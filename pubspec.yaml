@@ -1,0 +1,29 @@
+name: client
+description: Gang Chat client.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  flutter_secure_storage: ^10.0.0
+  http: ^1.5.0
+  window_manager: ^0.5.1
+  livekit_client: 2.6.1
+  # Pinned to match livekit_client 2.6.1's transitive constraint; used for the
+  # desktop screen-share source picker (desktopCapturer.getSources).
+  flutter_webrtc: 1.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/config/app_config.json

@@ -1,0 +1,477 @@
+class UserSummary {
+  const UserSummary({
+    required this.id,
+    required this.username,
+    required this.displayName,
+    required this.avatarUrl,
+    required this.defaultAvatarKey,
+  });
+
+  final String id;
+  final String username;
+  final String displayName;
+  final String? avatarUrl;
+  final String defaultAvatarKey;
+
+  factory UserSummary.fromJson(Map<String, Object?> json) {
+    final username = json['username']! as String;
+    return UserSummary(
+      id: json['id']! as String,
+      username: username,
+      displayName: json['display_name'] as String? ?? username,
+      avatarUrl: json['avatar_url'] as String?,
+      defaultAvatarKey: json['default_avatar_key'] as String? ?? 'blue-3',
+    );
+  }
+}
+
+class CurrentUser {
+  const CurrentUser({
+    required this.id,
+    required this.username,
+    required this.displayName,
+    required this.email,
+    required this.avatarUrl,
+    required this.defaultAvatarKey,
+    this.status,
+  });
+
+  final String id;
+  final String username;
+  final String displayName;
+  final String? email;
+  final String? avatarUrl;
+  final String defaultAvatarKey;
+  final String? status;
+
+  factory CurrentUser.fromJson(Map<String, Object?> json) {
+    final username = json['username']! as String;
+    return CurrentUser(
+      id: json['id']! as String,
+      username: username,
+      displayName: json['display_name'] as String? ?? username,
+      email: json['email'] as String?,
+      avatarUrl: json['avatar_url'] as String?,
+      defaultAvatarKey: json['default_avatar_key'] as String? ?? 'blue-3',
+      status: json['status'] as String?,
+    );
+  }
+
+  UserSummary toSummary() {
+    return UserSummary(
+      id: id,
+      username: username,
+      displayName: displayName,
+      avatarUrl: avatarUrl,
+      defaultAvatarKey: defaultAvatarKey,
+    );
+  }
+}
+
+class LastMessagePreview {
+  const LastMessagePreview({
+    required this.id,
+    required this.senderDisplayName,
+    required this.bodyPreview,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String senderDisplayName;
+  final String bodyPreview;
+  final DateTime createdAt;
+
+  factory LastMessagePreview.fromJson(Map<String, Object?> json) {
+    return LastMessagePreview(
+      id: json['id']! as String,
+      senderDisplayName: json['sender_display_name']! as String,
+      bodyPreview: json['body_preview']! as String,
+      createdAt: DateTime.parse(json['created_at']! as String),
+    );
+  }
+}
+
+class RoomCard {
+  const RoomCard({
+    required this.id,
+    required this.name,
+    required this.avatarUrl,
+    required this.defaultAvatarKey,
+    required this.memberCount,
+    required this.liveParticipantCount,
+    required this.liveAvatarPreview,
+    required this.lastMessage,
+    required this.unreadCount,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String name;
+  final String? avatarUrl;
+  final String defaultAvatarKey;
+  final int memberCount;
+  final int liveParticipantCount;
+  final List<UserSummary> liveAvatarPreview;
+  final LastMessagePreview? lastMessage;
+  final int unreadCount;
+  final DateTime updatedAt;
+
+  factory RoomCard.fromJson(Map<String, Object?> json) {
+    return RoomCard(
+      id: json['id']! as String,
+      name: json['name']! as String,
+      avatarUrl: json['avatar_url'] as String?,
+      defaultAvatarKey: json['default_avatar_key'] as String? ?? 'room-1',
+      memberCount: json['member_count']! as int,
+      liveParticipantCount: json['live_participant_count'] as int? ?? 0,
+      liveAvatarPreview: _listOfMaps(
+        json['live_avatar_preview'],
+      ).map(UserSummary.fromJson).toList(),
+      lastMessage: _nullableMap(json['last_message']) == null
+          ? null
+          : LastMessagePreview.fromJson(_nullableMap(json['last_message'])!),
+      unreadCount: json['unread_count'] as int? ?? 0,
+      updatedAt: DateTime.parse(json['updated_at']! as String),
+    );
+  }
+}
+
+/// A room as seen from search results — the viewer may or may not already be
+/// a member. [joinState] is one of `none`, `pending`, `joined` and drives the
+/// join button's affordance.
+class PublicRoom {
+  const PublicRoom({
+    required this.id,
+    required this.rid,
+    required this.name,
+    required this.avatarUrl,
+    required this.defaultAvatarKey,
+    required this.visibility,
+    required this.joinPolicy,
+    required this.memberCount,
+    required this.liveParticipantCount,
+    required this.joined,
+    required this.joinState,
+  });
+
+  final String id;
+  final String rid;
+  final String name;
+  final String? avatarUrl;
+  final String defaultAvatarKey;
+  final String visibility;
+  final String joinPolicy;
+  final int memberCount;
+  final int liveParticipantCount;
+  final bool joined;
+  final String joinState;
+
+  factory PublicRoom.fromJson(Map<String, Object?> json) {
+    return PublicRoom(
+      id: json['id']! as String,
+      rid: json['rid'] as String? ?? '',
+      name: json['name']! as String,
+      avatarUrl: json['avatar_url'] as String?,
+      defaultAvatarKey: json['default_avatar_key'] as String? ?? 'room-1',
+      visibility: json['visibility'] as String? ?? 'public',
+      joinPolicy: json['join_policy'] as String? ?? 'approval_required',
+      memberCount: json['member_count'] as int? ?? 0,
+      liveParticipantCount: json['live_participant_count'] as int? ?? 0,
+      joined: json['joined'] as bool? ?? false,
+      joinState: json['join_state'] as String? ?? 'none',
+    );
+  }
+}
+
+/// Result of POST /rooms/:id/join. Either we joined and got the full room
+/// detail back, or the room needs approval and we got a pending request.
+class JoinRoomResult {
+  const JoinRoomResult({this.room, this.pending = false});
+
+  final RoomDetail? room;
+  final bool pending;
+
+  bool get joined => room != null;
+}
+
+class RoomMembership {
+  const RoomMembership({required this.joinedAt, required this.role});
+
+  final DateTime joinedAt;
+  final String role;
+
+  factory RoomMembership.fromJson(Map<String, Object?> json) {
+    return RoomMembership(
+      joinedAt: DateTime.parse(json['joined_at']! as String),
+      role: json['role'] as String? ?? 'member',
+    );
+  }
+}
+
+/// A pending request to join an approval-required room, as seen by an admin
+/// reviewing the room's join queue.
+class JoinRequest {
+  const JoinRequest({
+    required this.id,
+    required this.status,
+    required this.user,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String status;
+  final UserSummary user;
+  final DateTime createdAt;
+
+  factory JoinRequest.fromJson(Map<String, Object?> json) {
+    return JoinRequest(
+      id: json['id']! as String,
+      status: json['status'] as String? ?? 'pending',
+      user: UserSummary.fromJson(json['user']! as Map<String, Object?>),
+      createdAt: DateTime.parse(json['created_at']! as String),
+    );
+  }
+}
+
+class RoomDetail {
+  const RoomDetail({
+    required this.id,
+    required this.name,
+    required this.avatarUrl,
+    required this.defaultAvatarKey,
+    required this.memberCount,
+    required this.createdBy,
+    required this.myMembership,
+    required this.live,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String name;
+  final String? avatarUrl;
+  final String defaultAvatarKey;
+  final int memberCount;
+  final UserSummary createdBy;
+  final RoomMembership myMembership;
+  final LiveState live;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  factory RoomDetail.fromJson(Map<String, Object?> json) {
+    return RoomDetail(
+      id: json['id']! as String,
+      name: json['name']! as String,
+      avatarUrl: json['avatar_url'] as String?,
+      defaultAvatarKey: json['default_avatar_key'] as String? ?? 'room-1',
+      memberCount: json['member_count']! as int,
+      createdBy: UserSummary.fromJson(
+        json['created_by']! as Map<String, Object?>,
+      ),
+      myMembership: RoomMembership.fromJson(
+        json['my_membership']! as Map<String, Object?>,
+      ),
+      live: LiveState.fromJson(json['live']! as Map<String, Object?>),
+      createdAt: DateTime.parse(json['created_at']! as String),
+      updatedAt: DateTime.parse(json['updated_at']! as String),
+    );
+  }
+
+  /// Whether the current user can administer this room (review join requests,
+  /// etc.). Mirrors the server's admin check: owner, admin, or superuser.
+  bool get isAdmin =>
+      myMembership.role == 'owner' ||
+      myMembership.role == 'admin' ||
+      myMembership.role == 'superuser';
+
+  RoomCard toCard() {
+    return RoomCard(
+      id: id,
+      name: name,
+      avatarUrl: avatarUrl,
+      defaultAvatarKey: defaultAvatarKey,
+      memberCount: memberCount,
+      liveParticipantCount: live.participantCount,
+      liveAvatarPreview: live.participants.map((p) => p.user).take(5).toList(),
+      lastMessage: null,
+      unreadCount: 0,
+      updatedAt: updatedAt,
+    );
+  }
+}
+
+class Message {
+  const Message({
+    required this.id,
+    required this.roomId,
+    required this.sender,
+    required this.clientMessageId,
+    required this.body,
+    required this.createdAt,
+    this.pending = false,
+    this.failed = false,
+  });
+
+  final String id;
+  final String roomId;
+  final UserSummary sender;
+  final String clientMessageId;
+  final String body;
+  final DateTime createdAt;
+  final bool pending;
+  final bool failed;
+
+  factory Message.fromJson(Map<String, Object?> json) {
+    return Message(
+      id: json['id']! as String,
+      roomId: json['room_id']! as String,
+      sender: UserSummary.fromJson(json['sender']! as Map<String, Object?>),
+      clientMessageId: json['client_message_id']! as String,
+      body: json['body']! as String,
+      createdAt: DateTime.parse(json['created_at']! as String),
+    );
+  }
+
+  factory Message.local({
+    required String roomId,
+    required UserSummary sender,
+    required String clientMessageId,
+    required String body,
+  }) {
+    return Message(
+      id: clientMessageId,
+      roomId: roomId,
+      sender: sender,
+      clientMessageId: clientMessageId,
+      body: body,
+      createdAt: DateTime.now().toUtc(),
+      pending: true,
+    );
+  }
+
+  Message markFailed() {
+    return Message(
+      id: id,
+      roomId: roomId,
+      sender: sender,
+      clientMessageId: clientMessageId,
+      body: body,
+      createdAt: createdAt,
+      failed: true,
+    );
+  }
+}
+
+class LiveParticipant {
+  const LiveParticipant({
+    required this.liveSessionId,
+    required this.user,
+    required this.joinedAt,
+    required this.micMuted,
+    required this.cameraOn,
+    required this.screenSharing,
+    required this.connectionState,
+  });
+
+  final String liveSessionId;
+  final UserSummary user;
+  final DateTime joinedAt;
+  final bool micMuted;
+  final bool cameraOn;
+  final bool screenSharing;
+  final String connectionState;
+
+  factory LiveParticipant.fromJson(Map<String, Object?> json) {
+    return LiveParticipant(
+      liveSessionId: json['live_session_id']! as String,
+      user: UserSummary.fromJson(json['user']! as Map<String, Object?>),
+      joinedAt: DateTime.parse(json['joined_at']! as String),
+      micMuted: json['mic_muted']! as bool,
+      cameraOn: json['camera_on']! as bool,
+      screenSharing: json['screen_sharing']! as bool,
+      connectionState: json['connection_state']! as String,
+    );
+  }
+}
+
+class LiveState {
+  const LiveState({
+    required this.roomId,
+    required this.participantCount,
+    required this.participants,
+    required this.updatedAt,
+  });
+
+  final String roomId;
+  final int participantCount;
+  final List<LiveParticipant> participants;
+  final DateTime updatedAt;
+
+  factory LiveState.fromJson(Map<String, Object?> json) {
+    return LiveState(
+      roomId: json['room_id']! as String,
+      participantCount: json['participant_count']! as int,
+      participants: _listOfMaps(
+        json['participants'],
+      ).map(LiveParticipant.fromJson).toList(),
+      updatedAt: DateTime.parse(json['updated_at']! as String),
+    );
+  }
+}
+
+class LiveKitConnectionInfo {
+  const LiveKitConnectionInfo({
+    required this.serverUrl,
+    required this.token,
+    required this.tokenExpiresAt,
+    required this.roomName,
+  });
+
+  final String serverUrl;
+  final String token;
+  final DateTime tokenExpiresAt;
+  final String roomName;
+
+  factory LiveKitConnectionInfo.fromJson(Map<String, Object?> json) {
+    return LiveKitConnectionInfo(
+      serverUrl: json['server_url']! as String,
+      token: json['token']! as String,
+      tokenExpiresAt: DateTime.parse(json['token_expires_at']! as String),
+      roomName: json['room_name']! as String,
+    );
+  }
+}
+
+class LiveJoinResult {
+  const LiveJoinResult({
+    required this.liveKit,
+    required this.participant,
+    required this.live,
+  });
+
+  final LiveKitConnectionInfo liveKit;
+  final LiveParticipant participant;
+  final LiveState live;
+
+  factory LiveJoinResult.fromJson(Map<String, Object?> json) {
+    return LiveJoinResult(
+      liveKit: LiveKitConnectionInfo.fromJson(
+        json['livekit']! as Map<String, Object?>,
+      ),
+      participant: LiveParticipant.fromJson(
+        json['participant']! as Map<String, Object?>,
+      ),
+      live: LiveState.fromJson(json['live']! as Map<String, Object?>),
+    );
+  }
+}
+
+List<Map<String, Object?>> _listOfMaps(Object? value) {
+  return (value as List<Object?>? ?? const [])
+      .cast<Map<String, Object?>>()
+      .toList();
+}
+
+Map<String, Object?>? _nullableMap(Object? value) {
+  return value == null ? null : value as Map<String, Object?>;
+}
