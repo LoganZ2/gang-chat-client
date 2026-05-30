@@ -141,7 +141,17 @@ class LiveSession extends ChangeNotifier {
 
     final room = lk.Room(
       roomOptions: const lk.RoomOptions(
-        adaptiveStream: true,
+        // Adaptive stream sizes the subscribed quality to the rendering
+        // widget's pixel size. When a screen share is viewed in the small
+        // (non-fullscreen) stage, that requests a low-quality layer; combined
+        // with dynacast (which pauses layers nobody subscribes to at full
+        // quality on the sender), the publisher drops to its lowest temporal
+        // layer and the share renders at a few fps — choppy until you go
+        // fullscreen and the renderer grows enough to request full quality.
+        // Keep subscriptions at full quality so the share is smooth at any
+        // tile size; the camera-tile bandwidth saving isn't worth a degraded
+        // screen share for a small group.
+        adaptiveStream: false,
         dynacast: true,
         defaultVideoPublishOptions: lk.VideoPublishOptions(
           // The capture rate (ScreenShareCaptureOptions.maxFrameRate) only sets
