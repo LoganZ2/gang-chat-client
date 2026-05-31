@@ -12,6 +12,7 @@ import '../config/app_config.dart';
 import '../lifecycle/shutdown_hooks.dart';
 import '../live/live_session.dart';
 import '../live/live_stream_client.dart';
+import '../live/livekit_url.dart';
 import '../protocol/api_client.dart';
 import '../protocol/models.dart';
 import '../settings/settings_page.dart';
@@ -477,8 +478,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _rooms = _patchRoomLiveCount(_rooms, room.id, result.live);
       });
       try {
+        final liveKitUrl = resolveLiveKitServerUrl(
+          serverUrl: result.liveKit.serverUrl,
+          apiBaseUrl: widget.apiBaseUrl,
+        );
         await _liveSession.connect(
-          url: result.liveKit.serverUrl,
+          url: liveKitUrl,
           token: result.liveKit.token,
           roomName: result.liveKit.roomName,
           micMuted: result.participant.micMuted,

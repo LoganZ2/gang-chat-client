@@ -1,0 +1,16 @@
+{
+  "name": "gang-chat-client",
+  "version": "1.0.0",
+  "description": "Flutter UI with text auth/session flows and the first-party `gang_video` native video plugin.",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

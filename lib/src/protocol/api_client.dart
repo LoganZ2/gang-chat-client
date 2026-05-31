@@ -88,7 +88,7 @@ class GangApiClient implements GangApi {
   Future<CurrentUser> me() async {
     final decoded = await _sendJson((token) {
       return _httpClient.get(_uri('/me'), headers: _headers(token));
-    });
+    }, retryTransientFailures: true);
     return CurrentUser.fromJson(decoded);
   }
 
@@ -98,7 +98,7 @@ class GangApiClient implements GangApi {
     if (cursor != null) query['cursor'] = cursor;
     final decoded = await _sendJson((token) {
       return _httpClient.get(_uri('/rooms', query), headers: _headers(token));
-    });
+    }, retryTransientFailures: true);
     return RoomPage.fromJson(decoded);
   }
 
@@ -124,7 +124,7 @@ class GangApiClient implements GangApi {
   Future<RoomDetail> getRoom(String roomId) async {
     final decoded = await _sendJson((token) {
       return _httpClient.get(_uri('/rooms/$roomId'), headers: _headers(token));
-    });
+    }, retryTransientFailures: true);
     return RoomDetail.fromJson(decoded['room']! as Map<String, Object?>);
   }
 
@@ -138,7 +138,7 @@ class GangApiClient implements GangApi {
         _uri('/rooms/search', {'q': query, 'limit': '$limit'}),
         headers: _headers(token),
       );
-    });
+    }, retryTransientFailures: true);
     return (decoded['rooms'] as List<Object?>? ?? const [])
         .cast<Map<String, Object?>>()
         .map(PublicRoom.fromJson)
@@ -171,7 +171,7 @@ class GangApiClient implements GangApi {
         _uri('/rooms/$roomId/join-requests', {'status': status}),
         headers: _headers(token),
       );
-    });
+    }, retryTransientFailures: true);
     return (decoded['requests'] as List<Object?>? ?? const [])
         .cast<Map<String, Object?>>()
         .map(JoinRequest.fromJson)
@@ -206,7 +206,7 @@ class GangApiClient implements GangApi {
         _uri('/rooms/$roomId/messages', query),
         headers: _headers(token),
       );
-    });
+    }, retryTransientFailures: true);
     return MessagePage.fromJson(decoded);
   }
 
@@ -249,7 +249,7 @@ class GangApiClient implements GangApi {
         _uri('/rooms/$roomId/live'),
         headers: _headers(token),
       );
-    });
+    }, retryTransientFailures: true);
     return LiveState.fromJson(decoded['live']! as Map<String, Object?>);
   }
 
@@ -298,6 +298,24 @@ class GangApiClient implements GangApi {
   }
 
   Future<Map<String, Object?>> _sendJson(
+    Future<http.Response> Function(String accessToken) send, {
+    bool retryTransientFailures = false,
+  }) async {
+    http.Response response;
+    try {
+      response = await _sendWithAuth(send);
+    } on http.ClientException catch (e) {
+      if (!retryTransientFailures || !_isRetryableTransportFailure(e)) {
+        rethrow;
+      }
+      response = await _sendWithAuth(send);
+    }
+    _throwIfFailed(response);
+    if (response.body.isEmpty) return {};
+    return jsonDecode(response.body) as Map<String, Object?>;
+  }
+
+  Future<http.Response> _sendWithAuth(
     Future<http.Response> Function(String accessToken) send,
   ) async {
     var token = await accessTokenProvider();
@@ -306,9 +324,14 @@ class GangApiClient implements GangApi {
       token = await accessTokenProvider(forceRefresh: true);
       response = await send(token);
     }
-    _throwIfFailed(response);
-    if (response.body.isEmpty) return {};
-    return jsonDecode(response.body) as Map<String, Object?>;
+    return response;
+  }
+
+  bool _isRetryableTransportFailure(http.ClientException error) {
+    final message = error.message.toLowerCase();
+    return message.contains('connection closed') ||
+        message.contains('connection reset') ||
+        message.contains('broken pipe');
   }
 
   void _throwIfFailed(http.Response response) {

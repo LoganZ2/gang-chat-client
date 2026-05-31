@@ -1,3 +1,5 @@
+import 'dart:io' show HttpOverrides;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:livekit_client/livekit_client.dart' as lk;
@@ -174,7 +176,10 @@ class LiveSession extends ChangeNotifier {
     _cancelEvents = room.events.listen(_onEvent);
 
     try {
-      await room.connect(url, token);
+      await HttpOverrides.runZoned(
+        () => room.connect(url, token),
+        findProxyFromEnvironment: (uri, environment) => 'DIRECT',
+      );
       // Publish the microphone track. The OS will prompt for permission on
       // the first publish.
       await room.localParticipant?.setMicrophoneEnabled(!micMuted);
@@ -192,7 +197,7 @@ class LiveSession extends ChangeNotifier {
       _speakingIdentities.clear();
       _micMutedByIdentity.clear();
       notifyListeners();
-      rethrow;
+      throw LiveSessionConnectException(url: url, cause: e);
     }
 
     _connecting = false;
@@ -400,4 +405,48 @@ class LiveSession extends ChangeNotifier {
     if (pubs.isEmpty) return true;
     return pubs.every((pub) => pub.muted);
   }
+}
+
+class LiveSessionConnectException implements Exception {
+  const LiveSessionConnectException({
+    required this.url,
+    required this.cause,
+  });
+
+  final String url;
+  final Object cause;
+
+  @override
+  String toString() {
+    return 'Could not connect to LiveKit at $url: ${_describeError(cause)}';
+  }
+}
+
+String _describeError(Object error) {
+  final message = _tryReadMessage(error);
+  final nested = _tryReadNestedError(error);
+  if (message != null && nested != null) {
+    return '$message (${_describeError(nested)})';
+  }
+  if (message != null) return message;
+
+  final text = error.toString();
+  if (text.startsWith('Instance of ')) return error.runtimeType.toString();
+  return text;
+}
+
+String? _tryReadMessage(Object error) {
+  try {
+    final value = (error as dynamic).message;
+    if (value is String && value.isNotEmpty) return value;
+  } catch (_) {}
+  return null;
+}
+
+Object? _tryReadNestedError(Object error) {
+  try {
+    final value = (error as dynamic).error;
+    if (value is Object) return value;
+  } catch (_) {}
+  return null;
 }
