@@ -18,7 +18,7 @@ on:
 
 jobs:
   build-macos:
-    runs-on: macos-runner
+    runs-on: macos-arm64
     env:
       # 国内镜像，避免 storage.googleapis.com（Flutter/Dart SDK 下载）被墙。
       # 注意：runner 上的 Flutter SDK 需预装，这里只影响 pub 依赖拉取。
