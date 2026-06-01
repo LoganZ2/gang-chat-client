@@ -42,14 +42,24 @@ jobs:
         run: |
           API="${GITHUB_SERVER_URL}/api/v1/repos/${GITHUB_REPOSITORY}"
           TAG="${{ steps.version.outputs.tag }}"
-          RESP="$(curl -fsS -X POST "$API/releases" \
+
+          # 不用 -f，让 409 时也能拿到响应体
+          RESP="$(curl -sS -X POST "$API/releases" \
             -H "Authorization: token $TOKEN" \
             -H "Content-Type: application/json" \
             -d "{\"tag_name\":\"$TAG\",\"target_commitish\":\"${GITHUB_SHA}\",\"name\":\"$TAG\",\"draft\":true,\"prerelease\":false}")"
-          RELEASE_ID="$(printf '%s' "$RESP" | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')"
-          if [ -z "$RELEASE_ID" ]; then echo "Failed to create release: $RESP"; exit 1; fi
+          RELEASE_ID="$(printf '%s' "$RESP" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("id",""))' 2>/dev/null)"
+
+          # 409（tag/release 已存在）时按 tag 查现有 release
+          if [ -z "$RELEASE_ID" ]; then
+            echo "Create returned no id (possibly 409), fetching existing release by tag..."
+            RESP="$(curl -fsS "$API/releases/tags/$TAG" -H "Authorization: token $TOKEN")"
+            RELEASE_ID="$(printf '%s' "$RESP" | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')"
+          fi
+
+          if [ -z "$RELEASE_ID" ]; then echo "Failed to get release id: $RESP"; exit 1; fi
           echo "release_id=$RELEASE_ID" >> "$GITHUB_OUTPUT"
-          echo "Draft release created: id=$RELEASE_ID"
+          echo "Release id=$RELEASE_ID"
 
   build-macos:
     runs-on: macos-arm64
