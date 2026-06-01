@@ -66,14 +66,16 @@ jobs:
     needs: [prepare]
     steps:
       # 不用 actions/checkout：runner 在国内访问不了 gitea.com，克隆 action 会卡死。
+      # 按 ref 名 fetch（而非 SHA）——服务器默认不允许 fetch 任意 SHA。
       - name: Checkout
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           rm -rf .git
           git init -q .
-          git -c "http.extraheader=Authorization: token $TOKEN" fetch --depth=1 --no-tags "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "$GITHUB_SHA"
+          git -c "http.extraheader=Authorization: token $TOKEN" fetch --depth=1 --no-tags "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "$GITHUB_REF"
           git checkout -f FETCH_HEAD
+          test -f pubspec.yaml || { echo "checkout failed: pubspec.yaml missing"; exit 1; }
 
       - name: Flutter sanity check
         run: |
@@ -131,8 +133,14 @@ jobs:
           if (Test-Path .git) { Remove-Item -Recurse -Force .git }
           git config --global core.longpaths true
           git init -q .
-          git -c "http.extraheader=Authorization: token $env:TOKEN" fetch --depth=1 --no-tags "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY.git" $env:GITHUB_SHA
+          # 按 ref 名 fetch（而非 SHA）——服务器默认不允许 fetch 任意 SHA
+          git -c "http.extraheader=Authorization: token $env:TOKEN" fetch --depth=1 --no-tags "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY.git" $env:GITHUB_REF
+          if ($LASTEXITCODE -ne 0) { Write-Error "git fetch failed"; exit 1 }
           git checkout -f FETCH_HEAD
+          if ($LASTEXITCODE -ne 0) { Write-Error "git checkout failed"; exit 1 }
+          # PowerShell step 不会因原生命令非零退出而失败，必须显式验证
+          if (-not (Test-Path "pubspec.yaml")) { Write-Error "checkout failed: pubspec.yaml missing"; exit 1 }
+          if (-not (Test-Path "windows")) { Write-Error "checkout failed: windows/ missing"; exit 1 }
 
       - name: Flutter sanity check
         shell: powershell
