@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:client/main.dart';
 import 'package:client/src/auth/token_store.dart';
+import 'package:client/src/settings/settings_page.dart';
 import 'package:client/src/ui/key_button.dart';
 
 void main() {
@@ -295,6 +296,27 @@ void main() {
         _expectedShadowForBackground(customBackground),
       ]),
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('embedded settings page exposes a close button', (
+    WidgetTester tester,
+  ) async {
+    var closeCount = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsPage(isSubWindow: true, onClose: () => closeCount += 1),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byTooltip('Close settings'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Close settings'));
+    await tester.pump();
+
+    expect(closeCount, 1);
     expect(tester.takeException(), isNull);
   });
 }

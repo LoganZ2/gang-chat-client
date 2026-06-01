@@ -906,8 +906,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  void _openSettings() {
-    if (_settingsOpen) return;
+  void _toggleSettings() {
+    if (_settingsOpen) {
+      _closeSettings();
+      return;
+    }
     setState(() {
       _settingsOpen = true;
       _selectedRoomId = null;
@@ -915,6 +918,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _messages = const [];
       _live = null;
       _livePanelOpen = false;
+      _error = null;
+    });
+  }
+
+  void _closeSettings() {
+    if (!_settingsOpen) return;
+    setState(() {
+      _settingsOpen = false;
       _error = null;
     });
   }
@@ -955,7 +966,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       settingsActive: _settingsOpen,
                       onCreateRoom: _createRoom,
                       onJoinRoom: _joinRoom,
-                      onOpenSettings: _openSettings,
+                      onOpenSettings: _toggleSettings,
                       onLogout: _handleLogout,
                       onOpenRoom: (room) => _openRoom(room),
                       onJoinLive: (room) => _openRoom(room, joinLive: true),
@@ -1050,7 +1061,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Widget _buildRoomPane() {
     if (_settingsOpen) {
-      return const SettingsPage(isSubWindow: true);
+      return SettingsPage(isSubWindow: true, onClose: _closeSettings);
     }
     final room = _selectedRoom;
     if (_selectedRoomId == null) {

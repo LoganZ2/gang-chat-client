@@ -260,16 +260,17 @@ class GangApiClient implements GangApi {
     required String source,
     String? idempotencyKey,
   }) {
+    final requestIdempotencyKey = idempotencyKey ?? newUuid();
     return _sendJson((token) {
       return _httpClient.post(
         _uri('/rooms/$roomId/live/join'),
-        headers: _headers(token, idempotencyKey: idempotencyKey ?? newUuid()),
+        headers: _headers(token, idempotencyKey: requestIdempotencyKey),
         body: jsonEncode({
           'client_live_session_id': clientLiveSessionId,
           'source': source,
         }),
       );
-    }).then(LiveJoinResult.fromJson);
+    }, retryTransientFailures: true).then(LiveJoinResult.fromJson);
   }
 
   @override
@@ -331,7 +332,11 @@ class GangApiClient implements GangApi {
     final message = error.message.toLowerCase();
     return message.contains('connection closed') ||
         message.contains('connection reset') ||
-        message.contains('broken pipe');
+        message.contains('broken pipe') ||
+        message.contains('write failed') ||
+        message.contains('connection abort') ||
+        message.contains('errno = 10053') ||
+        message.contains('errno=10053');
   }
 
   void _throwIfFailed(http.Response response) {

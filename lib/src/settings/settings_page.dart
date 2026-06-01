@@ -20,10 +20,12 @@ class SettingsPage extends StatefulWidget {
     super.key,
     this.isSubWindow = false,
     this.onDeviceSelected,
+    this.onClose,
   });
 
   final bool isSubWindow;
   final void Function(String kind, String deviceId)? onDeviceSelected;
+  final VoidCallback? onClose;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -232,6 +234,33 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ),
                 ),
+                if (widget.onClose != null) ...[
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 34,
+                    child: KeySurface(
+                      onPressed: widget.onClose,
+                      tooltip: 'Close settings',
+                      height: 34,
+                      padding: EdgeInsets.zero,
+                      backgroundColor: _primaryDarkLow,
+                      selectedBackgroundColor: _primaryDarkLow,
+                      pressedBackgroundColor: _primaryDark,
+                      borderColor: _primaryDarkLow,
+                      selectedBorderColor: _primaryDarkLow,
+                      hoverLift: 3,
+                      pressDepth: 3,
+                      baseDepth: 5,
+                      child: IconTheme.merge(
+                        data: const IconThemeData(
+                          color: _textSecondary,
+                          size: 16,
+                        ),
+                        child: const Center(child: Icon(Icons.close)),
+                      ),
+                    ),
+                  ),
+                ],
                 // Pull the refresh button further inward from the edge.
                 const SizedBox(width: 16),
               ],
