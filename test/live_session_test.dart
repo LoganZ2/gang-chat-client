@@ -76,6 +76,27 @@ void main() {
     ]);
   });
 
+  test('screen-share source picker keeps same raw id across types', () {
+    final sources = filterScreenSourcesForPicker([
+      const ScreenSource(
+        id: '1',
+        name: 'Screen 1',
+        thumbnail: null,
+        isWindow: false,
+        thumbnailKey: 'screen:1',
+      ),
+      const ScreenSource(
+        id: '1',
+        name: 'Window 1',
+        thumbnail: null,
+        isWindow: true,
+        thumbnailKey: 'window:1',
+      ),
+    ]);
+
+    expect(sources.map((s) => s.thumbnailKey), ['screen:1', 'window:1']);
+  });
+
   test('screen-share thumbnail updates are cached for reopened picker', () async {
     resetScreenSourceThumbnailCacheForTest();
     addTearDown(resetScreenSourceThumbnailCacheForTest);

@@ -14,13 +14,15 @@ class ScreenSource {
     required this.name,
     required this.thumbnail,
     required this.isWindow,
+    String? thumbnailKey,
     this.thumbnailUpdates,
-  });
+  }) : thumbnailKey = thumbnailKey ?? id;
 
   final String id;
   final String name;
   final Uint8List? thumbnail;
   final bool isWindow;
+  final String thumbnailKey;
   final Stream<Uint8List>? thumbnailUpdates;
 }
 
@@ -36,6 +38,7 @@ class _ScreenSourceThumbnailUpdate {
 
 final _screenSourceWhitespacePattern = RegExp(r'\s+');
 final _screenSourceThumbnailCache = <String, Uint8List>{};
+final _screenSourceDirectThumbnailKeys = <String>{};
 final _screenSourceThumbnailUpdateController =
     StreamController<_ScreenSourceThumbnailUpdate>.broadcast();
 StreamSubscription<rtc.DesktopCapturerSource>?
@@ -59,7 +62,7 @@ List<ScreenSource> filterScreenSourcesForPicker(
     if (source.isWindow) {
       if (_isIgnoredShareWindowName(normalizedName)) continue;
     }
-    if (seenIds.add(source.id)) visible.add(source);
+    if (seenIds.add(source.thumbnailKey)) visible.add(source);
   }
 
   return visible;
@@ -74,6 +77,11 @@ String _normalizeScreenSourceName(String name) {
 
 bool _isIgnoredShareWindowName(String normalizedName) {
   return _ignoredShareWindowNameParts.any(normalizedName.contains);
+}
+
+String _thumbnailKeyForDesktopSource(rtc.DesktopCapturerSource source) {
+  final type = source.type == rtc.SourceType.Screen ? 'screen' : 'window';
+  return '$type:${source.id}';
 }
 
 Uint8List? _rememberScreenSourceThumbnail({
@@ -126,11 +134,50 @@ Stream<Uint8List> _screenSourceThumbnailUpdates(String sourceId) {
 void _ensureScreenSourceThumbnailCacheSubscription() {
   _screenSourceThumbnailSubscription ??=
       rtc.desktopCapturer.onThumbnailChanged.stream.listen((source) {
+    final thumbnailKey = _thumbnailKeyForDesktopSource(source);
+    if (source.type == rtc.SourceType.Screen &&
+        _screenSourceDirectThumbnailKeys.contains(thumbnailKey)) {
+      return;
+    }
     _rememberAndEmitScreenSourceThumbnail(
-      sourceId: source.id,
+      sourceId: thumbnailKey,
       thumbnail: source.thumbnail,
     );
   });
+}
+
+Future<Uint8List?> _loadInitialScreenSourceThumbnail(
+  rtc.DesktopCapturerSource source,
+  String thumbnailKey,
+) async {
+  final isScreen = source.type == rtc.SourceType.Screen;
+  if (isScreen) {
+    final directThumbnail = await _getDesktopSourceThumbnail(source);
+    if (directThumbnail != null && directThumbnail.isNotEmpty) {
+      _screenSourceDirectThumbnailKeys.add(thumbnailKey);
+      return _rememberScreenSourceThumbnail(
+        sourceId: thumbnailKey,
+        thumbnail: directThumbnail,
+      );
+    }
+    _screenSourceDirectThumbnailKeys.remove(thumbnailKey);
+  }
+  return _rememberScreenSourceThumbnail(
+    sourceId: thumbnailKey,
+    thumbnail: source.thumbnail,
+  );
+}
+
+Future<Uint8List?> _getDesktopSourceThumbnail(
+  rtc.DesktopCapturerSource source,
+) async {
+  try {
+    final thumbnail = await (rtc.desktopCapturer as dynamic).getThumbnail(
+      source,
+    );
+    if (thumbnail is Uint8List && thumbnail.isNotEmpty) return thumbnail;
+  } catch (_) {}
+  return null;
 }
 
 @visibleForTesting
@@ -141,6 +188,7 @@ Uint8List? cachedScreenSourceThumbnailForTest(String sourceId) {
 @visibleForTesting
 void resetScreenSourceThumbnailCacheForTest() {
   _screenSourceThumbnailCache.clear();
+  _screenSourceDirectThumbnailKeys.clear();
 }
 
 @visibleForTesting
@@ -449,21 +497,28 @@ class LiveSession extends ChangeNotifier {
         types: [rtc.SourceType.Screen, rtc.SourceType.Window],
         thumbnailSize: rtc.ThumbnailSize(640, 360),
       );
-      return filterScreenSourcesForPicker(
-        sources.map((s) {
-          final isWindow = s.type == rtc.SourceType.Window;
-          final name = s.name.trim();
-          return ScreenSource(
+      final screenSources = <ScreenSource>[];
+      for (final s in sources) {
+        final isWindow = s.type == rtc.SourceType.Window;
+        final name = s.name.trim();
+        final thumbnailKey = _thumbnailKeyForDesktopSource(s);
+        final thumbnail = await _loadInitialScreenSourceThumbnail(
+          s,
+          thumbnailKey,
+        );
+        screenSources.add(
+          ScreenSource(
             id: s.id,
             name: name.isEmpty ? (isWindow ? 'Window' : 'Screen') : name,
-            thumbnail: _rememberScreenSourceThumbnail(
-              sourceId: s.id,
-              thumbnail: s.thumbnail,
-            ),
+            thumbnail: thumbnail,
             isWindow: isWindow,
-            thumbnailUpdates: _screenSourceThumbnailUpdates(s.id),
-          );
-        }).toList(),
+            thumbnailKey: thumbnailKey,
+            thumbnailUpdates: _screenSourceThumbnailUpdates(thumbnailKey),
+          ),
+        );
+      }
+      return filterScreenSourcesForPicker(
+        screenSources,
       );
     } catch (_) {
       return const [];
