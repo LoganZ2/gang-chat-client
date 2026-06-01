@@ -1886,11 +1886,9 @@ class _LiveHeaderActions extends StatelessWidget {
   }
 }
 
-enum _ComposerPanel { stickers, voice, file, tools }
+enum _ComposerPanel { stickers, tools }
 
 enum _StickerSource { personal, room }
-
-enum _VoiceMode { transcribe, recording }
 
 class _ChatPane extends StatefulWidget {
   const _ChatPane({
@@ -1918,17 +1916,12 @@ class _ChatPane extends StatefulWidget {
 class _ChatPaneState extends State<_ChatPane> {
   _ComposerPanel? _openPanel;
   _StickerSource _stickerSource = _StickerSource.personal;
-  _VoiceMode _voiceMode = _VoiceMode.transcribe;
-  bool _recordingDraft = false;
-  String? _fileDraftName;
 
   @override
   void didUpdateWidget(_ChatPane oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.roomId != widget.roomId) {
       _openPanel = null;
-      _recordingDraft = false;
-      _fileDraftName = null;
     }
   }
 
@@ -1971,17 +1964,7 @@ class _ChatPaneState extends State<_ChatPane> {
     widget.focusNode.requestFocus();
   }
 
-  void _handleVoiceTranscribe() {
-    _insertComposerText('语音识别结果待接入');
-  }
-
-  void _handleRecordingDraft() {
-    setState(() => _recordingDraft = true);
-  }
-
-  void _handleFileDraft() {
-    setState(() => _fileDraftName = '文件附件待接入');
-  }
+  void _handleFileDraft() {}
 
   Widget _buildComposerInput() {
     final input = Row(
@@ -2026,8 +2009,11 @@ class _ChatPaneState extends State<_ChatPane> {
       openPanel: _openPanel,
       sending: widget.sending,
       onStickers: () => _togglePanel(_ComposerPanel.stickers),
-      onVoice: () => _togglePanel(_ComposerPanel.voice),
-      onFile: () => _togglePanel(_ComposerPanel.file),
+      onVoice: null,
+      onFile: () {
+        _closePanel();
+        _handleFileDraft();
+      },
       onTools: () => _togglePanel(_ComposerPanel.tools),
       onSend: () {
         _closePanel();
@@ -2068,22 +2054,12 @@ class _ChatPaneState extends State<_ChatPane> {
     if (panel == null) return const SizedBox.shrink();
 
     return _ComposerPanelSurface(
+      panel: panel,
       child: switch (panel) {
         _ComposerPanel.stickers => _StickerPanel(
           source: _stickerSource,
           onSourceChanged: (source) => setState(() => _stickerSource = source),
           onStickerSelected: _insertComposerText,
-        ),
-        _ComposerPanel.voice => _VoicePanel(
-          mode: _voiceMode,
-          recordingDraft: _recordingDraft,
-          onModeChanged: (mode) => setState(() => _voiceMode = mode),
-          onTranscribe: _handleVoiceTranscribe,
-          onRecordDraft: _handleRecordingDraft,
-        ),
-        _ComposerPanel.file => _FilePanel(
-          draftName: _fileDraftName,
-          onChooseFile: _handleFileDraft,
         ),
         _ComposerPanel.tools => const _ToolboxPanel(),
       },
@@ -2122,6 +2098,14 @@ class _ChatPaneState extends State<_ChatPane> {
                   duration: const Duration(milliseconds: 140),
                   switchInCurve: Curves.easeOutCubic,
                   switchOutCurve: Curves.easeInCubic,
+                  layoutBuilder: (currentChild, previousChildren) {
+                    if (currentChild != null) return currentChild;
+                    return Stack(
+                      alignment: Alignment.bottomRight,
+                      clipBehavior: Clip.none,
+                      children: previousChildren,
+                    );
+                  },
                   child: KeyedSubtree(
                     key: ValueKey(_openPanel),
                     child: _buildPanel(),
@@ -2155,7 +2139,7 @@ class _ComposerActionBar extends StatelessWidget {
   final _ComposerPanel? openPanel;
   final bool sending;
   final VoidCallback onStickers;
-  final VoidCallback onVoice;
+  final VoidCallback? onVoice;
   final VoidCallback onFile;
   final VoidCallback onTools;
   final VoidCallback onSend;
@@ -2175,14 +2159,14 @@ class _ComposerActionBar extends StatelessWidget {
         _ComposerIconButton(
           tooltip: '语音',
           onPressed: onVoice,
-          selected: openPanel == _ComposerPanel.voice,
+          selected: false,
           icon: const Icon(Icons.mic_none),
         ),
         const SizedBox(width: 8),
         _ComposerIconButton(
           tooltip: '文件上传',
           onPressed: onFile,
-          selected: openPanel == _ComposerPanel.file,
+          selected: false,
           icon: const Icon(Icons.attach_file),
         ),
         const SizedBox(width: 8),
@@ -2223,7 +2207,7 @@ class _ComposerIconButton extends StatelessWidget {
   });
 
   final String tooltip;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final Widget icon;
   final bool selected;
 
@@ -2254,24 +2238,129 @@ class _ComposerIconButton extends StatelessWidget {
 }
 
 class _ComposerPanelSurface extends StatelessWidget {
-  const _ComposerPanelSurface({required this.child});
+  const _ComposerPanelSurface({required this.panel, required this.child});
 
+  final _ComposerPanel panel;
   final Widget child;
+
+  static const double _tipWidth = 18;
+  static const double _tipHeight = 10;
+  static const double _tipBottomClearance = 4;
+  static const double _surfaceYOffset = 2;
+  static const double _tipSideInset = 12;
+  static const double _horizontalInset = 18;
+  static const double _contentHorizontalPadding = _horizontalInset * 2;
+
+  EdgeInsets get _contentPadding {
+    return switch (panel) {
+      _ComposerPanel.stickers => EdgeInsets.zero,
+      _ComposerPanel.tools => const EdgeInsets.fromLTRB(18, 14, 18, 16),
+    };
+  }
+
+  double _limitedWidth({
+    required double maxWidth,
+    required double availableWidth,
+    required double minWidth,
+  }) {
+    if (availableWidth <= minWidth) return availableWidth;
+    return (maxWidth * 0.52).clamp(minWidth, availableWidth).toDouble();
+  }
+
+  double _bubbleWidth(double maxWidth, double bubbleMaxWidth) {
+    switch (panel) {
+      case _ComposerPanel.stickers:
+        return _limitedWidth(
+          maxWidth: maxWidth,
+          availableWidth: bubbleMaxWidth,
+          minWidth: 320,
+        );
+      case _ComposerPanel.tools:
+        final maxToolsWidth = _limitedWidth(
+          maxWidth: maxWidth,
+          availableWidth: bubbleMaxWidth,
+          minWidth: _contentHorizontalPadding + _ToolboxPanel.buttonSize,
+        );
+        final preferredWidth =
+            _contentHorizontalPadding + _ToolboxPanel.preferredContentWidth;
+        return preferredWidth <= maxToolsWidth ? preferredWidth : maxToolsWidth;
+    }
+  }
+
+  double _tipRightPadding(double bubbleWidth) {
+    final targetCenterFromRight = switch (panel) {
+      _ComposerPanel.stickers => 216.0,
+      _ComposerPanel.tools => 72.0,
+    };
+    final raw = targetCenterFromRight - (_tipWidth / 2);
+    final maxPadding = bubbleWidth <= _tipWidth + (_tipSideInset * 2)
+        ? _tipSideInset
+        : bubbleWidth - _tipWidth - _tipSideInset;
+    return raw.clamp(_tipSideInset, maxPadding).toDouble();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: _primaryDarkRaised,
-        border: Border(
-          top: BorderSide(color: _borderColor),
-          bottom: BorderSide(color: _borderColor),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
-        child: child,
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : 640.0;
+        final bubbleMaxWidth = maxWidth > 36 ? maxWidth - 36 : maxWidth;
+        final bubbleWidth = _bubbleWidth(maxWidth, bubbleMaxWidth);
+
+        return Transform.translate(
+          offset: const Offset(0, _surfaceYOffset),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              _horizontalInset,
+              0,
+              _horizontalInset,
+              _tipHeight + _surfaceYOffset + _tipBottomClearance,
+            ),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: SizedBox(
+                width: bubbleWidth,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: _primaryDarkRaised,
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.24),
+                              blurRadius: 18,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Padding(padding: _contentPadding, child: child),
+                    Positioned(
+                      right: _tipRightPadding(bubbleWidth),
+                      bottom: -_tipHeight,
+                      child: Padding(
+                        padding: EdgeInsets.zero,
+                        child: CustomPaint(
+                          size: const Size(_tipWidth, _tipHeight),
+                          painter: _BubbleTipPainter(
+                            color: _primaryDarkRaised,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -2310,123 +2399,133 @@ class _StickerPanel extends StatelessWidget {
     final stickers = source == _StickerSource.personal ? _personal : _room;
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            for (final sticker in stickers)
-              _StickerButton(
-                sticker: sticker,
-                onPressed: () => onStickerSelected(sticker.token),
-              ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Align(
-          alignment: Alignment.bottomCenter,
-          child: _SourceSwitch(
-            firstLabel: '个人表情包',
-            secondLabel: '房间表情包',
-            firstSelected: source == _StickerSource.personal,
-            onFirst: () => onSourceChanged(_StickerSource.personal),
-            onSecond: () => onSourceChanged(_StickerSource.room),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _VoicePanel extends StatelessWidget {
-  const _VoicePanel({
-    required this.mode,
-    required this.recordingDraft,
-    required this.onModeChanged,
-    required this.onTranscribe,
-    required this.onRecordDraft,
-  });
-
-  final _VoiceMode mode;
-  final bool recordingDraft;
-  final ValueChanged<_VoiceMode> onModeChanged;
-  final VoidCallback onTranscribe;
-  final VoidCallback onRecordDraft;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Align(
-          alignment: Alignment.center,
-          widthFactor: 1,
-          child: mode == _VoiceMode.transcribe
-              ? _InlineActionCard(
-                  icon: Icons.graphic_eq,
-                  tooltip: '开始语音转文字',
-                  label: '识别结果会进入输入框',
-                  onPressed: onTranscribe,
-                )
-              : _InlineActionCard(
-                  icon: recordingDraft ? Icons.check_circle_outline : Icons.mic,
-                  tooltip: recordingDraft ? '录音附件已预留' : '开始录音',
-                  label: recordingDraft ? '录音附件待接入发送' : '录音后作为附件发送',
-                  onPressed: onRecordDraft,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
+          child: Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              for (final sticker in stickers)
+                _StickerButton(
+                  sticker: sticker,
+                  onPressed: () => onStickerSelected(sticker.token),
                 ),
+            ],
           ),
-        const SizedBox(height: 12),
-        Align(
-          alignment: Alignment.bottomCenter,
-          widthFactor: 1,
-          child: _SourceSwitch(
-            firstLabel: '语音转文字',
-            secondLabel: '发送录音',
-            firstSelected: mode == _VoiceMode.transcribe,
-            onFirst: () => onModeChanged(_VoiceMode.transcribe),
-            onSecond: () => onModeChanged(_VoiceMode.recording),
-          ),
+        ),
+        _SourceSwitch(
+          firstLabel: '个人表情包',
+          secondLabel: '房间表情包',
+          firstSelected: source == _StickerSource.personal,
+          onFirst: () => onSourceChanged(_StickerSource.personal),
+          onSecond: () => onSourceChanged(_StickerSource.room),
         ),
       ],
     );
   }
 }
 
-class _FilePanel extends StatelessWidget {
-  const _FilePanel({required this.draftName, required this.onChooseFile});
+class _BubbleTipPainter extends CustomPainter {
+  const _BubbleTipPainter({required this.color});
 
-  final String? draftName;
-  final VoidCallback onChooseFile;
+  final Color color;
 
   @override
-  Widget build(BuildContext context) {
-    return _InlineActionCard(
-      icon: draftName == null ? Icons.upload_file : Icons.insert_drive_file,
-      tooltip: draftName == null ? '选择文件' : '文件附件已预留',
-      label: draftName ?? '选择文件后发送到当前房间',
-      onPressed: onChooseFile,
-    );
+  void paint(Canvas canvas, Size size) {
+    final fillPath = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width / 2, size.height)
+      ..close();
+    canvas.drawPath(fillPath, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_BubbleTipPainter oldDelegate) {
+    return oldDelegate.color != color;
   }
 }
 
 class _ToolboxPanel extends StatelessWidget {
   const _ToolboxPanel();
 
+  static const double buttonSize = 46;
+  static const double spacing = 10;
+  static const int maxColumns = 4;
+
+  static const _items = [
+    _ToolboxItem(
+      icon: Icons.music_note,
+      tooltip: '音乐盒',
+      backgroundColor: Color(0xFF1F2D27),
+      borderColor: Color(0xFF355C49),
+      foregroundColor: Color(0xFF6FCFA6),
+    ),
+    _ToolboxItem(
+      icon: Icons.poll_outlined,
+      tooltip: '投票',
+      backgroundColor: Color(0xFF2B2739),
+      borderColor: Color(0xFF594D78),
+      foregroundColor: Color(0xFFB8A3FF),
+    ),
+    _ToolboxItem(
+      icon: Icons.bolt_outlined,
+      tooltip: '快捷指令',
+      backgroundColor: Color(0xFF33291C),
+      borderColor: Color(0xFF6D5630),
+      foregroundColor: Color(0xFFD4B675),
+    ),
+    _ToolboxItem(
+      icon: Icons.add_box_outlined,
+      tooltip: '后续扩展',
+      backgroundColor: Color(0xFF2E1F22),
+      borderColor: Color(0xFF6B3E45),
+      foregroundColor: Color(0xFFE58383),
+    ),
+  ];
+
+  static double get preferredContentWidth {
+    final columns = _items.length < maxColumns ? _items.length : maxColumns;
+    if (columns <= 0) return 0;
+    return (columns * buttonSize) + ((columns - 1) * spacing);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: const [
-        _ToolboxButton(icon: Icons.music_note, tooltip: '音乐盒'),
-        _ToolboxButton(icon: Icons.poll_outlined, tooltip: '投票'),
-        _ToolboxButton(icon: Icons.bolt_outlined, tooltip: '快捷指令'),
-        _ToolboxButton(icon: Icons.add_box_outlined, tooltip: '后续扩展'),
+      spacing: spacing,
+      runSpacing: spacing,
+      children: [
+        for (final item in _items)
+          _ToolboxButton(
+            icon: item.icon,
+            tooltip: item.tooltip,
+            backgroundColor: item.backgroundColor,
+            borderColor: item.borderColor,
+            foregroundColor: item.foregroundColor,
+          ),
       ],
     );
   }
+}
+
+class _ToolboxItem {
+  const _ToolboxItem({
+    required this.icon,
+    required this.tooltip,
+    required this.backgroundColor,
+    required this.borderColor,
+    required this.foregroundColor,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final Color backgroundColor;
+  final Color borderColor;
+  final Color foregroundColor;
 }
 
 class _SourceSwitch extends StatelessWidget {
@@ -2446,38 +2545,32 @@ class _SourceSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const switchWidth = 264.0;
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth.isFinite &&
-                constraints.maxWidth < switchWidth
-            ? constraints.maxWidth
-            : switchWidth;
-
-        return SizedBox(
-          width: width,
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _SourceSwitchButton(
-                  onPressed: onFirst,
-                  selected: firstSelected,
-                  label: firstLabel,
-                ),
-                const SizedBox(width: 8),
-                _SourceSwitchButton(
-                  onPressed: onSecond,
-                  selected: !firstSelected,
-                  label: secondLabel,
-                ),
-              ],
+    return ClipRRect(
+      borderRadius: const BorderRadius.only(
+        bottomLeft: Radius.circular(8),
+        bottomRight: Radius.circular(8),
+      ),
+      child: SizedBox(
+        height: _SourceSwitchButton.height,
+        child: Row(
+          children: [
+            Expanded(
+              child: _SourceSwitchButton(
+                onPressed: onFirst,
+                selected: firstSelected,
+                label: firstLabel,
+              ),
             ),
-          ),
-        );
-      },
+            Expanded(
+              child: _SourceSwitchButton(
+                onPressed: onSecond,
+                selected: !firstSelected,
+                label: secondLabel,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -2488,6 +2581,8 @@ class _SourceSwitchButton extends StatelessWidget {
     required this.selected,
     required this.onPressed,
   });
+
+  static const height = 34.0;
 
   final String label;
   final bool selected;
@@ -2500,8 +2595,10 @@ class _SourceSwitchButton extends StatelessWidget {
     return KeySurface(
       onPressed: onPressed,
       selected: selected,
-      width: 128,
-      height: 34,
+      height: height,
+      hoverLift: 0,
+      pressDepth: 0,
+      baseDepth: 0,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       backgroundColor: _primaryDarkLow,
       selectedBackgroundColor: _selectedSurface,
@@ -2560,49 +2657,41 @@ class _StickerButton extends StatelessWidget {
   }
 }
 
-class _InlineActionCard extends StatelessWidget {
-  const _InlineActionCard({
+class _BubbleIconAction extends StatelessWidget {
+  const _BubbleIconAction({
     required this.icon,
     required this.tooltip,
-    required this.label,
+    required this.backgroundColor,
+    required this.borderColor,
+    required this.foregroundColor,
     required this.onPressed,
+    this.size = 50,
   });
 
   final IconData icon;
   final String tooltip;
-  final String label;
+  final Color backgroundColor;
+  final Color borderColor;
+  final Color foregroundColor;
   final VoidCallback onPressed;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: _primaryDarkLow,
-        border: Border.all(color: _borderColor),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            KeyIconButton(
-              tooltip: tooltip,
-              onPressed: onPressed,
-              icon: Icon(icon),
-              size: 42,
-            ),
-            const SizedBox(width: 12),
-            Flexible(
-              child: Text(
-                label,
-                style: const TextStyle(
-                  color: _textSecondary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
+    return SizedBox(
+      width: size,
+      child: KeySurface(
+        tooltip: tooltip,
+        onPressed: onPressed,
+        height: size,
+        padding: EdgeInsets.zero,
+        backgroundColor: backgroundColor,
+        selectedBackgroundColor: backgroundColor,
+        pressedBackgroundColor: backgroundColor,
+        borderColor: borderColor,
+        selectedBorderColor: borderColor,
+        child: Center(
+          child: Icon(icon, color: foregroundColor, size: size * 0.42),
         ),
       ),
     );
@@ -2610,18 +2699,30 @@ class _InlineActionCard extends StatelessWidget {
 }
 
 class _ToolboxButton extends StatelessWidget {
-  const _ToolboxButton({required this.icon, required this.tooltip});
+  const _ToolboxButton({
+    required this.icon,
+    required this.tooltip,
+    required this.backgroundColor,
+    required this.borderColor,
+    required this.foregroundColor,
+  });
 
   final IconData icon;
   final String tooltip;
+  final Color backgroundColor;
+  final Color borderColor;
+  final Color foregroundColor;
 
   @override
   Widget build(BuildContext context) {
-    return KeyIconButton(
+    return _BubbleIconAction(
+      icon: icon,
       tooltip: tooltip,
+      backgroundColor: backgroundColor,
+      borderColor: borderColor,
+      foregroundColor: foregroundColor,
       onPressed: () {},
-      icon: Icon(icon),
-      size: 46,
+      size: _ToolboxPanel.buttonSize,
     );
   }
 }
