@@ -5,9 +5,6 @@ name: release
 # 触发方式：push v* tag，或 Actions 页面手动触发。
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       version:
