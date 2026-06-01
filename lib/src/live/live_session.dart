@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show HttpOverrides;
 
 import 'package:flutter/foundation.dart';
@@ -13,12 +14,51 @@ class ScreenSource {
     required this.name,
     required this.thumbnail,
     required this.isWindow,
+    this.thumbnailUpdates,
   });
 
   final String id;
   final String name;
   final Uint8List? thumbnail;
   final bool isWindow;
+  final Stream<Uint8List>? thumbnailUpdates;
+}
+
+final _screenSourceWhitespacePattern = RegExp(r'\s+');
+
+const _ignoredShareWindowNameParts = <String>[
+  'nvidia geforce overlay',
+  'nvidia overlay',
+  'geforce overlay',
+];
+
+@visibleForTesting
+List<ScreenSource> filterScreenSourcesForPicker(
+  Iterable<ScreenSource> sources,
+) {
+  final visible = <ScreenSource>[];
+  final seenIds = <String>{};
+
+  for (final source in sources) {
+    final normalizedName = _normalizeScreenSourceName(source.name);
+    if (source.isWindow) {
+      if (_isIgnoredShareWindowName(normalizedName)) continue;
+    }
+    if (seenIds.add(source.id)) visible.add(source);
+  }
+
+  return visible;
+}
+
+String _normalizeScreenSourceName(String name) {
+  return name.trim().toLowerCase().replaceAll(
+    _screenSourceWhitespacePattern,
+    ' ',
+  );
+}
+
+bool _isIgnoredShareWindowName(String normalizedName) {
+  return _ignoredShareWindowNameParts.any(normalizedName.contains);
 }
 
 /// A single video track currently published in the live room, tagged with
@@ -311,21 +351,35 @@ class LiveSession extends ChangeNotifier {
     try {
       final sources = await rtc.desktopCapturer.getSources(
         types: [rtc.SourceType.Screen, rtc.SourceType.Window],
-        thumbnailSize: rtc.ThumbnailSize(320, 180),
+        thumbnailSize: rtc.ThumbnailSize(640, 360),
       );
-      return sources
-          .map(
-            (s) => ScreenSource(
-              id: s.id,
-              name: s.name.isEmpty ? '未命名来源' : s.name,
-              thumbnail: s.thumbnail,
-              isWindow: s.type == rtc.SourceType.Window,
-            ),
-          )
-          .toList();
+      return filterScreenSourcesForPicker(
+        sources.map((s) {
+          final isWindow = s.type == rtc.SourceType.Window;
+          final name = s.name.trim();
+          return ScreenSource(
+            id: s.id,
+            name: name.isEmpty ? (isWindow ? 'Window' : 'Screen') : name,
+            thumbnail: s.thumbnail,
+            isWindow: isWindow,
+            thumbnailUpdates: s.onThumbnailChanged.stream,
+          );
+        }).toList(),
+      );
     } catch (_) {
       return const [];
     }
+  }
+
+  /// Ask flutter_webrtc to refresh source thumbnails. On Windows the initial
+  /// getSources() call does not include thumbnail bytes; they arrive through
+  /// onThumbnailChanged after updateSources().
+  static Future<void> refreshScreenSourceThumbnails() async {
+    try {
+      await rtc.desktopCapturer.updateSources(
+        types: [rtc.SourceType.Screen, rtc.SourceType.Window],
+      );
+    } catch (_) {}
   }
 
   Future<void> disconnect() async {

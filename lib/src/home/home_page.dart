@@ -913,11 +913,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
     setState(() {
       _settingsOpen = true;
-      _selectedRoomId = null;
-      _selectedRoom = null;
-      _messages = const [];
-      _live = null;
-      _livePanelOpen = false;
       _error = null;
     });
   }
@@ -2682,32 +2677,63 @@ class _ScreenShareDialogState extends State<_ScreenShareDialog> {
   List<ScreenSource>? _sources;
   String? _selectedId;
   String? _error;
+  Timer? _refreshTimer;
+  bool _loadingSources = false;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    unawaited(_load());
+    _refreshTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      unawaited(LiveSession.refreshScreenSourceThumbnails());
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
+    if (_loadingSources) return;
+    _loadingSources = true;
     try {
       final sources = await LiveSession.listScreenSources();
       if (!mounted) return;
       setState(() {
         _sources = sources;
-        _selectedId = sources.isNotEmpty ? sources.first.id : null;
+        final selectedId = _selectedId;
+        _selectedId =
+            selectedId != null && sources.any((s) => s.id == selectedId)
+            ? selectedId
+            : sources.isNotEmpty
+            ? sources.first.id
+            : null;
       });
+      unawaited(LiveSession.refreshScreenSourceThumbnails());
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e.toString());
+    } finally {
+      _loadingSources = false;
     }
   }
 
   void _confirm() {
-    final id = _selectedId;
-    if (id == null) return;
-    final source = _sources?.firstWhere((s) => s.id == id);
+    final source = _selectedSource;
+    if (source == null) return;
     Navigator.of(context).pop(source);
+  }
+
+  ScreenSource? get _selectedSource {
+    final id = _selectedId;
+    final sources = _sources;
+    if (id == null || sources == null) return null;
+    for (final source in sources) {
+      if (source.id == id) return source;
+    }
+    return null;
   }
 
   @override
@@ -2807,6 +2833,109 @@ class _ScreenShareDialogState extends State<_ScreenShareDialog> {
   }
 }
 
+class _ScreenSourceThumbnail extends StatefulWidget {
+  const _ScreenSourceThumbnail({
+    required this.source,
+    required this.fit,
+    required this.iconSize,
+  });
+
+  final ScreenSource source;
+  final BoxFit fit;
+  final double iconSize;
+
+  @override
+  State<_ScreenSourceThumbnail> createState() => _ScreenSourceThumbnailState();
+}
+
+class _ScreenSourceThumbnailState extends State<_ScreenSourceThumbnail> {
+  Uint8List? _thumbnail;
+  Object? _imageError;
+  StreamSubscription<Uint8List>? _thumbnailSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _bindSource(widget.source);
+  }
+
+  @override
+  void didUpdateWidget(_ScreenSourceThumbnail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.source, widget.source)) _bindSource(widget.source);
+  }
+
+  @override
+  void dispose() {
+    unawaited(_thumbnailSubscription?.cancel());
+    super.dispose();
+  }
+
+  void _bindSource(ScreenSource source) {
+    unawaited(_thumbnailSubscription?.cancel());
+    _thumbnail = source.thumbnail;
+    _imageError = null;
+    _thumbnailSubscription = source.thumbnailUpdates?.listen((thumbnail) {
+      if (!mounted) return;
+      setState(() {
+        _thumbnail = thumbnail;
+        _imageError = null;
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final thumbnail = _thumbnail;
+    if (thumbnail == null || thumbnail.isEmpty || _imageError != null) {
+      return _ScreenSourceThumbnailFallback(
+        iconSize: widget.iconSize,
+      );
+    }
+
+    return ClipRect(
+      child: ColoredBox(
+        color: _primaryDarkLow,
+        child: Image.memory(
+          thumbnail,
+          fit: widget.fit,
+          gaplessPlayback: true,
+          errorBuilder: (context, error, stackTrace) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) setState(() => _imageError = error);
+            });
+            return _ScreenSourceThumbnailFallback(
+              iconSize: widget.iconSize,
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _ScreenSourceThumbnailFallback extends StatelessWidget {
+  const _ScreenSourceThumbnailFallback({
+    required this.iconSize,
+  });
+
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+        color: _primaryDarkLow,
+        child: Center(
+          child: Icon(
+            Icons.desktop_windows,
+            color: _textMuted,
+            size: iconSize,
+          ),
+      ),
+    );
+  }
+}
+
 class _ScreenSourceTile extends StatelessWidget {
   const _ScreenSourceTile({
     required this.source,
@@ -2820,7 +2949,6 @@ class _ScreenSourceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final thumbnail = source.thumbnail;
     return KeySurface(
       height: 158,
       interactive: true,
@@ -2836,28 +2964,17 @@ class _ScreenSourceTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: thumbnail == null
-                ? const ColoredBox(
-                    color: _primaryDarkLow,
-                    child: Center(
-                      child: Icon(
-                        Icons.desktop_windows,
-                        color: _textMuted,
-                        size: 32,
-                      ),
-                    ),
-                  )
-                : Image.memory(
-                    thumbnail,
-                    fit: BoxFit.contain,
-                    gaplessPlayback: true,
-                  ),
+            child: _ScreenSourceThumbnail(
+              source: source,
+              fit: BoxFit.cover,
+              iconSize: 32,
+            ),
           ),
           const SizedBox(height: 8),
           Row(
             children: [
               Icon(
-                source.isWindow ? Icons.web_asset : Icons.desktop_windows,
+                Icons.desktop_windows,
                 size: 13,
                 color: selected ? _cyan : _textMuted,
               ),
