@@ -65,8 +65,15 @@ jobs:
     runs-on: macos-arm64
     needs: [prepare]
     steps:
+      # 不用 actions/checkout：runner 在国内访问不了 gitea.com，克隆 action 会卡死。
       - name: Checkout
-        uses: https://gitea.com/actions/checkout@v4
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          rm -rf .git
+          git init -q .
+          git -c "http.extraheader=Authorization: token $TOKEN" fetch --depth=1 --no-tags "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "$GITHUB_SHA"
+          git checkout -f FETCH_HEAD
 
       - name: Flutter sanity check
         run: |
@@ -113,8 +120,19 @@ jobs:
       PUB_HOSTED_URL: https://pub.flutter-io.cn
       FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
     steps:
+      # 不用 actions/checkout：runner 在国内访问不了 gitea.com，克隆 action 会卡死。
+      # 必须开 core.longpaths，否则深层源文件（windows/ 下 CMake 文件等）因 260 字符
+      # 路径限制 checkout 不全，后续 flutter build windows 的 CMake 会报错。
       - name: Checkout
-        uses: https://gitea.com/actions/checkout@v4
+        shell: powershell
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if (Test-Path .git) { Remove-Item -Recurse -Force .git }
+          git config --global core.longpaths true
+          git init -q .
+          git -c "http.extraheader=Authorization: token $env:TOKEN" fetch --depth=1 --no-tags "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY.git" $env:GITHUB_SHA
+          git checkout -f FETCH_HEAD
 
       - name: Flutter sanity check
         shell: powershell
