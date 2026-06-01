@@ -133,6 +133,8 @@ WindowOptions _initialWindowOptions({bool authenticated = false}) {
   if (Platform.isMacOS) {
     return const WindowOptions(
       backgroundColor: _windowBackground,
+      titleBarStyle: TitleBarStyle.hidden,
+      windowButtonVisibility: false,
       center: true,
     );
   }

@@ -1,6 +1,4 @@
 PODS:
-  - desktop_multi_window (0.0.1):
-    - FlutterMacOS
   - flutter_webrtc (1.2.0):
     - FlutterMacOS
     - WebRTC-SDK (= 137.7151.04)
@@ -14,7 +12,6 @@ PODS:
   - WebRTC-SDK (137.7151.04)
 
 DEPENDENCIES:
-  - desktop_multi_window (from `Flutter/ephemeral/.symlinks/plugins/desktop_multi_window/macos`)
   - flutter_webrtc (from `Flutter/ephemeral/.symlinks/plugins/flutter_webrtc/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
   - livekit_client (from `Flutter/ephemeral/.symlinks/plugins/livekit_client/macos`)
@@ -25,8 +22,6 @@ SPEC REPOS:
     - WebRTC-SDK
 
 EXTERNAL SOURCES:
-  desktop_multi_window:
-    :path: Flutter/ephemeral/.symlinks/plugins/desktop_multi_window/macos
   flutter_webrtc:
     :path: Flutter/ephemeral/.symlinks/plugins/flutter_webrtc/macos
   FlutterMacOS:
@@ -37,7 +32,6 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/screen_retriever_macos/macos
 
 SPEC CHECKSUMS:
-  desktop_multi_window: 93667594ccc4b88d91a97972fd3b1b89667fa80a
   flutter_webrtc: 718eae22a371cd94e5d56aa4f301443ebc5bb737
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
   livekit_client: 5568bc8a65cdfffc1fa3a6d4cd2a3233c77aca1d

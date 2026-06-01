@@ -28,8 +28,7 @@ const _textMuted = Color(0xFF6F7785);
 const _hoverNeutral = Color(0xFF1F232C);
 const _hoverDanger = Color(0xFFE58383);
 
-bool get _supportsCustomControls =>
-    !kIsWeb && (Platform.isWindows || Platform.isLinux);
+bool get _supportsCustomControls => !kIsWeb;
 
 /// When true, [WindowControls] paints nothing. The immersive full-screen
 /// screen-share view flips this so the min/maximize/close buttons (which are

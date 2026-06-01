@@ -1,7 +1,7 @@
 import Cocoa
 import FlutterMacOS
 
-private let loginWindowSize = NSSize(width: 430, height: 288)
+private let loginWindowSize = NSSize(width: 430, height: 256)
 private let appBackground = NSColor(
   red: CGFloat(0x14) / 255.0,
   green: CGFloat(0x17) / 255.0,
@@ -22,8 +22,6 @@ class MainFlutterWindow: NSWindow {
     styleMask.insert(.fullSizeContentView)
     styleMask.remove(.resizable)
     backgroundColor = appBackground
-    isOpaque = true
-    hasShadow = false
     isRestorable = false
     animationBehavior = .none
 
@@ -32,6 +30,19 @@ class MainFlutterWindow: NSWindow {
     RegisterGeneratedPlugins(registry: flutterViewController)
 
     super.awakeFromNib()
+  }
+
+  // window_manager's setTitleBarStyle("hidden") flips isOpaque to false and
+  // hasShadow to true. Pin them so the window stays opaque (no black strip) and
+  // shadowless regardless of what the plugin does.
+  override var isOpaque: Bool {
+    get { true }
+    set {}
+  }
+
+  override var hasShadow: Bool {
+    get { false }
+    set {}
   }
 
   private func setInitialLoginFrame() {
