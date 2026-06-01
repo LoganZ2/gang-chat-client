@@ -53,15 +53,43 @@ class LiveSession extends ChangeNotifier {
   String? _roomName;
   bool _connecting = false;
   bool _screenSharing = false;
+  bool _canPublish = true;
 
   final Set<String> _speakingIdentities = <String>{};
   final Map<String, bool> _micMutedByIdentity = <String, bool>{};
+
+  /// Fired when the server force-disconnects the local participant from
+  /// LiveKit (an admin `kick` -> `RemoveParticipant`). The UI uses this to drop
+  /// its joined state and exit the voice panel without auto-reconnecting. Only
+  /// raised for involuntary removals, not for our own [disconnect].
+  void Function()? onForciblyRemoved;
+
+  /// Fired when LiveKit reports the local participant's publish permission
+  /// changed (an admin `block_voice` -> canPublish=false, or `restore_voice` ->
+  /// canPublish=true). [canPublish] is the new value. The UI reconciles the
+  /// mic button: disabled while false, re-enabled (still muted) when restored.
+  void Function(bool canPublish)? onPublishPermissionChanged;
 
   bool get isConnected =>
       _room?.connectionState == lk.ConnectionState.connected;
   bool get isConnecting => _connecting;
   bool get isScreenSharing => _screenSharing;
   String? get roomName => _roomName;
+
+  /// Whether LiveKit currently grants the local participant publish rights.
+  /// False once an admin `block_voice` revokes it; LiveKit is the source of
+  /// truth here, not any locally-tracked flag.
+  bool get canPublish => _canPublish;
+
+  /// Whether the local microphone is muted according to the LiveKit track
+  /// itself (server-side mutes by an admin are reflected here, unlike a
+  /// locally-tracked bool). Returns true when not connected or unpublished.
+  bool get localMicMuted {
+    final local = _room?.localParticipant;
+    if (local == null) return true;
+    return _isMicMuted(local);
+  }
+
   Set<String> get speakingIdentities => Set.unmodifiable(_speakingIdentities);
   Map<String, bool> get micMutedByIdentity =>
       Map.unmodifiable(_micMutedByIdentity);
@@ -173,6 +201,7 @@ class LiveSession extends ChangeNotifier {
     _room = room;
     _roomName = roomName;
     _screenSharing = false;
+    _canPublish = true;
     _cancelEvents = room.events.listen(_onEvent);
 
     try {
@@ -180,9 +209,15 @@ class LiveSession extends ChangeNotifier {
         () => room.connect(url, token),
         findProxyFromEnvironment: (uri, environment) => 'DIRECT',
       );
+      // Seed publish permission from the token LiveKit just validated: a
+      // voice-banned user joins with canPublish=false, and we must not try to
+      // publish the mic below (LiveKit would reject it).
+      _canPublish = room.localParticipant?.permissions.canPublish ?? true;
       // Publish the microphone track. The OS will prompt for permission on
-      // the first publish.
-      await room.localParticipant?.setMicrophoneEnabled(!micMuted);
+      // the first publish. Skip it entirely when publishing is blocked.
+      if (_canPublish) {
+        await room.localParticipant?.setMicrophoneEnabled(!micMuted);
+      }
       _refreshAllMicStates();
     } catch (e) {
       await _cancelEvents?.call();
@@ -292,6 +327,7 @@ class LiveSession extends ChangeNotifier {
     _roomName = null;
     _connecting = false;
     _screenSharing = false;
+    _canPublish = true;
     _speakingIdentities.clear();
     _micMutedByIdentity.clear();
     if (cancel != null) {
@@ -354,6 +390,21 @@ class LiveSession extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    // An admin block_voice / restore_voice flips the local participant's
+    // publish permission server-side; LiveKit pushes it down here. Track only
+    // the local participant — remote permission changes don't affect our UI.
+    if (event is lk.ParticipantPermissionsUpdatedEvent) {
+      final local = _room?.localParticipant;
+      if (local != null && event.participant.identity == local.identity) {
+        final next = event.permissions.canPublish;
+        if (next != _canPublish) {
+          _canPublish = next;
+          notifyListeners();
+          onPublishPermissionChanged?.call(next);
+        }
+      }
+      return;
+    }
     // Video subscription / publish lifecycle: rebuild the rendered track list.
     if (event is lk.TrackSubscribedEvent ||
         event is lk.TrackUnsubscribedEvent ||
@@ -375,6 +426,16 @@ class LiveSession extends ChangeNotifier {
       _speakingIdentities.clear();
       _micMutedByIdentity.clear();
       notifyListeners();
+      // An admin kick force-disconnects us via RemoveParticipant; LiveKit
+      // reports it as participantRemoved. Distinguish it from our own
+      // disconnect() (which clears _cancelEvents before the event can fire, so
+      // this handler never runs for a voluntary leave) and from transient
+      // network drops, so the UI can exit the voice panel without auto-
+      // reconnecting into a room we were just removed from.
+      if (event.reason == lk.DisconnectReason.participantRemoved ||
+          event.reason == lk.DisconnectReason.roomDeleted) {
+        onForciblyRemoved?.call();
+      }
       return;
     }
   }

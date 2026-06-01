@@ -83,6 +83,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _headphonesMuted = false;
   bool _cameraOn = false;
   bool _screenSharing = false;
+  // A persistent admin voice ban (block_voice) on the local user. While true
+  // the mic is force-muted, the mic button is disabled, and self-unmute is
+  // rejected by the server. Driven by LiveKit permission events and the
+  // voice_blocked field on join/patch responses.
+  bool _voiceBlocked = false;
 
   // Immersive full-screen screen-share. Holds the identity of the participant
   // whose share is expanded; null when not in full-screen. We track identity
@@ -106,6 +111,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _api = _newApiClient();
     _liveSession.addListener(_onLiveSessionChanged);
+    _liveSession.onForciblyRemoved = _onForciblyRemovedFromLive;
+    _liveSession.onPublishPermissionChanged = _onPublishPermissionChanged;
     _shutdownHookToken = ShutdownHooks.register(
       () => _shutdownLive(reason: 'app_exit'),
     );
@@ -163,11 +170,108 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       case 'live_room_finished':
         _applyLiveSnapshot(ev.data);
         break;
+      // Room-list sync: the server pushes the full public snapshot of a room
+      // when membership, settings, or the last message change, so the sidebar
+      // stays live without polling.
+      case 'room_added':
+        _applyRoomAdded(ev.data);
+        break;
+      case 'room_updated':
+        _applyRoomUpdated(ev.data);
+        break;
+      case 'room_deleted':
+        _applyRoomDeleted(ev.data);
+        break;
+      case 'room_role_changed':
+        _applyRoomRoleChanged(ev.data);
+        break;
       default:
-        // Other event types (messages, room updates, ...) aren't wired yet.
+        // Other event types aren't wired yet.
         break;
     }
   }
+
+  /// A room we just gained membership in (created it, joined an open room, or
+  /// an admin approved our request). Insert its public snapshot; the request
+  /// approver flow relies on this even though our SSE never subscribed to the
+  /// room. A duplicate id is replaced rather than added twice.
+  void _applyRoomAdded(Map<String, dynamic> data) {
+    final card = _roomCardFromSnapshot(data);
+    if (card == null || !mounted) return;
+    setState(() => _rooms = _upsertRoomCard(_rooms, card));
+  }
+
+  /// A room's public state changed (member count, settings, rename, new last
+  /// message, ...). Replace the matching card but keep our local per-user
+  /// fields, which the snapshot doesn't carry.
+  void _applyRoomUpdated(Map<String, dynamic> data) {
+    final incoming = _roomCardFromSnapshot(data);
+    if (incoming == null || !mounted) return;
+    setState(() {
+      final idx = _rooms.indexWhere((r) => r.id == incoming.id);
+      if (idx < 0) {
+        // We don't have it yet (e.g. missed the room_added); treat as an insert
+        // so the list still converges.
+        _rooms = _upsertRoomCard(_rooms, incoming);
+        return;
+      }
+      final existing = _rooms[idx];
+      final next = [..._rooms];
+      // Carry the local unread count forward — the public snapshot resets it
+      // to 0. Real unread tracking still needs a badge + read-marking, which
+      // this client doesn't have yet, so we just avoid clobbering it.
+      next[idx] = incoming.copyWith(unreadCount: existing.unreadCount);
+      _rooms = next;
+    });
+  }
+
+  /// We lost a room (left, were removed, or it was deleted). Drop the card and,
+  /// if it's the open room, clear the chat pane back to the empty state.
+  void _applyRoomDeleted(Map<String, dynamic> data) {
+    final roomId = data['room_id'] as String?;
+    if (roomId == null || !mounted) return;
+    setState(() {
+      _rooms = _rooms.where((r) => r.id != roomId).toList();
+      if (_selectedRoomId == roomId) {
+        _selectedRoomId = null;
+        _selectedRoom = null;
+        _messages = const [];
+        _live = null;
+        _livePanelOpen = false;
+        _settingsOpen = false;
+      }
+    });
+    // If we were live in that room, the LiveKit session is now orphaned; drop
+    // it so we don't keep streaming into a room we no longer belong to.
+    if (_joinedLiveRoomId == roomId) {
+      _joinedLiveRoomId = null;
+      unawaited(_liveSession.disconnect().catchError((_) {}));
+    }
+  }
+
+  /// Our role in a room changed (promoted to / demoted from admin). The room
+  /// list card carries no role, but the open room's detail does and gates the
+  /// admin affordances, so patch its membership when it's the selected room.
+  void _applyRoomRoleChanged(Map<String, dynamic> data) {
+    final roomId = data['room_id'] as String?;
+    final role = data['role'] as String?;
+    if (roomId == null || role == null || !mounted) return;
+    final current = _selectedRoom;
+    if (current == null || current.id != roomId) return;
+    setState(() {
+      _selectedRoom = current.copyWithRole(role);
+    });
+  }
+
+  RoomCard? _roomCardFromSnapshot(Map<String, dynamic> data) {
+    if (data['id'] is! String) return null;
+    try {
+      return RoomCard.fromJson(data);
+    } catch (_) {
+      return null;
+    }
+  }
+
 
   void _applyLiveSnapshot(Map<String, dynamic> data) {
     final roomId = data['room_id'] as String?;
@@ -216,6 +320,38 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       unawaited(_patchLiveState(screenSharing: false));
     }
     setState(() {});
+  }
+
+  /// An admin kicked us: LiveKit tore down our session via RemoveParticipant.
+  /// Drop joined state and exit the voice panel; do not auto-reconnect (the
+  /// next deliberate Join goes through the normal join flow, which the server
+  /// gates against any standing ban).
+  void _onForciblyRemovedFromLive() {
+    if (!mounted) return;
+    final roomId = _joinedLiveRoomId;
+    setState(() {
+      if (roomId != null) _removeSelfFromLive(roomId);
+      _joinedLiveRoomId = null;
+      _joiningLive = false;
+      _cameraOn = false;
+      _screenSharing = false;
+      _voiceBlocked = false;
+    });
+    // Drop any lingering transport so a stale connection can't auto-reconnect.
+    unawaited(_liveSession.disconnect().catchError((_) {}));
+    _showToast('你已被移出语音');
+  }
+
+  /// LiveKit reported our publish permission changed (admin block_voice /
+  /// restore_voice). LiveKit is authoritative, so mirror it into the mic UI:
+  /// when blocked the mic is force-muted and the button is disabled; when
+  /// restored the button is re-enabled but stays muted until the user opens it.
+  void _onPublishPermissionChanged(bool canPublish) {
+    if (!mounted) return;
+    setState(() {
+      _voiceBlocked = !canPublish;
+      if (!canPublish) _micMuted = true;
+    });
   }
 
   /// Best-effort live-session teardown. Caller is responsible for waiting on
@@ -474,6 +610,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _micMuted = result.participant.micMuted;
         _cameraOn = result.participant.cameraOn;
         _screenSharing = result.participant.screenSharing;
+        _voiceBlocked = result.participant.voiceBlocked;
         _live = result.live;
         _rooms = _patchRoomLiveCount(_rooms, room.id, result.live);
       });
@@ -532,6 +669,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _joinedLiveRoomId = null;
       _cameraOn = false;
       _screenSharing = false;
+      _voiceBlocked = false;
     });
     try {
       // Drop the LiveKit connection. The server observes the disconnect via
@@ -624,6 +762,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _micMuted = participant.micMuted;
         _cameraOn = participant.cameraOn;
         _screenSharing = participant.screenSharing;
+        // The server forces mic_muted/voice_blocked back on for a banned user
+        // who tried to self-unmute; trust the returned values over what we
+        // optimistically asked for.
+        _voiceBlocked = participant.voiceBlocked;
         _live = _mergeParticipant(_live, participant);
       });
     } catch (e) {
@@ -703,6 +845,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
     WidgetsBinding.instance.removeObserver(this);
     _liveSession.removeListener(_onLiveSessionChanged);
+    _liveSession.onForciblyRemoved = null;
+    _liveSession.onPublishPermissionChanged = null;
     _liveSession.dispose();
     _api.close();
     _messageController.dispose();
@@ -947,12 +1091,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   joining: _joiningLive,
                   micMuted: _micMuted,
                   headphonesMuted: _headphonesMuted,
+                  voiceBlocked: _voiceBlocked,
                   cameraOn: _cameraOn,
                   screenSharing: _screenSharing,
                   speakingUserIds: _liveSession.speakingIdentities,
                   onJoin: () => _joinLive('live_panel'),
                   onLeave: _leaveLive,
-                  onToggleMic: () => _patchLiveState(micMuted: !_micMuted),
+                  onToggleMic: _voiceBlocked
+                      ? null
+                      : () => _patchLiveState(micMuted: !_micMuted),
                   onToggleHeadphones: () {
                     setState(() => _headphonesMuted = !_headphonesMuted);
                   },
@@ -1915,6 +2062,7 @@ class _LivePanel extends StatelessWidget {
     required this.joining,
     required this.micMuted,
     required this.headphonesMuted,
+    required this.voiceBlocked,
     required this.cameraOn,
     required this.screenSharing,
     required this.speakingUserIds,
@@ -1936,12 +2084,14 @@ class _LivePanel extends StatelessWidget {
   final bool joining;
   final bool micMuted;
   final bool headphonesMuted;
+  final bool voiceBlocked;
   final bool cameraOn;
   final bool screenSharing;
   final Set<String> speakingUserIds;
   final VoidCallback onJoin;
   final VoidCallback onLeave;
-  final VoidCallback onToggleMic;
+  // Null when the local user is voice-blocked: the mic can't be toggled.
+  final VoidCallback? onToggleMic;
   final VoidCallback onToggleHeadphones;
   final VoidCallback onToggleCamera;
   final VoidCallback onToggleShare;
@@ -2034,6 +2184,7 @@ class _LivePanel extends StatelessWidget {
           joining: joining,
           micMuted: micMuted,
           headphonesMuted: headphonesMuted,
+          voiceBlocked: voiceBlocked,
           cameraOn: cameraOn,
           screenSharing: screenSharing,
           onJoin: onJoin,
@@ -2159,8 +2310,14 @@ class _LiveParticipantCard extends StatelessWidget {
             spacing: 8,
             children: [
               _StatusIcon(
-                icon: participant.micMuted ? Icons.mic_off : Icons.mic,
-                active: !participant.micMuted && speaking,
+                // A voice-blocked participant reads as force-muted; show the
+                // off-mic glyph regardless of their own mic flag.
+                icon: participant.voiceBlocked || participant.micMuted
+                    ? Icons.mic_off
+                    : Icons.mic,
+                active: !participant.voiceBlocked &&
+                    !participant.micMuted &&
+                    speaking,
               ),
               _StatusIcon(icon: Icons.videocam, active: participant.cameraOn),
               _StatusIcon(
@@ -2720,6 +2877,7 @@ class _LiveControls extends StatelessWidget {
     required this.joining,
     required this.micMuted,
     required this.headphonesMuted,
+    required this.voiceBlocked,
     required this.cameraOn,
     required this.screenSharing,
     required this.onJoin,
@@ -2735,11 +2893,13 @@ class _LiveControls extends StatelessWidget {
   final bool joining;
   final bool micMuted;
   final bool headphonesMuted;
+  final bool voiceBlocked;
   final bool cameraOn;
   final bool screenSharing;
   final VoidCallback onJoin;
   final VoidCallback onLeave;
-  final VoidCallback onToggleMic;
+  // Null disables the mic button (the local user is voice-blocked).
+  final VoidCallback? onToggleMic;
   final VoidCallback onToggleHeadphones;
   final VoidCallback onToggleCamera;
   final VoidCallback onToggleShare;
@@ -2763,10 +2923,14 @@ class _LiveControls extends StatelessWidget {
             )
           else ...[
             _LiveControlKey(
-              tooltip: micMuted ? 'Unmute' : 'Mute',
-              icon: micMuted ? Icons.mic_off : Icons.mic,
-              active: !micMuted,
-              onPressed: onToggleMic,
+              tooltip: voiceBlocked
+                  ? '已被管理员禁言'
+                  : micMuted
+                  ? 'Unmute'
+                  : 'Mute',
+              icon: voiceBlocked || micMuted ? Icons.mic_off : Icons.mic,
+              active: !voiceBlocked && !micMuted,
+              onPressed: voiceBlocked ? null : onToggleMic,
             ),
             _LiveControlKey(
               tooltip: headphonesMuted
@@ -2822,7 +2986,7 @@ class _LiveControlKey extends StatelessWidget {
   final String tooltip;
   final IconData icon;
   final bool active;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final bool danger;
   final bool busy;
 

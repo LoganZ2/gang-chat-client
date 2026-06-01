@@ -134,6 +134,25 @@ class RoomCard {
       updatedAt: DateTime.parse(json['updated_at']! as String),
     );
   }
+
+  /// Returns a copy with selected fields overridden. Used when merging a
+  /// server-pushed public snapshot (room_updated) over an existing card: the
+  /// snapshot carries no per-user fields, so the caller re-supplies the local
+  /// [unreadCount] to keep it from being reset to 0.
+  RoomCard copyWith({int? unreadCount}) {
+    return RoomCard(
+      id: id,
+      name: name,
+      avatarUrl: avatarUrl,
+      defaultAvatarKey: defaultAvatarKey,
+      memberCount: memberCount,
+      liveParticipantCount: liveParticipantCount,
+      liveAvatarPreview: liveAvatarPreview,
+      lastMessage: lastMessage,
+      unreadCount: unreadCount ?? this.unreadCount,
+      updatedAt: updatedAt,
+    );
+  }
 }
 
 /// A room as seen from search results — the viewer may or may not already be
@@ -284,6 +303,27 @@ class RoomDetail {
       myMembership.role == 'admin' ||
       myMembership.role == 'superuser';
 
+  /// Returns a copy with the current user's membership role replaced. Used to
+  /// apply a `room_role_changed` SSE event (promote/demote) without re-fetching
+  /// the whole room detail.
+  RoomDetail copyWithRole(String role) {
+    return RoomDetail(
+      id: id,
+      name: name,
+      avatarUrl: avatarUrl,
+      defaultAvatarKey: defaultAvatarKey,
+      memberCount: memberCount,
+      createdBy: createdBy,
+      myMembership: RoomMembership(
+        joinedAt: myMembership.joinedAt,
+        role: role,
+      ),
+      live: live,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+    );
+  }
+
   RoomCard toCard() {
     return RoomCard(
       id: id,
@@ -368,6 +408,8 @@ class LiveParticipant {
     required this.user,
     required this.joinedAt,
     required this.micMuted,
+    required this.headphonesMuted,
+    required this.voiceBlocked,
     required this.cameraOn,
     required this.screenSharing,
     required this.connectionState,
@@ -377,6 +419,14 @@ class LiveParticipant {
   final UserSummary user;
   final DateTime joinedAt;
   final bool micMuted;
+  final bool headphonesMuted;
+
+  /// A persistent room-level voice ban set by an admin (`block_voice`). While
+  /// true the participant's LiveKit publish permission is revoked: the mic is
+  /// force-muted and self-unmute requests are rejected by the server. Survives
+  /// reconnects until an admin runs `restore_voice`. Defaults to false for
+  /// servers that don't send the field.
+  final bool voiceBlocked;
   final bool cameraOn;
   final bool screenSharing;
   final String connectionState;
@@ -387,6 +437,8 @@ class LiveParticipant {
       user: UserSummary.fromJson(json['user']! as Map<String, Object?>),
       joinedAt: DateTime.parse(json['joined_at']! as String),
       micMuted: json['mic_muted']! as bool,
+      headphonesMuted: json['headphones_muted'] as bool? ?? false,
+      voiceBlocked: json['voice_blocked'] as bool? ?? false,
       cameraOn: json['camera_on']! as bool,
       screenSharing: json['screen_sharing']! as bool,
       connectionState: json['connection_state']! as String,
