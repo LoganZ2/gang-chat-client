@@ -2249,6 +2249,7 @@ class _ComposerPanelSurface extends StatelessWidget {
 
   static const double _tipWidth = 18;
   static const double _tipHeight = 10;
+  static const double _tipOverlap = 1;
   static const double _tipBottomClearance = 4;
   static const double _surfaceYOffset = 2;
   static const double _tipSideInset = 12;
@@ -2334,20 +2335,13 @@ class _ComposerPanelSurface extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: _primaryDarkRaised,
                           borderRadius: BorderRadius.circular(8),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.24),
-                              blurRadius: 18,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
                         ),
                       ),
                     ),
                     Padding(padding: _contentPadding, child: child),
                     Positioned(
                       right: _tipRightPadding(bubbleWidth),
-                      bottom: -_tipHeight,
+                      bottom: -(_tipHeight - _tipOverlap),
                       child: Padding(
                         padding: EdgeInsets.zero,
                         child: CustomPaint(
