@@ -110,7 +110,7 @@ jobs:
       FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
     steps:
       - name: Checkout
-        shell: pwsh
+        shell: powershell
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -120,7 +120,7 @@ jobs:
           git checkout FETCH_HEAD
 
       - name: Flutter sanity check
-        shell: pwsh
+        shell: powershell
         run: |
           if (-not (Get-Command flutter -ErrorAction SilentlyContinue)) {
             Write-Error "flutter not found in PATH"; exit 1
@@ -135,7 +135,7 @@ jobs:
 
       - name: Package ZIP
         id: zip
-        shell: pwsh
+        shell: powershell
         run: |
           $VERSION = "${{ needs.prepare.outputs.version }}"
           $SRC = "build\windows\x64\runner\Release"
@@ -146,7 +146,7 @@ jobs:
           Get-Item $ZIP | Select-Object Name, @{n='Size';e={'{0:N0} bytes' -f $_.Length}}
 
       - name: Upload ZIP to release
-        shell: pwsh
+        shell: powershell
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
