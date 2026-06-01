@@ -183,6 +183,15 @@ class LiveSession extends ChangeNotifier {
         // screen share for a small group.
         adaptiveStream: false,
         dynacast: true,
+        // Don't stop the OS audio capture session when the mic is muted.
+        // The default (true) calls MediaStreamTrack.stop() on mute, which on
+        // macOS tears down the shared input device and cuts audio for other
+        // apps using the same mic (e.g. WeChat voice). Muting now only stops
+        // sending audio; the device stays open (system mic indicator stays
+        // lit) and unmute is instant.
+        defaultAudioCaptureOptions: lk.AudioCaptureOptions(
+          stopAudioCaptureOnMute: false,
+        ),
         defaultVideoPublishOptions: lk.VideoPublishOptions(
           // The capture rate (ScreenShareCaptureOptions.maxFrameRate) only sets
           // how fast the grabber samples the screen. What viewers actually
