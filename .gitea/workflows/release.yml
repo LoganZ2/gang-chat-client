@@ -19,15 +19,9 @@ on:
 jobs:
   build-macos:
     runs-on: macos-arm64
-    env:
-      # 国内镜像，避免 storage.googleapis.com（Flutter/Dart SDK 下载）被墙。
-      # 注意：runner 上的 Flutter SDK 需预装，这里只影响 pub 依赖拉取。
-      PUB_HOSTED_URL: https://pub.flutter-io.cn
-      FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
     steps:
-      # 从 gitea.com 镜像拉 action，不走被墙的 github.com（与 server 仓库一致）。
       - name: Checkout
-        uses: https://gitea.com/actions/checkout@v4
+        uses: https://github.com/actions/checkout@v4
 
       # 手动触发用输入的版本号；tag 触发则从 tag 名去掉 v 前缀。
       - name: Resolve version
