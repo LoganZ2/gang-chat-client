@@ -1,10 +1,9 @@
 name: release
 
-# 在 macos-runner 上构建 macOS release，打成 .dmg，然后通过 Gitea release API
-# 建一个 draft release 并挂上产物。两种触发方式：
+# 并行构建 macOS (.dmg) 和 Windows (.zip)，两者完成后统一创建 draft release 并上传产物。
+# 触发方式：
 #   - push 一个 v* tag（如 v1.2.0）
-#   - 在 Actions 页面手动触发（workflow_dispatch），手填版本号
-# 暂不做签名/公证（ad-hoc），用户首次打开需右键“打开”绕过 Gatekeeper。
+#   - Actions 页面手动触发，手填版本号
 
 on:
   push:
@@ -19,11 +18,13 @@ on:
 jobs:
   build-macos:
     runs-on: macos-arm64
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
     steps:
       - name: Checkout
         uses: https://github.com/actions/checkout@v4
 
-      # 手动触发用输入的版本号；tag 触发则从 tag 名去掉 v 前缀。
       - name: Resolve version
         id: version
         run: |
@@ -35,10 +36,8 @@ jobs:
           if [ -z "$VERSION" ]; then echo "version is empty"; exit 1; fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Resolved version: $VERSION (tag v$VERSION)"
+          echo "Resolved version: $VERSION"
 
-      # 环境自检：runner 是后台服务，可能不继承登录 shell 的 PATH。
-      # 若这里报 "flutter not found"，需把 Flutter 路径加进 runner 的 PATH。
       - name: Flutter sanity check
         run: |
           command -v flutter >/dev/null 2>&1 || { echo "flutter not found in PATH"; exit 1; }
@@ -50,7 +49,6 @@ jobs:
       - name: Build macOS (release)
         run: flutter build macos --release --build-name="${{ steps.version.outputs.version }}"
 
-      # 用系统自带 hdiutil 打 DMG，带一个指向 /Applications 的软链，方便拖拽安装。
       - name: Package DMG
         id: dmg
         run: |
@@ -63,20 +61,90 @@ jobs:
           hdiutil create -volname "Gang Chat" -srcfolder "$STAGING" \
             -ov -format UDZO "$DMG"
           rm -rf "$STAGING"
-          echo "path=$DMG" >> "$GITHUB_OUTPUT"
           echo "name=$DMG" >> "$GITHUB_OUTPUT"
           ls -lh "$DMG"
 
-      # 建 draft release 并挂上 DMG。GITHUB_TOKEN 由 Gitea Actions 自动注入，
-      # 对当前仓库默认有写权限。若返回 403，改用仓库 secret RELEASE_TOKEN（PAT）。
+      - name: Upload macOS artifact
+        uses: https://github.com/actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: ${{ steps.dmg.outputs.name }}
+
+  build-windows:
+    runs-on: windows
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: https://github.com/actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") {
+            $VERSION = "${{ github.event.inputs.version }}"
+          } else {
+            $VERSION = $env:GITHUB_REF_NAME -replace '^v', ''
+          }
+          if (-not $VERSION) { Write-Error "version is empty"; exit 1 }
+          "version=$VERSION" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "tag=v$VERSION"    | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "Resolved version: $VERSION"
+
+      - name: Flutter sanity check
+        shell: pwsh
+        run: |
+          if (-not (Get-Command flutter -ErrorAction SilentlyContinue)) {
+            Write-Error "flutter not found in PATH"; exit 1
+          }
+          flutter --version
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build Windows (release)
+        run: flutter build windows --release --build-name="${{ steps.version.outputs.version }}"
+
+      - name: Package ZIP
+        id: zip
+        shell: pwsh
+        run: |
+          $VERSION = "${{ steps.version.outputs.version }}"
+          $SRC = "build\windows\x64\runner\Release"
+          if (-not (Test-Path $SRC)) { Write-Error "build output not found at $SRC"; exit 1 }
+          $ZIP = "GangChat-$VERSION-windows.zip"
+          Compress-Archive -Path "$SRC\*" -DestinationPath $ZIP
+          "name=$ZIP" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Get-Item $ZIP | Select-Object Name, @{n='Size';e={'{0:N0} bytes' -f $_.Length}}
+
+      - name: Upload Windows artifact
+        uses: https://github.com/actions/upload-artifact@v4
+        with:
+          name: windows-zip
+          path: ${{ steps.zip.outputs.name }}
+
+  release:
+    runs-on: macos-arm64
+    needs: [build-macos, build-windows]
+    steps:
+      - name: Download artifacts
+        uses: https://github.com/actions/download-artifact@v4
+        with:
+          pattern: '*'
+          path: artifacts/
+          merge-multiple: true
+
       - name: Create draft release & upload
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.build-macos.outputs.version }}
+          TAG: ${{ needs.build-macos.outputs.tag }}
         run: |
           API="${GITHUB_SERVER_URL}/api/v1/repos/${GITHUB_REPOSITORY}"
-          TAG="${{ steps.version.outputs.tag }}"
-          DMG="${{ steps.dmg.outputs.path }}"
-          NAME="${{ steps.dmg.outputs.name }}"
+          DMG="GangChat-$VERSION-macos.dmg"
+          ZIP="GangChat-$VERSION-windows.zip"
 
           echo "Creating draft release $TAG ..."
           RESP="$(curl -fsS -X POST "$API/releases" \
@@ -88,8 +156,12 @@ jobs:
           if [ -z "$RELEASE_ID" ]; then echo "failed to parse release id from: $RESP"; exit 1; fi
           echo "Created release id=$RELEASE_ID"
 
-          echo "Uploading $NAME ..."
-          curl -fsS -X POST "$API/releases/$RELEASE_ID/assets?name=$NAME" \
-            -H "Authorization: token $TOKEN" \
-            -F "attachment=@$DMG" >/dev/null
-          echo "Done. Draft release ready for review at $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases"
+          for FILE in "$DMG" "$ZIP"; do
+            echo "Uploading $FILE ..."
+            curl -fsS -X POST "$API/releases/$RELEASE_ID/assets?name=$FILE" \
+              -H "Authorization: token $TOKEN" \
+              -F "attachment=@artifacts/$FILE" >/dev/null
+            echo "  done."
+          done
+
+          echo "Draft release ready: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases"
