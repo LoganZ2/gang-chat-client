@@ -152,7 +152,8 @@ jobs:
           if (-not (Test-Path $SRC)) { Write-Error "build output not found at $SRC"; exit 1 }
           $ZIP = "GangChat-$VERSION-windows.zip"
           Compress-Archive -Path "$SRC\*" -DestinationPath $ZIP
-          "name=$ZIP" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          # 用 .NET 方法写入，避免 PS5 Out-File -Encoding utf8 带 BOM 导致 runner 解析失败
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "name=$ZIP`n")
           Get-Item $ZIP | Select-Object Name, @{n='Size';e={'{0:N0} bytes' -f $_.Length}}
 
       - name: Upload ZIP to release
@@ -163,10 +164,12 @@ jobs:
           $ZIP = "${{ steps.zip.outputs.name }}"
           $API = "$env:GITHUB_SERVER_URL/api/v1/repos/$env:GITHUB_REPOSITORY"
           $RELEASE_ID = "${{ needs.prepare.outputs.release_id }}"
-          # 用 curl.exe 避免 PowerShell 的 curl 别名（Invoke-WebRequest）
-          curl.exe -fsS -X POST "$API/releases/$RELEASE_ID/assets?name=$ZIP" `
-            -H "Authorization: token $env:TOKEN" `
-            -F "attachment=@$ZIP"
+          # 用数组传参避免 PS 多行 backtick 续行解析问题
+          $curlArgs = @('-fsS', '-X', 'POST',
+            "$API/releases/$RELEASE_ID/assets?name=$ZIP",
+            '-H', "Authorization: token $env:TOKEN",
+            '-F', "attachment=@$ZIP")
+          curl.exe @curlArgs
           Write-Host "Uploaded $ZIP"
 
   release:
