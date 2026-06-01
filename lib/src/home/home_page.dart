@@ -2159,6 +2159,7 @@ class _ComposerActionBar extends StatelessWidget {
         _ComposerIconButton(
           tooltip: '语音',
           onPressed: onVoice,
+          interactive: true,
           selected: false,
           icon: const Icon(Icons.mic_none),
         ),
@@ -2204,12 +2205,14 @@ class _ComposerIconButton extends StatelessWidget {
     required this.onPressed,
     required this.icon,
     required this.selected,
+    this.interactive = false,
   });
 
   final String tooltip;
   final VoidCallback? onPressed;
   final Widget icon;
   final bool selected;
+  final bool interactive;
 
   @override
   Widget build(BuildContext context) {
@@ -2220,6 +2223,7 @@ class _ComposerIconButton extends StatelessWidget {
       child: KeySurface(
         tooltip: tooltip,
         onPressed: onPressed,
+        interactive: interactive,
         selected: selected,
         height: size,
         padding: EdgeInsets.zero,
