@@ -61,6 +61,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   final _messageController = TextEditingController();
   final _messageFocus = FocusNode();
+  final Map<String, String> _messageDrafts = {};
 
   List<RoomCard> _rooms = [];
   List<Message> _messages = [];
@@ -110,6 +111,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _api = _newApiClient();
+    _messageController.addListener(_onMessageDraftChanged);
     _liveSession.addListener(_onLiveSessionChanged);
     _liveSession.onForciblyRemoved = _onForciblyRemovedFromLive;
     _liveSession.onPublishPermissionChanged = _onPublishPermissionChanged;
@@ -118,6 +120,26 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
     _loadRooms();
     _startLiveStream();
+  }
+
+  void _onMessageDraftChanged() {
+    final roomId = _selectedRoomId;
+    if (roomId == null) return;
+    _messageDrafts[roomId] = _messageController.text;
+  }
+
+  void _saveCurrentMessageDraft() {
+    final roomId = _selectedRoomId;
+    if (roomId == null) return;
+    _messageDrafts[roomId] = _messageController.text;
+  }
+
+  void _restoreMessageDraft(String roomId) {
+    final draft = _messageDrafts[roomId] ?? '';
+    _messageController.value = TextEditingValue(
+      text: draft,
+      selection: TextSelection.collapsed(offset: draft.length),
+    );
   }
 
   void _startLiveStream() {
@@ -230,9 +252,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void _applyRoomDeleted(Map<String, dynamic> data) {
     final roomId = data['room_id'] as String?;
     if (roomId == null || !mounted) return;
+    final wasSelected = _selectedRoomId == roomId;
     setState(() {
       _rooms = _rooms.where((r) => r.id != roomId).toList();
-      if (_selectedRoomId == roomId) {
+      if (wasSelected) {
         _selectedRoomId = null;
         _selectedRoom = null;
         _messages = const [];
@@ -241,6 +264,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _settingsOpen = false;
       }
     });
+    _messageDrafts.remove(roomId);
+    if (wasSelected) _messageController.clear();
     // If we were live in that room, the LiveKit session is now orphaned; drop
     // it so we don't keep streaming into a room we no longer belong to.
     if (_joinedLiveRoomId == roomId) {
@@ -431,6 +456,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> _openRoom(RoomCard room, {bool joinLive = false}) async {
     if (_loadingRoom && _selectedRoomId == room.id) return;
+    _saveCurrentMessageDraft();
     setState(() {
       _settingsOpen = false;
       _selectedRoomId = room.id;
@@ -438,6 +464,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _error = null;
       if (!joinLive) _livePanelOpen = false;
     });
+    _restoreMessageDraft(room.id);
 
     try {
       final detail = await _api.getRoom(room.id);
@@ -849,6 +876,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _liveSession.onPublishPermissionChanged = null;
     _liveSession.dispose();
     _api.close();
+    _messageController.removeListener(_onMessageDraftChanged);
     _messageController.dispose();
     _messageFocus.dispose();
     super.dispose();
@@ -1116,6 +1144,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   localUserId: widget.session.user.id,
                 )
               : _ChatPane(
+                  roomId: _selectedRoomId!,
                   messages: _messages,
                   currentUserId: widget.session.user.id,
                   controller: _messageController,
@@ -1857,8 +1886,15 @@ class _LiveHeaderActions extends StatelessWidget {
   }
 }
 
-class _ChatPane extends StatelessWidget {
+enum _ComposerPanel { stickers, voice, file, tools }
+
+enum _StickerSource { personal, room }
+
+enum _VoiceMode { transcribe, recording }
+
+class _ChatPane extends StatefulWidget {
   const _ChatPane({
+    required this.roomId,
     required this.messages,
     required this.currentUserId,
     required this.controller,
@@ -1867,6 +1903,7 @@ class _ChatPane extends StatelessWidget {
     required this.onSend,
   });
 
+  final String roomId;
   final List<Message> messages;
   final String currentUserId;
   final TextEditingController controller;
@@ -1875,97 +1912,716 @@ class _ChatPane extends StatelessWidget {
   final VoidCallback onSend;
 
   @override
+  State<_ChatPane> createState() => _ChatPaneState();
+}
+
+class _ChatPaneState extends State<_ChatPane> {
+  _ComposerPanel? _openPanel;
+  _StickerSource _stickerSource = _StickerSource.personal;
+  _VoiceMode _voiceMode = _VoiceMode.transcribe;
+  bool _recordingDraft = false;
+  String? _fileDraftName;
+
+  @override
+  void didUpdateWidget(_ChatPane oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.roomId != widget.roomId) {
+      _openPanel = null;
+      _recordingDraft = false;
+      _fileDraftName = null;
+    }
+  }
+
+  void _closePanel() {
+    if (_openPanel == null) return;
+    setState(() => _openPanel = null);
+  }
+
+  void _togglePanel(_ComposerPanel panel) {
+    setState(() {
+      _openPanel = _openPanel == panel ? null : panel;
+    });
+  }
+
+  void _insertComposerText(String value) {
+    final text = widget.controller.text;
+    final selection = widget.controller.selection;
+    var start = text.length;
+    var end = text.length;
+
+    if (selection.isValid) {
+      start = selection.start;
+      end = selection.end;
+      if (start < 0) start = 0;
+      if (end < 0) end = 0;
+      if (start > text.length) start = text.length;
+      if (end > text.length) end = text.length;
+      if (start > end) {
+        final previousStart = start;
+        start = end;
+        end = previousStart;
+      }
+    }
+
+    final next = text.replaceRange(start, end, value);
+    widget.controller.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: start + value.length),
+    );
+    widget.focusNode.requestFocus();
+  }
+
+  void _handleVoiceTranscribe() {
+    _insertComposerText('语音识别结果待接入');
+  }
+
+  void _handleRecordingDraft() {
+    setState(() => _recordingDraft = true);
+  }
+
+  void _handleFileDraft() {
+    setState(() => _fileDraftName = '文件附件待接入');
+  }
+
+  Widget _buildComposerInput() {
+    final input = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(top: 10),
+          child: Text(
+            '>',
+            style: TextStyle(
+              color: _textMuted,
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: TextField(
+            controller: widget.controller,
+            focusNode: widget.focusNode,
+            minLines: 1,
+            maxLines: 4,
+            textInputAction: TextInputAction.send,
+            onSubmitted: (_) => widget.onSend(),
+            cursorColor: _textSecondary,
+            decoration: const InputDecoration(
+              isDense: true,
+              filled: false,
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              disabledBorder: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+        ),
+      ],
+    );
+
+    final actions = _ComposerActionBar(
+      openPanel: _openPanel,
+      sending: widget.sending,
+      onStickers: () => _togglePanel(_ComposerPanel.stickers),
+      onVoice: () => _togglePanel(_ComposerPanel.voice),
+      onFile: () => _togglePanel(_ComposerPanel.file),
+      onTools: () => _togglePanel(_ComposerPanel.tools),
+      onSend: () {
+        _closePanel();
+        widget.onSend();
+      },
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 560) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              input,
+              const SizedBox(height: 10),
+              Align(alignment: Alignment.centerRight, child: actions),
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: input),
+            const SizedBox(width: 10),
+            Transform.translate(
+              offset: const Offset(0, 2),
+              child: actions,
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildPanel() {
+    final panel = _openPanel;
+    if (panel == null) return const SizedBox.shrink();
+
+    return _ComposerPanelSurface(
+      child: switch (panel) {
+        _ComposerPanel.stickers => _StickerPanel(
+          source: _stickerSource,
+          onSourceChanged: (source) => setState(() => _stickerSource = source),
+          onStickerSelected: _insertComposerText,
+        ),
+        _ComposerPanel.voice => _VoicePanel(
+          mode: _voiceMode,
+          recordingDraft: _recordingDraft,
+          onModeChanged: (mode) => setState(() => _voiceMode = mode),
+          onTranscribe: _handleVoiceTranscribe,
+          onRecordDraft: _handleRecordingDraft,
+        ),
+        _ComposerPanel.file => _FilePanel(
+          draftName: _fileDraftName,
+          onChooseFile: _handleFileDraft,
+        ),
+        _ComposerPanel.tools => const _ToolboxPanel(),
+      },
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     return ColoredBox(
       color: _primaryDarkLow,
       child: Column(
         children: [
           Expanded(
-            child: messages.isEmpty
+            child: widget.messages.isEmpty
                 ? const Center(
                     child: Text('还没有消息', style: TextStyle(color: _textMuted)),
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(22, 18, 22, 18),
-                    itemCount: messages.length,
+                    itemCount: widget.messages.length,
                     itemBuilder: (context, index) {
-                      final message = messages[index];
+                      final message = widget.messages[index];
                       return _MessageBubble(
                         message: message,
-                        mine: message.sender.id == currentUserId,
+                        mine: message.sender.id == widget.currentUserId,
                       );
                     },
                   ),
           ),
-          Container(
-            padding: const EdgeInsets.fromLTRB(18, 12, 18, 14),
-            color: _primaryDarkLow,
-            child: Row(
+          TapRegion(
+            onTapOutside: (_) => _closePanel(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Expanded(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.only(top: 10),
-                        child: Text(
-                          '>',
-                          style: TextStyle(
-                            color: _textMuted,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextField(
-                          controller: controller,
-                          focusNode: focusNode,
-                          minLines: 1,
-                          maxLines: 4,
-                          textInputAction: TextInputAction.send,
-                          onSubmitted: (_) => onSend(),
-                          cursorColor: _textSecondary,
-                          decoration: const InputDecoration(
-                            isDense: true,
-                            filled: false,
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            disabledBorder: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(vertical: 12),
-                          ),
-                        ),
-                      ),
-                    ],
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 140),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  child: KeyedSubtree(
+                    key: ValueKey(_openPanel),
+                    child: _buildPanel(),
                   ),
                 ),
-                const SizedBox(width: 10),
-                Transform.translate(
-                  offset: const Offset(0, 2),
-                  child: KeyButton(
-                    height: 44,
-                    onPressed: onSend,
-                    loading: sending,
-                    tone: KeyButtonTone.primary,
-                    padding: const EdgeInsets.symmetric(horizontal: 18),
-                    child: sending
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: _cyan,
-                            ),
-                          )
-                        : const Text('Send'),
-                  ),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(18, 12, 18, 14),
+                  color: _primaryDarkLow,
+                  child: _buildComposerInput(),
                 ),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ComposerActionBar extends StatelessWidget {
+  const _ComposerActionBar({
+    required this.openPanel,
+    required this.sending,
+    required this.onStickers,
+    required this.onVoice,
+    required this.onFile,
+    required this.onTools,
+    required this.onSend,
+  });
+
+  final _ComposerPanel? openPanel;
+  final bool sending;
+  final VoidCallback onStickers;
+  final VoidCallback onVoice;
+  final VoidCallback onFile;
+  final VoidCallback onTools;
+  final VoidCallback onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _ComposerIconButton(
+          tooltip: '表情包',
+          onPressed: onStickers,
+          selected: openPanel == _ComposerPanel.stickers,
+          icon: const Icon(Icons.emoji_emotions_outlined),
+        ),
+        const SizedBox(width: 8),
+        _ComposerIconButton(
+          tooltip: '语音',
+          onPressed: onVoice,
+          selected: openPanel == _ComposerPanel.voice,
+          icon: const Icon(Icons.mic_none),
+        ),
+        const SizedBox(width: 8),
+        _ComposerIconButton(
+          tooltip: '文件上传',
+          onPressed: onFile,
+          selected: openPanel == _ComposerPanel.file,
+          icon: const Icon(Icons.attach_file),
+        ),
+        const SizedBox(width: 8),
+        _ComposerIconButton(
+          tooltip: '工具箱',
+          onPressed: onTools,
+          selected: openPanel == _ComposerPanel.tools,
+          icon: const Icon(Icons.extension_outlined),
+        ),
+        const SizedBox(width: 8),
+        KeyIconButton(
+          tooltip: '发送',
+          onPressed: sending ? null : onSend,
+          loading: sending,
+          tone: KeyButtonTone.primary,
+          icon: sending
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: _cyan,
+                  ),
+                )
+              : const Icon(Icons.send_rounded),
+          size: 44,
+        ),
+      ],
+    );
+  }
+}
+
+class _ComposerIconButton extends StatelessWidget {
+  const _ComposerIconButton({
+    required this.tooltip,
+    required this.onPressed,
+    required this.icon,
+    required this.selected,
+  });
+
+  final String tooltip;
+  final VoidCallback onPressed;
+  final Widget icon;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    const size = 40.0;
+
+    return SizedBox(
+      width: size,
+      child: KeySurface(
+        tooltip: tooltip,
+        onPressed: onPressed,
+        selected: selected,
+        height: size,
+        padding: EdgeInsets.zero,
+        backgroundColor: _primaryDarkRaised,
+        selectedBackgroundColor: _selectedSurface,
+        pressedBackgroundColor: _selectedSurface,
+        borderColor: _primaryDarkRaised,
+        selectedBorderColor: _cyan,
+        child: IconTheme.merge(
+          data: IconThemeData(color: selected ? _cyan : _textPrimary, size: 20),
+          child: Center(child: icon),
+        ),
+      ),
+    );
+  }
+}
+
+class _ComposerPanelSurface extends StatelessWidget {
+  const _ComposerPanelSurface({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: _primaryDarkRaised,
+        border: Border(
+          top: BorderSide(color: _borderColor),
+          bottom: BorderSide(color: _borderColor),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _StickerPanel extends StatelessWidget {
+  const _StickerPanel({
+    required this.source,
+    required this.onSourceChanged,
+    required this.onStickerSelected,
+  });
+
+  final _StickerSource source;
+  final ValueChanged<_StickerSource> onSourceChanged;
+  final ValueChanged<String> onStickerSelected;
+
+  static const _personal = [
+    _StickerChoice('😀', '开心', '[开心]'),
+    _StickerChoice('👍', '收到', '[收到]'),
+    _StickerChoice('🔥', '热烈', '[热烈]'),
+    _StickerChoice('🎉', '庆祝', '[庆祝]'),
+    _StickerChoice('💡', '灵感', '[灵感]'),
+    _StickerChoice('☕', '休息', '[休息]'),
+  ];
+
+  static const _room = [
+    _StickerChoice('🏠', '房间', '[房间]'),
+    _StickerChoice('🚀', '开冲', '[开冲]'),
+    _StickerChoice('✅', '通过', '[通过]'),
+    _StickerChoice('📌', '标记', '[标记]'),
+    _StickerChoice('🧩', '协作', '[协作]'),
+    _StickerChoice('✨', '完成', '[完成]'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final stickers = source == _StickerSource.personal ? _personal : _room;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            for (final sticker in stickers)
+              _StickerButton(
+                sticker: sticker,
+                onPressed: () => onStickerSelected(sticker.token),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.bottomCenter,
+          child: _SourceSwitch(
+            firstLabel: '个人表情包',
+            secondLabel: '房间表情包',
+            firstSelected: source == _StickerSource.personal,
+            onFirst: () => onSourceChanged(_StickerSource.personal),
+            onSecond: () => onSourceChanged(_StickerSource.room),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _VoicePanel extends StatelessWidget {
+  const _VoicePanel({
+    required this.mode,
+    required this.recordingDraft,
+    required this.onModeChanged,
+    required this.onTranscribe,
+    required this.onRecordDraft,
+  });
+
+  final _VoiceMode mode;
+  final bool recordingDraft;
+  final ValueChanged<_VoiceMode> onModeChanged;
+  final VoidCallback onTranscribe;
+  final VoidCallback onRecordDraft;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Align(
+          alignment: Alignment.center,
+          widthFactor: 1,
+          child: mode == _VoiceMode.transcribe
+              ? _InlineActionCard(
+                  icon: Icons.graphic_eq,
+                  tooltip: '开始语音转文字',
+                  label: '识别结果会进入输入框',
+                  onPressed: onTranscribe,
+                )
+              : _InlineActionCard(
+                  icon: recordingDraft ? Icons.check_circle_outline : Icons.mic,
+                  tooltip: recordingDraft ? '录音附件已预留' : '开始录音',
+                  label: recordingDraft ? '录音附件待接入发送' : '录音后作为附件发送',
+                  onPressed: onRecordDraft,
+                ),
+          ),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.bottomCenter,
+          widthFactor: 1,
+          child: _SourceSwitch(
+            firstLabel: '语音转文字',
+            secondLabel: '发送录音',
+            firstSelected: mode == _VoiceMode.transcribe,
+            onFirst: () => onModeChanged(_VoiceMode.transcribe),
+            onSecond: () => onModeChanged(_VoiceMode.recording),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FilePanel extends StatelessWidget {
+  const _FilePanel({required this.draftName, required this.onChooseFile});
+
+  final String? draftName;
+  final VoidCallback onChooseFile;
+
+  @override
+  Widget build(BuildContext context) {
+    return _InlineActionCard(
+      icon: draftName == null ? Icons.upload_file : Icons.insert_drive_file,
+      tooltip: draftName == null ? '选择文件' : '文件附件已预留',
+      label: draftName ?? '选择文件后发送到当前房间',
+      onPressed: onChooseFile,
+    );
+  }
+}
+
+class _ToolboxPanel extends StatelessWidget {
+  const _ToolboxPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: const [
+        _ToolboxButton(icon: Icons.music_note, tooltip: '音乐盒'),
+        _ToolboxButton(icon: Icons.poll_outlined, tooltip: '投票'),
+        _ToolboxButton(icon: Icons.bolt_outlined, tooltip: '快捷指令'),
+        _ToolboxButton(icon: Icons.add_box_outlined, tooltip: '后续扩展'),
+      ],
+    );
+  }
+}
+
+class _SourceSwitch extends StatelessWidget {
+  const _SourceSwitch({
+    required this.firstLabel,
+    required this.secondLabel,
+    required this.firstSelected,
+    required this.onFirst,
+    required this.onSecond,
+  });
+
+  final String firstLabel;
+  final String secondLabel;
+  final bool firstSelected;
+  final VoidCallback onFirst;
+  final VoidCallback onSecond;
+
+  @override
+  Widget build(BuildContext context) {
+    const switchWidth = 264.0;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth.isFinite &&
+                constraints.maxWidth < switchWidth
+            ? constraints.maxWidth
+            : switchWidth;
+
+        return SizedBox(
+          width: width,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _SourceSwitchButton(
+                  onPressed: onFirst,
+                  selected: firstSelected,
+                  label: firstLabel,
+                ),
+                const SizedBox(width: 8),
+                _SourceSwitchButton(
+                  onPressed: onSecond,
+                  selected: !firstSelected,
+                  label: secondLabel,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SourceSwitchButton extends StatelessWidget {
+  const _SourceSwitchButton({
+    required this.label,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = selected ? _cyan : _textSecondary;
+
+    return KeySurface(
+      onPressed: onPressed,
+      selected: selected,
+      width: 128,
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      backgroundColor: _primaryDarkLow,
+      selectedBackgroundColor: _selectedSurface,
+      pressedBackgroundColor: _selectedSurface,
+      borderColor: _borderColor,
+      selectedBorderColor: _cyan,
+      child: Center(
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: textColor,
+            fontSize: 13,
+            fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StickerChoice {
+  const _StickerChoice(this.icon, this.tooltip, this.token);
+
+  final String icon;
+  final String tooltip;
+  final String token;
+}
+
+class _StickerButton extends StatelessWidget {
+  const _StickerButton({required this.sticker, required this.onPressed});
+
+  final _StickerChoice sticker;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: sticker.tooltip,
+      child: KeySurface(
+        height: 46,
+        width: 52,
+        onPressed: onPressed,
+        tooltip: null,
+        backgroundColor: _primaryDarkLow,
+        selectedBackgroundColor: _selectedSurface,
+        pressedBackgroundColor: _selectedSurface,
+        borderColor: _borderColor,
+        selectedBorderColor: _cyan,
+        child: Center(
+          child: Text(sticker.icon, style: const TextStyle(fontSize: 22)),
+        ),
+      ),
+    );
+  }
+}
+
+class _InlineActionCard extends StatelessWidget {
+  const _InlineActionCard({
+    required this.icon,
+    required this.tooltip,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _primaryDarkLow,
+        border: Border.all(color: _borderColor),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            KeyIconButton(
+              tooltip: tooltip,
+              onPressed: onPressed,
+              icon: Icon(icon),
+              size: 42,
+            ),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: _textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ToolboxButton extends StatelessWidget {
+  const _ToolboxButton({required this.icon, required this.tooltip});
+
+  final IconData icon;
+  final String tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    return KeyIconButton(
+      tooltip: tooltip,
+      onPressed: () {},
+      icon: Icon(icon),
+      size: 46,
     );
   }
 }
@@ -2030,8 +2686,10 @@ class _MessageBubble extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(
+                    SelectableText(
                       message.body,
+                      cursorColor: _cyan,
+                      selectionColor: _cyan.withValues(alpha: 0.28),
                       style: const TextStyle(
                         color: _textPrimary,
                         fontSize: 15,
