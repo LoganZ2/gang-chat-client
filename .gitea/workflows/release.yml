@@ -1,9 +1,8 @@
 name: release
 
-# 并行构建 macOS (.dmg) 和 Windows (.zip)，两者完成后统一创建 draft release 并上传产物。
-# 触发方式：
-#   - push 一个 v* tag（如 v1.2.0）
-#   - Actions 页面手动触发，手填版本号
+# 流程：prepare（建 draft release）→ build-macos & build-windows（并行构建，直接上传产物）→ release（发布）
+# 全程不依赖任何外部 action，仅用 git / curl / python3 原生工具。
+# 触发方式：push v* tag，或 Actions 页面手动触发。
 
 on:
   push:
@@ -16,15 +15,13 @@ on:
         required: true
 
 jobs:
-  build-macos:
+  prepare:
     runs-on: macos-arm64
     outputs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
+      release_id: ${{ steps.release.outputs.release_id }}
     steps:
-      - name: Checkout
-        uses: https://gitea.com/actions/checkout@v4
-
       - name: Resolve version
         id: version
         run: |
@@ -38,6 +35,35 @@ jobs:
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
           echo "Resolved version: $VERSION"
 
+      - name: Create draft release
+        id: release
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          API="${GITHUB_SERVER_URL}/api/v1/repos/${GITHUB_REPOSITORY}"
+          TAG="${{ steps.version.outputs.tag }}"
+          RESP="$(curl -fsS -X POST "$API/releases" \
+            -H "Authorization: token $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"tag_name\":\"$TAG\",\"target_commitish\":\"${GITHUB_SHA}\",\"name\":\"$TAG\",\"draft\":true,\"prerelease\":false}")"
+          RELEASE_ID="$(printf '%s' "$RESP" | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')"
+          if [ -z "$RELEASE_ID" ]; then echo "Failed to create release: $RESP"; exit 1; fi
+          echo "release_id=$RELEASE_ID" >> "$GITHUB_OUTPUT"
+          echo "Draft release created: id=$RELEASE_ID"
+
+  build-macos:
+    runs-on: macos-arm64
+    needs: [prepare]
+    steps:
+      - name: Checkout
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git init .
+          git -c "http.extraheader=Authorization: token $TOKEN" \
+            fetch --depth=1 --no-tags "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "$GITHUB_SHA"
+          git checkout FETCH_HEAD
+
       - name: Flutter sanity check
         run: |
           command -v flutter >/dev/null 2>&1 || { echo "flutter not found in PATH"; exit 1; }
@@ -47,14 +73,14 @@ jobs:
         run: flutter pub get
 
       - name: Build macOS (release)
-        run: flutter build macos --release --build-name="${{ steps.version.outputs.version }}"
+        run: flutter build macos --release --build-name="${{ needs.prepare.outputs.version }}"
 
       - name: Package DMG
         id: dmg
         run: |
           APP="build/macos/Build/Products/Release/client.app"
           [ -d "$APP" ] || { echo "app bundle not found at $APP"; exit 1; }
-          DMG="GangChat-${{ steps.version.outputs.version }}-macos.dmg"
+          DMG="GangChat-${{ needs.prepare.outputs.version }}-macos.dmg"
           STAGING="$(mktemp -d)"
           cp -R "$APP" "$STAGING/"
           ln -s /Applications "$STAGING/Applications"
@@ -64,37 +90,34 @@ jobs:
           echo "name=$DMG" >> "$GITHUB_OUTPUT"
           ls -lh "$DMG"
 
-      - name: Upload macOS artifact
-        uses: https://gitea.com/actions/upload-artifact@v3
-        with:
-          name: macos-dmg
-          path: ${{ steps.dmg.outputs.name }}
+      - name: Upload DMG to release
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DMG="${{ steps.dmg.outputs.name }}"
+          API="${GITHUB_SERVER_URL}/api/v1/repos/${GITHUB_REPOSITORY}"
+          RELEASE_ID="${{ needs.prepare.outputs.release_id }}"
+          curl -fsS -X POST "$API/releases/$RELEASE_ID/assets?name=$DMG" \
+            -H "Authorization: token $TOKEN" \
+            -F "attachment=@$DMG"
+          echo "Uploaded $DMG"
 
   build-windows:
     runs-on: windows
+    needs: [prepare]
     env:
       PUB_HOSTED_URL: https://pub.flutter-io.cn
       FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-      tag: ${{ steps.version.outputs.tag }}
     steps:
       - name: Checkout
-        uses: https://gitea.com/actions/checkout@v4
-
-      - name: Resolve version
-        id: version
         shell: pwsh
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") {
-            $VERSION = "${{ github.event.inputs.version }}"
-          } else {
-            $VERSION = $env:GITHUB_REF_NAME -replace '^v', ''
-          }
-          if (-not $VERSION) { Write-Error "version is empty"; exit 1 }
-          "version=$VERSION" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          "tag=v$VERSION"    | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          Write-Host "Resolved version: $VERSION"
+          git init .
+          git -c "http.extraheader=Authorization: token $env:TOKEN" `
+            fetch --depth=1 --no-tags "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY.git" $env:GITHUB_SHA
+          git checkout FETCH_HEAD
 
       - name: Flutter sanity check
         shell: pwsh
@@ -108,13 +131,13 @@ jobs:
         run: flutter pub get
 
       - name: Build Windows (release)
-        run: flutter build windows --release --build-name="${{ steps.version.outputs.version }}"
+        run: flutter build windows --release --build-name="${{ needs.prepare.outputs.version }}"
 
       - name: Package ZIP
         id: zip
         shell: pwsh
         run: |
-          $VERSION = "${{ steps.version.outputs.version }}"
+          $VERSION = "${{ needs.prepare.outputs.version }}"
           $SRC = "build\windows\x64\runner\Release"
           if (-not (Test-Path $SRC)) { Write-Error "build output not found at $SRC"; exit 1 }
           $ZIP = "GangChat-$VERSION-windows.zip"
@@ -122,54 +145,32 @@ jobs:
           "name=$ZIP" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           Get-Item $ZIP | Select-Object Name, @{n='Size';e={'{0:N0} bytes' -f $_.Length}}
 
-      - name: Upload Windows artifact
-        uses: https://gitea.com/actions/upload-artifact@v3
-        with:
-          name: windows-zip
-          path: ${{ steps.zip.outputs.name }}
+      - name: Upload ZIP to release
+        shell: pwsh
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ZIP = "${{ steps.zip.outputs.name }}"
+          $API = "$env:GITHUB_SERVER_URL/api/v1/repos/$env:GITHUB_REPOSITORY"
+          $RELEASE_ID = "${{ needs.prepare.outputs.release_id }}"
+          # 用 curl.exe 避免 PowerShell 的 curl 别名（Invoke-WebRequest）
+          curl.exe -fsS -X POST "$API/releases/$RELEASE_ID/assets?name=$ZIP" `
+            -H "Authorization: token $env:TOKEN" `
+            -F "attachment=@$ZIP"
+          Write-Host "Uploaded $ZIP"
 
   release:
     runs-on: macos-arm64
-    needs: [build-macos, build-windows]
+    needs: [prepare, build-macos, build-windows]
     steps:
-      - name: Download macOS artifact
-        uses: https://gitea.com/actions/download-artifact@v3
-        with:
-          name: macos-dmg
-          path: artifacts/
-
-      - name: Download Windows artifact
-        uses: https://gitea.com/actions/download-artifact@v3
-        with:
-          name: windows-zip
-          path: artifacts/
-
-      - name: Create draft release & upload
+      - name: Publish release
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ needs.build-macos.outputs.version }}
-          TAG: ${{ needs.build-macos.outputs.tag }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
         run: |
           API="${GITHUB_SERVER_URL}/api/v1/repos/${GITHUB_REPOSITORY}"
-          DMG="GangChat-$VERSION-macos.dmg"
-          ZIP="GangChat-$VERSION-windows.zip"
-
-          echo "Creating draft release $TAG ..."
-          RESP="$(curl -fsS -X POST "$API/releases" \
+          curl -fsS -X PATCH "$API/releases/$RELEASE_ID" \
             -H "Authorization: token $TOKEN" \
             -H "Content-Type: application/json" \
-            -d "{\"tag_name\":\"$TAG\",\"target_commitish\":\"${GITHUB_SHA}\",\"name\":\"$TAG\",\"draft\":true,\"prerelease\":false}")"
-
-          RELEASE_ID="$(printf '%s' "$RESP" | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')"
-          if [ -z "$RELEASE_ID" ]; then echo "failed to parse release id from: $RESP"; exit 1; fi
-          echo "Created release id=$RELEASE_ID"
-
-          for FILE in "$DMG" "$ZIP"; do
-            echo "Uploading $FILE ..."
-            curl -fsS -X POST "$API/releases/$RELEASE_ID/assets?name=$FILE" \
-              -H "Authorization: token $TOKEN" \
-              -F "attachment=@artifacts/$FILE" >/dev/null
-            echo "  done."
-          done
-
-          echo "Draft release ready: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases"
+            -d '{"draft":false}'
+          echo "Published: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases"
