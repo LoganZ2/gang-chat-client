@@ -24,7 +24,22 @@ class ScreenSource {
   final Stream<Uint8List>? thumbnailUpdates;
 }
 
+class _ScreenSourceThumbnailUpdate {
+  const _ScreenSourceThumbnailUpdate({
+    required this.sourceId,
+    required this.thumbnail,
+  });
+
+  final String sourceId;
+  final Uint8List thumbnail;
+}
+
 final _screenSourceWhitespacePattern = RegExp(r'\s+');
+final _screenSourceThumbnailCache = <String, Uint8List>{};
+final _screenSourceThumbnailUpdateController =
+    StreamController<_ScreenSourceThumbnailUpdate>.broadcast();
+StreamSubscription<rtc.DesktopCapturerSource>?
+    _screenSourceThumbnailSubscription;
 
 const _ignoredShareWindowNameParts = <String>[
   'nvidia geforce overlay',
@@ -59,6 +74,86 @@ String _normalizeScreenSourceName(String name) {
 
 bool _isIgnoredShareWindowName(String normalizedName) {
   return _ignoredShareWindowNameParts.any(normalizedName.contains);
+}
+
+Uint8List? _rememberScreenSourceThumbnail({
+  required String sourceId,
+  required Uint8List? thumbnail,
+}) {
+  if (thumbnail != null && thumbnail.isNotEmpty) {
+    _screenSourceThumbnailCache[sourceId] = thumbnail;
+    return thumbnail;
+  }
+  return _screenSourceThumbnailCache[sourceId];
+}
+
+void _rememberAndEmitScreenSourceThumbnail({
+  required String sourceId,
+  required Uint8List? thumbnail,
+}) {
+  final remembered = _rememberScreenSourceThumbnail(
+    sourceId: sourceId,
+    thumbnail: thumbnail,
+  );
+  if (remembered == null || remembered.isEmpty) return;
+  _screenSourceThumbnailUpdateController.add(
+    _ScreenSourceThumbnailUpdate(
+      sourceId: sourceId,
+      thumbnail: remembered,
+    ),
+  );
+}
+
+Stream<Uint8List> _cacheScreenSourceThumbnailUpdates(
+  String sourceId,
+  Stream<Uint8List> updates,
+) {
+  return updates.map((thumbnail) {
+    _rememberAndEmitScreenSourceThumbnail(
+      sourceId: sourceId,
+      thumbnail: thumbnail,
+    );
+    return thumbnail;
+  });
+}
+
+Stream<Uint8List> _screenSourceThumbnailUpdates(String sourceId) {
+  return _screenSourceThumbnailUpdateController.stream
+      .where((update) => update.sourceId == sourceId)
+      .map((update) => update.thumbnail);
+}
+
+void _ensureScreenSourceThumbnailCacheSubscription() {
+  _screenSourceThumbnailSubscription ??=
+      rtc.desktopCapturer.onThumbnailChanged.stream.listen((source) {
+    _rememberAndEmitScreenSourceThumbnail(
+      sourceId: source.id,
+      thumbnail: source.thumbnail,
+    );
+  });
+}
+
+@visibleForTesting
+Uint8List? cachedScreenSourceThumbnailForTest(String sourceId) {
+  return _screenSourceThumbnailCache[sourceId];
+}
+
+@visibleForTesting
+void resetScreenSourceThumbnailCacheForTest() {
+  _screenSourceThumbnailCache.clear();
+}
+
+@visibleForTesting
+Stream<Uint8List> cacheScreenSourceThumbnailUpdatesForTest(
+  String sourceId,
+  Stream<Uint8List> updates,
+) {
+  return _cacheScreenSourceThumbnailUpdates(sourceId, updates);
+}
+
+@visibleForTesting
+Stream<Uint8List> screenSourceThumbnailUpdatesForTest(String sourceId) {
+  return _screenSourceThumbnailUpdates(sourceId);
 }
 
 /// A single video track currently published in the live room, tagged with
@@ -349,6 +444,7 @@ class LiveSession extends ChangeNotifier {
   /// share picker. Best-effort: returns an empty list if enumeration fails.
   static Future<List<ScreenSource>> listScreenSources() async {
     try {
+      _ensureScreenSourceThumbnailCacheSubscription();
       final sources = await rtc.desktopCapturer.getSources(
         types: [rtc.SourceType.Screen, rtc.SourceType.Window],
         thumbnailSize: rtc.ThumbnailSize(640, 360),
@@ -360,9 +456,12 @@ class LiveSession extends ChangeNotifier {
           return ScreenSource(
             id: s.id,
             name: name.isEmpty ? (isWindow ? 'Window' : 'Screen') : name,
-            thumbnail: s.thumbnail,
+            thumbnail: _rememberScreenSourceThumbnail(
+              sourceId: s.id,
+              thumbnail: s.thumbnail,
+            ),
             isWindow: isWindow,
-            thumbnailUpdates: s.onThumbnailChanged.stream,
+            thumbnailUpdates: _screenSourceThumbnailUpdates(s.id),
           );
         }).toList(),
       );
@@ -376,6 +475,7 @@ class LiveSession extends ChangeNotifier {
   /// onThumbnailChanged after updateSources().
   static Future<void> refreshScreenSourceThumbnails() async {
     try {
+      _ensureScreenSourceThumbnailCacheSubscription();
       await rtc.desktopCapturer.updateSources(
         types: [rtc.SourceType.Screen, rtc.SourceType.Window],
       );

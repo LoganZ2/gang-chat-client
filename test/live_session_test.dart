@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -73,5 +74,35 @@ void main() {
       'window:input',
       'window:program-manager',
     ]);
+  });
+
+  test('screen-share thumbnail updates are cached for reopened picker', () async {
+    resetScreenSourceThumbnailCacheForTest();
+    addTearDown(resetScreenSourceThumbnailCacheForTest);
+
+    final controller = StreamController<Uint8List>.broadcast(sync: true);
+    addTearDown(controller.close);
+
+    final observed = <Uint8List>[];
+    final subscription = cacheScreenSourceThumbnailUpdatesForTest(
+      'screen:0',
+      controller.stream,
+    ).listen(observed.add);
+    addTearDown(subscription.cancel);
+    final sourceIdUpdates = <Uint8List>[];
+    final sourceIdSubscription = screenSourceThumbnailUpdatesForTest(
+      'screen:0',
+    ).listen(sourceIdUpdates.add);
+    addTearDown(sourceIdSubscription.cancel);
+
+    final thumbnail = Uint8List.fromList([1, 2, 3]);
+    controller.add(thumbnail);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(observed, hasLength(1));
+    expect(observed.single, same(thumbnail));
+    expect(sourceIdUpdates, hasLength(1));
+    expect(sourceIdUpdates.single, same(thumbnail));
+    expect(cachedScreenSourceThumbnailForTest('screen:0'), same(thumbnail));
   });
 }

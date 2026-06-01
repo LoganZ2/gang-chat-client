@@ -2966,7 +2966,7 @@ class _ScreenSourceTile extends StatelessWidget {
           Expanded(
             child: _ScreenSourceThumbnail(
               source: source,
-              fit: BoxFit.cover,
+              fit: BoxFit.contain,
               iconSize: 32,
             ),
           ),
