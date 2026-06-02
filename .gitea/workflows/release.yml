@@ -181,7 +181,6 @@ jobs:
           New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null
           $zipPath = "$downloadDir\libwebrtc.zip"
           $mirrors = @(
-            "https://gitcode.com/gh_mirrors/fl/flutter-webrtc/releases/download/v$webrtcVersion/libwebrtc.zip",
             "https://github.com/flutter-webrtc/flutter-webrtc/releases/download/v$webrtcVersion/libwebrtc.zip"
           )
           $ok = $false
