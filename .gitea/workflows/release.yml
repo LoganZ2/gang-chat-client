@@ -132,11 +132,13 @@ jobs:
       # 不用 actions/checkout：runner 在国内访问不了 gitea.com，克隆 action 会卡死。
       # 必须开 core.longpaths，否则深层源文件（windows/ 下 CMake 文件等）因 260 字符
       # 路径限制 checkout 不全，后续 flutter build windows 的 CMake 会报错。
+      # 每个 step 头部都补全 PATH：runner 启动时的 PATH 可能不完整，子进程继承残缺 PATH。
       - name: Checkout
         shell: powershell
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
           if (Test-Path .git) { Remove-Item -Recurse -Force .git }
           git config --global core.longpaths true
           git init -q .
@@ -152,21 +154,29 @@ jobs:
       - name: Flutter sanity check
         shell: powershell
         run: |
+          $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
           if (-not (Get-Command flutter -ErrorAction SilentlyContinue)) {
             Write-Error "flutter not found in PATH"; exit 1
           }
           flutter --version
 
       - name: Get dependencies
-        run: flutter pub get
+        shell: powershell
+        run: |
+          $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
+          flutter pub get
 
       - name: Build Windows (release)
-        run: flutter build windows --release --build-name="${{ needs.prepare.outputs.version }}"
+        shell: powershell
+        run: |
+          $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
+          flutter build windows --release --build-name="${{ needs.prepare.outputs.version }}"
 
       - name: Package ZIP
         id: zip
         shell: powershell
         run: |
+          $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
           $VERSION = "${{ needs.prepare.outputs.version }}"
           $SRC = "build\windows\x64\runner\Release"
           if (-not (Test-Path $SRC)) { Write-Error "build output not found at $SRC"; exit 1 }
@@ -181,6 +191,7 @@ jobs:
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
           $ZIP = "${{ steps.zip.outputs.name }}"
           $API = "$env:GITHUB_SERVER_URL/api/v1/repos/$env:GITHUB_REPOSITORY"
           $RELEASE_ID = "${{ needs.prepare.outputs.release_id }}"
