@@ -83,13 +83,16 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _changingPassword = false;
   bool _deletingAccount = false;
   List<StickerPack> _stickerPacks = const [];
-  String? _activeStickerPackId;
-  Set<String> _selectedStickerIds = <String>{};
+  List<String> _selectedStickerIds = <String>[];
   final Map<String, List<String>> _stickerOrderDrafts = {};
+  bool _managingStickers = false;
   bool _loadingStickers = false;
   bool _uploadingStickers = false;
   bool _deletingStickers = false;
   bool _savingStickerOrder = false;
+  bool _downloadingStickers = false;
+  String _stickerFilterKeyword = '';
+  String _stickerFilterMimeType = '';
   String? _stickerError;
   bool _obscureCurrentPassword = true;
   bool _obscureNewPassword = true;
@@ -229,17 +232,9 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       final packs = await api.listStickerPacks(scope: 'personal');
       if (!mounted) return;
-      final nextActiveId = _activeStickerPackId;
-      final activeExists =
-          nextActiveId != null && packs.any((pack) => pack.id == nextActiveId);
       setState(() {
         _stickerPacks = packs;
-        _activeStickerPackId = activeExists
-            ? nextActiveId
-            : packs.isEmpty
-            ? null
-            : packs.first.id;
-        _selectedStickerIds = <String>{};
+        _selectedStickerIds = <String>[];
         _stickerOrderDrafts
           ..clear()
           ..addEntries(
@@ -486,17 +481,6 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  StickerPack? _selectedStickerPack() {
-    if (_stickerPacks.isEmpty) return null;
-    final activeId = _activeStickerPackId;
-    if (activeId != null) {
-      for (final pack in _stickerPacks) {
-        if (pack.id == activeId) return pack;
-      }
-    }
-    return _stickerPacks.first;
-  }
-
   List<Sticker> _orderedStickers(StickerPack pack) {
     final remaining = {
       for (final sticker in pack.stickers) sticker.id: sticker,
@@ -513,27 +497,42 @@ class _SettingsPageState extends State<SettingsPage> {
     return ordered;
   }
 
-  bool _stickerOrderDirty(StickerPack pack) {
-    final original = pack.stickers.map((sticker) => sticker.id).toList();
-    final draft = _orderedStickers(pack).map((sticker) => sticker.id).toList();
-    if (original.length != draft.length) return true;
-    for (var i = 0; i < original.length; i++) {
-      if (original[i] != draft[i]) return true;
-    }
-    return false;
+  List<_ManagedSticker> _allStickerItems() {
+    return [
+      for (final pack in _stickerPacks)
+        for (final sticker in _orderedStickers(pack))
+          _ManagedSticker(pack: pack, sticker: sticker),
+    ];
   }
 
-  void _selectStickerPack(String packId) {
-    if (_activeStickerPackId == packId) return;
-    setState(() {
-      _activeStickerPackId = packId;
-      _selectedStickerIds = <String>{};
-    });
+  List<_ManagedSticker> _filteredStickerItems() {
+    final keyword = _stickerFilterKeyword.trim().toLowerCase();
+    return _allStickerItems().where((item) {
+      final sticker = item.sticker;
+      if (keyword.isNotEmpty && !sticker.name.toLowerCase().contains(keyword)) {
+        return false;
+      }
+      if (_stickerFilterMimeType.isNotEmpty &&
+          sticker.asset.mimeType != _stickerFilterMimeType) {
+        return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  bool get _stickerFilterActive =>
+      _stickerFilterKeyword.trim().isNotEmpty ||
+      _stickerFilterMimeType.isNotEmpty;
+
+  Map<String, int> _stickerSelectionNumbers() {
+    return {
+      for (final entry in _selectedStickerIds.asMap().entries)
+        entry.value: entry.key + 1,
+    };
   }
 
   Future<StickerPack> _ensureActiveStickerPack() async {
-    final existing = _selectedStickerPack();
-    if (existing != null) return existing;
+    if (_stickerPacks.isNotEmpty) return _stickerPacks.first;
 
     final api = widget.api;
     if (api == null) {
@@ -546,7 +545,6 @@ class _SettingsPageState extends State<SettingsPage> {
     if (mounted) {
       setState(() {
         _stickerPacks = [..._stickerPacks, created];
-        _activeStickerPackId = created.id;
         _stickerOrderDrafts[created.id] = <String>[];
       });
     }
@@ -612,39 +610,44 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  void _toggleStickerSelection(String stickerId, bool selected) {
+  void _toggleStickerManageMode() {
     setState(() {
-      final next = Set<String>.from(_selectedStickerIds);
-      if (selected) {
-        next.add(stickerId);
-      } else {
+      _managingStickers = !_managingStickers;
+      _selectedStickerIds = <String>[];
+    });
+  }
+
+  void _toggleStickerSelection(String stickerId) {
+    if (!_managingStickers) return;
+    setState(() {
+      final next = [..._selectedStickerIds];
+      if (next.contains(stickerId)) {
         next.remove(stickerId);
+      } else {
+        next.add(stickerId);
       }
       _selectedStickerIds = next;
     });
   }
 
-  void _toggleSelectAllStickers() {
-    final pack = _selectedStickerPack();
-    if (pack == null) return;
-    final allIds = _orderedStickers(pack).map((sticker) => sticker.id).toSet();
+  void _selectAllVisibleStickers(List<_ManagedSticker> items) {
+    if (items.isEmpty) return;
     setState(() {
-      _selectedStickerIds = _selectedStickerIds.length == allIds.length
-          ? <String>{}
-          : allIds;
+      _selectedStickerIds = items.reversed
+          .map((item) => item.sticker.id)
+          .toList();
     });
   }
 
   Future<void> _deleteSelectedStickers() async {
     final api = widget.api;
-    final pack = _selectedStickerPack();
-    final selectedIds = Set<String>.from(_selectedStickerIds);
-    if (api == null ||
-        pack == null ||
-        selectedIds.isEmpty ||
-        _deletingStickers) {
+    final selectedIds = List<String>.from(_selectedStickerIds);
+    if (api == null || selectedIds.isEmpty || _deletingStickers) {
       return;
     }
+    final byStickerId = {
+      for (final item in _allStickerItems()) item.sticker.id: item,
+    };
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -665,7 +668,9 @@ class _SettingsPageState extends State<SettingsPage> {
     });
     try {
       for (final stickerId in selectedIds) {
-        await api.deleteSticker(packId: pack.id, stickerId: stickerId);
+        final item = byStickerId[stickerId];
+        if (item == null) continue;
+        await api.deleteSticker(packId: item.pack.id, stickerId: stickerId);
       }
       await _loadStickers();
       _showNotice('已删除 ${selectedIds.length} 个表情');
@@ -677,50 +682,82 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  void _moveSticker(StickerPack pack, String stickerId, int delta) {
-    final ordered = _orderedStickers(pack);
-    final from = ordered.indexWhere((sticker) => sticker.id == stickerId);
-    if (from < 0) return;
-    final to = (from + delta).clamp(0, ordered.length - 1).toInt();
-    if (from == to) return;
-    final ids = ordered.map((sticker) => sticker.id).toList();
-    final moving = ids.removeAt(from);
-    ids.insert(to, moving);
-    setState(() => _stickerOrderDrafts[pack.id] = ids);
+  Future<void> _downloadSelectedStickers() async {
+    final api = widget.api;
+    final selectedIds = List<String>.from(_selectedStickerIds);
+    if (api == null || selectedIds.isEmpty || _downloadingStickers) return;
+
+    setState(() {
+      _downloadingStickers = true;
+      _stickerError = null;
+      _notice = null;
+    });
+    try {
+      final downloaded = await api.downloadStickers(stickerIds: selectedIds);
+      final location = await getSaveLocation(
+        suggestedName: downloaded.filename,
+        acceptedTypeGroups: const [
+          XTypeGroup(
+            label: 'Images and ZIP',
+            extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'zip'],
+          ),
+        ],
+        confirmButtonText: '保存',
+      );
+      if (location == null) return;
+      await XFile.fromData(
+        downloaded.bytes,
+        mimeType: downloaded.mimeType,
+        name: downloaded.filename,
+      ).saveTo(location.path);
+      _showNotice(selectedIds.length == 1 ? '表情已下载' : '表情压缩包已下载');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _stickerError = e.toString());
+    } finally {
+      if (mounted) setState(() => _downloadingStickers = false);
+    }
   }
 
-  Future<void> _saveStickerOrder() async {
+  Future<void> _pinSelectedStickers() async {
     final api = widget.api;
-    final pack = _selectedStickerPack();
-    if (api == null || pack == null || _savingStickerOrder) return;
-    if (!_stickerOrderDirty(pack)) {
+    final selectedIds = List<String>.from(_selectedStickerIds);
+    if (api == null || selectedIds.isEmpty || _savingStickerOrder) return;
+
+    final selectedSet = selectedIds.toSet();
+    final selectedByPack = <String, List<String>>{};
+    for (final stickerId in selectedIds) {
+      for (final pack in _stickerPacks) {
+        if (pack.stickers.any((sticker) => sticker.id == stickerId)) {
+          selectedByPack.putIfAbsent(pack.id, () => <String>[]).add(stickerId);
+          break;
+        }
+      }
+    }
+    if (selectedByPack.isEmpty) {
       _showNotice('表情排序没有变化');
       return;
     }
 
-    final ordered = _orderedStickers(pack);
     setState(() {
       _savingStickerOrder = true;
       _stickerError = null;
       _notice = null;
     });
     try {
-      // The server currently accepts sticker sort_order only when creating a
-      // sticker, so persisting a reordered pack rebuilds the pack contents.
-      for (final entry in ordered.asMap().entries) {
-        final sticker = entry.value;
-        await api.addSticker(
+      for (final pack in _stickerPacks) {
+        final selectedInPack = selectedByPack[pack.id];
+        if (selectedInPack == null || selectedInPack.isEmpty) continue;
+        final remaining = _orderedStickers(
+          pack,
+        ).map((sticker) => sticker.id).where((id) => !selectedSet.contains(id));
+        await api.reorderStickers(
           packId: pack.id,
-          assetId: sticker.asset.id,
-          name: sticker.name,
-          sortOrder: (entry.key + 1) * 10,
+          stickerIds: [...selectedInPack, ...remaining],
         );
       }
-      for (final sticker in pack.stickers) {
-        await api.deleteSticker(packId: pack.id, stickerId: sticker.id);
-      }
       await _loadStickers();
-      _showNotice('表情排序已保存');
+      _showNotice('已置顶 ${selectedIds.length} 个表情');
     } catch (e) {
       if (!mounted) return;
       setState(() => _stickerError = e.toString());
@@ -729,18 +766,97 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  void _previewSticker(Sticker sticker) {
+  void _previewSticker(_ManagedSticker item) {
     final imageUrl = AppConfigScope.of(
       context,
-    ).resolveAssetUrl(sticker.asset.url);
+    ).resolveAssetUrl(item.sticker.asset.url);
     if (imageUrl == null) return;
     unawaited(
       showDialog<void>(
         context: context,
-        builder: (context) =>
-            _StickerPreviewDialog(sticker: sticker, imageUrl: imageUrl),
+        builder: (context) => _StickerPreviewDialog(
+          item: item,
+          imageUrl: imageUrl,
+          onRename: (name) => _renameSticker(item, name),
+          onSetAvatar: () => _setStickerAsAvatar(item),
+        ),
       ),
     );
+  }
+
+  Future<String?> _renameSticker(_ManagedSticker item, String name) async {
+    final api = widget.api;
+    final trimmed = name.trim();
+    if (api == null || trimmed.isEmpty) return null;
+    try {
+      final updated = await api.updateSticker(
+        packId: item.pack.id,
+        stickerId: item.sticker.id,
+        name: trimmed,
+      );
+      await _loadStickers();
+      return updated.name;
+    } catch (e) {
+      if (!mounted) return null;
+      setState(() => _stickerError = e.toString());
+      return null;
+    }
+  }
+
+  Future<void> _setStickerAsAvatar(_ManagedSticker item) async {
+    final api = widget.api;
+    if (api == null || _uploadingAvatar) return;
+    setState(() {
+      _uploadingAvatar = true;
+      _stickerError = null;
+      _notice = null;
+    });
+    try {
+      final downloaded = await api.downloadStickers(
+        stickerIds: [item.sticker.id],
+      );
+      if (!mounted) return;
+      final cropped = await showDialog<Uint8List>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => _AvatarCropDialog(bytes: downloaded.bytes),
+      );
+      if (cropped == null || !mounted) return;
+      final asset = await api.uploadImageAsset(
+        bytes: cropped,
+        filename: 'avatar-${item.sticker.id}.png',
+        purpose: 'avatar',
+      );
+      final updated = await api.updateProfile(avatarAssetId: asset.id);
+      if (!mounted) return;
+      setState(() {
+        _user = updated;
+        _syncUserFields(updated);
+      });
+      widget.onUserUpdated?.call(updated);
+      _showNotice('头像已更新');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _stickerError = e.toString());
+    } finally {
+      if (mounted) setState(() => _uploadingAvatar = false);
+    }
+  }
+
+  Future<void> _openStickerFilter() async {
+    final result = await showDialog<_StickerFilterValue>(
+      context: context,
+      builder: (context) => _StickerFilterDialog(
+        keyword: _stickerFilterKeyword,
+        mimeType: _stickerFilterMimeType,
+      ),
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      _stickerFilterKeyword = result.keyword;
+      _stickerFilterMimeType = result.mimeType;
+      _selectedStickerIds = <String>[];
+    });
   }
 
   void _usePresetAvatar() {
@@ -1240,7 +1356,7 @@ class _SettingsPageState extends State<SettingsPage> {
   String get _activeTitle {
     return switch (_section) {
       _SettingsSection.profile => '用户资料',
-      _SettingsSection.stickers => '我的表情包',
+      _SettingsSection.stickers => '表情包管理',
       _SettingsSection.security => '隐私和安全',
       _SettingsSection.voice => '默认语音源',
     };
@@ -1257,16 +1373,19 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget _buildStickersContent() {
     final unavailable = widget.api == null;
-    final pack = _selectedStickerPack();
-    final stickers = pack == null ? const <Sticker>[] : _orderedStickers(pack);
-    final allSelected =
-        stickers.isNotEmpty && _selectedStickerIds.length == stickers.length;
-    final orderDirty = pack != null && _stickerOrderDirty(pack);
+    final items = _filteredStickerItems();
+    final totalCount = _allStickerItems().length;
+    final selectionNumbers = _stickerSelectionNumbers();
+    final busy =
+        _uploadingStickers ||
+        _deletingStickers ||
+        _savingStickerOrder ||
+        _downloadingStickers;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(28, 24, 30, 32),
       children: [
-        _ContentTitle(title: '我的表情包', loading: _loadingStickers),
+        _ContentTitle(title: '表情包管理', loading: _loadingStickers),
         if (_notice != null) ...[
           const SizedBox(height: 12),
           _SettingsNotice(message: _notice!),
@@ -1280,9 +1399,11 @@ class _SettingsPageState extends State<SettingsPage> {
           const _SettingsEmptyState(text: '表情包需要登录后从服务端读取')
         else
           _SettingsGroup(
-            title: '服务端表情',
+            title: '表情包管理',
             trailing: Text(
-              '${stickers.length} 个',
+              _stickerFilterActive
+                  ? '${items.length} / $totalCount 个'
+                  : '$totalCount 个',
               style: const TextStyle(
                 color: _textMuted,
                 fontSize: 12,
@@ -1290,48 +1411,108 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
             children: [
-              _StickerPackSelector(
-                packs: _stickerPacks,
-                selectedPackId: pack?.id,
-                loading: _loadingStickers,
-                onSelected: _selectStickerPack,
+              _StickerActionRow(
+                children: [
+                  KeyButton(
+                    onPressed: busy
+                        ? null
+                        : _managingStickers
+                        ? _deleteSelectedStickers
+                        : _pickAndUploadStickers,
+                    loading: _managingStickers
+                        ? _deletingStickers
+                        : _uploadingStickers,
+                    tone: _managingStickers
+                        ? KeyButtonTone.danger
+                        : KeyButtonTone.primary,
+                    icon: Icon(
+                      _managingStickers
+                          ? Icons.delete_outline
+                          : Icons.upload_file,
+                    ),
+                    width: double.infinity,
+                    child: Text(_managingStickers ? '删除' : '本地上传'),
+                  ),
+                  KeyButton(
+                    onPressed: busy ? null : _toggleStickerManageMode,
+                    selected: _managingStickers,
+                    tone: _managingStickers
+                        ? KeyButtonTone.primary
+                        : KeyButtonTone.neutral,
+                    icon: Icon(
+                      _managingStickers ? Icons.close : Icons.checklist_rtl,
+                    ),
+                    width: double.infinity,
+                    child: Text(_managingStickers ? '取消管理' : '批量管理'),
+                  ),
+                  KeyButton(
+                    onPressed: busy ? null : _openStickerFilter,
+                    selected: _stickerFilterActive,
+                    tone: _stickerFilterActive
+                        ? KeyButtonTone.primary
+                        : KeyButtonTone.neutral,
+                    icon: const Icon(Icons.filter_alt_outlined),
+                    width: double.infinity,
+                    child: const Text('筛选'),
+                  ),
+                ],
               ),
-              const SizedBox(height: 14),
-              _StickerToolbar(
-                selectedCount: _selectedStickerIds.length,
-                allSelected: allSelected,
-                hasStickers: stickers.isNotEmpty,
-                orderDirty: orderDirty,
-                uploading: _uploadingStickers,
-                deleting: _deletingStickers,
-                savingOrder: _savingStickerOrder,
-                onUpload: _pickAndUploadStickers,
-                onToggleAll: _toggleSelectAllStickers,
-                onDeleteSelected: _deleteSelectedStickers,
-                onSaveOrder: _saveStickerOrder,
-              ),
+              if (_managingStickers) ...[
+                const SizedBox(height: 10),
+                _StickerActionRow(
+                  children: [
+                    KeyButton(
+                      onPressed: busy || _selectedStickerIds.isEmpty
+                          ? null
+                          : _downloadSelectedStickers,
+                      loading: _downloadingStickers,
+                      icon: const Icon(Icons.download_outlined),
+                      width: double.infinity,
+                      child: const Text('下载'),
+                    ),
+                    KeyButton(
+                      onPressed: busy || _selectedStickerIds.isEmpty
+                          ? null
+                          : _pinSelectedStickers,
+                      loading: _savingStickerOrder,
+                      icon: const Icon(Icons.vertical_align_top),
+                      width: double.infinity,
+                      child: const Text('置顶'),
+                    ),
+                    KeyButton(
+                      onPressed: busy || items.isEmpty
+                          ? null
+                          : () => _selectAllVisibleStickers(items),
+                      icon: const Icon(Icons.select_all),
+                      width: double.infinity,
+                      child: const Text('全选'),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 14),
               if (_loadingStickers && _stickerPacks.isEmpty)
                 const SizedBox(
                   height: 128,
                   child: Center(child: CircularProgressIndicator(color: _cyan)),
                 )
-              else if (pack == null)
-                const _SettingsEmptyState(text: '暂无表情包，批量上传会自动创建')
-              else if (stickers.isEmpty)
-                const _SettingsEmptyState(text: '当前表情包为空')
+              else if (totalCount == 0)
+                const _SettingsEmptyState(text: '暂无表情，点击本地上传会自动创建')
+              else if (items.isEmpty)
+                const _SettingsEmptyState(text: '没有匹配的表情')
               else
-                _StickerManagementList(
-                  stickers: stickers,
-                  selectedIds: _selectedStickerIds,
-                  busy:
-                      _uploadingStickers ||
-                      _deletingStickers ||
-                      _savingStickerOrder,
-                  onToggleSelected: _toggleStickerSelection,
-                  onMoveUp: (sticker) => _moveSticker(pack, sticker.id, -1),
-                  onMoveDown: (sticker) => _moveSticker(pack, sticker.id, 1),
-                  onPreview: _previewSticker,
+                _StickerGrid(
+                  items: items,
+                  managing: _managingStickers,
+                  selectionNumbers: selectionNumbers,
+                  busy: busy,
+                  onTap: (item) {
+                    if (_managingStickers) {
+                      _toggleStickerSelection(item.sticker.id);
+                    } else {
+                      _previewSticker(item);
+                    }
+                  },
                 ),
             ],
           ),
@@ -1912,7 +2093,7 @@ class _SettingsNavigation extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               _NavItem(
-                title: '我的表情包',
+                title: '表情包管理',
                 icon: Icons.emoji_emotions_outlined,
                 selected: selected == _SettingsSection.stickers,
                 onPressed: () => onChanged(_SettingsSection.stickers),
@@ -2589,319 +2770,163 @@ class _SessionList extends StatelessWidget {
   }
 }
 
-class _StickerPackSelector extends StatelessWidget {
-  const _StickerPackSelector({
-    required this.packs,
-    required this.selectedPackId,
-    required this.loading,
-    required this.onSelected,
-  });
+class _StickerActionRow extends StatelessWidget {
+  const _StickerActionRow({required this.children});
 
-  final List<StickerPack> packs;
-  final String? selectedPackId;
-  final bool loading;
-  final ValueChanged<String> onSelected;
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
-    if (packs.isEmpty) return const SizedBox.shrink();
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
+    return Row(
       children: [
-        for (final pack in packs)
-          _StickerPackChip(
-            pack: pack,
-            selected: pack.id == selectedPackId,
-            loading: loading,
-            onPressed: () => onSelected(pack.id),
-          ),
+        for (final entry in children.asMap().entries) ...[
+          if (entry.key > 0) const SizedBox(width: 10),
+          Expanded(child: entry.value),
+        ],
       ],
     );
   }
 }
 
-class _StickerPackChip extends StatelessWidget {
-  const _StickerPackChip({
-    required this.pack,
-    required this.selected,
-    required this.loading,
-    required this.onPressed,
-  });
+class _ManagedSticker {
+  const _ManagedSticker({required this.pack, required this.sticker});
 
   final StickerPack pack;
-  final bool selected;
-  final bool loading;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 178,
-      child: KeySurface(
-        onPressed: loading ? null : onPressed,
-        selected: selected,
-        height: 42,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        backgroundColor: _primaryDark,
-        selectedBackgroundColor: const Color(0xFF1F2D27),
-        pressedBackgroundColor: _primaryDarkLow,
-        borderColor: selected ? _cyan : _borderColor,
-        selectedBorderColor: _cyan,
-        child: Row(
-          children: [
-            Icon(
-              Icons.emoji_emotions_outlined,
-              color: selected ? _cyan : _textMuted,
-              size: 17,
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Text(
-                pack.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: selected ? _textPrimary : _textSecondary,
-                  fontSize: 13,
-                  fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              '${pack.stickers.length}',
-              style: TextStyle(
-                color: selected ? _cyan : _textMuted,
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  final Sticker sticker;
 }
 
-class _StickerToolbar extends StatelessWidget {
-  const _StickerToolbar({
-    required this.selectedCount,
-    required this.allSelected,
-    required this.hasStickers,
-    required this.orderDirty,
-    required this.uploading,
-    required this.deleting,
-    required this.savingOrder,
-    required this.onUpload,
-    required this.onToggleAll,
-    required this.onDeleteSelected,
-    required this.onSaveOrder,
-  });
-
-  final int selectedCount;
-  final bool allSelected;
-  final bool hasStickers;
-  final bool orderDirty;
-  final bool uploading;
-  final bool deleting;
-  final bool savingOrder;
-  final VoidCallback onUpload;
-  final VoidCallback onToggleAll;
-  final VoidCallback onDeleteSelected;
-  final VoidCallback onSaveOrder;
-
-  @override
-  Widget build(BuildContext context) {
-    final busy = uploading || deleting || savingOrder;
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: [
-        KeyButton(
-          onPressed: busy ? null : onUpload,
-          loading: uploading,
-          icon: const Icon(Icons.add_photo_alternate_outlined),
-          tone: KeyButtonTone.primary,
-          child: const Text('批量添加'),
-        ),
-        KeyButton(
-          onPressed: busy || !hasStickers ? null : onToggleAll,
-          icon: Icon(allSelected ? Icons.deselect_outlined : Icons.select_all),
-          child: Text(allSelected ? '取消全选' : '全选'),
-        ),
-        KeyButton(
-          onPressed: busy || selectedCount == 0 ? null : onDeleteSelected,
-          loading: deleting,
-          icon: const Icon(Icons.delete_outline),
-          tone: KeyButtonTone.danger,
-          child: Text(selectedCount == 0 ? '批量删除' : '删除 $selectedCount 个'),
-        ),
-        KeyButton(
-          onPressed: busy || !orderDirty ? null : onSaveOrder,
-          loading: savingOrder,
-          icon: const Icon(Icons.swap_vert),
-          child: const Text('保存排序'),
-        ),
-      ],
-    );
-  }
-}
-
-class _StickerManagementList extends StatelessWidget {
-  const _StickerManagementList({
-    required this.stickers,
-    required this.selectedIds,
+class _StickerGrid extends StatelessWidget {
+  const _StickerGrid({
+    required this.items,
+    required this.managing,
+    required this.selectionNumbers,
     required this.busy,
-    required this.onToggleSelected,
-    required this.onMoveUp,
-    required this.onMoveDown,
-    required this.onPreview,
+    required this.onTap,
   });
 
-  final List<Sticker> stickers;
-  final Set<String> selectedIds;
+  final List<_ManagedSticker> items;
+  final bool managing;
+  final Map<String, int> selectionNumbers;
   final bool busy;
-  final void Function(String stickerId, bool selected) onToggleSelected;
-  final ValueChanged<Sticker> onMoveUp;
-  final ValueChanged<Sticker> onMoveDown;
-  final ValueChanged<Sticker> onPreview;
+  final ValueChanged<_ManagedSticker> onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        for (final entry in stickers.asMap().entries)
-          Padding(
-            padding: EdgeInsets.only(
-              bottom: entry.key == stickers.length - 1 ? 0 : 8,
-            ),
-            child: _StickerRow(
-              sticker: entry.value,
-              index: entry.key,
-              total: stickers.length,
-              selected: selectedIds.contains(entry.value.id),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : 360.0;
+        final columns = (width / 92).floor().clamp(3, 9);
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: items.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 1,
+          ),
+          itemBuilder: (context, index) {
+            final item = items[index];
+            return _StickerGridTile(
+              item: item,
+              managing: managing,
+              selectionNumber: selectionNumbers[item.sticker.id],
               busy: busy,
-              onToggleSelected: (selected) {
-                onToggleSelected(entry.value.id, selected);
-              },
-              onMoveUp: () => onMoveUp(entry.value),
-              onMoveDown: () => onMoveDown(entry.value),
-              onPreview: () => onPreview(entry.value),
+              onTap: () => onTap(item),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _StickerGridTile extends StatelessWidget {
+  const _StickerGridTile({
+    required this.item,
+    required this.managing,
+    required this.selectionNumber,
+    required this.busy,
+    required this.onTap,
+  });
+
+  final _ManagedSticker item;
+  final bool managing;
+  final int? selectionNumber;
+  final bool busy;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = selectionNumber != null;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tileHeight = constraints.maxHeight.isFinite
+            ? math.max(54.0, constraints.maxHeight - 6)
+            : 86.0;
+        return Tooltip(
+          message: item.sticker.name,
+          child: KeySurface(
+            onPressed: busy ? null : onTap,
+            selected: selected,
+            height: tileHeight,
+            padding: const EdgeInsets.all(7),
+            backgroundColor: _primaryDark,
+            selectedBackgroundColor: const Color(0xFF1F2D27),
+            pressedBackgroundColor: _primaryDarkLow,
+            borderColor: selected ? _cyan : _borderColor,
+            selectedBorderColor: _cyan,
+            hoverLift: 2,
+            baseDepth: 4,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Center(
+                  child: _StickerThumbnail(
+                    sticker: item.sticker,
+                    size: math.min(62, tileHeight - 18),
+                  ),
+                ),
+                if (managing && selected)
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.24),
+                      ),
+                      child: Align(
+                        alignment: Alignment.topRight,
+                        child: Container(
+                          margin: const EdgeInsets.all(5),
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: _cyan,
+                            border: Border.all(color: _primaryDark, width: 2),
+                          ),
+                          child: Center(
+                            child: Text(
+                              '$selectionNumber',
+                              maxLines: 1,
+                              overflow: TextOverflow.clip,
+                              style: const TextStyle(
+                                color: _primaryDark,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
-      ],
-    );
-  }
-}
-
-class _StickerRow extends StatelessWidget {
-  const _StickerRow({
-    required this.sticker,
-    required this.index,
-    required this.total,
-    required this.selected,
-    required this.busy,
-    required this.onToggleSelected,
-    required this.onMoveUp,
-    required this.onMoveDown,
-    required this.onPreview,
-  });
-
-  final Sticker sticker;
-  final int index;
-  final int total;
-  final bool selected;
-  final bool busy;
-  final ValueChanged<bool> onToggleSelected;
-  final VoidCallback onMoveUp;
-  final VoidCallback onMoveDown;
-  final VoidCallback onPreview;
-
-  @override
-  Widget build(BuildContext context) {
-    final asset = sticker.asset;
-    final dimensions = asset.width != null && asset.height != null
-        ? '${asset.width}x${asset.height}'
-        : '未知尺寸';
-    return SizedBox(
-      width: double.infinity,
-      child: KeySurface(
-        onPressed: onPreview,
-        selected: selected,
-        height: 76,
-        padding: const EdgeInsets.fromLTRB(6, 8, 10, 8),
-        backgroundColor: _primaryDark,
-        selectedBackgroundColor: const Color(0xFF1F2D27),
-        pressedBackgroundColor: _primaryDarkLow,
-        borderColor: selected ? _cyan : _borderColor,
-        selectedBorderColor: _cyan,
-        child: Row(
-          children: [
-            Checkbox(
-              value: selected,
-              onChanged: busy
-                  ? null
-                  : (value) => onToggleSelected(value ?? false),
-              activeColor: _cyan,
-              checkColor: _primaryDark,
-              side: const BorderSide(color: _borderColor),
-            ),
-            _StickerThumbnail(sticker: sticker, size: 52),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    sticker.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: _textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    '${asset.mimeType} · $dimensions · #${index + 1}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: _textMuted,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            KeyIconButton(
-              tooltip: '预览表情',
-              onPressed: onPreview,
-              icon: const Icon(Icons.visibility_outlined),
-              size: 32,
-            ),
-            const SizedBox(width: 8),
-            KeyIconButton(
-              tooltip: '上移',
-              onPressed: busy || index == 0 ? null : onMoveUp,
-              icon: const Icon(Icons.keyboard_arrow_up),
-              size: 32,
-            ),
-            const SizedBox(width: 8),
-            KeyIconButton(
-              tooltip: '下移',
-              onPressed: busy || index == total - 1 ? null : onMoveDown,
-              icon: const Icon(Icons.keyboard_arrow_down),
-              size: 32,
-            ),
-          ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -2944,6 +2969,165 @@ class _StickerThumbnail extends StatelessWidget {
       ),
     );
   }
+}
+
+class _StickerFilterValue {
+  const _StickerFilterValue({required this.keyword, required this.mimeType});
+
+  final String keyword;
+  final String mimeType;
+}
+
+class _StickerFilterDialog extends StatefulWidget {
+  const _StickerFilterDialog({required this.keyword, required this.mimeType});
+
+  final String keyword;
+  final String mimeType;
+
+  @override
+  State<_StickerFilterDialog> createState() => _StickerFilterDialogState();
+}
+
+class _StickerFilterDialogState extends State<_StickerFilterDialog> {
+  late final TextEditingController _keywordController;
+  late String _mimeType;
+
+  static const _filters = [
+    _StickerMimeFilter('', '全部'),
+    _StickerMimeFilter('image/png', 'PNG'),
+    _StickerMimeFilter('image/jpeg', 'JPG'),
+    _StickerMimeFilter('image/webp', 'WebP'),
+    _StickerMimeFilter('image/gif', 'GIF'),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _keywordController = TextEditingController(text: widget.keyword);
+    _mimeType = widget.mimeType;
+  }
+
+  @override
+  void dispose() {
+    _keywordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: _primaryDarkLow,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.zero,
+        side: BorderSide(color: _borderColor),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                '筛选',
+                style: TextStyle(
+                  color: _textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _keywordController,
+                autofocus: true,
+                cursorColor: _textSecondary,
+                style: const TextStyle(
+                  color: _textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  labelText: '名称关键字',
+                ),
+              ),
+              const SizedBox(height: 16),
+              const _FieldLabel('图片类型'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final filter in _filters)
+                    SizedBox(
+                      width: 72,
+                      child: KeySurface(
+                        onPressed: () =>
+                            setState(() => _mimeType = filter.mimeType),
+                        selected: _mimeType == filter.mimeType,
+                        height: 36,
+                        padding: EdgeInsets.zero,
+                        backgroundColor: _primaryDark,
+                        selectedBackgroundColor: const Color(0xFF1F2D27),
+                        pressedBackgroundColor: _primaryDarkLow,
+                        borderColor: _mimeType == filter.mimeType
+                            ? _cyan
+                            : _borderColor,
+                        selectedBorderColor: _cyan,
+                        child: Center(
+                          child: Text(
+                            filter.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: _mimeType == filter.mimeType
+                                  ? _cyan
+                                  : _textSecondary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  KeyButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('取消'),
+                  ),
+                  const SizedBox(width: 12),
+                  KeyButton(
+                    onPressed: () => Navigator.of(context).pop(
+                      _StickerFilterValue(
+                        keyword: _keywordController.text.trim(),
+                        mimeType: _mimeType,
+                      ),
+                    ),
+                    tone: KeyButtonTone.primary,
+                    icon: const Icon(Icons.check),
+                    child: const Text('确认'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StickerMimeFilter {
+  const _StickerMimeFilter(this.mimeType, this.label);
+
+  final String mimeType;
+  final String label;
 }
 
 class _ConfirmActionDialog extends StatelessWidget {
@@ -3021,15 +3205,82 @@ class _ConfirmActionDialog extends StatelessWidget {
   }
 }
 
-class _StickerPreviewDialog extends StatelessWidget {
-  const _StickerPreviewDialog({required this.sticker, required this.imageUrl});
+class _StickerPreviewDialog extends StatefulWidget {
+  const _StickerPreviewDialog({
+    required this.item,
+    required this.imageUrl,
+    required this.onRename,
+    required this.onSetAvatar,
+  });
 
-  final Sticker sticker;
+  final _ManagedSticker item;
   final String imageUrl;
+  final Future<String?> Function(String name) onRename;
+  final Future<void> Function() onSetAvatar;
+
+  @override
+  State<_StickerPreviewDialog> createState() => _StickerPreviewDialogState();
+}
+
+class _StickerPreviewDialogState extends State<_StickerPreviewDialog> {
+  late final TextEditingController _nameController;
+  bool _savingName = false;
+  bool _settingAvatar = false;
+  String? _error;
+
+  Sticker get _sticker => widget.item.sticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: _sticker.name);
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveName() async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty || _savingName) return;
+    setState(() {
+      _savingName = true;
+      _error = null;
+    });
+    try {
+      final actualName = await widget.onRename(name);
+      if (!mounted) return;
+      if (actualName == null) {
+        setState(() => _error = '名称保存失败');
+      } else {
+        _nameController.text = actualName;
+      }
+    } finally {
+      if (mounted) setState(() => _savingName = false);
+    }
+  }
+
+  Future<void> _setAvatar() async {
+    if (_settingAvatar) return;
+    setState(() {
+      _settingAvatar = true;
+      _error = null;
+    });
+    try {
+      await widget.onSetAvatar();
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _settingAvatar = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final asset = sticker.asset;
+    final asset = _sticker.asset;
     final dimensions = asset.width != null && asset.height != null
         ? '${asset.width}x${asset.height}'
         : '未知尺寸';
@@ -3040,7 +3291,7 @@ class _StickerPreviewDialog extends StatelessWidget {
         side: BorderSide(color: _borderColor),
       ),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
+        constraints: const BoxConstraints(maxWidth: 560),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
           child: Column(
@@ -3049,12 +3300,12 @@ class _StickerPreviewDialog extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Expanded(
+                  const Expanded(
                     child: Text(
-                      sticker.name,
+                      '预览表情',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: _textPrimary,
                         fontSize: 18,
                         fontWeight: FontWeight.w900,
@@ -3071,7 +3322,7 @@ class _StickerPreviewDialog extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               SizedBox(
-                height: 360,
+                height: 340,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     color: _primaryDark,
@@ -3083,7 +3334,7 @@ class _StickerPreviewDialog extends StatelessWidget {
                       maxScale: 4,
                       child: Center(
                         child: Image.network(
-                          imageUrl,
+                          widget.imageUrl,
                           fit: BoxFit.contain,
                           errorBuilder: (_, _, _) => const Icon(
                             Icons.broken_image_outlined,
@@ -3096,7 +3347,22 @@ class _StickerPreviewDialog extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _nameController,
+                cursorColor: _textSecondary,
+                style: const TextStyle(
+                  color: _textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  labelText: '名称',
+                ),
+                onSubmitted: (_) => unawaited(_saveName()),
+              ),
+              const SizedBox(height: 8),
               Text(
                 '${asset.mimeType} · $dimensions',
                 maxLines: 1,
@@ -3106,6 +3372,30 @@ class _StickerPreviewDialog extends StatelessWidget {
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                _SettingsError(message: _error!),
+              ],
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  KeyButton(
+                    onPressed: _settingAvatar ? null : _setAvatar,
+                    loading: _settingAvatar,
+                    icon: const Icon(Icons.account_circle_outlined),
+                    child: const Text('设为头像'),
+                  ),
+                  const SizedBox(width: 12),
+                  KeyButton(
+                    onPressed: _savingName ? null : _saveName,
+                    loading: _savingName,
+                    tone: KeyButtonTone.primary,
+                    icon: const Icon(Icons.save_outlined),
+                    child: const Text('保存名称'),
+                  ),
+                ],
               ),
             ],
           ),

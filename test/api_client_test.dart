@@ -345,6 +345,94 @@ void main() {
   });
 
   test(
+    'sticker item management uses rename reorder and download routes',
+    () async {
+      var requestIndex = 0;
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          requestIndex += 1;
+          expect(request.headers['authorization'], 'Bearer token');
+
+          switch (requestIndex) {
+            case 1:
+              expect(request.method, 'PATCH');
+              expect(
+                request.url.path,
+                '/api/v1/sticker-packs/stkp_1/stickers/stk_1',
+              );
+              expect(jsonDecode(request.body) as Map<String, Object?>, {
+                'name': 'ok',
+              });
+              return http.Response(
+                jsonEncode({'sticker': _stickerJson(name: 'ok (2)')}),
+                200,
+              );
+            case 2:
+              expect(request.method, 'POST');
+              expect(
+                request.url.path,
+                '/api/v1/sticker-packs/stkp_1/stickers/reorder',
+              );
+              expect(jsonDecode(request.body) as Map<String, Object?>, {
+                'sticker_ids': ['stk_2', 'stk_1'],
+              });
+              return http.Response(
+                jsonEncode(
+                  _stickerPackJson(
+                    stickers: [
+                      _stickerJson(id: 'stk_2', sortOrder: 10),
+                      _stickerJson(id: 'stk_1', sortOrder: 20),
+                    ],
+                  ),
+                ),
+                200,
+              );
+            case 3:
+              expect(request.method, 'GET');
+              expect(request.url.path, '/api/v1/stickers/download');
+              expect(request.url.queryParameters['ids'], 'stk_1,stk_2');
+              return http.Response.bytes(
+                Uint8List.fromList([80, 75, 3, 4]),
+                200,
+                headers: {
+                  'content-type': 'application/zip',
+                  'content-disposition': 'attachment; filename="stickers.zip"',
+                },
+              );
+          }
+
+          fail(
+            'unexpected request $requestIndex ${request.method} ${request.url}',
+          );
+        }),
+      );
+
+      final renamed = await api.updateSticker(
+        packId: 'stkp_1',
+        stickerId: 'stk_1',
+        name: 'ok',
+      );
+      final reordered = await api.reorderStickers(
+        packId: 'stkp_1',
+        stickerIds: ['stk_2', 'stk_1'],
+      );
+      final downloaded = await api.downloadStickers(
+        stickerIds: ['stk_1', 'stk_2'],
+      );
+
+      expect(renamed.name, 'ok (2)');
+      expect(reordered.stickers.first.id, 'stk_2');
+      expect(downloaded.filename, 'stickers.zip');
+      expect(downloaded.mimeType, 'application/zip');
+      expect(downloaded.bytes, [80, 75, 3, 4]);
+      expect(requestIndex, 3);
+      api.close();
+    },
+  );
+
+  test(
     'addSticker treats transient write failure as success when asset exists',
     () async {
       var requestIndex = 0;
@@ -591,7 +679,10 @@ Map<String, Object?> _liveJoinJson() {
   };
 }
 
-Map<String, Object?> _stickerPackJson({String name = 'My Stickers'}) {
+Map<String, Object?> _stickerPackJson({
+  String name = 'My Stickers',
+  List<Map<String, Object?>> stickers = const [],
+}) {
   return {
     'pack': {
       'id': 'stkp_1',
@@ -600,7 +691,29 @@ Map<String, Object?> _stickerPackJson({String name = 'My Stickers'}) {
       'name': name,
       'sort_order': 10,
       'updated_at': '2026-06-02T08:00:00Z',
-      'stickers': const [],
+      'stickers': stickers,
+    },
+  };
+}
+
+Map<String, Object?> _stickerJson({
+  String id = 'stk_1',
+  String name = 'ok',
+  int sortOrder = 10,
+}) {
+  final assetId = 'asset_$id';
+  return {
+    'id': id,
+    'name': name,
+    'sort_order': sortOrder,
+    'asset': {
+      'id': assetId,
+      'url': '/assets/$assetId/ok.webp',
+      'thumbnail_url': '/assets/$assetId/ok.webp',
+      'mime_type': 'image/webp',
+      'width': 128,
+      'height': 128,
+      'created_at': '2026-06-02T07:59:00Z',
     },
   };
 }

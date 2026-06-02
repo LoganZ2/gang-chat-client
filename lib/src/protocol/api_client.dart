@@ -8,6 +8,18 @@ import 'models.dart';
 
 typedef AccessTokenProvider = Future<String> Function({bool forceRefresh});
 
+class DownloadedFile {
+  const DownloadedFile({
+    required this.bytes,
+    required this.filename,
+    required this.mimeType,
+  });
+
+  final Uint8List bytes;
+  final String filename;
+  final String mimeType;
+}
+
 abstract interface class GangApi {
   Future<CurrentUser> me();
 
@@ -65,6 +77,20 @@ abstract interface class GangApi {
     required String packId,
     required String stickerId,
   });
+
+  Future<Sticker> updateSticker({
+    required String packId,
+    required String stickerId,
+    String? name,
+    int? sortOrder,
+  });
+
+  Future<StickerPack> reorderStickers({
+    required String packId,
+    required List<String> stickerIds,
+  });
+
+  Future<DownloadedFile> downloadStickers({required List<String> stickerIds});
 
   Future<void> changePassword({
     required String currentPassword,
@@ -364,6 +390,59 @@ class GangApiClient implements GangApi {
         headers: _headers(token),
       );
     });
+  }
+
+  @override
+  Future<Sticker> updateSticker({
+    required String packId,
+    required String stickerId,
+    String? name,
+    int? sortOrder,
+  }) async {
+    final body = <String, Object?>{};
+    if (name != null) body['name'] = name;
+    if (sortOrder != null) body['sort_order'] = sortOrder;
+    final decoded = await _sendJson((token) {
+      return _httpClient.patch(
+        _uri('/sticker-packs/$packId/stickers/$stickerId'),
+        headers: _headers(token),
+        body: jsonEncode(body),
+      );
+    });
+    return Sticker.fromJson(decoded['sticker']! as Map<String, Object?>);
+  }
+
+  @override
+  Future<StickerPack> reorderStickers({
+    required String packId,
+    required List<String> stickerIds,
+  }) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.post(
+        _uri('/sticker-packs/$packId/stickers/reorder'),
+        headers: _headers(token),
+        body: jsonEncode({'sticker_ids': stickerIds}),
+      );
+    });
+    return StickerPack.fromJson(decoded['pack']! as Map<String, Object?>);
+  }
+
+  @override
+  Future<DownloadedFile> downloadStickers({
+    required List<String> stickerIds,
+  }) async {
+    final response = await _sendWithAuth((token) {
+      return _httpClient.get(
+        _uri('/stickers/download', {'ids': stickerIds.join(',')}),
+        headers: {'authorization': 'Bearer $token'},
+      );
+    });
+    _throwIfFailed(response);
+    return DownloadedFile(
+      bytes: response.bodyBytes,
+      filename: _downloadFilename(response),
+      mimeType: response.headers['content-type'] ?? 'application/octet-stream',
+    );
   }
 
   @override
@@ -693,6 +772,16 @@ class GangApiClient implements GangApi {
     };
     if (idempotencyKey != null) headers['idempotency-key'] = idempotencyKey;
     return headers;
+  }
+
+  String _downloadFilename(http.Response response) {
+    final disposition = response.headers['content-disposition'] ?? '';
+    final quoted = RegExp(r'filename="([^"]+)"').firstMatch(disposition);
+    if (quoted != null) return quoted.group(1)!;
+    final unquoted = RegExp(r'filename=([^;]+)').firstMatch(disposition);
+    if (unquoted != null) return unquoted.group(1)!.trim();
+    final mimeType = response.headers['content-type'] ?? '';
+    return mimeType.contains('zip') ? 'stickers.zip' : 'sticker';
   }
 
   @override
