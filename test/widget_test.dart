@@ -300,6 +300,23 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  test('visualizer band levels use overall audio energy', () {
+    expect(levelFromVisualizerBandsForTest([0.0, 0.03, null, double.nan]), 0);
+
+    final singleSpike = levelFromVisualizerBandsForTest(<Object?>[
+      1.0,
+      ...List<double>.filled(13, 0.0),
+    ]);
+    final broadVoice = levelFromVisualizerBandsForTest(
+      List<double>.filled(14, 0.5),
+    );
+
+    expect(singleSpike, greaterThan(0));
+    expect(singleSpike, lessThan(0.7));
+    expect(broadVoice, greaterThan(singleSpike));
+    expect(levelFromVisualizerBandsForTest(List<double>.filled(14, 1.0)), 1);
+  });
+
   testWidgets('embedded settings page exposes a close button', (
     WidgetTester tester,
   ) async {

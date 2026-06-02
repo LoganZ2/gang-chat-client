@@ -2784,13 +2784,37 @@ class _StartedVisualizer {
 }
 
 double _levelFromVisualizerEvent(lk.AudioVisualizerEvent event) {
+  return _levelFromVisualizerBands(event.event);
+}
+
+double _levelFromVisualizerBands(Iterable<Object?> bands) {
+  const noiseFloor = 0.04;
+  const displayGain = 1.45;
   var peak = 0.0;
-  for (final value in event.event) {
+  var squareSum = 0.0;
+  var count = 0;
+
+  for (final value in bands) {
     if (value is! num) continue;
-    final sample = value.toDouble();
+    final raw = value.toDouble();
+    if (!raw.isFinite) continue;
+    final clamped = raw.clamp(0.0, 1.0).toDouble();
+    final sample = clamped <= noiseFloor
+        ? 0.0
+        : (clamped - noiseFloor) / (1 - noiseFloor);
     if (sample > peak) peak = sample;
+    squareSum += sample * sample;
+    count++;
   }
-  return peak.clamp(0.0, 1.0).toDouble();
+
+  if (count == 0 || peak <= 0) return 0;
+  final rms = math.sqrt(squareSum / count);
+  final energy = (rms * 0.82) + (peak * 0.18);
+  return (energy * displayGain).clamp(0.0, 1.0).toDouble();
+}
+
+double levelFromVisualizerBandsForTest(Iterable<Object?> bands) {
+  return _levelFromVisualizerBands(bands);
 }
 
 double _normalizedVolume(double volume) {
@@ -3106,7 +3130,7 @@ class _LevelMeter extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: i < activeCount
                             ? _cyan
-                            : const Color(0xFFE8EBEE),
+                            : const Color(0xFF2A2F38),
                         borderRadius: BorderRadius.circular(3),
                       ),
                     ),
