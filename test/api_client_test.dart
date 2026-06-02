@@ -343,6 +343,108 @@ void main() {
     api.close();
   });
 
+  test(
+    'addSticker treats transient write failure as success when asset exists',
+    () async {
+      var requestIndex = 0;
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          requestIndex += 1;
+          expect(request.headers['authorization'], 'Bearer token');
+
+          switch (requestIndex) {
+            case 1:
+              expect(request.method, 'POST');
+              expect(request.url.path, '/api/v1/sticker-packs/stkp_1/stickers');
+              throw http.ClientException(
+                'SocketException: Write failed (OS Error: connection aborted, errno = 10053)',
+                request.url,
+              );
+            case 2:
+              expect(request.method, 'GET');
+              expect(request.url.path, '/api/v1/sticker-packs');
+              expect(request.url.queryParameters['scope'], 'personal');
+              return http.Response(
+                jsonEncode(_personalStickerPacksJson(linkedAssetId: 'asset_2')),
+                200,
+              );
+          }
+
+          fail(
+            'unexpected request $requestIndex ${request.method} ${request.url}',
+          );
+        }),
+      );
+
+      await api.addSticker(packId: 'stkp_1', assetId: 'asset_2', name: 'hi');
+
+      expect(requestIndex, 2);
+      api.close();
+    },
+  );
+
+  test(
+    'addSticker retries once after transient write failure when not linked',
+    () async {
+      var requestIndex = 0;
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          requestIndex += 1;
+          expect(request.headers['authorization'], 'Bearer token');
+
+          switch (requestIndex) {
+            case 1:
+              expect(request.method, 'POST');
+              expect(request.url.path, '/api/v1/sticker-packs/stkp_1/stickers');
+              throw http.ClientException(
+                'SocketException: Write failed (OS Error: connection aborted, errno = 10053)',
+                request.url,
+              );
+            case 2:
+              expect(request.method, 'GET');
+              expect(request.url.path, '/api/v1/sticker-packs');
+              expect(request.url.queryParameters['scope'], 'personal');
+              return http.Response(
+                jsonEncode(_personalStickerPacksJson()),
+                200,
+              );
+            case 3:
+              expect(request.method, 'POST');
+              expect(request.url.path, '/api/v1/sticker-packs/stkp_1/stickers');
+              expect(jsonDecode(request.body) as Map<String, Object?>, {
+                'asset_id': 'asset_2',
+                'name': 'hi',
+              });
+              return http.Response(
+                jsonEncode({
+                  'sticker': {
+                    'id': 'stk_2',
+                    'asset_id': 'asset_2',
+                    'name': 'hi',
+                    'sort_order': 10,
+                  },
+                }),
+                201,
+              );
+          }
+
+          fail(
+            'unexpected request $requestIndex ${request.method} ${request.url}',
+          );
+        }),
+      );
+
+      await api.addSticker(packId: 'stkp_1', assetId: 'asset_2', name: 'hi');
+
+      expect(requestIndex, 3);
+      api.close();
+    },
+  );
+
   test('updateProfile retries a transient socket write abort', () async {
     var requests = 0;
     final api = GangApiClient(
@@ -430,5 +532,34 @@ Map<String, Object?> _stickerPackJson({String name = 'My Stickers'}) {
       'updated_at': '2026-06-02T08:00:00Z',
       'stickers': const [],
     },
+  };
+}
+
+Map<String, Object?> _personalStickerPacksJson({String? linkedAssetId}) {
+  return {
+    'packs': [
+      {
+        'id': 'stkp_1',
+        'scope': 'personal',
+        'room_id': null,
+        'name': 'My Stickers',
+        'sort_order': 10,
+        'updated_at': '2026-06-02T08:00:00Z',
+        'stickers': [
+          if (linkedAssetId != null)
+            {
+              'id': 'stk_2',
+              'name': 'hi',
+              'sort_order': 10,
+              'asset': {
+                'id': linkedAssetId,
+                'url': '/assets/$linkedAssetId/hi.webp',
+                'thumbnail_url': '/assets/$linkedAssetId/hi.webp',
+                'mime_type': 'image/webp',
+              },
+            },
+        ],
+      },
+    ],
   };
 }

@@ -303,13 +303,54 @@ class GangApiClient implements GangApi {
   }) async {
     final body = <String, Object?>{'asset_id': assetId, 'name': name};
     if (sortOrder != null) body['sort_order'] = sortOrder;
-    await _sendJson((token) {
-      return _httpClient.post(
-        _uri('/sticker-packs/$packId/stickers'),
-        headers: _headers(token),
-        body: jsonEncode(body),
-      );
-    });
+    Future<void> send() {
+      return _sendJson((token) {
+        return _httpClient.post(
+          _uri('/sticker-packs/$packId/stickers'),
+          headers: _headers(token),
+          body: jsonEncode(body),
+        );
+      });
+    }
+
+    try {
+      await send();
+    } on http.ClientException catch (e) {
+      if (!_isRetryableTransportFailure(e)) rethrow;
+      if (await _stickerAssetAlreadyLinked(packId: packId, assetId: assetId)) {
+        return;
+      }
+      try {
+        await send();
+      } on http.ClientException catch (retryError) {
+        if (_isRetryableTransportFailure(retryError) &&
+            await _stickerAssetAlreadyLinked(
+              packId: packId,
+              assetId: assetId,
+            )) {
+          return;
+        }
+        rethrow;
+      }
+    }
+  }
+
+  Future<bool> _stickerAssetAlreadyLinked({
+    required String packId,
+    required String assetId,
+  }) async {
+    try {
+      final packs = await listStickerPacks(scope: 'personal');
+      for (final pack in packs) {
+        if (pack.id != packId) continue;
+        for (final sticker in pack.stickers) {
+          if (sticker.asset.id == assetId) return true;
+        }
+      }
+    } catch (_) {
+      // If verification is also unavailable, let the caller retry once.
+    }
+    return false;
   }
 
   @override

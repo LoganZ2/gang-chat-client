@@ -25,7 +25,7 @@ const _textSecondary = Color(0xFFB0B8C0);
 const _textMuted = Color(0xFF6F7785);
 const _danger = Color(0xFFE58383);
 
-enum _SettingsSection { profile, stickers, security, voice }
+enum _SettingsSection { profile, security, voice, stickers }
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
@@ -1898,13 +1898,6 @@ class _SettingsNavigation extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               _NavItem(
-                title: '我的表情包',
-                icon: Icons.emoji_emotions_outlined,
-                selected: selected == _SettingsSection.stickers,
-                onPressed: () => onChanged(_SettingsSection.stickers),
-              ),
-              const SizedBox(height: 8),
-              _NavItem(
                 title: '隐私和安全',
                 icon: Icons.shield_outlined,
                 selected: selected == _SettingsSection.security,
@@ -1916,6 +1909,13 @@ class _SettingsNavigation extends StatelessWidget {
                 icon: Icons.graphic_eq,
                 selected: selected == _SettingsSection.voice,
                 onPressed: () => onChanged(_SettingsSection.voice),
+              ),
+              const SizedBox(height: 8),
+              _NavItem(
+                title: '我的表情包',
+                icon: Icons.emoji_emotions_outlined,
+                selected: selected == _SettingsSection.stickers,
+                onPressed: () => onChanged(_SettingsSection.stickers),
               ),
             ],
           ),
