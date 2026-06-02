@@ -122,6 +122,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
     _loadRooms();
     _startLiveStream();
+    unawaited(_restoreStoredAudioSettings());
   }
 
   void _onMessageDraftChanged() {
@@ -644,7 +645,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           serverUrl: result.liveKit.serverUrl,
           apiBaseUrl: widget.apiBaseUrl,
         );
-        await _restoreStoredAudioDevicesForLive();
+        await _restoreStoredAudioSettings();
         await _liveSession.connect(
           url: liveKitUrl,
           token: result.liveKit.token,
@@ -676,8 +677,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _restoreStoredAudioDevicesForLive() async {
+  Future<void> _restoreStoredAudioSettings() async {
     try {
+      final stored = await _audioDeviceStore.read();
+      await _liveSession.setInputVolume(stored.inputVolume);
+      await _liveSession.setOutputVolume(stored.outputVolume);
       await restoreStoredAudioDevices(_audioDeviceStore);
     } catch (_) {
       // Joining voice should still work with LiveKit's current/default device
@@ -1095,6 +1099,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       return SettingsPage(
         isSubWindow: true,
         audioDeviceStore: _audioDeviceStore,
+        onVolumeChanged: (kind, volume) {
+          if (kind == 'audioinput') {
+            unawaited(_liveSession.setInputVolume(volume));
+          } else if (kind == 'audiooutput') {
+            unawaited(_liveSession.setOutputVolume(volume));
+          }
+        },
         onClose: _closeSettings,
       );
     }
@@ -1147,7 +1158,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         ? null
                         : () => _patchLiveState(micMuted: !_micMuted),
                     onToggleHeadphones: () {
-                      setState(() => _headphonesMuted = !_headphonesMuted);
+                      final muted = !_headphonesMuted;
+                      setState(() => _headphonesMuted = muted);
+                      unawaited(_liveSession.setOutputMuted(muted));
                     },
                     onToggleCamera: _toggleCamera,
                     onToggleShare: _toggleScreenShare,

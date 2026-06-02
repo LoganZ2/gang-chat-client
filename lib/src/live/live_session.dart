@@ -237,6 +237,9 @@ class LiveSession extends ChangeNotifier {
   bool _connecting = false;
   bool _screenSharing = false;
   bool _canPublish = true;
+  double _inputVolume = 1.0;
+  double _outputVolume = 1.0;
+  bool _outputMuted = false;
 
   final Set<String> _speakingIdentities = <String>{};
   final Map<String, bool> _micMutedByIdentity = <String, bool>{};
@@ -263,6 +266,9 @@ class LiveSession extends ChangeNotifier {
   /// False once an admin `block_voice` revokes it; LiveKit is the source of
   /// truth here, not any locally-tracked flag.
   bool get canPublish => _canPublish;
+  double get inputVolume => _inputVolume;
+  double get outputVolume => _outputVolume;
+  bool get outputMuted => _outputMuted;
 
   /// Whether the local microphone is muted according to the LiveKit track
   /// itself (server-side mutes by an admin are reflected here, unlike a
@@ -410,6 +416,8 @@ class LiveSession extends ChangeNotifier {
       if (_canPublish) {
         await room.localParticipant?.setMicrophoneEnabled(!micMuted);
       }
+      await _applyInputVolume();
+      await _applyOutputVolume();
       _refreshAllMicStates();
     } catch (e) {
       await _cancelEvents?.call();
@@ -436,8 +444,24 @@ class LiveSession extends ChangeNotifier {
     final local = _room?.localParticipant;
     if (local == null) return;
     await local.setMicrophoneEnabled(!muted);
+    await _applyInputVolume();
     _refreshAllMicStates();
     notifyListeners();
+  }
+
+  Future<void> setInputVolume(double volume) async {
+    _inputVolume = _normalizedVolume(volume);
+    await _applyInputVolume();
+  }
+
+  Future<void> setOutputVolume(double volume) async {
+    _outputVolume = _normalizedVolume(volume);
+    await _applyOutputVolume();
+  }
+
+  Future<void> setOutputMuted(bool muted) async {
+    _outputMuted = muted;
+    await _applyOutputVolume();
   }
 
   /// Start or stop sharing the screen. [sourceId] is a desktop capturer source
@@ -599,6 +623,7 @@ class LiveSession extends ChangeNotifier {
     if (event is lk.ParticipantConnectedEvent) {
       _micMutedByIdentity[event.participant.identity] =
           _isMicMuted(event.participant);
+      unawaited(_applyOutputVolume());
       notifyListeners();
       return;
     }
@@ -632,6 +657,8 @@ class LiveSession extends ChangeNotifier {
         event is lk.TrackUnpublishedEvent ||
         event is lk.TrackMutedEvent ||
         event is lk.TrackUnmutedEvent) {
+      unawaited(_applyInputVolume());
+      unawaited(_applyOutputVolume());
       _refreshAllMicStates();
       // A local screen-share track can be stopped from the OS (e.g. the
       // "stop sharing" bar); keep our flag honest.
@@ -684,6 +711,37 @@ class LiveSession extends ChangeNotifier {
     if (pubs.isEmpty) return true;
     return pubs.every((pub) => pub.muted);
   }
+
+  Future<void> _applyInputVolume() async {
+    final local = _room?.localParticipant;
+    if (local == null) return;
+    for (final pub in local.audioTrackPublications) {
+      final track = pub.track;
+      if (track == null) continue;
+      try {
+        await rtc.Helper.setVolume(_inputVolume, track.mediaStreamTrack);
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _applyOutputVolume() async {
+    final room = _room;
+    if (room == null) return;
+    final volume = _outputMuted ? 0.0 : _outputVolume;
+    for (final participant in room.remoteParticipants.values) {
+      for (final pub in participant.audioTrackPublications) {
+        final track = pub.track;
+        if (track == null) continue;
+        try {
+          await rtc.Helper.setVolume(volume, track.mediaStreamTrack);
+        } catch (_) {}
+      }
+    }
+  }
+}
+
+double _normalizedVolume(double volume) {
+  return volume.clamp(0.0, 1.0).toDouble();
 }
 
 class LiveSessionConnectException implements Exception {
