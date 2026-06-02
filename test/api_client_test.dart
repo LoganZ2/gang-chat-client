@@ -201,6 +201,148 @@ void main() {
     api.close();
   });
 
+  test('listStickerPacks parses personal sticker assets', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/api/v1/sticker-packs');
+        expect(request.url.queryParameters['scope'], 'personal');
+        expect(request.headers['authorization'], 'Bearer token');
+        return http.Response(
+          jsonEncode({
+            'packs': [
+              {
+                'id': 'stkp_1',
+                'scope': 'personal',
+                'room_id': null,
+                'name': 'My Stickers',
+                'sort_order': 10,
+                'updated_at': '2026-06-02T08:00:00Z',
+                'stickers': [
+                  {
+                    'id': 'stk_1',
+                    'name': 'ok',
+                    'sort_order': 20,
+                    'asset': {
+                      'id': 'asset_1',
+                      'url': '/assets/asset_1/ok.webp',
+                      'thumbnail_url': '/assets/asset_1/ok.webp',
+                      'mime_type': 'image/webp',
+                      'width': 128,
+                      'height': 128,
+                      'created_at': '2026-06-02T07:59:00Z',
+                    },
+                  },
+                ],
+              },
+            ],
+          }),
+          200,
+        );
+      }),
+    );
+
+    final packs = await api.listStickerPacks();
+
+    expect(packs.single.name, 'My Stickers');
+    expect(packs.single.stickers.single.asset.mimeType, 'image/webp');
+    expect(packs.single.stickers.single.asset.width, 128);
+    api.close();
+  });
+
+  test('sticker pack management uses server sticker routes', () async {
+    var requestIndex = 0;
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        requestIndex += 1;
+        expect(request.headers['authorization'], 'Bearer token');
+
+        switch (requestIndex) {
+          case 1:
+            expect(request.method, 'POST');
+            expect(request.url.path, '/api/v1/sticker-packs');
+            expect(jsonDecode(request.body) as Map<String, Object?>, {
+              'scope': 'personal',
+              'name': 'My Stickers',
+              'sort_order': 10,
+            });
+            return http.Response(jsonEncode(_stickerPackJson()), 201);
+          case 2:
+            expect(request.method, 'POST');
+            expect(request.url.path, '/api/v1/sticker-packs/stkp_1/stickers');
+            expect(jsonDecode(request.body) as Map<String, Object?>, {
+              'asset_id': 'asset_2',
+              'name': 'hi',
+              'sort_order': 20,
+            });
+            return http.Response(
+              jsonEncode({
+                'sticker': {
+                  'id': 'stk_2',
+                  'asset_id': 'asset_2',
+                  'name': 'hi',
+                  'sort_order': 20,
+                },
+              }),
+              201,
+            );
+          case 3:
+            expect(request.method, 'PATCH');
+            expect(request.url.path, '/api/v1/sticker-packs/stkp_1');
+            expect(jsonDecode(request.body) as Map<String, Object?>, {
+              'name': 'Saved',
+              'sort_order': 30,
+            });
+            return http.Response(
+              jsonEncode(_stickerPackJson(name: 'Saved')),
+              200,
+            );
+          case 4:
+            expect(request.method, 'DELETE');
+            expect(
+              request.url.path,
+              '/api/v1/sticker-packs/stkp_1/stickers/stk_2',
+            );
+            return http.Response(jsonEncode({'ok': true}), 200);
+          case 5:
+            expect(request.method, 'DELETE');
+            expect(request.url.path, '/api/v1/sticker-packs/stkp_1');
+            return http.Response(jsonEncode({'ok': true}), 200);
+        }
+
+        fail(
+          'unexpected request $requestIndex ${request.method} ${request.url}',
+        );
+      }),
+    );
+
+    final pack = await api.createStickerPack(
+      name: 'My Stickers',
+      sortOrder: 10,
+    );
+    await api.addSticker(
+      packId: pack.id,
+      assetId: 'asset_2',
+      name: 'hi',
+      sortOrder: 20,
+    );
+    final updated = await api.updateStickerPack(
+      packId: pack.id,
+      name: 'Saved',
+      sortOrder: 30,
+    );
+    await api.deleteSticker(packId: pack.id, stickerId: 'stk_2');
+    await api.deleteStickerPack(pack.id);
+
+    expect(updated.name, 'Saved');
+    expect(requestIndex, 5);
+    api.close();
+  });
+
   test('updateProfile retries a transient socket write abort', () async {
     var requests = 0;
     final api = GangApiClient(
@@ -273,6 +415,20 @@ Map<String, Object?> _liveJoinJson() {
       'participant_count': 1,
       'participants': [participant],
       'updated_at': '2026-05-31T14:00:00Z',
+    },
+  };
+}
+
+Map<String, Object?> _stickerPackJson({String name = 'My Stickers'}) {
+  return {
+    'pack': {
+      'id': 'stkp_1',
+      'scope': 'personal',
+      'room_id': null,
+      'name': name,
+      'sort_order': 10,
+      'updated_at': '2026-06-02T08:00:00Z',
+      'stickers': const [],
     },
   };
 }

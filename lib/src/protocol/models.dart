@@ -145,12 +145,18 @@ class UploadedAsset {
     required this.url,
     required this.thumbnailUrl,
     required this.mimeType,
+    this.width,
+    this.height,
+    this.createdAt,
   });
 
   final String id;
   final String url;
   final String? thumbnailUrl;
   final String mimeType;
+  final int? width;
+  final int? height;
+  final DateTime? createdAt;
 
   factory UploadedAsset.fromJson(Map<String, Object?> json) {
     return UploadedAsset(
@@ -158,6 +164,64 @@ class UploadedAsset {
       url: json['url']! as String,
       thumbnailUrl: json['thumbnail_url'] as String?,
       mimeType: json['mime_type'] as String? ?? 'application/octet-stream',
+      width: json['width'] as int?,
+      height: json['height'] as int?,
+      createdAt: _parseDateTime(json['created_at']),
+    );
+  }
+}
+
+class StickerPack {
+  const StickerPack({
+    required this.id,
+    required this.scope,
+    required this.roomId,
+    required this.name,
+    required this.stickers,
+    required this.sortOrder,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String scope;
+  final String? roomId;
+  final String name;
+  final List<Sticker> stickers;
+  final int sortOrder;
+  final DateTime? updatedAt;
+
+  factory StickerPack.fromJson(Map<String, Object?> json) {
+    return StickerPack(
+      id: json['id']! as String,
+      scope: json['scope'] as String? ?? 'personal',
+      roomId: json['room_id'] as String?,
+      name: json['name'] as String? ?? 'Stickers',
+      stickers: _listOfMaps(json['stickers']).map(Sticker.fromJson).toList(),
+      sortOrder: json['sort_order'] as int? ?? 10,
+      updatedAt: _parseDateTime(json['updated_at']),
+    );
+  }
+}
+
+class Sticker {
+  const Sticker({
+    required this.id,
+    required this.name,
+    required this.sortOrder,
+    required this.asset,
+  });
+
+  final String id;
+  final String name;
+  final int sortOrder;
+  final UploadedAsset asset;
+
+  factory Sticker.fromJson(Map<String, Object?> json) {
+    return Sticker(
+      id: json['id']! as String,
+      name: json['name'] as String? ?? 'sticker',
+      sortOrder: json['sort_order'] as int? ?? 10,
+      asset: UploadedAsset.fromJson(json['asset']! as Map<String, Object?>),
     );
   }
 }

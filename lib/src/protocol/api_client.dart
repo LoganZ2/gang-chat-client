@@ -33,6 +33,38 @@ abstract interface class GangApi {
     String purpose = 'image',
   });
 
+  Future<List<StickerPack>> listStickerPacks({
+    String scope = 'personal',
+    String? roomId,
+  });
+
+  Future<StickerPack> createStickerPack({
+    required String name,
+    String scope = 'personal',
+    String? roomId,
+    int? sortOrder,
+  });
+
+  Future<StickerPack> updateStickerPack({
+    required String packId,
+    String? name,
+    int? sortOrder,
+  });
+
+  Future<void> deleteStickerPack(String packId);
+
+  Future<void> addSticker({
+    required String packId,
+    required String assetId,
+    required String name,
+    int? sortOrder,
+  });
+
+  Future<void> deleteSticker({
+    required String packId,
+    required String stickerId,
+  });
+
   Future<void> changePassword({
     required String currentPassword,
     required String newPassword,
@@ -192,6 +224,105 @@ class GangApiClient implements GangApi {
       return http.Response.fromStream(streamed);
     });
     return UploadedAsset.fromJson(decoded['asset']! as Map<String, Object?>);
+  }
+
+  @override
+  Future<List<StickerPack>> listStickerPacks({
+    String scope = 'personal',
+    String? roomId,
+  }) async {
+    final query = {'scope': scope};
+    if (roomId != null) query['room_id'] = roomId;
+    final decoded = await _sendJson((token) {
+      return _httpClient.get(
+        _uri('/sticker-packs', query),
+        headers: _headers(token),
+      );
+    }, retryTransientFailures: true);
+    return (decoded['packs'] as List<Object?>? ?? const [])
+        .cast<Map<String, Object?>>()
+        .map(StickerPack.fromJson)
+        .toList();
+  }
+
+  @override
+  Future<StickerPack> createStickerPack({
+    required String name,
+    String scope = 'personal',
+    String? roomId,
+    int? sortOrder,
+  }) async {
+    final body = <String, Object?>{'scope': scope, 'name': name};
+    if (roomId != null) body['room_id'] = roomId;
+    if (sortOrder != null) body['sort_order'] = sortOrder;
+    final decoded = await _sendJson((token) {
+      return _httpClient.post(
+        _uri('/sticker-packs'),
+        headers: _headers(token),
+        body: jsonEncode(body),
+      );
+    });
+    return StickerPack.fromJson(decoded['pack']! as Map<String, Object?>);
+  }
+
+  @override
+  Future<StickerPack> updateStickerPack({
+    required String packId,
+    String? name,
+    int? sortOrder,
+  }) async {
+    final body = <String, Object?>{};
+    if (name != null) body['name'] = name;
+    if (sortOrder != null) body['sort_order'] = sortOrder;
+    final decoded = await _sendJson((token) {
+      return _httpClient.patch(
+        _uri('/sticker-packs/$packId'),
+        headers: _headers(token),
+        body: jsonEncode(body),
+      );
+    });
+    return StickerPack.fromJson(decoded['pack']! as Map<String, Object?>);
+  }
+
+  @override
+  Future<void> deleteStickerPack(String packId) async {
+    await _sendJson((token) {
+      return _httpClient.delete(
+        _uri('/sticker-packs/$packId'),
+        headers: _headers(token),
+      );
+    });
+  }
+
+  @override
+  Future<void> addSticker({
+    required String packId,
+    required String assetId,
+    required String name,
+    int? sortOrder,
+  }) async {
+    final body = <String, Object?>{'asset_id': assetId, 'name': name};
+    if (sortOrder != null) body['sort_order'] = sortOrder;
+    await _sendJson((token) {
+      return _httpClient.post(
+        _uri('/sticker-packs/$packId/stickers'),
+        headers: _headers(token),
+        body: jsonEncode(body),
+      );
+    });
+  }
+
+  @override
+  Future<void> deleteSticker({
+    required String packId,
+    required String stickerId,
+  }) async {
+    await _sendJson((token) {
+      return _httpClient.delete(
+        _uri('/sticker-packs/$packId/stickers/$stickerId'),
+        headers: _headers(token),
+      );
+    });
   }
 
   @override

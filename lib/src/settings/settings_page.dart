@@ -25,7 +25,7 @@ const _textSecondary = Color(0xFFB0B8C0);
 const _textMuted = Color(0xFF6F7785);
 const _danger = Color(0xFFE58383);
 
-enum _SettingsSection { profile, security, voice }
+enum _SettingsSection { profile, stickers, security, voice }
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
@@ -82,6 +82,15 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _pendingAvatarUrl;
   bool _changingPassword = false;
   bool _deletingAccount = false;
+  List<StickerPack> _stickerPacks = const [];
+  String? _activeStickerPackId;
+  Set<String> _selectedStickerIds = <String>{};
+  final Map<String, List<String>> _stickerOrderDrafts = {};
+  bool _loadingStickers = false;
+  bool _uploadingStickers = false;
+  bool _deletingStickers = false;
+  bool _savingStickerOrder = false;
+  String? _stickerError;
   bool _obscureCurrentPassword = true;
   bool _obscureNewPassword = true;
   bool _obscureConfirmPassword = true;
@@ -204,10 +213,59 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Future<void> _ensureStickersLoaded({bool forceReload = false}) async {
+    if (_loadingStickers) return;
+    if (!forceReload && _stickerPacks.isNotEmpty) return;
+    await _loadStickers();
+  }
+
+  Future<void> _loadStickers() async {
+    final api = widget.api;
+    if (api == null) return;
+    setState(() {
+      _loadingStickers = true;
+      _stickerError = null;
+    });
+    try {
+      final packs = await api.listStickerPacks(scope: 'personal');
+      if (!mounted) return;
+      final nextActiveId = _activeStickerPackId;
+      final activeExists =
+          nextActiveId != null && packs.any((pack) => pack.id == nextActiveId);
+      setState(() {
+        _stickerPacks = packs;
+        _activeStickerPackId = activeExists
+            ? nextActiveId
+            : packs.isEmpty
+            ? null
+            : packs.first.id;
+        _selectedStickerIds = <String>{};
+        _stickerOrderDrafts
+          ..clear()
+          ..addEntries(
+            packs.map(
+              (pack) => MapEntry(
+                pack.id,
+                pack.stickers.map((sticker) => sticker.id).toList(),
+              ),
+            ),
+          );
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _stickerError = e.toString());
+    } finally {
+      if (mounted) setState(() => _loadingStickers = false);
+    }
+  }
+
   Future<void> _refreshActiveSection() async {
     switch (_section) {
       case _SettingsSection.profile:
         await _loadAccount();
+        break;
+      case _SettingsSection.stickers:
+        await _loadStickers();
         break;
       case _SettingsSection.security:
         await Future.wait([_loadAccount(), _loadSessions()]);
@@ -426,6 +484,263 @@ class _SettingsPageState extends State<SettingsPage> {
     } finally {
       if (mounted) setState(() => _uploadingAvatar = false);
     }
+  }
+
+  StickerPack? _selectedStickerPack() {
+    if (_stickerPacks.isEmpty) return null;
+    final activeId = _activeStickerPackId;
+    if (activeId != null) {
+      for (final pack in _stickerPacks) {
+        if (pack.id == activeId) return pack;
+      }
+    }
+    return _stickerPacks.first;
+  }
+
+  List<Sticker> _orderedStickers(StickerPack pack) {
+    final remaining = {
+      for (final sticker in pack.stickers) sticker.id: sticker,
+    };
+    final draftOrder =
+        _stickerOrderDrafts[pack.id] ??
+        pack.stickers.map((sticker) => sticker.id).toList();
+    final ordered = <Sticker>[];
+    for (final stickerId in draftOrder) {
+      final sticker = remaining.remove(stickerId);
+      if (sticker != null) ordered.add(sticker);
+    }
+    ordered.addAll(remaining.values);
+    return ordered;
+  }
+
+  bool _stickerOrderDirty(StickerPack pack) {
+    final original = pack.stickers.map((sticker) => sticker.id).toList();
+    final draft = _orderedStickers(pack).map((sticker) => sticker.id).toList();
+    if (original.length != draft.length) return true;
+    for (var i = 0; i < original.length; i++) {
+      if (original[i] != draft[i]) return true;
+    }
+    return false;
+  }
+
+  void _selectStickerPack(String packId) {
+    if (_activeStickerPackId == packId) return;
+    setState(() {
+      _activeStickerPackId = packId;
+      _selectedStickerIds = <String>{};
+    });
+  }
+
+  Future<StickerPack> _ensureActiveStickerPack() async {
+    final existing = _selectedStickerPack();
+    if (existing != null) return existing;
+
+    final api = widget.api;
+    if (api == null) {
+      throw StateError('表情包需要登录后从服务端读取');
+    }
+    final created = await api.createStickerPack(
+      name: '我的表情包',
+      sortOrder: (_stickerPacks.length + 1) * 10,
+    );
+    if (mounted) {
+      setState(() {
+        _stickerPacks = [..._stickerPacks, created];
+        _activeStickerPackId = created.id;
+        _stickerOrderDrafts[created.id] = <String>[];
+      });
+    }
+    return created;
+  }
+
+  Future<void> _pickAndUploadStickers() async {
+    final api = widget.api;
+    if (api == null || _uploadingStickers) return;
+
+    List<XFile> files;
+    try {
+      files = await openFiles(
+        acceptedTypeGroups: const [
+          XTypeGroup(
+            label: 'Images',
+            extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'],
+          ),
+        ],
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _stickerError = '无法打开文件选择器：$e');
+      return;
+    }
+    if (files.isEmpty) return;
+
+    setState(() {
+      _uploadingStickers = true;
+      _stickerError = null;
+      _notice = null;
+    });
+    var uploadedCount = 0;
+    try {
+      final pack = await _ensureActiveStickerPack();
+      var sortIndex = pack.stickers.length;
+      for (final entry in files.asMap().entries) {
+        final file = entry.value;
+        final bytes = await file.readAsBytes();
+        if (bytes.isEmpty) {
+          throw StateError('${file.name} 文件为空');
+        }
+        final asset = await api.uploadImageAsset(
+          bytes: bytes,
+          filename: _stickerUploadFilename(file.name, entry.key),
+          purpose: 'sticker',
+        );
+        await api.addSticker(
+          packId: pack.id,
+          assetId: asset.id,
+          name: _stickerNameFromFilename(file.name),
+          sortOrder: (++sortIndex) * 10,
+        );
+        uploadedCount += 1;
+      }
+      await _loadStickers();
+      _showNotice('已添加 $uploadedCount 个表情');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _stickerError = e.toString());
+    } finally {
+      if (mounted) setState(() => _uploadingStickers = false);
+    }
+  }
+
+  void _toggleStickerSelection(String stickerId, bool selected) {
+    setState(() {
+      final next = Set<String>.from(_selectedStickerIds);
+      if (selected) {
+        next.add(stickerId);
+      } else {
+        next.remove(stickerId);
+      }
+      _selectedStickerIds = next;
+    });
+  }
+
+  void _toggleSelectAllStickers() {
+    final pack = _selectedStickerPack();
+    if (pack == null) return;
+    final allIds = _orderedStickers(pack).map((sticker) => sticker.id).toSet();
+    setState(() {
+      _selectedStickerIds = _selectedStickerIds.length == allIds.length
+          ? <String>{}
+          : allIds;
+    });
+  }
+
+  Future<void> _deleteSelectedStickers() async {
+    final api = widget.api;
+    final pack = _selectedStickerPack();
+    final selectedIds = Set<String>.from(_selectedStickerIds);
+    if (api == null ||
+        pack == null ||
+        selectedIds.isEmpty ||
+        _deletingStickers) {
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => _ConfirmActionDialog(
+        title: '删除表情',
+        body: '将从服务端删除选中的 ${selectedIds.length} 个表情，删除后不会再出现在你的表情包里。',
+        confirmLabel: '删除',
+        confirmIcon: Icons.delete_outline,
+        danger: true,
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _deletingStickers = true;
+      _stickerError = null;
+      _notice = null;
+    });
+    try {
+      for (final stickerId in selectedIds) {
+        await api.deleteSticker(packId: pack.id, stickerId: stickerId);
+      }
+      await _loadStickers();
+      _showNotice('已删除 ${selectedIds.length} 个表情');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _stickerError = e.toString());
+    } finally {
+      if (mounted) setState(() => _deletingStickers = false);
+    }
+  }
+
+  void _moveSticker(StickerPack pack, String stickerId, int delta) {
+    final ordered = _orderedStickers(pack);
+    final from = ordered.indexWhere((sticker) => sticker.id == stickerId);
+    if (from < 0) return;
+    final to = (from + delta).clamp(0, ordered.length - 1).toInt();
+    if (from == to) return;
+    final ids = ordered.map((sticker) => sticker.id).toList();
+    final moving = ids.removeAt(from);
+    ids.insert(to, moving);
+    setState(() => _stickerOrderDrafts[pack.id] = ids);
+  }
+
+  Future<void> _saveStickerOrder() async {
+    final api = widget.api;
+    final pack = _selectedStickerPack();
+    if (api == null || pack == null || _savingStickerOrder) return;
+    if (!_stickerOrderDirty(pack)) {
+      _showNotice('表情排序没有变化');
+      return;
+    }
+
+    final ordered = _orderedStickers(pack);
+    setState(() {
+      _savingStickerOrder = true;
+      _stickerError = null;
+      _notice = null;
+    });
+    try {
+      // The server currently accepts sticker sort_order only when creating a
+      // sticker, so persisting a reordered pack rebuilds the pack contents.
+      for (final entry in ordered.asMap().entries) {
+        final sticker = entry.value;
+        await api.addSticker(
+          packId: pack.id,
+          assetId: sticker.asset.id,
+          name: sticker.name,
+          sortOrder: (entry.key + 1) * 10,
+        );
+      }
+      for (final sticker in pack.stickers) {
+        await api.deleteSticker(packId: pack.id, stickerId: sticker.id);
+      }
+      await _loadStickers();
+      _showNotice('表情排序已保存');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _stickerError = e.toString());
+    } finally {
+      if (mounted) setState(() => _savingStickerOrder = false);
+    }
+  }
+
+  void _previewSticker(Sticker sticker) {
+    final imageUrl = AppConfigScope.of(
+      context,
+    ).resolveAssetUrl(sticker.asset.url);
+    if (imageUrl == null) return;
+    unawaited(
+      showDialog<void>(
+        context: context,
+        builder: (context) =>
+            _StickerPreviewDialog(sticker: sticker, imageUrl: imageUrl),
+      ),
+    );
   }
 
   void _usePresetAvatar() {
@@ -916,6 +1231,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool get _isRefreshing {
     return switch (_section) {
       _SettingsSection.profile => _loadingAccount,
+      _SettingsSection.stickers => _loadingStickers,
       _SettingsSection.security => _loadingAccount || _loadingSessions,
       _SettingsSection.voice => _loading,
     };
@@ -924,6 +1240,7 @@ class _SettingsPageState extends State<SettingsPage> {
   String get _activeTitle {
     return switch (_section) {
       _SettingsSection.profile => '用户资料',
+      _SettingsSection.stickers => '我的表情包',
       _SettingsSection.security => '隐私和安全',
       _SettingsSection.voice => '默认语音源',
     };
@@ -932,9 +1249,94 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _buildSectionContent() {
     return switch (_section) {
       _SettingsSection.profile => _buildProfileContent(),
+      _SettingsSection.stickers => _buildStickersContent(),
       _SettingsSection.security => _buildSecurityContent(),
       _SettingsSection.voice => _buildVoiceContent(),
     };
+  }
+
+  Widget _buildStickersContent() {
+    final unavailable = widget.api == null;
+    final pack = _selectedStickerPack();
+    final stickers = pack == null ? const <Sticker>[] : _orderedStickers(pack);
+    final allSelected =
+        stickers.isNotEmpty && _selectedStickerIds.length == stickers.length;
+    final orderDirty = pack != null && _stickerOrderDirty(pack);
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(28, 24, 30, 32),
+      children: [
+        _ContentTitle(title: '我的表情包', loading: _loadingStickers),
+        if (_notice != null) ...[
+          const SizedBox(height: 12),
+          _SettingsNotice(message: _notice!),
+        ],
+        if (_stickerError != null) ...[
+          const SizedBox(height: 12),
+          _SettingsError(message: _stickerError!),
+        ],
+        const SizedBox(height: 18),
+        if (unavailable)
+          const _SettingsEmptyState(text: '表情包需要登录后从服务端读取')
+        else
+          _SettingsGroup(
+            title: '服务端表情',
+            trailing: Text(
+              '${stickers.length} 个',
+              style: const TextStyle(
+                color: _textMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            children: [
+              _StickerPackSelector(
+                packs: _stickerPacks,
+                selectedPackId: pack?.id,
+                loading: _loadingStickers,
+                onSelected: _selectStickerPack,
+              ),
+              const SizedBox(height: 14),
+              _StickerToolbar(
+                selectedCount: _selectedStickerIds.length,
+                allSelected: allSelected,
+                hasStickers: stickers.isNotEmpty,
+                orderDirty: orderDirty,
+                uploading: _uploadingStickers,
+                deleting: _deletingStickers,
+                savingOrder: _savingStickerOrder,
+                onUpload: _pickAndUploadStickers,
+                onToggleAll: _toggleSelectAllStickers,
+                onDeleteSelected: _deleteSelectedStickers,
+                onSaveOrder: _saveStickerOrder,
+              ),
+              const SizedBox(height: 14),
+              if (_loadingStickers && _stickerPacks.isEmpty)
+                const SizedBox(
+                  height: 128,
+                  child: Center(child: CircularProgressIndicator(color: _cyan)),
+                )
+              else if (pack == null)
+                const _SettingsEmptyState(text: '暂无表情包，批量上传会自动创建')
+              else if (stickers.isEmpty)
+                const _SettingsEmptyState(text: '当前表情包为空')
+              else
+                _StickerManagementList(
+                  stickers: stickers,
+                  selectedIds: _selectedStickerIds,
+                  busy:
+                      _uploadingStickers ||
+                      _deletingStickers ||
+                      _savingStickerOrder,
+                  onToggleSelected: _toggleStickerSelection,
+                  onMoveUp: (sticker) => _moveSticker(pack, sticker.id, -1),
+                  onMoveDown: (sticker) => _moveSticker(pack, sticker.id, 1),
+                  onPreview: _previewSticker,
+                ),
+            ],
+          ),
+      ],
+    );
   }
 
   Widget _buildProfileContent() {
@@ -1443,6 +1845,9 @@ class _SettingsPageState extends State<SettingsPage> {
                       _section = section;
                       _notice = null;
                     });
+                    if (section == _SettingsSection.stickers) {
+                      unawaited(_ensureStickersLoaded());
+                    }
                     if (section == _SettingsSection.security &&
                         _sessions.isEmpty &&
                         !_loadingSessions) {
@@ -1490,6 +1895,13 @@ class _SettingsNavigation extends StatelessWidget {
                 icon: Icons.badge_outlined,
                 selected: selected == _SettingsSection.profile,
                 onPressed: () => onChanged(_SettingsSection.profile),
+              ),
+              const SizedBox(height: 8),
+              _NavItem(
+                title: '我的表情包',
+                icon: Icons.emoji_emotions_outlined,
+                selected: selected == _SettingsSection.stickers,
+                onPressed: () => onChanged(_SettingsSection.stickers),
               ),
               const SizedBox(height: 8),
               _NavItem(
@@ -2177,6 +2589,532 @@ class _SessionList extends StatelessWidget {
   }
 }
 
+class _StickerPackSelector extends StatelessWidget {
+  const _StickerPackSelector({
+    required this.packs,
+    required this.selectedPackId,
+    required this.loading,
+    required this.onSelected,
+  });
+
+  final List<StickerPack> packs;
+  final String? selectedPackId;
+  final bool loading;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    if (packs.isEmpty) return const SizedBox.shrink();
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        for (final pack in packs)
+          _StickerPackChip(
+            pack: pack,
+            selected: pack.id == selectedPackId,
+            loading: loading,
+            onPressed: () => onSelected(pack.id),
+          ),
+      ],
+    );
+  }
+}
+
+class _StickerPackChip extends StatelessWidget {
+  const _StickerPackChip({
+    required this.pack,
+    required this.selected,
+    required this.loading,
+    required this.onPressed,
+  });
+
+  final StickerPack pack;
+  final bool selected;
+  final bool loading;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 178,
+      child: KeySurface(
+        onPressed: loading ? null : onPressed,
+        selected: selected,
+        height: 42,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        backgroundColor: _primaryDark,
+        selectedBackgroundColor: const Color(0xFF1F2D27),
+        pressedBackgroundColor: _primaryDarkLow,
+        borderColor: selected ? _cyan : _borderColor,
+        selectedBorderColor: _cyan,
+        child: Row(
+          children: [
+            Icon(
+              Icons.emoji_emotions_outlined,
+              color: selected ? _cyan : _textMuted,
+              size: 17,
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(
+                pack.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: selected ? _textPrimary : _textSecondary,
+                  fontSize: 13,
+                  fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '${pack.stickers.length}',
+              style: TextStyle(
+                color: selected ? _cyan : _textMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StickerToolbar extends StatelessWidget {
+  const _StickerToolbar({
+    required this.selectedCount,
+    required this.allSelected,
+    required this.hasStickers,
+    required this.orderDirty,
+    required this.uploading,
+    required this.deleting,
+    required this.savingOrder,
+    required this.onUpload,
+    required this.onToggleAll,
+    required this.onDeleteSelected,
+    required this.onSaveOrder,
+  });
+
+  final int selectedCount;
+  final bool allSelected;
+  final bool hasStickers;
+  final bool orderDirty;
+  final bool uploading;
+  final bool deleting;
+  final bool savingOrder;
+  final VoidCallback onUpload;
+  final VoidCallback onToggleAll;
+  final VoidCallback onDeleteSelected;
+  final VoidCallback onSaveOrder;
+
+  @override
+  Widget build(BuildContext context) {
+    final busy = uploading || deleting || savingOrder;
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        KeyButton(
+          onPressed: busy ? null : onUpload,
+          loading: uploading,
+          icon: const Icon(Icons.add_photo_alternate_outlined),
+          tone: KeyButtonTone.primary,
+          child: const Text('批量添加'),
+        ),
+        KeyButton(
+          onPressed: busy || !hasStickers ? null : onToggleAll,
+          icon: Icon(allSelected ? Icons.deselect_outlined : Icons.select_all),
+          child: Text(allSelected ? '取消全选' : '全选'),
+        ),
+        KeyButton(
+          onPressed: busy || selectedCount == 0 ? null : onDeleteSelected,
+          loading: deleting,
+          icon: const Icon(Icons.delete_outline),
+          tone: KeyButtonTone.danger,
+          child: Text(selectedCount == 0 ? '批量删除' : '删除 $selectedCount 个'),
+        ),
+        KeyButton(
+          onPressed: busy || !orderDirty ? null : onSaveOrder,
+          loading: savingOrder,
+          icon: const Icon(Icons.swap_vert),
+          child: const Text('保存排序'),
+        ),
+      ],
+    );
+  }
+}
+
+class _StickerManagementList extends StatelessWidget {
+  const _StickerManagementList({
+    required this.stickers,
+    required this.selectedIds,
+    required this.busy,
+    required this.onToggleSelected,
+    required this.onMoveUp,
+    required this.onMoveDown,
+    required this.onPreview,
+  });
+
+  final List<Sticker> stickers;
+  final Set<String> selectedIds;
+  final bool busy;
+  final void Function(String stickerId, bool selected) onToggleSelected;
+  final ValueChanged<Sticker> onMoveUp;
+  final ValueChanged<Sticker> onMoveDown;
+  final ValueChanged<Sticker> onPreview;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        for (final entry in stickers.asMap().entries)
+          Padding(
+            padding: EdgeInsets.only(
+              bottom: entry.key == stickers.length - 1 ? 0 : 8,
+            ),
+            child: _StickerRow(
+              sticker: entry.value,
+              index: entry.key,
+              total: stickers.length,
+              selected: selectedIds.contains(entry.value.id),
+              busy: busy,
+              onToggleSelected: (selected) {
+                onToggleSelected(entry.value.id, selected);
+              },
+              onMoveUp: () => onMoveUp(entry.value),
+              onMoveDown: () => onMoveDown(entry.value),
+              onPreview: () => onPreview(entry.value),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _StickerRow extends StatelessWidget {
+  const _StickerRow({
+    required this.sticker,
+    required this.index,
+    required this.total,
+    required this.selected,
+    required this.busy,
+    required this.onToggleSelected,
+    required this.onMoveUp,
+    required this.onMoveDown,
+    required this.onPreview,
+  });
+
+  final Sticker sticker;
+  final int index;
+  final int total;
+  final bool selected;
+  final bool busy;
+  final ValueChanged<bool> onToggleSelected;
+  final VoidCallback onMoveUp;
+  final VoidCallback onMoveDown;
+  final VoidCallback onPreview;
+
+  @override
+  Widget build(BuildContext context) {
+    final asset = sticker.asset;
+    final dimensions = asset.width != null && asset.height != null
+        ? '${asset.width}x${asset.height}'
+        : '未知尺寸';
+    return SizedBox(
+      width: double.infinity,
+      child: KeySurface(
+        onPressed: onPreview,
+        selected: selected,
+        height: 76,
+        padding: const EdgeInsets.fromLTRB(6, 8, 10, 8),
+        backgroundColor: _primaryDark,
+        selectedBackgroundColor: const Color(0xFF1F2D27),
+        pressedBackgroundColor: _primaryDarkLow,
+        borderColor: selected ? _cyan : _borderColor,
+        selectedBorderColor: _cyan,
+        child: Row(
+          children: [
+            Checkbox(
+              value: selected,
+              onChanged: busy
+                  ? null
+                  : (value) => onToggleSelected(value ?? false),
+              activeColor: _cyan,
+              checkColor: _primaryDark,
+              side: const BorderSide(color: _borderColor),
+            ),
+            _StickerThumbnail(sticker: sticker, size: 52),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    sticker.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    '${asset.mimeType} · $dimensions · #${index + 1}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _textMuted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            KeyIconButton(
+              tooltip: '预览表情',
+              onPressed: onPreview,
+              icon: const Icon(Icons.visibility_outlined),
+              size: 32,
+            ),
+            const SizedBox(width: 8),
+            KeyIconButton(
+              tooltip: '上移',
+              onPressed: busy || index == 0 ? null : onMoveUp,
+              icon: const Icon(Icons.keyboard_arrow_up),
+              size: 32,
+            ),
+            const SizedBox(width: 8),
+            KeyIconButton(
+              tooltip: '下移',
+              onPressed: busy || index == total - 1 ? null : onMoveDown,
+              icon: const Icon(Icons.keyboard_arrow_down),
+              size: 32,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StickerThumbnail extends StatelessWidget {
+  const _StickerThumbnail({required this.sticker, required this.size});
+
+  final Sticker sticker;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final asset = sticker.asset;
+    final imageUrl = AppConfigScope.of(
+      context,
+    ).resolveAssetUrl(asset.thumbnailUrl ?? asset.url);
+    final fallback = ColoredBox(
+      color: _primaryDarkLow,
+      child: Center(
+        child: Icon(
+          Icons.image_not_supported_outlined,
+          color: _textMuted,
+          size: size * 0.38,
+        ),
+      ),
+    );
+    return SizedBox.square(
+      dimension: size,
+      child: DecoratedBox(
+        decoration: BoxDecoration(border: Border.all(color: _borderColor)),
+        child: ClipRect(
+          child: imageUrl == null
+              ? fallback
+              : Image.network(
+                  imageUrl,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => fallback,
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ConfirmActionDialog extends StatelessWidget {
+  const _ConfirmActionDialog({
+    required this.title,
+    required this.body,
+    required this.confirmLabel,
+    required this.confirmIcon,
+    this.danger = false,
+  });
+
+  final String title;
+  final String body;
+  final String confirmLabel;
+  final IconData confirmIcon;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: _primaryDarkLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.zero,
+        side: BorderSide(
+          color: danger ? const Color(0xFF3A2A2E) : _borderColor,
+        ),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: danger ? _danger : _textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                body,
+                style: const TextStyle(
+                  color: _textSecondary,
+                  fontSize: 13,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  KeyButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('取消'),
+                  ),
+                  const SizedBox(width: 12),
+                  KeyButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    tone: danger ? KeyButtonTone.danger : KeyButtonTone.primary,
+                    icon: Icon(confirmIcon),
+                    child: Text(confirmLabel),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StickerPreviewDialog extends StatelessWidget {
+  const _StickerPreviewDialog({required this.sticker, required this.imageUrl});
+
+  final Sticker sticker;
+  final String imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final asset = sticker.asset;
+    final dimensions = asset.width != null && asset.height != null
+        ? '${asset.width}x${asset.height}'
+        : '未知尺寸';
+    return Dialog(
+      backgroundColor: _primaryDarkLow,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.zero,
+        side: BorderSide(color: _borderColor),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      sticker.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _textPrimary,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  KeyIconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    tooltip: '关闭预览',
+                    icon: const Icon(Icons.close),
+                    size: 32,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 360,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: _primaryDark,
+                    border: Border.all(color: _borderColor),
+                  ),
+                  child: ClipRect(
+                    child: InteractiveViewer(
+                      minScale: 0.5,
+                      maxScale: 4,
+                      child: Center(
+                        child: Image.network(
+                          imageUrl,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, _, _) => const Icon(
+                            Icons.broken_image_outlined,
+                            color: _textMuted,
+                            size: 42,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '${asset.mimeType} · $dimensions',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _textMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DeleteAccountDialog extends StatefulWidget {
   const _DeleteAccountDialog({required this.username});
 
@@ -2847,6 +3785,27 @@ String _avatarUploadFilename(String originalName) {
   final stem = cleaned.replaceFirst(RegExp(r'\.[A-Za-z0-9]+$'), '');
   final safeStem = stem.isEmpty ? 'avatar' : stem;
   return '$safeStem-${DateTime.now().millisecondsSinceEpoch}.png';
+}
+
+String _stickerUploadFilename(String originalName, int index) {
+  final cleaned = originalName
+      .trim()
+      .replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '-')
+      .replaceAll(RegExp(r'-+'), '-');
+  final extensionMatch = RegExp(r'\.([A-Za-z0-9]+)$').firstMatch(cleaned);
+  final extension = extensionMatch == null
+      ? 'png'
+      : extensionMatch.group(1)!.toLowerCase();
+  final stem = cleaned.replaceFirst(RegExp(r'\.[A-Za-z0-9]+$'), '');
+  final safeStem = stem.isEmpty ? 'sticker' : stem;
+  return '$safeStem-${DateTime.now().millisecondsSinceEpoch}-$index.$extension';
+}
+
+String _stickerNameFromFilename(String originalName) {
+  final stem = originalName.trim().replaceFirst(RegExp(r'\.[^.]+$'), '').trim();
+  if (stem.isEmpty) return 'sticker';
+  final chars = stem.characters.take(32).toList().join();
+  return chars.isEmpty ? 'sticker' : chars;
 }
 
 String _sessionStateText(UserSession session) {

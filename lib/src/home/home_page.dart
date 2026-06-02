@@ -1179,6 +1179,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   )
                 : _ChatPane(
                     roomId: _selectedRoomId!,
+                    api: _api,
                     messages: _messages,
                     currentUserId: _currentUser.id,
                     controller: _messageController,
@@ -1927,6 +1928,7 @@ enum _StickerSource { personal, room }
 class _ChatPane extends StatefulWidget {
   const _ChatPane({
     required this.roomId,
+    required this.api,
     required this.messages,
     required this.currentUserId,
     required this.controller,
@@ -1936,6 +1938,7 @@ class _ChatPane extends StatefulWidget {
   });
 
   final String roomId;
+  final GangApi api;
   final List<Message> messages;
   final String currentUserId;
   final TextEditingController controller;
@@ -1950,12 +1953,51 @@ class _ChatPane extends StatefulWidget {
 class _ChatPaneState extends State<_ChatPane> {
   _ComposerPanel? _openPanel;
   _StickerSource _stickerSource = _StickerSource.personal;
+  List<StickerPack> _personalStickerPacks = const [];
+  List<StickerPack> _roomStickerPacks = const [];
+  bool _loadingStickerPacks = false;
+  String? _stickerPackError;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadStickerPacks());
+  }
 
   @override
   void didUpdateWidget(_ChatPane oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.roomId != widget.roomId) {
       _openPanel = null;
+      unawaited(_loadStickerPacks());
+    } else if (oldWidget.api != widget.api) {
+      unawaited(_loadStickerPacks());
+    }
+  }
+
+  Future<void> _loadStickerPacks() async {
+    final roomId = widget.roomId;
+    setState(() {
+      _loadingStickerPacks = true;
+      _stickerPackError = null;
+    });
+    try {
+      final packs = await Future.wait([
+        widget.api.listStickerPacks(scope: 'personal'),
+        widget.api.listStickerPacks(scope: 'room', roomId: roomId),
+      ]);
+      if (!mounted || widget.roomId != roomId) return;
+      setState(() {
+        _personalStickerPacks = packs[0];
+        _roomStickerPacks = packs[1];
+      });
+    } catch (e) {
+      if (!mounted || widget.roomId != roomId) return;
+      setState(() => _stickerPackError = e.toString());
+    } finally {
+      if (mounted && widget.roomId == roomId) {
+        setState(() => _loadingStickerPacks = false);
+      }
     }
   }
 
@@ -2089,6 +2131,11 @@ class _ChatPaneState extends State<_ChatPane> {
       child: switch (panel) {
         _ComposerPanel.stickers => _StickerPanel(
           source: _stickerSource,
+          personalPacks: _personalStickerPacks,
+          roomPacks: _roomStickerPacks,
+          loading: _loadingStickerPacks,
+          error: _stickerPackError,
+          onRefresh: _loadStickerPacks,
           onSourceChanged: (source) => setState(() => _stickerSource = source),
           onStickerSelected: _insertComposerText,
         ),
@@ -2395,35 +2442,28 @@ class _ComposerPanelSurface extends StatelessWidget {
 class _StickerPanel extends StatelessWidget {
   const _StickerPanel({
     required this.source,
+    required this.personalPacks,
+    required this.roomPacks,
+    required this.loading,
+    required this.error,
+    required this.onRefresh,
     required this.onSourceChanged,
     required this.onStickerSelected,
   });
 
   final _StickerSource source;
+  final List<StickerPack> personalPacks;
+  final List<StickerPack> roomPacks;
+  final bool loading;
+  final String? error;
+  final Future<void> Function() onRefresh;
   final ValueChanged<_StickerSource> onSourceChanged;
   final ValueChanged<String> onStickerSelected;
 
-  static const _personal = [
-    _StickerChoice('😀', '开心', '[开心]'),
-    _StickerChoice('👍', '收到', '[收到]'),
-    _StickerChoice('🔥', '热烈', '[热烈]'),
-    _StickerChoice('🎉', '庆祝', '[庆祝]'),
-    _StickerChoice('💡', '灵感', '[灵感]'),
-    _StickerChoice('☕', '休息', '[休息]'),
-  ];
-
-  static const _room = [
-    _StickerChoice('🏠', '房间', '[房间]'),
-    _StickerChoice('🚀', '开冲', '[开冲]'),
-    _StickerChoice('✅', '通过', '[通过]'),
-    _StickerChoice('📌', '标记', '[标记]'),
-    _StickerChoice('🧩', '协作', '[协作]'),
-    _StickerChoice('✨', '完成', '[完成]'),
-  ];
-
   @override
   Widget build(BuildContext context) {
-    final stickers = source == _StickerSource.personal ? _personal : _room;
+    final packs = source == _StickerSource.personal ? personalPacks : roomPacks;
+    final stickers = [for (final pack in packs) ...pack.stickers];
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -2431,17 +2471,7 @@ class _StickerPanel extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
-          child: Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              for (final sticker in stickers)
-                _StickerButton(
-                  sticker: sticker,
-                  onPressed: () => onStickerSelected(sticker.token),
-                ),
-            ],
-          ),
+          child: _buildBody(stickers),
         ),
         _SourceSwitch(
           firstLabel: '个人表情包',
@@ -2450,6 +2480,40 @@ class _StickerPanel extends StatelessWidget {
           onFirst: () => onSourceChanged(_StickerSource.personal),
           onSecond: () => onSourceChanged(_StickerSource.room),
         ),
+      ],
+    );
+  }
+
+  Widget _buildBody(List<Sticker> stickers) {
+    if (loading && stickers.isEmpty) {
+      return const SizedBox(
+        height: 78,
+        child: Center(child: CircularProgressIndicator(color: _cyan)),
+      );
+    }
+    if (error != null && stickers.isEmpty) {
+      return _StickerPanelMessage(
+        text: error!,
+        icon: Icons.warning_amber,
+        onRefresh: onRefresh,
+      );
+    }
+    if (stickers.isEmpty) {
+      return _StickerPanelMessage(
+        text: source == _StickerSource.personal ? '暂无个人表情' : '暂无房间表情',
+        icon: Icons.emoji_emotions_outlined,
+        onRefresh: onRefresh,
+      );
+    }
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        for (final sticker in stickers)
+          _StickerButton(
+            sticker: sticker,
+            onPressed: () => onStickerSelected('[${sticker.name}]'),
+          ),
       ],
     );
   }
@@ -2667,18 +2731,10 @@ class _SourceSwitchButtonState extends State<_SourceSwitchButton> {
   }
 }
 
-class _StickerChoice {
-  const _StickerChoice(this.icon, this.tooltip, this.token);
-
-  final String icon;
-  final String tooltip;
-  final String token;
-}
-
 class _StickerButton extends StatefulWidget {
   const _StickerButton({required this.sticker, required this.onPressed});
 
-  final _StickerChoice sticker;
+  final Sticker sticker;
   final VoidCallback onPressed;
 
   @override
@@ -2690,8 +2746,16 @@ class _StickerButtonState extends State<_StickerButton> {
 
   @override
   Widget build(BuildContext context) {
+    final imageUrl = AppConfigScope.of(context).resolveAssetUrl(
+      widget.sticker.asset.thumbnailUrl ?? widget.sticker.asset.url,
+    );
+    final fallback = Icon(
+      Icons.image_not_supported_outlined,
+      color: _textMuted,
+      size: 22,
+    );
     return Tooltip(
-      message: widget.sticker.tooltip,
+      message: widget.sticker.name,
       child: MouseRegion(
         onEnter: (_) => setState(() => _hovered = true),
         onExit: (_) => setState(() => _hovered = false),
@@ -2713,13 +2777,59 @@ class _StickerButtonState extends State<_StickerButton> {
               duration: const Duration(milliseconds: 120),
               curve: Curves.easeOutCubic,
               scale: _hovered ? 1.12 : 1,
-              child: Text(
-                widget.sticker.icon,
-                style: const TextStyle(fontSize: 22),
+              child: SizedBox.square(
+                dimension: 32,
+                child: imageUrl == null
+                    ? fallback
+                    : Image.network(
+                        imageUrl,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, _, _) => fallback,
+                      ),
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _StickerPanelMessage extends StatelessWidget {
+  const _StickerPanelMessage({
+    required this.text,
+    required this.icon,
+    required this.onRefresh,
+  });
+
+  final String text;
+  final IconData icon;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 78,
+      child: Row(
+        children: [
+          Icon(icon, color: _textMuted, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: _textMuted, fontSize: 12),
+            ),
+          ),
+          const SizedBox(width: 10),
+          KeyIconButton(
+            tooltip: '刷新表情包',
+            onPressed: () => unawaited(onRefresh()),
+            icon: const Icon(Icons.refresh),
+            size: 32,
+          ),
+        ],
       ),
     );
   }
