@@ -985,7 +985,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           const SizedBox(height: 18),
           _SettingsGroup(
-            title: '资料',
+            title: '默认资料',
             children: [
               _LabeledTextField(
                 label: '用户名',
