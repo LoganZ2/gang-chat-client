@@ -28,31 +28,62 @@ class UserSummary {
 class CurrentUser {
   const CurrentUser({
     required this.id,
+    required this.uid,
     required this.username,
     required this.displayName,
+    required this.bio,
+    required this.gender,
     required this.email,
+    required this.emailPublic,
+    required this.phoneNumber,
+    required this.phoneNumberPublic,
     required this.avatarUrl,
     required this.defaultAvatarKey,
+    required this.isSuperuser,
+    required this.createdAt,
+    this.usernameUpdatedAt,
+    this.canChangeUsernameAt,
     this.status,
   });
 
   final String id;
+  final String uid;
   final String username;
   final String displayName;
+  final String bio;
+  final String gender;
   final String? email;
+  final bool emailPublic;
+  final String? phoneNumber;
+  final bool phoneNumberPublic;
   final String? avatarUrl;
   final String defaultAvatarKey;
+  final bool isSuperuser;
+  final DateTime? usernameUpdatedAt;
+  final DateTime? canChangeUsernameAt;
+  final DateTime? createdAt;
   final String? status;
 
   factory CurrentUser.fromJson(Map<String, Object?> json) {
     final username = json['username']! as String;
+    final id = json['id']! as String;
     return CurrentUser(
-      id: json['id']! as String,
+      id: id,
+      uid: json['uid'] as String? ?? id,
       username: username,
       displayName: json['display_name'] as String? ?? username,
+      bio: json['bio'] as String? ?? '',
+      gender: json['gender'] as String? ?? 'secret',
       email: json['email'] as String?,
+      emailPublic: json['email_public'] as bool? ?? false,
+      phoneNumber: json['phone_number'] as String?,
+      phoneNumberPublic: json['phone_number_public'] as bool? ?? false,
       avatarUrl: json['avatar_url'] as String?,
       defaultAvatarKey: json['default_avatar_key'] as String? ?? 'blue-3',
+      isSuperuser: json['is_superuser'] as bool? ?? false,
+      usernameUpdatedAt: _parseDateTime(json['username_updated_at']),
+      canChangeUsernameAt: _parseDateTime(json['can_change_username_at']),
+      createdAt: _parseDateTime(json['created_at']),
       status: json['status'] as String?,
     );
   }
@@ -66,6 +97,46 @@ class CurrentUser {
       defaultAvatarKey: defaultAvatarKey,
     );
   }
+}
+
+class UserSession {
+  const UserSession({
+    required this.id,
+    required this.userAgent,
+    required this.ipAddress,
+    required this.location,
+    required this.createdAt,
+    required this.lastUsedAt,
+    required this.expiresAt,
+    required this.revokedAt,
+    required this.isCurrent,
+  });
+
+  final String id;
+  final String? userAgent;
+  final String? ipAddress;
+  final String location;
+  final DateTime createdAt;
+  final DateTime lastUsedAt;
+  final DateTime expiresAt;
+  final DateTime? revokedAt;
+  final bool isCurrent;
+
+  factory UserSession.fromJson(Map<String, Object?> json) {
+    return UserSession(
+      id: json['id']! as String,
+      userAgent: json['user_agent'] as String?,
+      ipAddress: json['ip_address'] as String?,
+      location: json['location'] as String? ?? '未知地点',
+      createdAt: _fromUnixSeconds(json['created_at']! as int),
+      lastUsedAt: _fromUnixSeconds(json['last_used_at']! as int),
+      expiresAt: _fromUnixSeconds(json['expires_at']! as int),
+      revokedAt: _nullableUnixSeconds(json['revoked_at']),
+      isCurrent: json['is_current']! as bool,
+    );
+  }
+
+  bool get isActive => revokedAt == null && expiresAt.isAfter(DateTime.now());
 }
 
 class LastMessagePreview {
@@ -314,10 +385,7 @@ class RoomDetail {
       defaultAvatarKey: defaultAvatarKey,
       memberCount: memberCount,
       createdBy: createdBy,
-      myMembership: RoomMembership(
-        joinedAt: myMembership.joinedAt,
-        role: role,
-      ),
+      myMembership: RoomMembership(joinedAt: myMembership.joinedAt, role: role),
       live: live,
       createdAt: createdAt,
       updatedAt: updatedAt,
@@ -526,4 +594,18 @@ List<Map<String, Object?>> _listOfMaps(Object? value) {
 
 Map<String, Object?>? _nullableMap(Object? value) {
   return value == null ? null : value as Map<String, Object?>;
+}
+
+DateTime? _parseDateTime(Object? value) {
+  if (value is! String || value.isEmpty) return null;
+  return DateTime.tryParse(value);
+}
+
+DateTime _fromUnixSeconds(int value) {
+  return DateTime.fromMillisecondsSinceEpoch(value * 1000);
+}
+
+DateTime? _nullableUnixSeconds(Object? value) {
+  if (value is! int) return null;
+  return _fromUnixSeconds(value);
 }

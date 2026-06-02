@@ -58,6 +58,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late GangApi _api;
+  late CurrentUser _currentUser;
   final LiveSession _liveSession = LiveSession();
   final AudioDeviceStore _audioDeviceStore = const AudioDeviceStore();
 
@@ -112,6 +113,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _currentUser = widget.session.user;
     _api = _newApiClient();
     _messageController.addListener(_onMessageDraftChanged);
     _liveSession.addListener(_onLiveSessionChanged);
@@ -418,6 +420,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void didUpdateWidget(HomePage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.session.user.id != widget.session.user.id) {
+      _currentUser = widget.session.user;
+    }
     if (oldWidget.apiBaseUrl == widget.apiBaseUrl &&
         oldWidget.api == widget.api) {
       return;
@@ -551,7 +556,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final clientMessageId = newClientId('cmsg');
     final local = Message.local(
       roomId: room.id,
-      sender: widget.session.user.toSummary(),
+      sender: _currentUser.toSummary(),
       clientMessageId: clientMessageId,
       body: body,
     );
@@ -729,7 +734,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// the room-list live count for [roomId]. The authoritative SSE snapshot
   /// reconciles afterward; this just keeps the UI from lagging on departure.
   void _removeSelfFromLive(String roomId) {
-    final selfId = widget.session.user.id;
+    final selfId = _currentUser.id;
     final current = _live;
     if (current != null && current.roomId == roomId) {
       final remaining = current.participants
@@ -996,7 +1001,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       rooms: _rooms,
                       selectedRoomId: _selectedRoomId,
                       loading: _loadingRooms,
-                      currentUser: widget.session.user,
+                      currentUser: _currentUser,
                       collapsed: _sidebarCollapsed,
                       settingsActive: _settingsOpen,
                       onCreateRoom: _createRoom,
@@ -1099,6 +1104,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       return SettingsPage(
         isSubWindow: true,
         audioDeviceStore: _audioDeviceStore,
+        api: _api,
+        currentUser: _currentUser,
+        onUserUpdated: (user) => setState(() => _currentUser = user),
         onVolumeChanged: (kind, volume) {
           if (kind == 'audioinput') {
             unawaited(_liveSession.setInputVolume(volume));
@@ -1106,6 +1114,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             unawaited(_liveSession.setOutputVolume(volume));
           }
         },
+        onAccountDeleted: _handleLogout,
         onClose: _closeSettings,
       );
     }
@@ -1166,12 +1175,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     onToggleShare: _toggleScreenShare,
                     onCollapse: () => setState(() => _livePanelOpen = false),
                     onEnterFullScreen: _enterShareFullScreen,
-                    localUserId: widget.session.user.id,
+                    localUserId: _currentUser.id,
                   )
                 : _ChatPane(
                     roomId: _selectedRoomId!,
                     messages: _messages,
-                    currentUserId: widget.session.user.id,
+                    currentUserId: _currentUser.id,
                     controller: _messageController,
                     focusNode: _messageFocus,
                     sending: _sending,

@@ -127,6 +127,40 @@ void main() {
       api.close();
     },
   );
+
+  test('listSessions parses recent account activity array', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/api/v1/auth/sessions');
+        expect(request.headers['authorization'], 'Bearer token');
+        return http.Response(
+          jsonEncode([
+            {
+              'id': 'session_1',
+              'user_agent': 'Flutter test',
+              'ip_address': '127.0.0.1',
+              'location': 'Local',
+              'created_at': 1780300800,
+              'last_used_at': 1780300860,
+              'expires_at': 1782892800,
+              'is_current': true,
+            },
+          ]),
+          200,
+        );
+      }),
+    );
+
+    final sessions = await api.listSessions();
+
+    expect(sessions, hasLength(1));
+    expect(sessions.single.location, 'Local');
+    expect(sessions.single.isCurrent, isTrue);
+    api.close();
+  });
 }
 
 Map<String, Object?> _liveJoinJson() {

@@ -10,6 +10,32 @@ typedef AccessTokenProvider = Future<String> Function({bool forceRefresh});
 abstract interface class GangApi {
   Future<CurrentUser> me();
 
+  Future<CurrentUser> updateAccount({
+    String? username,
+    String? email,
+    bool? emailPublic,
+    String? phoneNumber,
+    bool? phoneNumberPublic,
+  });
+
+  Future<CurrentUser> updateProfile({
+    String? displayName,
+    String? bio,
+    String? gender,
+    String? avatarAssetId,
+    String? defaultAvatarKey,
+  });
+
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    bool revokeOtherSessions = true,
+  });
+
+  Future<List<UserSession>> listSessions();
+
+  Future<void> deleteMyAccount({required bool confirm});
+
   Future<RoomPage> listRooms({int limit = 50, String? cursor});
 
   Future<RoomDetail> createRoom({
@@ -90,6 +116,104 @@ class GangApiClient implements GangApi {
       return _httpClient.get(_uri('/me'), headers: _headers(token));
     }, retryTransientFailures: true);
     return CurrentUser.fromJson(decoded);
+  }
+
+  @override
+  Future<CurrentUser> updateAccount({
+    String? username,
+    String? email,
+    bool? emailPublic,
+    String? phoneNumber,
+    bool? phoneNumberPublic,
+  }) async {
+    final body = <String, Object?>{};
+    if (username != null) body['username'] = username;
+    if (email != null) body['email'] = email;
+    if (emailPublic != null) body['email_public'] = emailPublic;
+    if (phoneNumber != null) body['phone_number'] = phoneNumber;
+    if (phoneNumberPublic != null) {
+      body['phone_number_public'] = phoneNumberPublic;
+    }
+    final decoded = await _sendJson((token) {
+      return _httpClient.patch(
+        _uri('/users/me/account'),
+        headers: _headers(token),
+        body: jsonEncode(body),
+      );
+    });
+    return CurrentUser.fromJson(decoded['user']! as Map<String, Object?>);
+  }
+
+  @override
+  Future<CurrentUser> updateProfile({
+    String? displayName,
+    String? bio,
+    String? gender,
+    String? avatarAssetId,
+    String? defaultAvatarKey,
+  }) async {
+    final body = <String, Object?>{};
+    if (displayName != null) body['display_name'] = displayName;
+    if (bio != null) body['bio'] = bio;
+    if (gender != null) body['gender'] = gender;
+    if (avatarAssetId != null) body['avatar_asset_id'] = avatarAssetId;
+    if (defaultAvatarKey != null) body['default_avatar_key'] = defaultAvatarKey;
+    final decoded = await _sendJson((token) {
+      return _httpClient.patch(
+        _uri('/users/me/profile'),
+        headers: _headers(token),
+        body: jsonEncode(body),
+      );
+    });
+    return CurrentUser.fromJson(decoded['user']! as Map<String, Object?>);
+  }
+
+  @override
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    bool revokeOtherSessions = true,
+  }) async {
+    await _sendJson((token) {
+      return _httpClient.post(
+        _uri('/auth/password'),
+        headers: _headers(token),
+        body: jsonEncode({
+          'current_password': currentPassword,
+          'new_password': newPassword,
+          'revoke_other_sessions': revokeOtherSessions,
+        }),
+      );
+    });
+  }
+
+  @override
+  Future<List<UserSession>> listSessions() async {
+    final decoded = await _sendJsonValue((token) {
+      return _httpClient.get(_uri('/auth/sessions'), headers: _headers(token));
+    }, retryTransientFailures: true);
+    final items = decoded is List
+        ? decoded.cast<Object?>()
+        : decoded is Map<String, Object?>
+        ? decoded['items'] as List<Object?>? ??
+              decoded['sessions'] as List<Object?>? ??
+              const []
+        : const [];
+    return items
+        .cast<Map<String, Object?>>()
+        .map(UserSession.fromJson)
+        .toList();
+  }
+
+  @override
+  Future<void> deleteMyAccount({required bool confirm}) async {
+    await _sendJson((token) {
+      return _httpClient.delete(
+        _uri('/users/me/account'),
+        headers: _headers(token),
+        body: jsonEncode({'confirm': confirm}),
+      );
+    });
   }
 
   @override
@@ -302,6 +426,17 @@ class GangApiClient implements GangApi {
     Future<http.Response> Function(String accessToken) send, {
     bool retryTransientFailures = false,
   }) async {
+    final decoded = await _sendJsonValue(
+      send,
+      retryTransientFailures: retryTransientFailures,
+    );
+    return decoded as Map<String, Object?>;
+  }
+
+  Future<Object?> _sendJsonValue(
+    Future<http.Response> Function(String accessToken) send, {
+    bool retryTransientFailures = false,
+  }) async {
     http.Response response;
     try {
       response = await _sendWithAuth(send);
@@ -313,7 +448,7 @@ class GangApiClient implements GangApi {
     }
     _throwIfFailed(response);
     if (response.body.isEmpty) return {};
-    return jsonDecode(response.body) as Map<String, Object?>;
+    return jsonDecode(response.body);
   }
 
   Future<http.Response> _sendWithAuth(

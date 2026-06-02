@@ -161,42 +161,6 @@ class AuthSession {
   }
 }
 
-class UserSession {
-  const UserSession({
-    required this.id,
-    required this.userAgent,
-    required this.ipAddress,
-    required this.createdAt,
-    required this.lastUsedAt,
-    required this.expiresAt,
-    required this.isCurrent,
-  });
-
-  final String id;
-  final String? userAgent;
-  final String? ipAddress;
-  final DateTime createdAt;
-  final DateTime lastUsedAt;
-  final DateTime expiresAt;
-  final bool isCurrent;
-
-  factory UserSession.fromJson(Map<String, Object?> json) {
-    return UserSession(
-      id: json['id']! as String,
-      userAgent: json['user_agent'] as String?,
-      ipAddress: json['ip_address'] as String?,
-      createdAt: _fromUnixSeconds(json['created_at']! as int),
-      lastUsedAt: _fromUnixSeconds(json['last_used_at']! as int),
-      expiresAt: _fromUnixSeconds(json['expires_at']! as int),
-      isCurrent: json['is_current']! as bool,
-    );
-  }
-
-  static DateTime _fromUnixSeconds(int value) {
-    return DateTime.fromMillisecondsSinceEpoch(value * 1000);
-  }
-}
-
 class AuthException implements Exception {
   AuthException(this.message, {required this.statusCode, required this.code});
 
