@@ -139,6 +139,29 @@ class UserSession {
   bool get isActive => revokedAt == null && expiresAt.isAfter(DateTime.now());
 }
 
+class UploadedAsset {
+  const UploadedAsset({
+    required this.id,
+    required this.url,
+    required this.thumbnailUrl,
+    required this.mimeType,
+  });
+
+  final String id;
+  final String url;
+  final String? thumbnailUrl;
+  final String mimeType;
+
+  factory UploadedAsset.fromJson(Map<String, Object?> json) {
+    return UploadedAsset(
+      id: json['id']! as String,
+      url: json['url']! as String,
+      thumbnailUrl: json['thumbnail_url'] as String?,
+      mimeType: json['mime_type'] as String? ?? 'application/octet-stream',
+    );
+  }
+}
+
 class LastMessagePreview {
   const LastMessagePreview({
     required this.id,

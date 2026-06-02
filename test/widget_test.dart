@@ -17,6 +17,7 @@ void main() {
     expect(find.text('Password'), findsOneWidget);
     expect(find.byTooltip('Show password'), findsOneWidget);
     expect(find.widgetWithText(KeyButton, 'Login'), findsOneWidget);
+    expect(find.byType(SelectionArea), findsOneWidget);
 
     await tester.tap(find.byTooltip('Show password'));
     await tester.pump();

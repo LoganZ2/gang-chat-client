@@ -17,6 +17,7 @@ dependencies:
   # Pinned to match livekit_client 2.6.1's transitive constraint; used for the
   # desktop screen-share source picker (desktopCapturer.getSources).
   flutter_webrtc: 1.2.1
+  file_selector: ^1.1.0
 
 dev_dependencies:
   flutter_test:

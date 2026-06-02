@@ -1,5 +1,9 @@
 import 'dart:async';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 
+import 'package:file_selector/file_selector.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
@@ -72,6 +76,10 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _loadingSessions = false;
   bool _savingAccount = false;
   bool _savingProfile = false;
+  bool _uploadingAvatar = false;
+  bool _clearUploadedAvatar = false;
+  String? _pendingAvatarAssetId;
+  String? _pendingAvatarUrl;
   bool _changingPassword = false;
   bool _deletingAccount = false;
   bool _obscureCurrentPassword = true;
@@ -93,9 +101,10 @@ class _SettingsPageState extends State<SettingsPage> {
   double _outputLevel = 0.0;
   bool _testingInput = false;
   bool _testingOutput = false;
+  bool _voiceInitialized = false;
   bool _requestedDeviceAccess = false;
   String? _error;
-  bool _loading = true;
+  bool _loading = false;
   lk.LocalAudioTrack? _inputTestTrack;
   lk.AudioVisualizer? _inputVisualizer;
   lk.EventsListener<lk.AudioVisualizerEvent>? _inputVisualizerListener;
@@ -109,15 +118,7 @@ class _SettingsPageState extends State<SettingsPage> {
     super.initState();
     _user = widget.currentUser;
     _syncUserFields(widget.currentUser);
-    _deviceSubscription = lk.Hardware.instance.onDeviceChange.stream.listen((
-      devices,
-    ) {
-      unawaited(_applyDevices(devices));
-    });
-    unawaited(_loadStoredAudioSettings());
-    unawaited(_loadDevices());
     unawaited(_loadAccount());
-    unawaited(_loadSessions());
   }
 
   @override
@@ -156,6 +157,9 @@ class _SettingsPageState extends State<SettingsPage> {
     _defaultAvatarKey = user.defaultAvatarKey;
     _emailPublic = user.emailPublic;
     _phonePublic = user.phoneNumberPublic;
+    _clearUploadedAvatar = false;
+    _pendingAvatarAssetId = null;
+    _pendingAvatarUrl = null;
   }
 
   Future<void> _loadAccount() async {
@@ -209,9 +213,23 @@ class _SettingsPageState extends State<SettingsPage> {
         await Future.wait([_loadAccount(), _loadSessions()]);
         break;
       case _SettingsSection.voice:
-        await _loadDevices();
+        await _ensureVoiceInitialized(forceReload: true);
         break;
     }
+  }
+
+  Future<void> _ensureVoiceInitialized({bool forceReload = false}) async {
+    if (_voiceInitialized && !forceReload) return;
+    if (!_voiceInitialized) {
+      _voiceInitialized = true;
+      _deviceSubscription ??= lk.Hardware.instance.onDeviceChange.stream.listen(
+        (devices) {
+          unawaited(_applyDevices(devices));
+        },
+      );
+      unawaited(_loadStoredAudioSettings());
+    }
+    await _loadDevices();
   }
 
   Future<void> _saveAccount() async {
@@ -285,7 +303,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final displayName = _displayNameController.text.trim();
     final bio = _bioController.text.trim();
     if (displayName.isEmpty) {
-      setState(() => _accountError = '默认用户名不能为空');
+      setState(() => _accountError = '用户名不能为空');
       return;
     }
 
@@ -299,10 +317,13 @@ class _SettingsPageState extends State<SettingsPage> {
     final nextAvatarKey = _defaultAvatarKey == user.defaultAvatarKey
         ? null
         : _defaultAvatarKey;
+    final nextAvatarAssetId =
+        _pendingAvatarAssetId ?? (_clearUploadedAvatar ? '' : null);
     if (nextDisplayName == null &&
         nextBio == null &&
         nextGender == null &&
-        nextAvatarKey == null) {
+        nextAvatarKey == null &&
+        nextAvatarAssetId == null) {
       _showNotice('没有用户资料变更');
       return;
     }
@@ -318,7 +339,7 @@ class _SettingsPageState extends State<SettingsPage> {
         bio: nextBio,
         gender: nextGender,
         defaultAvatarKey: nextAvatarKey,
-        avatarAssetId: nextAvatarKey == null ? null : '',
+        avatarAssetId: nextAvatarAssetId,
       );
       if (!mounted) return;
       setState(() {
@@ -333,6 +354,92 @@ class _SettingsPageState extends State<SettingsPage> {
     } finally {
       if (mounted) setState(() => _savingProfile = false);
     }
+  }
+
+  Future<void> _pickAndUploadAvatar() async {
+    final api = widget.api;
+    if (api == null || _uploadingAvatar) return;
+    setState(() {
+      _accountError = null;
+      _notice = null;
+    });
+
+    XFile? file;
+    try {
+      file = await openFile(
+        acceptedTypeGroups: const [
+          XTypeGroup(
+            label: 'Images',
+            extensions: ['png', 'jpg', 'jpeg', 'webp'],
+          ),
+        ],
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _accountError = '无法打开文件选择器：$e');
+      return;
+    }
+    if (file == null) return;
+
+    Uint8List bytes;
+    try {
+      bytes = await file.readAsBytes();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _accountError = '无法读取图片：$e');
+      return;
+    }
+    if (bytes.isEmpty) {
+      setState(() => _accountError = '图片文件为空');
+      return;
+    }
+    if (!mounted) return;
+
+    final cropped = await showDialog<Uint8List>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _AvatarCropDialog(bytes: bytes),
+    );
+    if (cropped == null || !mounted) return;
+
+    setState(() {
+      _uploadingAvatar = true;
+      _accountError = null;
+      _notice = null;
+    });
+    try {
+      final asset = await api.uploadImageAsset(
+        bytes: cropped,
+        filename: _avatarUploadFilename(file.name),
+        purpose: 'avatar',
+      );
+      if (!mounted) return;
+      setState(() {
+        _pendingAvatarAssetId = asset.id;
+        _pendingAvatarUrl = asset.url;
+        _clearUploadedAvatar = false;
+      });
+      _showNotice('头像已上传，保存用户资料后生效');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _accountError = e.toString());
+    } finally {
+      if (mounted) setState(() => _uploadingAvatar = false);
+    }
+  }
+
+  void _usePresetAvatar() {
+    _selectDefaultAvatarKey(_defaultAvatarKey);
+  }
+
+  void _selectDefaultAvatarKey(String value) {
+    setState(() {
+      _defaultAvatarKey = value;
+      _pendingAvatarAssetId = null;
+      _pendingAvatarUrl = null;
+      _clearUploadedAvatar = _user?.avatarUrl != null;
+      _notice = _clearUploadedAvatar ? '保存用户资料后将使用预设头像' : null;
+    });
   }
 
   Future<void> _changePassword() async {
@@ -833,6 +940,10 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _buildProfileContent() {
     final user = _user;
     final unavailable = widget.api == null || user == null;
+    final appConfig = AppConfigScope.of(context);
+    final avatarPreviewUrl = _clearUploadedAvatar
+        ? null
+        : appConfig.resolveAssetUrl(_pendingAvatarUrl ?? user?.avatarUrl);
     return ListView(
       padding: const EdgeInsets.fromLTRB(28, 24, 30, 32),
       children: [
@@ -853,7 +964,7 @@ class _SettingsPageState extends State<SettingsPage> {
             title: '账号标识',
             children: [
               _CopyableField(
-                label: '个人永久 UID',
+                label: '个人 UID',
                 value: user.uid,
                 tooltip: '复制 UID',
                 onCopy: () => _copyText(user.uid, 'UID 已复制'),
@@ -863,14 +974,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 label: '登录 Username',
                 controller: _usernameController,
                 enabled: _canEditUsername(user),
-                trailing: KeyIconButton(
-                  tooltip: '复制 Username',
-                  onPressed: () => _copyText(
-                    _usernameController.text.trim(),
-                    'Username 已复制',
-                  ),
-                  icon: const Icon(Icons.copy),
-                  size: 30,
+                suffixIcon: _copyControllerButton(
+                  _usernameController,
+                  '复制 Username',
+                  'Username 已复制',
                 ),
                 helperText: _usernameHelper(user),
               ),
@@ -878,11 +985,16 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           const SizedBox(height: 18),
           _SettingsGroup(
-            title: '默认资料',
+            title: '资料',
             children: [
               _LabeledTextField(
-                label: '默认用户名',
+                label: '用户名',
                 controller: _displayNameController,
+                suffixIcon: _copyControllerButton(
+                  _displayNameController,
+                  '复制用户名',
+                  '用户名已复制',
+                ),
                 helperText: '没有房间个人资料覆盖时展示。',
               ),
               const SizedBox(height: 14),
@@ -900,16 +1012,22 @@ class _SettingsPageState extends State<SettingsPage> {
               _AvatarKeyPicker(
                 value: _defaultAvatarKey,
                 displayName: _displayNameController.text,
-                avatarUrl: AppConfigScope.of(
-                  context,
-                ).resolveAssetUrl(user.avatarUrl),
-                onChanged: (value) => setState(() => _defaultAvatarKey = value),
+                avatarUrl: avatarPreviewUrl,
+                uploading: _uploadingAvatar,
+                onChanged: _selectDefaultAvatarKey,
+                onUpload: _pickAndUploadAvatar,
+                onUsePreset: _usePresetAvatar,
               ),
               const SizedBox(height: 14),
               _LabeledTextField(
-                label: '默认签名',
+                label: '签名',
                 controller: _bioController,
                 maxLines: 4,
+                suffixIcon: _copyControllerButton(
+                  _bioController,
+                  '复制签名',
+                  '签名已复制',
+                ),
                 helperText: '用于个人资料面板展示。',
               ),
             ],
@@ -956,6 +1074,11 @@ class _SettingsPageState extends State<SettingsPage> {
                 label: '邮箱绑定',
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
+                suffixIcon: _copyControllerButton(
+                  _emailController,
+                  '复制邮箱',
+                  '邮箱已复制',
+                ),
                 helperText: '用于登录、账号找回和安全通知。',
               ),
               const SizedBox(height: 10),
@@ -969,6 +1092,11 @@ class _SettingsPageState extends State<SettingsPage> {
                 label: '手机号绑定',
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
+                suffixIcon: _copyControllerButton(
+                  _phoneController,
+                  '复制手机号',
+                  '手机号已复制',
+                ),
                 helperText: '用于账号找回和安全通知，留空表示解绑。',
               ),
               const SizedBox(height: 10),
@@ -1109,56 +1237,68 @@ class _SettingsPageState extends State<SettingsPage> {
       children: [
         _ContentTitle(title: '默认语音源', loading: _loading),
         const SizedBox(height: 18),
-        _DeviceSection(
-          title: 'Input source',
-          icon: Icons.mic,
-          devices: _audioInputs,
-          selectedDevice: _selectedInput,
-          busyDeviceId: _busyDeviceId,
-          emptyText: _loading
-              ? 'Loading input sources'
-              : 'No input sources found',
-          fallbackLabel: 'Microphone',
-          onSelect: _selectInput,
+        _SettingsGroup(
+          title: '输入',
+          children: [
+            _SettingsSubPanel(
+              child: _DeviceSection(
+                title: '输入源',
+                icon: Icons.mic,
+                devices: _audioInputs,
+                selectedDevice: _selectedInput,
+                busyDeviceId: _busyDeviceId,
+                emptyText: _loading ? '正在加载输入源' : '未找到输入源',
+                fallbackLabel: '麦克风',
+                onSelect: _selectInput,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _SettingsSubPanel(
+              child: _AudioControlPanel(
+                title: '输入音量',
+                icon: Icons.graphic_eq,
+                volume: _inputVolume,
+                level: _inputLevel,
+                testing: _testingInput,
+                testTooltip: _testingInput ? '停止输入测试' : '测试输入音量',
+                disabled: _audioInputs.isEmpty,
+                onVolumeChanged: (value) => unawaited(_setInputVolume(value)),
+                onToggleTest: _toggleInputTest,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 16),
-        _AudioControlPanel(
-          title: 'Input volume',
-          icon: Icons.graphic_eq,
-          volume: _inputVolume,
-          level: _inputLevel,
-          testing: _testingInput,
-          testTooltip: _testingInput ? 'Stop input test' : 'Test input volume',
-          disabled: _audioInputs.isEmpty,
-          onVolumeChanged: (value) => unawaited(_setInputVolume(value)),
-          onToggleTest: _toggleInputTest,
-        ),
-        const SizedBox(height: 30),
-        _DeviceSection(
-          title: 'Output source',
-          icon: Icons.headphones,
-          devices: _audioOutputs,
-          selectedDevice: _selectedOutput,
-          busyDeviceId: _busyDeviceId,
-          emptyText: _loading
-              ? 'Loading output sources'
-              : 'No output sources found',
-          fallbackLabel: 'Output',
-          onSelect: _selectOutput,
-        ),
-        const SizedBox(height: 16),
-        _AudioControlPanel(
-          title: 'Output volume',
-          icon: Icons.volume_up,
-          volume: _outputVolume,
-          level: _outputLevel,
-          testing: _testingOutput,
-          testTooltip: _testingOutput
-              ? 'Stop output test'
-              : 'Test output volume',
-          disabled: _audioOutputs.isEmpty,
-          onVolumeChanged: (value) => unawaited(_setOutputVolume(value)),
-          onToggleTest: _toggleOutputTest,
+        const SizedBox(height: 18),
+        _SettingsGroup(
+          title: '输出',
+          children: [
+            _SettingsSubPanel(
+              child: _DeviceSection(
+                title: '输出源',
+                icon: Icons.headphones,
+                devices: _audioOutputs,
+                selectedDevice: _selectedOutput,
+                busyDeviceId: _busyDeviceId,
+                emptyText: _loading ? '正在加载输出源' : '未找到输出源',
+                fallbackLabel: '输出',
+                onSelect: _selectOutput,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _SettingsSubPanel(
+              child: _AudioControlPanel(
+                title: '输出音量',
+                icon: Icons.volume_up,
+                volume: _outputVolume,
+                level: _outputLevel,
+                testing: _testingOutput,
+                testTooltip: _testingOutput ? '停止输出测试' : '测试输出音量',
+                disabled: _audioOutputs.isEmpty,
+                onVolumeChanged: (value) => unawaited(_setOutputVolume(value)),
+                onToggleTest: _toggleOutputTest,
+              ),
+            ),
+          ],
         ),
         if (_error != null) ...[
           const SizedBox(height: 28),
@@ -1184,6 +1324,19 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _copyText(String value, String notice) async {
     await Clipboard.setData(ClipboardData(text: value));
     _showNotice(notice);
+  }
+
+  Widget _copyControllerButton(
+    TextEditingController controller,
+    String tooltip,
+    String notice,
+  ) {
+    return KeyIconButton(
+      tooltip: tooltip,
+      onPressed: () => _copyText(controller.text.trim(), notice),
+      icon: const Icon(Icons.copy),
+      size: 30,
+    );
   }
 
   @override
@@ -1294,6 +1447,9 @@ class _SettingsPageState extends State<SettingsPage> {
                         _sessions.isEmpty &&
                         !_loadingSessions) {
                       unawaited(_loadSessions());
+                    }
+                    if (section == _SettingsSection.voice) {
+                      unawaited(_ensureVoiceInitialized());
                     }
                   },
                 ),
@@ -1488,6 +1644,23 @@ class _SettingsGroup extends StatelessWidget {
   }
 }
 
+class _SettingsSubPanel extends StatelessWidget {
+  const _SettingsSubPanel({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _primaryDark,
+        border: Border.all(color: _borderColor),
+      ),
+      child: Padding(padding: const EdgeInsets.all(14), child: child),
+    );
+  }
+}
+
 class _LabeledTextField extends StatelessWidget {
   const _LabeledTextField({
     required this.label,
@@ -1496,7 +1669,7 @@ class _LabeledTextField extends StatelessWidget {
     this.maxLines = 1,
     this.obscureText = false,
     this.keyboardType,
-    this.trailing,
+    this.suffixIcon,
     this.helperText,
     this.onTogglePasswordVisibility,
   });
@@ -1507,21 +1680,23 @@ class _LabeledTextField extends StatelessWidget {
   final int maxLines;
   final bool obscureText;
   final TextInputType? keyboardType;
-  final Widget? trailing;
+  final Widget? suffixIcon;
   final String? helperText;
   final VoidCallback? onTogglePasswordVisibility;
 
   @override
   Widget build(BuildContext context) {
+    final effectiveSuffixIcon = onTogglePasswordVisibility == null
+        ? suffixIcon
+        : _PasswordVisibilityToggle(
+            obscure: obscureText,
+            enabled: enabled,
+            onPressed: onTogglePasswordVisibility!,
+          );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Expanded(child: _FieldLabel(label)),
-            ?trailing,
-          ],
-        ),
+        _FieldLabel(label),
         const SizedBox(height: 8),
         TextField(
           controller: controller,
@@ -1537,13 +1712,7 @@ class _LabeledTextField extends StatelessWidget {
           ),
           decoration: InputDecoration(
             isDense: true,
-            suffixIcon: onTogglePasswordVisibility == null
-                ? null
-                : _PasswordVisibilityToggle(
-                    obscure: obscureText,
-                    enabled: enabled,
-                    onPressed: onTogglePasswordVisibility!,
-                  ),
+            suffixIcon: effectiveSuffixIcon,
             suffixIconConstraints: const BoxConstraints(
               minWidth: 38,
               minHeight: 38,
@@ -1744,45 +1913,69 @@ class _AvatarKeyPicker extends StatelessWidget {
     required this.value,
     required this.displayName,
     required this.avatarUrl,
+    required this.uploading,
     required this.onChanged,
+    required this.onUpload,
+    required this.onUsePreset,
   });
 
   static const _keys = [
     'blue-3',
+    'sky-2',
+    'cyan-2',
+    'mint-2',
     'green-2',
+    'lime-2',
     'amber-2',
+    'orange-2',
+    'coral-2',
+    'pink-2',
     'violet-2',
+    'indigo-2',
     'rose-2',
     'teal-2',
     'olive-2',
     'slate-2',
+    'steel-2',
+    'graphite-2',
   ];
 
   final String value;
   final String displayName;
   final String? avatarUrl;
+  final bool uploading;
   final ValueChanged<String> onChanged;
+  final VoidCallback onUpload;
+  final VoidCallback onUsePreset;
 
   @override
   Widget build(BuildContext context) {
+    final uploadedSelected = avatarUrl != null;
+    final presetSelected = !uploadedSelected;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _FieldLabel('默认头像'),
+        _FieldLabel('头像'),
         const SizedBox(height: 10),
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _AvatarPreview(
-              label: displayName,
-              imageUrl: avatarUrl,
-              defaultAvatarKey: value,
-              size: 46,
+            SizedBox(
+              width: 100,
+              child: Center(
+                child: _AvatarPreview(
+                  label: displayName,
+                  imageUrl: avatarUrl,
+                  defaultAvatarKey: value,
+                  size: 88,
+                ),
+              ),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 16),
             Expanded(
               child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
+                spacing: 10,
+                runSpacing: 10,
                 children: [
                   for (final key in _keys)
                     Tooltip(
@@ -1794,15 +1987,52 @@ class _AvatarKeyPicker extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: _avatarColor(key),
                             border: Border.all(
-                              color: value == key ? _cyan : _borderColor,
-                              width: value == key ? 2 : 1,
+                              color: presetSelected && value == key
+                                  ? _cyan
+                                  : _borderColor,
+                              width: presetSelected && value == key ? 2 : 1,
                             ),
                           ),
-                          child: const SizedBox.square(dimension: 28),
+                          child: const SizedBox.square(dimension: 30),
                         ),
                       ),
                     ),
                 ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: KeyButton(
+                onPressed: uploading ? null : onUpload,
+                loading: uploading,
+                icon: const Icon(Icons.upload_file),
+                tone: uploadedSelected
+                    ? KeyButtonTone.primary
+                    : KeyButtonTone.neutral,
+                selected: uploadedSelected,
+                height: 38,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                width: double.infinity,
+                child: const Text('上传头像'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: KeyButton(
+                onPressed: uploading ? null : onUsePreset,
+                icon: const Icon(Icons.restart_alt),
+                tone: presetSelected
+                    ? KeyButtonTone.primary
+                    : KeyButtonTone.neutral,
+                selected: presetSelected,
+                height: 38,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                width: double.infinity,
+                child: const Text('预设头像'),
               ),
             ),
           ],
@@ -1834,7 +2064,7 @@ class _AvatarPreview extends StatelessWidget {
           _initials(label),
           style: TextStyle(
             color: _textPrimary,
-            fontSize: (size * 0.36).clamp(12, 20).toDouble(),
+            fontSize: (size * 0.36).clamp(12, 28).toDouble(),
             fontWeight: FontWeight.w900,
           ),
         ),
@@ -2041,6 +2271,400 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
   }
 }
 
+class _AvatarCropDialog extends StatefulWidget {
+  const _AvatarCropDialog({required this.bytes});
+
+  final Uint8List bytes;
+
+  @override
+  State<_AvatarCropDialog> createState() => _AvatarCropDialogState();
+}
+
+class _AvatarCropDialogState extends State<_AvatarCropDialog> {
+  static const _workSize = 320.0;
+  static const _frameSize = 280.0;
+  static const _outputSize = 512;
+  static const _minZoom = 0.25;
+  static const _maxZoom = 4.0;
+
+  late final Future<ui.Image> _imageFuture = _decodeImage();
+  ui.Image? _image;
+  double _baseScale = 1;
+  double _zoom = 1;
+  Offset _offset = Offset.zero;
+  bool _rendering = false;
+  bool _dragging = false;
+  int? _dragPointer;
+
+  Future<ui.Image> _decodeImage() async {
+    final codec = await ui.instantiateImageCodec(widget.bytes);
+    final frame = await codec.getNextFrame();
+    final image = frame.image;
+    _image = image;
+    _baseScale = math.max(_frameSize / image.width, _frameSize / image.height);
+    return image;
+  }
+
+  @override
+  void dispose() {
+    _image?.dispose();
+    super.dispose();
+  }
+
+  void _handleWheel(PointerSignalEvent event, ui.Image image) {
+    if (event is! PointerScrollEvent) return;
+    final direction = event.scrollDelta.dy < 0 ? 1 : -1;
+    _setZoom(
+      (_zoom + direction * 0.1).clamp(_minZoom, _maxZoom).toDouble(),
+      image,
+    );
+  }
+
+  void _startDrag(PointerDownEvent event, ui.Image image) {
+    if (_rendering) return;
+    if (event.kind == ui.PointerDeviceKind.mouse &&
+        event.buttons != kPrimaryMouseButton) {
+      return;
+    }
+    setState(() {
+      _dragging = true;
+      _dragPointer = event.pointer;
+    });
+  }
+
+  void _moveDrag(PointerMoveEvent event, ui.Image image) {
+    if (!_dragging || _dragPointer != event.pointer) return;
+    setState(() {
+      _offset = _clampOffset(_offset + event.delta, image);
+    });
+  }
+
+  void _endDrag(PointerEvent event) {
+    if (!_dragging || _dragPointer != event.pointer) return;
+    setState(() {
+      _dragging = false;
+      _dragPointer = null;
+    });
+  }
+
+  void _setZoom(double value, ui.Image image) {
+    setState(() {
+      _zoom = value.clamp(_minZoom, _maxZoom).toDouble();
+      _offset = _clampOffset(_offset, image);
+    });
+  }
+
+  double _zoomSliderValue() {
+    if (_zoom <= 1) {
+      final normalized = (_zoom - _minZoom) / (1 - _minZoom);
+      return (normalized * 0.5).clamp(0.0, 0.5).toDouble();
+    }
+    final normalized = (_zoom - 1) / (_maxZoom - 1);
+    return (0.5 + normalized * 0.5).clamp(0.5, 1.0).toDouble();
+  }
+
+  void _setZoomFromSlider(double value, ui.Image image) {
+    if (value <= 0.5) {
+      _setZoom(_minZoom + (value / 0.5) * (1 - _minZoom), image);
+      return;
+    }
+    _setZoom(1 + ((value - 0.5) / 0.5) * (_maxZoom - 1), image);
+  }
+
+  void _adjustZoom(double delta, ui.Image image) {
+    _setZoom((_zoom + delta).clamp(_minZoom, _maxZoom).toDouble(), image);
+  }
+
+  Offset _clampOffset(Offset value, ui.Image image) {
+    final displayWidth = image.width * _baseScale * _zoom;
+    final displayHeight = image.height * _baseScale * _zoom;
+    final maxX = (displayWidth - _frameSize).abs() / 2;
+    final maxY = (displayHeight - _frameSize).abs() / 2;
+    return Offset(
+      value.dx.clamp(-maxX, maxX).toDouble(),
+      value.dy.clamp(-maxY, maxY).toDouble(),
+    );
+  }
+
+  Future<void> _confirm() async {
+    final image = _image;
+    if (image == null || _rendering) return;
+    setState(() => _rendering = true);
+    try {
+      final bytes = await _renderCrop(image);
+      if (!mounted) return;
+      Navigator.of(context).pop(bytes);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _rendering = false);
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(SnackBar(content: Text('裁剪图片失败：$e')));
+    }
+  }
+
+  Future<Uint8List> _renderCrop(ui.Image image) async {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final outputScale = _outputSize / _frameSize;
+    final scale = _baseScale * _zoom;
+    final displayedWidth = image.width * scale;
+    final displayedHeight = image.height * scale;
+    final imageLeft = _workSize / 2 + _offset.dx - displayedWidth / 2;
+    final imageTop = _workSize / 2 + _offset.dy - displayedHeight / 2;
+    final cropLeft = (_workSize - _frameSize) / 2;
+    final cropTop = (_workSize - _frameSize) / 2;
+    final dest = Rect.fromLTWH(
+      (imageLeft - cropLeft) * outputScale,
+      (imageTop - cropTop) * outputScale,
+      displayedWidth * outputScale,
+      displayedHeight * outputScale,
+    );
+
+    canvas.drawImageRect(
+      image,
+      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+      dest,
+      Paint()..filterQuality = FilterQuality.high,
+    );
+    final picture = recorder.endRecording();
+    final cropped = await picture.toImage(_outputSize, _outputSize);
+    final data = await cropped.toByteData(format: ui.ImageByteFormat.png);
+    cropped.dispose();
+    if (data == null) {
+      throw StateError('no image data');
+    }
+    return data.buffer.asUint8List();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: _primaryDarkLow,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.zero,
+        side: BorderSide(color: _borderColor),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 440),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+          child: FutureBuilder<ui.Image>(
+            future: _imageFuture,
+            builder: (context, snapshot) {
+              final image = snapshot.data;
+              final zoomPercent = (_zoom * 100).round();
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          '裁剪头像',
+                          style: TextStyle(
+                            color: _textPrimary,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      KeyIconButton(
+                        onPressed: _rendering
+                            ? null
+                            : () => Navigator.of(context).pop(),
+                        tooltip: 'Close crop',
+                        icon: const Icon(Icons.close),
+                        size: 32,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  if (snapshot.hasError)
+                    _SettingsError(message: '无法读取图片：${snapshot.error}')
+                  else if (image == null)
+                    const SizedBox(
+                      height: 180,
+                      child: Center(
+                        child: CircularProgressIndicator(color: _cyan),
+                      ),
+                    )
+                  else ...[
+                    Center(
+                      child: Listener(
+                        behavior: HitTestBehavior.opaque,
+                        onPointerSignal: (event) => _handleWheel(event, image),
+                        onPointerDown: (event) => _startDrag(event, image),
+                        onPointerMove: (event) => _moveDrag(event, image),
+                        onPointerUp: _endDrag,
+                        onPointerCancel: _endDrag,
+                        child: MouseRegion(
+                          cursor: _dragging
+                              ? SystemMouseCursors.grabbing
+                              : SystemMouseCursors.grab,
+                          child: SizedBox.square(
+                            dimension: _workSize,
+                            child: Stack(
+                              children: [
+                                Positioned.fill(
+                                  child: ColoredBox(color: _primaryDark),
+                                ),
+                                Positioned.fill(
+                                  child: ClipRect(
+                                    child: Center(
+                                      child: Transform.translate(
+                                        offset: _offset,
+                                        child: Transform.scale(
+                                          scale: _zoom,
+                                          child: RawImage(
+                                            image: image,
+                                            width: image.width * _baseScale,
+                                            height: image.height * _baseScale,
+                                            fit: BoxFit.contain,
+                                            filterQuality: FilterQuality.high,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Positioned.fill(
+                                  child: CustomPaint(
+                                    painter: _CropShadePainter(
+                                      frameSize: _frameSize,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        KeyIconButton(
+                          onPressed: _rendering
+                              ? null
+                              : () => _adjustZoom(-0.15, image),
+                          tooltip: '缩小 15%',
+                          icon: const Icon(Icons.zoom_out),
+                          size: 30,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: SliderTheme(
+                            data: SliderTheme.of(context).copyWith(
+                              activeTrackColor: _cyan,
+                              inactiveTrackColor: _borderColor,
+                              thumbColor: _textPrimary,
+                              overlayColor: _cyan.withValues(alpha: 0.14),
+                              trackHeight: 4,
+                            ),
+                            child: Slider(
+                              value: _zoomSliderValue(),
+                              min: 0,
+                              max: 1,
+                              onChanged: _rendering
+                                  ? null
+                                  : (value) => _setZoomFromSlider(value, image),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        KeyIconButton(
+                          onPressed: _rendering
+                              ? null
+                              : () => _adjustZoom(0.6, image),
+                          tooltip: '放大 60%',
+                          icon: const Icon(Icons.zoom_in),
+                          size: 30,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Center(
+                      child: Text(
+                        '$zoomPercent%',
+                        style: const TextStyle(
+                          color: _textSecondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      KeyButton(
+                        onPressed: _rendering
+                            ? null
+                            : () => Navigator.of(context).pop(),
+                        child: const Text('取消'),
+                      ),
+                      const SizedBox(width: 12),
+                      KeyButton(
+                        onPressed: image == null || _rendering
+                            ? null
+                            : _confirm,
+                        loading: _rendering,
+                        tone: KeyButtonTone.primary,
+                        icon: const Icon(Icons.crop),
+                        child: const Text('确定'),
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CropShadePainter extends CustomPainter {
+  const _CropShadePainter({required this.frameSize});
+
+  final double frameSize;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final frame = Rect.fromCenter(
+      center: Offset(size.width / 2, size.height / 2),
+      width: frameSize,
+      height: frameSize,
+    );
+    final overlay = Path()
+      ..fillType = PathFillType.evenOdd
+      ..addRect(Offset.zero & size)
+      ..addRect(frame);
+    canvas.drawPath(
+      overlay,
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.34)
+        ..style = PaintingStyle.fill
+        ..blendMode = BlendMode.srcOver,
+    );
+    canvas.drawRect(
+      frame,
+      Paint()
+        ..color = _cyan
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_CropShadePainter oldDelegate) =>
+      oldDelegate.frameSize != frameSize;
+}
+
 class _PasswordVisibilityToggle extends StatelessWidget {
   const _PasswordVisibilityToggle({
     required this.obscure,
@@ -2191,6 +2815,16 @@ String _formatDateTime(DateTime? value) {
   return '$year-$month-$day $hour:$minute';
 }
 
+String _avatarUploadFilename(String originalName) {
+  final cleaned = originalName
+      .trim()
+      .replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '-')
+      .replaceAll(RegExp(r'-+'), '-');
+  final stem = cleaned.replaceFirst(RegExp(r'\.[A-Za-z0-9]+$'), '');
+  final safeStem = stem.isEmpty ? 'avatar' : stem;
+  return '$safeStem-${DateTime.now().millisecondsSinceEpoch}.png';
+}
+
 String _sessionStateText(UserSession session) {
   if (session.isCurrent) return '当前会话';
   if (session.revokedAt != null) return '已失效';
@@ -2207,18 +2841,27 @@ String _initials(String value) {
 }
 
 Color _avatarColor(String key) {
-  const palette = <Color>[
-    Color(0xFF46695B),
-    Color(0xFF566A7F),
-    Color(0xFF71614E),
-    Color(0xFF665B7D),
-    Color(0xFF7A5961),
-    Color(0xFF536E73),
-    Color(0xFF6A704B),
-    Color(0xFF5E6472),
-  ];
-  final index = key.codeUnits.fold<int>(0, (sum, unit) => sum + unit);
-  return palette[index % palette.length];
+  return switch (key) {
+    'blue-3' => const Color(0xFF526C9F),
+    'sky-2' => const Color(0xFF4F7F92),
+    'cyan-2' => const Color(0xFF47777A),
+    'mint-2' => const Color(0xFF4F7A67),
+    'green-2' => const Color(0xFF46695B),
+    'lime-2' => const Color(0xFF687A47),
+    'amber-2' => const Color(0xFF71614E),
+    'orange-2' => const Color(0xFF7A6046),
+    'coral-2' => const Color(0xFF7A5952),
+    'pink-2' => const Color(0xFF75566F),
+    'violet-2' => const Color(0xFF665B7D),
+    'indigo-2' => const Color(0xFF5B638A),
+    'rose-2' => const Color(0xFF7A5961),
+    'teal-2' => const Color(0xFF536E73),
+    'olive-2' => const Color(0xFF6A704B),
+    'slate-2' => const Color(0xFF5E6472),
+    'steel-2' => const Color(0xFF4F6672),
+    'graphite-2' => const Color(0xFF5B5D63),
+    _ => const Color(0xFF526C9F),
+  };
 }
 
 class _DeviceSection extends StatelessWidget {

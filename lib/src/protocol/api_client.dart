@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -24,6 +25,12 @@ abstract interface class GangApi {
     String? gender,
     String? avatarAssetId,
     String? defaultAvatarKey,
+  });
+
+  Future<UploadedAsset> uploadImageAsset({
+    required Uint8List bytes,
+    required String filename,
+    String purpose = 'image',
   });
 
   Future<void> changePassword({
@@ -164,8 +171,27 @@ class GangApiClient implements GangApi {
         headers: _headers(token),
         body: jsonEncode(body),
       );
-    });
+    }, retryTransientFailures: true);
     return CurrentUser.fromJson(decoded['user']! as Map<String, Object?>);
+  }
+
+  @override
+  Future<UploadedAsset> uploadImageAsset({
+    required Uint8List bytes,
+    required String filename,
+    String purpose = 'image',
+  }) async {
+    final decoded = await _sendJson((token) async {
+      final request = http.MultipartRequest('POST', _uri('/uploads/images'));
+      request.headers['authorization'] = 'Bearer $token';
+      request.fields['purpose'] = purpose;
+      request.files.add(
+        http.MultipartFile.fromBytes('file', bytes, filename: filename),
+      );
+      final streamed = await _httpClient.send(request);
+      return http.Response.fromStream(streamed);
+    });
+    return UploadedAsset.fromJson(decoded['asset']! as Map<String, Object?>);
   }
 
   @override

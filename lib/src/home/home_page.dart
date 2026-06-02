@@ -2602,7 +2602,7 @@ class _SourceSwitch extends StatelessWidget {
   }
 }
 
-class _SourceSwitchButton extends StatelessWidget {
+class _SourceSwitchButton extends StatefulWidget {
   const _SourceSwitchButton({
     required this.label,
     required this.selected,
@@ -2616,31 +2616,50 @@ class _SourceSwitchButton extends StatelessWidget {
   final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) {
-    final textColor = selected ? _cyan : _textSecondary;
+  State<_SourceSwitchButton> createState() => _SourceSwitchButtonState();
+}
 
-    return KeySurface(
-      onPressed: onPressed,
-      selected: selected,
-      height: height,
-      hoverLift: 0,
-      pressDepth: 0,
-      baseDepth: 0,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      backgroundColor: _primaryDarkLow,
-      selectedBackgroundColor: _selectedSurface,
-      pressedBackgroundColor: _selectedSurface,
-      borderColor: _borderColor,
-      selectedBorderColor: _cyan,
-      child: Center(
-        child: Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: textColor,
-            fontSize: 13,
-            fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+class _SourceSwitchButtonState extends State<_SourceSwitchButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final hovered = _hovered && !widget.selected;
+    final textColor = widget.selected
+        ? _cyan
+        : hovered
+        ? _textPrimary
+        : _textSecondary;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: KeySurface(
+        onPressed: widget.onPressed,
+        selected: widget.selected,
+        height: _SourceSwitchButton.height,
+        hoverLift: 2,
+        pressDepth: 1,
+        baseDepth: 3,
+        elevateOnHover: true,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        backgroundColor: hovered ? const Color(0xFF202A30) : _primaryDarkLow,
+        selectedBackgroundColor: _selectedSurface,
+        pressedBackgroundColor: _selectedSurface,
+        borderColor: hovered ? const Color(0xFF3A4A54) : _borderColor,
+        selectedBorderColor: _cyan,
+        child: Center(
+          child: Text(
+            widget.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: textColor,
+              fontSize: 13,
+              fontWeight: widget.selected || hovered
+                  ? FontWeight.w900
+                  : FontWeight.w700,
+            ),
           ),
         ),
       ),
@@ -2656,28 +2675,50 @@ class _StickerChoice {
   final String token;
 }
 
-class _StickerButton extends StatelessWidget {
+class _StickerButton extends StatefulWidget {
   const _StickerButton({required this.sticker, required this.onPressed});
 
   final _StickerChoice sticker;
   final VoidCallback onPressed;
 
   @override
+  State<_StickerButton> createState() => _StickerButtonState();
+}
+
+class _StickerButtonState extends State<_StickerButton> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: sticker.tooltip,
-      child: KeySurface(
-        height: 46,
-        width: 52,
-        onPressed: onPressed,
-        tooltip: null,
-        backgroundColor: _primaryDarkLow,
-        selectedBackgroundColor: _selectedSurface,
-        pressedBackgroundColor: _selectedSurface,
-        borderColor: _borderColor,
-        selectedBorderColor: _cyan,
-        child: Center(
-          child: Text(sticker.icon, style: const TextStyle(fontSize: 22)),
+      message: widget.sticker.tooltip,
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: KeySurface(
+          height: 46,
+          width: 52,
+          onPressed: widget.onPressed,
+          tooltip: null,
+          backgroundColor: _hovered ? const Color(0xFF202A30) : _primaryDarkLow,
+          selectedBackgroundColor: _selectedSurface,
+          pressedBackgroundColor: _selectedSurface,
+          borderColor: _hovered ? const Color(0xFF3A4A54) : _borderColor,
+          selectedBorderColor: _cyan,
+          elevateOnHover: true,
+          hoverLift: 4,
+          baseDepth: 4,
+          child: Center(
+            child: AnimatedScale(
+              duration: const Duration(milliseconds: 120),
+              curve: Curves.easeOutCubic,
+              scale: _hovered ? 1.12 : 1,
+              child: Text(
+                widget.sticker.icon,
+                style: const TextStyle(fontSize: 22),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -5002,16 +5043,25 @@ String _formatMessageTime(DateTime value) {
 }
 
 Color _avatarColor(String key) {
-  const palette = <Color>[
-    Color(0xFF46695B),
-    Color(0xFF566A7F),
-    Color(0xFF71614E),
-    Color(0xFF665B7D),
-    Color(0xFF7A5961),
-    Color(0xFF536E73),
-    Color(0xFF6A704B),
-    Color(0xFF5E6472),
-  ];
-  final index = key.codeUnits.fold<int>(0, (sum, unit) => sum + unit);
-  return palette[index % palette.length];
+  return switch (key) {
+    'blue-3' => const Color(0xFF526C9F),
+    'sky-2' => const Color(0xFF4F7F92),
+    'cyan-2' => const Color(0xFF47777A),
+    'mint-2' => const Color(0xFF4F7A67),
+    'green-2' => const Color(0xFF46695B),
+    'lime-2' => const Color(0xFF687A47),
+    'amber-2' => const Color(0xFF71614E),
+    'orange-2' => const Color(0xFF7A6046),
+    'coral-2' => const Color(0xFF7A5952),
+    'pink-2' => const Color(0xFF75566F),
+    'violet-2' => const Color(0xFF665B7D),
+    'indigo-2' => const Color(0xFF5B638A),
+    'rose-2' => const Color(0xFF7A5961),
+    'teal-2' => const Color(0xFF536E73),
+    'olive-2' => const Color(0xFF6A704B),
+    'slate-2' => const Color(0xFF5E6472),
+    'steel-2' => const Color(0xFF4F6672),
+    'graphite-2' => const Color(0xFF5B5D63),
+    _ => const Color(0xFF526C9F),
+  };
 }

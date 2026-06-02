@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -159,6 +160,89 @@ void main() {
     expect(sessions, hasLength(1));
     expect(sessions.single.location, 'Local');
     expect(sessions.single.isCurrent, isTrue);
+    api.close();
+  });
+
+  test('uploadImageAsset posts multipart image data', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/v1/uploads/images');
+        expect(request.headers['authorization'], 'Bearer token');
+        expect(
+          request.headers['content-type'],
+          startsWith('multipart/form-data'),
+        );
+        expect(request.bodyBytes, isNotEmpty);
+        return http.Response(
+          jsonEncode({
+            'asset': {
+              'id': 'asset_1',
+              'url': '/assets/asset_1/avatar.png',
+              'thumbnail_url': '/assets/asset_1/avatar.png',
+              'mime_type': 'image/png',
+            },
+          }),
+          201,
+        );
+      }),
+    );
+
+    final asset = await api.uploadImageAsset(
+      bytes: Uint8List.fromList([1, 2, 3]),
+      filename: 'avatar.png',
+      purpose: 'avatar',
+    );
+
+    expect(asset.id, 'asset_1');
+    expect(asset.mimeType, 'image/png');
+    api.close();
+  });
+
+  test('updateProfile retries a transient socket write abort', () async {
+    var requests = 0;
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        requests += 1;
+        expect(request.method, 'PATCH');
+        expect(request.url.path, '/api/v1/users/me/profile');
+        expect(request.headers['authorization'], 'Bearer token');
+        expect(jsonDecode(request.body) as Map<String, Object?>, {
+          'avatar_asset_id': 'asset_1',
+        });
+
+        if (requests == 1) {
+          throw http.ClientException(
+            'SocketException: Write failed (OS Error: '
+            '你的主机中的软件中止了一个已建立的连接, errno = 10053)',
+            request.url,
+          );
+        }
+
+        return http.Response(
+          jsonEncode({
+            'user': {
+              'id': 'user_1',
+              'uid': '1000001',
+              'username': 'alice',
+              'display_name': 'Alice',
+              'avatar_url': '/assets/asset_1/avatar.png',
+              'default_avatar_key': 'blue-3',
+            },
+          }),
+          200,
+        );
+      }),
+    );
+
+    final user = await api.updateProfile(avatarAssetId: 'asset_1');
+
+    expect(requests, 2);
+    expect(user.avatarUrl, '/assets/asset_1/avatar.png');
     api.close();
   });
 }

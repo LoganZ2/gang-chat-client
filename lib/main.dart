@@ -67,11 +67,13 @@ Future<void> main() async {
     await windowManager.setPreventClose(true);
     windowManager.addListener(_AppWindowListener());
   }
-  runApp(GangApp(
-    config: config,
-    tokenStore: tokenStore,
-    startsAuthenticated: hasStoredSession,
-  ));
+  runApp(
+    GangApp(
+      config: config,
+      tokenStore: tokenStore,
+      startsAuthenticated: hasStoredSession,
+    ),
+  );
   if (_supportsDesktopWindowManagement) {
     await binding.waitUntilFirstFrameRasterized;
     // The window is shown by _AuthGate after it has decided which screen to
@@ -337,10 +339,12 @@ class GangApp extends StatelessWidget {
             ],
           );
         },
-        home: _AuthGate(
-          tokenStore: tokenStore,
-          config: config,
-          startsAuthenticated: startsAuthenticated,
+        home: SelectionArea(
+          child: _AuthGate(
+            tokenStore: tokenStore,
+            config: config,
+            startsAuthenticated: startsAuthenticated,
+          ),
         ),
       ),
     );
@@ -461,7 +465,6 @@ class _AuthGateState extends State<_AuthGate> {
     }
     _restoreSession();
   }
-
 
   Future<void> _restoreSession() async {
     // The asset config (app_config.json / --dart-define) is the single source
@@ -764,7 +767,6 @@ class _LoginPageState extends State<_LoginPage> {
       client.close();
     }
   }
-
 
   @override
   void dispose() {
