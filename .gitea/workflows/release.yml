@@ -21,6 +21,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
       release_id: ${{ steps.release.outputs.release_id }}
+      duplicate: ${{ steps.release.outputs.duplicate }}
     steps:
       - name: Resolve version
         id: version
@@ -50,11 +51,15 @@ jobs:
             -d "{\"tag_name\":\"$TAG\",\"target_commitish\":\"${GITHUB_SHA}\",\"name\":\"$TAG\",\"draft\":true,\"prerelease\":false}")"
           RELEASE_ID="$(printf '%s' "$RESP" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("id",""))' 2>/dev/null)"
 
-          # 409（tag/release 已存在）时按 tag 查现有 release
+          # 409（tag/release 已存在）= workflow_dispatch 创建 release 时生成了 tag，
+          # tag 又触发了 push 事件导致流水线重复执行。标记 duplicate 让后续 job 跳过。
           if [ -z "$RELEASE_ID" ]; then
             echo "Create returned no id (possibly 409), fetching existing release by tag..."
             RESP="$(curl -fsS "$API/releases/tags/$TAG" -H "Authorization: token $TOKEN")"
             RELEASE_ID="$(printf '%s' "$RESP" | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')"
+            echo "duplicate=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "duplicate=false" >> "$GITHUB_OUTPUT"
           fi
 
           if [ -z "$RELEASE_ID" ]; then echo "Failed to get release id: $RESP"; exit 1; fi
@@ -64,6 +69,7 @@ jobs:
   build-macos:
     runs-on: macos-arm64
     needs: [prepare]
+    if: needs.prepare.outputs.duplicate != 'true'
     steps:
       # 不用 actions/checkout：runner 在国内访问不了 gitea.com，克隆 action 会卡死。
       # 按 ref 名 fetch（而非 SHA）——服务器默认不允许 fetch 任意 SHA。
@@ -118,6 +124,7 @@ jobs:
   build-windows:
     runs-on: windows
     needs: [prepare]
+    if: needs.prepare.outputs.duplicate != 'true'
     env:
       PUB_HOSTED_URL: https://pub.flutter-io.cn
       FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
@@ -188,6 +195,7 @@ jobs:
   release:
     runs-on: macos-arm64
     needs: [prepare, build-macos, build-windows]
+    if: needs.prepare.outputs.duplicate != 'true'
     steps:
       - name: Publish release
         env:
