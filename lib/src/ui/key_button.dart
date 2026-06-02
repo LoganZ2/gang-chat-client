@@ -544,6 +544,8 @@ class KeyIconButton extends StatelessWidget {
     this.selected = false,
     this.size = 40,
     this.loading = false,
+    this.backgroundColor,
+    this.borderColor,
   });
 
   final VoidCallback? onPressed;
@@ -553,12 +555,16 @@ class KeyIconButton extends StatelessWidget {
   final bool selected;
   final double size;
   final bool loading;
+  final Color? backgroundColor;
+  final Color? borderColor;
 
   @override
   Widget build(BuildContext context) {
     final visuallyEnabled = onPressed != null || loading;
     final effectiveOnPressed = loading ? null : onPressed;
     final colors = _colorsFor(tone, visuallyEnabled);
+    final bg = backgroundColor ?? colors.background;
+    final border = borderColor ?? colors.border;
     return SizedBox(
       width: size,
       child: KeySurface(
@@ -569,11 +575,11 @@ class KeyIconButton extends StatelessWidget {
         selected: selected || tone == KeyButtonTone.primary,
         height: size,
         padding: EdgeInsets.zero,
-        backgroundColor: colors.background,
-        selectedBackgroundColor: colors.background,
+        backgroundColor: bg,
+        selectedBackgroundColor: bg,
         pressedBackgroundColor: colors.pressedBackground,
-        borderColor: colors.border,
-        selectedBorderColor: colors.border,
+        borderColor: border,
+        selectedBorderColor: border,
         child: IconTheme.merge(
           data: IconThemeData(color: colors.foreground, size: size * 0.46),
           child: Center(child: icon),

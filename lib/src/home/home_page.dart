@@ -23,6 +23,7 @@ import '../ui/title_bar.dart';
 const _primaryDark = Color(0xFF14171D);
 const _primaryDarkRaised = Color(0xFF1F232C);
 const _primaryDarkLow = Color(0xFF181C24);
+const _bubbleBackground = Color(0xFF12161D);
 const _selectedSurface = Color(0xFF1F2D27);
 const _borderColor = Color(0xFF2A2F38);
 const _cyan = Color(0xFF6FCFA6);
@@ -1921,7 +1922,7 @@ class _LiveHeaderActions extends StatelessWidget {
   }
 }
 
-enum _ComposerPanel { stickers, tools }
+enum _ComposerPanel { stickers, voice, file, tools }
 
 enum _StickerSource { personal, room }
 
@@ -2040,8 +2041,6 @@ class _ChatPaneState extends State<_ChatPane> {
     widget.focusNode.requestFocus();
   }
 
-  void _handleFileDraft() {}
-
   Widget _buildComposerInput() {
     final input = Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2085,11 +2084,8 @@ class _ChatPaneState extends State<_ChatPane> {
       openPanel: _openPanel,
       sending: widget.sending,
       onStickers: () => _togglePanel(_ComposerPanel.stickers),
-      onVoice: null,
-      onFile: () {
-        _closePanel();
-        _handleFileDraft();
-      },
+      onVoice: () => _togglePanel(_ComposerPanel.voice),
+      onFile: () => _togglePanel(_ComposerPanel.file),
       onTools: () => _togglePanel(_ComposerPanel.tools),
       onSend: () {
         _closePanel();
@@ -2128,6 +2124,11 @@ class _ChatPaneState extends State<_ChatPane> {
 
     return _ComposerPanelSurface(
       panel: panel,
+      tipColor: panel == _ComposerPanel.stickers
+          ? (_stickerSource == _StickerSource.personal
+                ? _selectedSurface
+                : _bubbleBackground)
+          : null,
       child: switch (panel) {
         _ComposerPanel.stickers => _StickerPanel(
           source: _stickerSource,
@@ -2139,6 +2140,8 @@ class _ChatPaneState extends State<_ChatPane> {
           onSourceChanged: (source) => setState(() => _stickerSource = source),
           onStickerSelected: _insertComposerText,
         ),
+        _ComposerPanel.voice => const _PlaceholderPanel(text: '语音输入开发中'),
+        _ComposerPanel.file => const _PlaceholderPanel(text: '文件上传开发中'),
         _ComposerPanel.tools => const _ToolboxPanel(),
       },
     );
@@ -2320,10 +2323,15 @@ class _ComposerIconButton extends StatelessWidget {
 }
 
 class _ComposerPanelSurface extends StatelessWidget {
-  const _ComposerPanelSurface({required this.panel, required this.child});
+  const _ComposerPanelSurface({
+    required this.panel,
+    required this.child,
+    this.tipColor,
+  });
 
   final _ComposerPanel panel;
   final Widget child;
+  final Color? tipColor;
 
   static const double _tipWidth = 18;
   static const double _tipHeight = 10;
@@ -2332,109 +2340,68 @@ class _ComposerPanelSurface extends StatelessWidget {
   static const double _surfaceYOffset = 2;
   static const double _tipSideInset = 12;
   static const double _horizontalInset = 18;
-  static const double _contentHorizontalPadding = _horizontalInset * 2;
+  static const double _bubbleWidth = 360;
 
-  EdgeInsets get _contentPadding {
-    return switch (panel) {
-      _ComposerPanel.stickers => EdgeInsets.zero,
-      _ComposerPanel.tools => const EdgeInsets.fromLTRB(18, 14, 18, 16),
-    };
-  }
+  // Distance from the right edge of the action bar (== bubble's right edge)
+  // to the center of each composer button. Keep in sync with
+  // _ComposerActionBar's layout: send(44) | gap(8) | tools(40) | gap(8) |
+  // file(40) | gap(8) | voice(40) | gap(8) | stickers(40).
+  static const Map<_ComposerPanel, double> _buttonCenterFromRight = {
+    _ComposerPanel.tools: 72,
+    _ComposerPanel.file: 120,
+    _ComposerPanel.voice: 168,
+    _ComposerPanel.stickers: 216,
+  };
 
-  double _limitedWidth({
-    required double maxWidth,
-    required double availableWidth,
-    required double minWidth,
-  }) {
-    if (availableWidth <= minWidth) return availableWidth;
-    return (maxWidth * 0.52).clamp(minWidth, availableWidth).toDouble();
-  }
-
-  double _bubbleWidth(double maxWidth, double bubbleMaxWidth) {
-    switch (panel) {
-      case _ComposerPanel.stickers:
-        return _limitedWidth(
-          maxWidth: maxWidth,
-          availableWidth: bubbleMaxWidth,
-          minWidth: 320,
-        );
-      case _ComposerPanel.tools:
-        final maxToolsWidth = _limitedWidth(
-          maxWidth: maxWidth,
-          availableWidth: bubbleMaxWidth,
-          minWidth: _contentHorizontalPadding + _ToolboxPanel.buttonSize,
-        );
-        final preferredWidth =
-            _contentHorizontalPadding + _ToolboxPanel.preferredContentWidth;
-        return preferredWidth <= maxToolsWidth ? preferredWidth : maxToolsWidth;
-    }
-  }
-
-  double _tipRightPadding(double bubbleWidth) {
-    final targetCenterFromRight = switch (panel) {
-      _ComposerPanel.stickers => 216.0,
-      _ComposerPanel.tools => 72.0,
-    };
+  double _tipRightPadding() {
+    final targetCenterFromRight = _buttonCenterFromRight[panel]!;
     final raw = targetCenterFromRight - (_tipWidth / 2);
-    final maxPadding = bubbleWidth <= _tipWidth + (_tipSideInset * 2)
-        ? _tipSideInset
-        : bubbleWidth - _tipWidth - _tipSideInset;
+    final maxPadding = _bubbleWidth - _tipWidth - _tipSideInset;
     return raw.clamp(_tipSideInset, maxPadding).toDouble();
   }
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final maxWidth = constraints.maxWidth.isFinite
-            ? constraints.maxWidth
-            : 640.0;
-        final bubbleMaxWidth = maxWidth > 36 ? maxWidth - 36 : maxWidth;
-        final bubbleWidth = _bubbleWidth(maxWidth, bubbleMaxWidth);
-
-        return Transform.translate(
-          offset: const Offset(0, _surfaceYOffset),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              _horizontalInset,
-              0,
-              _horizontalInset,
-              _tipHeight + _surfaceYOffset + _tipBottomClearance,
-            ),
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: SizedBox(
-                width: bubbleWidth,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Positioned.fill(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: _primaryDarkRaised,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
+    return Transform.translate(
+      offset: const Offset(0, _surfaceYOffset),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          _horizontalInset,
+          0,
+          _horizontalInset,
+          _tipHeight + _surfaceYOffset + _tipBottomClearance,
+        ),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: SizedBox(
+            width: _bubbleWidth,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: _bubbleBackground,
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    Padding(padding: _contentPadding, child: child),
-                    Positioned(
-                      right: _tipRightPadding(bubbleWidth),
-                      bottom: -(_tipHeight - _tipOverlap),
-                      child: Padding(
-                        padding: EdgeInsets.zero,
-                        child: CustomPaint(
-                          size: const Size(_tipWidth, _tipHeight),
-                          painter: _BubbleTipPainter(color: _primaryDarkRaised),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+                child,
+                Positioned(
+                  right: _tipRightPadding(),
+                  bottom: -(_tipHeight - _tipOverlap),
+                  child: CustomPaint(
+                    size: const Size(_tipWidth, _tipHeight),
+                    painter: _BubbleTipPainter(
+                      color: tipColor ?? _bubbleBackground,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }
@@ -2545,7 +2512,6 @@ class _ToolboxPanel extends StatelessWidget {
 
   static const double buttonSize = 46;
   static const double spacing = 10;
-  static const int maxColumns = 4;
 
   static const _items = [
     _ToolboxItem(
@@ -2578,27 +2544,43 @@ class _ToolboxPanel extends StatelessWidget {
     ),
   ];
 
-  static double get preferredContentWidth {
-    final columns = _items.length < maxColumns ? _items.length : maxColumns;
-    if (columns <= 0) return 0;
-    return (columns * buttonSize) + ((columns - 1) * spacing);
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
+      child: Wrap(
+        spacing: spacing,
+        runSpacing: spacing,
+        children: [
+          for (final item in _items)
+            _ToolboxButton(
+              icon: item.icon,
+              tooltip: item.tooltip,
+              backgroundColor: item.backgroundColor,
+              borderColor: item.borderColor,
+              foregroundColor: item.foregroundColor,
+            ),
+        ],
+      ),
+    );
   }
+}
+
+class _PlaceholderPanel extends StatelessWidget {
+  const _PlaceholderPanel({required this.text});
+
+  final String text;
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: spacing,
-      runSpacing: spacing,
-      children: [
-        for (final item in _items)
-          _ToolboxButton(
-            icon: item.icon,
-            tooltip: item.tooltip,
-            backgroundColor: item.backgroundColor,
-            borderColor: item.borderColor,
-            foregroundColor: item.foregroundColor,
-          ),
-      ],
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 22, 18, 22),
+      child: Center(
+        child: Text(
+          text,
+          style: const TextStyle(color: _textMuted, fontSize: 13),
+        ),
+      ),
     );
   }
 }
@@ -2666,7 +2648,7 @@ class _SourceSwitch extends StatelessWidget {
   }
 }
 
-class _SourceSwitchButton extends StatefulWidget {
+class _SourceSwitchButton extends StatelessWidget {
   const _SourceSwitchButton({
     required this.label,
     required this.selected,
@@ -2680,49 +2662,23 @@ class _SourceSwitchButton extends StatefulWidget {
   final VoidCallback onPressed;
 
   @override
-  State<_SourceSwitchButton> createState() => _SourceSwitchButtonState();
-}
-
-class _SourceSwitchButtonState extends State<_SourceSwitchButton> {
-  bool _hovered = false;
-
-  @override
   Widget build(BuildContext context) {
-    final hovered = _hovered && !widget.selected;
-    final textColor = widget.selected
-        ? _cyan
-        : hovered
-        ? _textPrimary
-        : _textSecondary;
-
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: KeySurface(
-        onPressed: widget.onPressed,
-        selected: widget.selected,
-        height: _SourceSwitchButton.height,
-        hoverLift: 2,
-        pressDepth: 1,
-        baseDepth: 3,
-        elevateOnHover: true,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        backgroundColor: hovered ? const Color(0xFF202A30) : _primaryDarkLow,
-        selectedBackgroundColor: _selectedSurface,
-        pressedBackgroundColor: _selectedSurface,
-        borderColor: hovered ? const Color(0xFF3A4A54) : _borderColor,
-        selectedBorderColor: _cyan,
-        child: Center(
-          child: Text(
-            widget.label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 13,
-              fontWeight: widget.selected || hovered
-                  ? FontWeight.w900
-                  : FontWeight.w700,
+    return Material(
+      color: selected ? _selectedSurface : Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        child: SizedBox(
+          height: height,
+          child: Center(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: selected ? _cyan : _textSecondary,
+                fontSize: 13,
+                fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+              ),
             ),
           ),
         ),
@@ -2731,23 +2687,16 @@ class _SourceSwitchButtonState extends State<_SourceSwitchButton> {
   }
 }
 
-class _StickerButton extends StatefulWidget {
+class _StickerButton extends StatelessWidget {
   const _StickerButton({required this.sticker, required this.onPressed});
 
   final Sticker sticker;
   final VoidCallback onPressed;
 
   @override
-  State<_StickerButton> createState() => _StickerButtonState();
-}
-
-class _StickerButtonState extends State<_StickerButton> {
-  bool _hovered = false;
-
-  @override
   Widget build(BuildContext context) {
     final imageUrl = AppConfigScope.of(context).resolveAssetUrl(
-      widget.sticker.asset.thumbnailUrl ?? widget.sticker.asset.url,
+      sticker.asset.thumbnailUrl ?? sticker.asset.url,
     );
     final fallback = Icon(
       Icons.image_not_supported_outlined,
@@ -2755,28 +2704,16 @@ class _StickerButtonState extends State<_StickerButton> {
       size: 22,
     );
     return Tooltip(
-      message: widget.sticker.name,
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
-        child: KeySurface(
-          height: 46,
-          width: 52,
-          onPressed: widget.onPressed,
-          tooltip: null,
-          backgroundColor: _hovered ? const Color(0xFF202A30) : _primaryDarkLow,
-          selectedBackgroundColor: _selectedSurface,
-          pressedBackgroundColor: _selectedSurface,
-          borderColor: _hovered ? const Color(0xFF3A4A54) : _borderColor,
-          selectedBorderColor: _cyan,
-          elevateOnHover: true,
-          hoverLift: 4,
-          baseDepth: 4,
-          child: Center(
-            child: AnimatedScale(
-              duration: const Duration(milliseconds: 120),
-              curve: Curves.easeOutCubic,
-              scale: _hovered ? 1.12 : 1,
+      message: sticker.name,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(6),
+          child: SizedBox(
+            height: 46,
+            width: 52,
+            child: Center(
               child: SizedBox.square(
                 dimension: 32,
                 child: imageUrl == null
@@ -2828,6 +2765,8 @@ class _StickerPanelMessage extends StatelessWidget {
             onPressed: () => unawaited(onRefresh()),
             icon: const Icon(Icons.refresh),
             size: 32,
+            backgroundColor: _bubbleBackground,
+            borderColor: _bubbleBackground,
           ),
         ],
       ),
