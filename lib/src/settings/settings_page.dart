@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:livekit_client/livekit_client.dart' as lk;
 
+import 'audio_device_store.dart';
 import '../ui/key_button.dart';
 import '../ui/title_bar.dart';
 
@@ -19,11 +20,13 @@ class SettingsPage extends StatefulWidget {
   const SettingsPage({
     super.key,
     this.isSubWindow = false,
+    this.audioDeviceStore = const AudioDeviceStore(),
     this.onDeviceSelected,
     this.onClose,
   });
 
   final bool isSubWindow;
+  final AudioDeviceStore audioDeviceStore;
   final void Function(String kind, String deviceId)? onDeviceSelected;
   final VoidCallback? onClose;
 
@@ -48,7 +51,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _deviceSubscription = lk.Hardware.instance.onDeviceChange.stream.listen((
       devices,
     ) {
-      _applyDevices(devices);
+      unawaited(_applyDevices(devices));
     });
     unawaited(_loadDevices());
   }
@@ -67,7 +70,7 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       await _ensureDeviceAccess();
       final devices = await lk.Hardware.instance.enumerateDevices();
-      _applyDevices(devices);
+      await _applyDevices(devices);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -90,7 +93,7 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  void _applyDevices(List<lk.MediaDevice> devices) {
+  Future<void> _applyDevices(List<lk.MediaDevice> devices) async {
     if (!mounted) return;
     final inputs = devices
         .where((device) => device.kind == 'audioinput')
@@ -98,30 +101,40 @@ class _SettingsPageState extends State<SettingsPage> {
     final outputs = devices
         .where((device) => device.kind == 'audiooutput')
         .toList();
+    RestoredAudioDevices restored = const RestoredAudioDevices();
+    try {
+      restored = await restoreStoredAudioDevices(
+        widget.audioDeviceStore,
+        devices: devices,
+      );
+    } catch (_) {
+      // Device choices are a local convenience. If storage or OS routing fails,
+      // keep rendering the current device list and let the user re-select.
+    }
+    if (!mounted) return;
     setState(() {
       _audioInputs = inputs;
       _audioOutputs = outputs;
-      _selectedInput = _selectedFrom(
-        inputs,
+      _selectedInput = _selectedFrom(inputs, [
+        restored.input,
         lk.Hardware.instance.selectedAudioInput,
         _selectedInput,
-      );
-      _selectedOutput = _selectedFrom(
-        outputs,
+      ]);
+      _selectedOutput = _selectedFrom(outputs, [
+        restored.output,
         lk.Hardware.instance.selectedAudioOutput,
         _selectedOutput,
-      );
+      ]);
       _loading = false;
     });
   }
 
   lk.MediaDevice? _selectedFrom(
     List<lk.MediaDevice> devices,
-    lk.MediaDevice? hardwareSelected,
-    lk.MediaDevice? currentSelected,
+    Iterable<lk.MediaDevice?> candidates,
   ) {
     if (devices.isEmpty) return null;
-    for (final candidate in [hardwareSelected, currentSelected]) {
+    for (final candidate in candidates) {
       if (candidate == null) continue;
       for (final device in devices) {
         if (device.deviceId == candidate.deviceId &&
@@ -137,6 +150,7 @@ class _SettingsPageState extends State<SettingsPage> {
     await _selectDevice(
       device,
       () => lk.Hardware.instance.selectAudioInput(device),
+      () => widget.audioDeviceStore.writeInputDeviceId(device.deviceId),
       () => _selectedInput = device,
     );
   }
@@ -145,6 +159,7 @@ class _SettingsPageState extends State<SettingsPage> {
     await _selectDevice(
       device,
       () => lk.Hardware.instance.selectAudioOutput(device),
+      () => widget.audioDeviceStore.writeOutputDeviceId(device.deviceId),
       () => _selectedOutput = device,
     );
   }
@@ -152,6 +167,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _selectDevice(
     lk.MediaDevice device,
     Future<void> Function() select,
+    Future<void> Function() rememberSelection,
     VoidCallback applySelection,
   ) async {
     if (_busyDeviceId != null) return;
@@ -161,8 +177,19 @@ class _SettingsPageState extends State<SettingsPage> {
     });
     try {
       await select();
+      Object? storageError;
+      try {
+        await rememberSelection();
+      } catch (e) {
+        storageError = e;
+      }
       if (!mounted) return;
-      setState(applySelection);
+      setState(() {
+        applySelection();
+        if (storageError != null) {
+          _error = 'Could not save audio device preference: $storageError';
+        }
+      });
       widget.onDeviceSelected?.call(device.kind, device.deviceId);
     } catch (e) {
       if (!mounted) return;

@@ -15,6 +15,7 @@ import '../live/live_stream_client.dart';
 import '../live/livekit_url.dart';
 import '../protocol/api_client.dart';
 import '../protocol/models.dart';
+import '../settings/audio_device_store.dart';
 import '../settings/settings_page.dart';
 import '../ui/key_button.dart';
 import '../ui/title_bar.dart';
@@ -58,6 +59,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late GangApi _api;
   final LiveSession _liveSession = LiveSession();
+  final AudioDeviceStore _audioDeviceStore = const AudioDeviceStore();
 
   final _messageController = TextEditingController();
   final _messageFocus = FocusNode();
@@ -297,7 +299,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-
   void _applyLiveSnapshot(Map<String, dynamic> data) {
     final roomId = data['room_id'] as String?;
     if (roomId == null) return;
@@ -523,11 +524,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (room == null) return;
     final changed = await showDialog<bool>(
       context: context,
-      builder: (context) => _JoinRequestsDialog(
-        api: _api,
-        roomId: room.id,
-        roomName: room.name,
-      ),
+      builder: (context) =>
+          _JoinRequestsDialog(api: _api, roomId: room.id, roomName: room.name),
     );
     if (changed != true || !mounted) return;
     try {
@@ -646,6 +644,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           serverUrl: result.liveKit.serverUrl,
           apiBaseUrl: widget.apiBaseUrl,
         );
+        await _restoreStoredAudioDevicesForLive();
         await _liveSession.connect(
           url: liveKitUrl,
           token: result.liveKit.token,
@@ -674,6 +673,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _showToast(e.toString());
     } finally {
       if (mounted) setState(() => _joiningLive = false);
+    }
+  }
+
+  Future<void> _restoreStoredAudioDevicesForLive() async {
+    try {
+      await restoreStoredAudioDevices(_audioDeviceStore);
+    } catch (_) {
+      // Joining voice should still work with LiveKit's current/default device
+      // if a stored local preference cannot be applied.
     }
   }
 
@@ -1084,7 +1092,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Widget _buildRoomPane() {
     if (_settingsOpen) {
-      return SettingsPage(isSubWindow: true, onClose: _closeSettings);
+      return SettingsPage(
+        isSubWindow: true,
+        audioDeviceStore: _audioDeviceStore,
+        onClose: _closeSettings,
+      );
     }
     final room = _selectedRoom;
     if (_selectedRoomId == null) {
@@ -1104,56 +1116,56 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return ColoredBox(
       color: _primaryDarkLow,
       child: Column(
-      children: [
-        if (!_livePanelOpen)
-          _LiveHeader(
-            room: room,
-            live: live,
-            joined: _joinedLiveRoomId == room.id,
-            joining: _joiningLive,
-            onExpand: () => setState(() => _livePanelOpen = true),
-            onJoin: () => _joinLive('live_header'),
-            onReviewRequests: room.isAdmin ? _reviewJoinRequests : null,
+        children: [
+          if (!_livePanelOpen)
+            _LiveHeader(
+              room: room,
+              live: live,
+              joined: _joinedLiveRoomId == room.id,
+              joining: _joiningLive,
+              onExpand: () => setState(() => _livePanelOpen = true),
+              onJoin: () => _joinLive('live_header'),
+              onReviewRequests: room.isAdmin ? _reviewJoinRequests : null,
+            ),
+          Expanded(
+            child: _livePanelOpen
+                ? _LivePanel(
+                    room: room,
+                    live: live,
+                    liveSession: _liveSession,
+                    joined: _joinedLiveRoomId == room.id,
+                    joining: _joiningLive,
+                    micMuted: _micMuted,
+                    headphonesMuted: _headphonesMuted,
+                    voiceBlocked: _voiceBlocked,
+                    cameraOn: _cameraOn,
+                    screenSharing: _screenSharing,
+                    speakingUserIds: _liveSession.speakingIdentities,
+                    onJoin: () => _joinLive('live_panel'),
+                    onLeave: _leaveLive,
+                    onToggleMic: _voiceBlocked
+                        ? null
+                        : () => _patchLiveState(micMuted: !_micMuted),
+                    onToggleHeadphones: () {
+                      setState(() => _headphonesMuted = !_headphonesMuted);
+                    },
+                    onToggleCamera: _toggleCamera,
+                    onToggleShare: _toggleScreenShare,
+                    onCollapse: () => setState(() => _livePanelOpen = false),
+                    onEnterFullScreen: _enterShareFullScreen,
+                    localUserId: widget.session.user.id,
+                  )
+                : _ChatPane(
+                    roomId: _selectedRoomId!,
+                    messages: _messages,
+                    currentUserId: widget.session.user.id,
+                    controller: _messageController,
+                    focusNode: _messageFocus,
+                    sending: _sending,
+                    onSend: _sendMessage,
+                  ),
           ),
-        Expanded(
-          child: _livePanelOpen
-              ? _LivePanel(
-                  room: room,
-                  live: live,
-                  liveSession: _liveSession,
-                  joined: _joinedLiveRoomId == room.id,
-                  joining: _joiningLive,
-                  micMuted: _micMuted,
-                  headphonesMuted: _headphonesMuted,
-                  voiceBlocked: _voiceBlocked,
-                  cameraOn: _cameraOn,
-                  screenSharing: _screenSharing,
-                  speakingUserIds: _liveSession.speakingIdentities,
-                  onJoin: () => _joinLive('live_panel'),
-                  onLeave: _leaveLive,
-                  onToggleMic: _voiceBlocked
-                      ? null
-                      : () => _patchLiveState(micMuted: !_micMuted),
-                  onToggleHeadphones: () {
-                    setState(() => _headphonesMuted = !_headphonesMuted);
-                  },
-                  onToggleCamera: _toggleCamera,
-                  onToggleShare: _toggleScreenShare,
-                  onCollapse: () => setState(() => _livePanelOpen = false),
-                  onEnterFullScreen: _enterShareFullScreen,
-                  localUserId: widget.session.user.id,
-                )
-              : _ChatPane(
-                  roomId: _selectedRoomId!,
-                  messages: _messages,
-                  currentUserId: widget.session.user.id,
-                  controller: _messageController,
-                  focusNode: _messageFocus,
-                  sending: _sending,
-                  onSend: _sendMessage,
-                ),
-        ),
-      ],
+        ],
       ),
     );
   }
@@ -1707,88 +1719,88 @@ class _LiveHeader extends StatelessWidget {
         final compact = constraints.maxWidth < 430;
         final tight = constraints.maxWidth < 300;
         return KeySurface(
-            height: 72,
-            onPressed: onExpand,
-            backgroundColor: _primaryDarkRaised,
-            borderColor: _borderColor,
-            elevateOnHover: true,
-            // Notch is shortened by the drop so its bottom still lines up with
-            // the bottom of the window-control buttons.
-            cornerCut: const Size(
-              windowControlsWidth,
-              titleBarHeight - windowDragHeight,
-            ),
-            cutCorner: KeyCorner.topRight,
-            // Drop the whole header surface down so the top band stays free to
-            // grab-and-drag the window, and inset its right edge so its right
-            // shadow shows and the notch lines up with the inset buttons.
-            margin: const EdgeInsets.only(
-              top: windowDragHeight,
-              right: windowControlsInset,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(
-                      left: compact ? 16 : 22,
-                      right: compact ? 8 : 12,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            room.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: _textPrimary,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                            ),
+          height: 72,
+          onPressed: onExpand,
+          backgroundColor: _primaryDarkRaised,
+          borderColor: _borderColor,
+          elevateOnHover: true,
+          // Notch is shortened by the drop so its bottom still lines up with
+          // the bottom of the window-control buttons.
+          cornerCut: const Size(
+            windowControlsWidth,
+            titleBarHeight - windowDragHeight,
+          ),
+          cutCorner: KeyCorner.topRight,
+          // Drop the whole header surface down so the top band stays free to
+          // grab-and-drag the window, and inset its right edge so its right
+          // shadow shows and the notch lines up with the inset buttons.
+          margin: const EdgeInsets.only(
+            top: windowDragHeight,
+            right: windowControlsInset,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    left: compact ? 16 : 22,
+                    right: compact ? 8 : 12,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          room.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _textPrimary,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Flexible(
-                          child: Text(
-                            '${room.memberCount} members',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: _textSecondary,
-                              fontSize: 12,
-                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Flexible(
+                        child: Text(
+                          '${room.memberCount} members',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _textSecondary,
+                            fontSize: 12,
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-                if (onReviewRequests != null) ...[
-                  Transform.translate(
-                    offset: const Offset(0, 2),
-                    child: KeyIconButton(
-                      tooltip: '加入申请',
-                      onPressed: onReviewRequests,
-                      icon: const Icon(Icons.how_to_reg),
-                      size: 36,
-                    ),
+              ),
+              if (onReviewRequests != null) ...[
+                Transform.translate(
+                  offset: const Offset(0, 2),
+                  child: KeyIconButton(
+                    tooltip: '加入申请',
+                    onPressed: onReviewRequests,
+                    icon: const Icon(Icons.how_to_reg),
+                    size: 36,
                   ),
-                  const SizedBox(width: 10),
-                ],
-                _LiveHeaderActions(
-                  live: live,
-                  joined: joined,
-                  joining: joining,
-                  onJoin: onJoin,
-                  showAvatars: !compact,
-                  showCount: !tight,
-                  compactButton: compact,
                 ),
+                const SizedBox(width: 10),
               ],
-            ),
+              _LiveHeaderActions(
+                live: live,
+                joined: joined,
+                joining: joining,
+                onJoin: onJoin,
+                showAvatars: !compact,
+                showCount: !tight,
+                compactButton: compact,
+              ),
+            ],
+          ),
         );
       },
     );
@@ -2039,10 +2051,7 @@ class _ChatPaneState extends State<_ChatPane> {
           children: [
             Expanded(child: input),
             const SizedBox(width: 10),
-            Transform.translate(
-              offset: const Offset(0, 2),
-              child: actions,
-            ),
+            Transform.translate(offset: const Offset(0, 2), child: actions),
           ],
         );
       },
@@ -2346,9 +2355,7 @@ class _ComposerPanelSurface extends StatelessWidget {
                         padding: EdgeInsets.zero,
                         child: CustomPaint(
                           size: const Size(_tipWidth, _tipHeight),
-                          painter: _BubbleTipPainter(
-                            color: _primaryDarkRaised,
-                          ),
+                          painter: _BubbleTipPainter(color: _primaryDarkRaised),
                         ),
                       ),
                     ),
@@ -2880,85 +2887,85 @@ class _LivePanel extends StatelessWidget {
     return ColoredBox(
       color: _primaryDarkLow,
       child: Column(
-      children: [
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 26, 24, 12),
-            child: Column(
-              children: [
-                Text(
-                  room.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: _textPrimary,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 22),
-                if (stageShare != null) ...[
-                  Expanded(
-                    flex: 3,
-                    child: _ScreenShareStage(
-                      track: stageShare,
-                      label: _displayNameFor(stageShare.identity),
-                      onToggleFullScreen: canFullScreen
-                          ? () => onEnterFullScreen(stageShare)
-                          : null,
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 26, 24, 12),
+              child: Column(
+                children: [
+                  Text(
+                    room.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: _textPrimary,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 22),
+                  if (stageShare != null) ...[
+                    Expanded(
+                      flex: 3,
+                      child: _ScreenShareStage(
+                        track: stageShare,
+                        label: _displayNameFor(stageShare.identity),
+                        onToggleFullScreen: canFullScreen
+                            ? () => onEnterFullScreen(stageShare)
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  Expanded(
+                    flex: 2,
+                    child: live.participants.isEmpty
+                        ? const SizedBox.shrink()
+                        : GridView.builder(
+                            gridDelegate:
+                                const SliverGridDelegateWithMaxCrossAxisExtent(
+                                  maxCrossAxisExtent: 220,
+                                  mainAxisExtent: 156,
+                                  crossAxisSpacing: 12,
+                                  mainAxisSpacing: 12,
+                                ),
+                            itemCount: live.participants.length,
+                            itemBuilder: (context, index) {
+                              final participant = live.participants[index];
+                              return _LiveParticipantCard(
+                                participant: participant,
+                                speaking: speakingUserIds.contains(
+                                  participant.user.id,
+                                ),
+                                cameraTrack: liveSession.cameraFor(
+                                  participant.user.id,
+                                ),
+                              );
+                            },
+                          ),
+                  ),
                 ],
-                Expanded(
-                  flex: 2,
-                  child: live.participants.isEmpty
-                      ? const SizedBox.shrink()
-                      : GridView.builder(
-                          gridDelegate:
-                              const SliverGridDelegateWithMaxCrossAxisExtent(
-                                maxCrossAxisExtent: 220,
-                                mainAxisExtent: 156,
-                                crossAxisSpacing: 12,
-                                mainAxisSpacing: 12,
-                              ),
-                          itemCount: live.participants.length,
-                          itemBuilder: (context, index) {
-                            final participant = live.participants[index];
-                            return _LiveParticipantCard(
-                              participant: participant,
-                              speaking: speakingUserIds.contains(
-                                participant.user.id,
-                              ),
-                              cameraTrack: liveSession.cameraFor(
-                                participant.user.id,
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              ],
+              ),
             ),
           ),
-        ),
-        _LiveControls(
-          joined: joined,
-          joining: joining,
-          micMuted: micMuted,
-          headphonesMuted: headphonesMuted,
-          voiceBlocked: voiceBlocked,
-          cameraOn: cameraOn,
-          screenSharing: screenSharing,
-          onJoin: onJoin,
-          onLeave: onLeave,
-          onToggleMic: onToggleMic,
-          onToggleHeadphones: onToggleHeadphones,
-          onToggleCamera: onToggleCamera,
-          onToggleShare: onToggleShare,
-          onCollapse: onCollapse,
-        ),
-      ],
+          _LiveControls(
+            joined: joined,
+            joining: joining,
+            micMuted: micMuted,
+            headphonesMuted: headphonesMuted,
+            voiceBlocked: voiceBlocked,
+            cameraOn: cameraOn,
+            screenSharing: screenSharing,
+            onJoin: onJoin,
+            onLeave: onLeave,
+            onToggleMic: onToggleMic,
+            onToggleHeadphones: onToggleHeadphones,
+            onToggleCamera: onToggleCamera,
+            onToggleShare: onToggleShare,
+            onCollapse: onCollapse,
+          ),
+        ],
       ),
     );
   }
@@ -2975,10 +2982,7 @@ class _LivePanel extends StatelessWidget {
         .where((t) => t.isScreenShare)
         .toList();
     if (shares.isEmpty) return null;
-    return shares.firstWhere(
-      (t) => !t.isLocal,
-      orElse: () => shares.first,
-    );
+    return shares.firstWhere((t) => !t.isLocal, orElse: () => shares.first);
   }
 }
 
@@ -3078,7 +3082,8 @@ class _LiveParticipantCard extends StatelessWidget {
                 icon: participant.voiceBlocked || participant.micMuted
                     ? Icons.mic_off
                     : Icons.mic,
-                active: !participant.voiceBlocked &&
+                active:
+                    !participant.voiceBlocked &&
                     !participant.micMuted &&
                     speaking,
               ),
@@ -3120,9 +3125,7 @@ class _ScreenShareStage extends StatelessWidget {
           Positioned(
             left: 0,
             top: 0,
-            child: _StageBadge(
-              label: label.isEmpty ? '屏幕共享' : '$label 的屏幕',
-            ),
+            child: _StageBadge(label: label.isEmpty ? '屏幕共享' : '$label 的屏幕'),
           ),
           if (onToggleFullScreen != null)
             Positioned(
@@ -3256,9 +3259,7 @@ class _FullScreenShareState extends State<_FullScreenShare> {
 
   @override
   Widget build(BuildContext context) {
-    final label = widget.label.isEmpty
-        ? '屏幕共享'
-        : '${widget.label} 的屏幕';
+    final label = widget.label.isEmpty ? '屏幕共享' : '${widget.label} 的屏幕';
     return Focus(
       focusNode: _focusNode,
       autofocus: true,
@@ -3394,9 +3395,7 @@ class _VideoTileFooter extends StatelessWidget {
           Icon(
             micMuted ? Icons.mic_off : Icons.mic,
             size: 14,
-            color: micMuted
-                ? _textMuted
-                : (speaking ? _cyan : _textSecondary),
+            color: micMuted ? _textMuted : (speaking ? _cyan : _textSecondary),
           ),
           const SizedBox(width: 6),
           Expanded(
@@ -3561,10 +3560,7 @@ class _ScreenShareDialogState extends State<_ScreenShareDialog> {
       return const SizedBox(
         height: 200,
         child: Center(
-          child: Text(
-            '没有可共享的屏幕或窗口',
-            style: TextStyle(color: _textMuted),
-          ),
+          child: Text('没有可共享的屏幕或窗口', style: TextStyle(color: _textMuted)),
         ),
       );
     }
@@ -3645,9 +3641,7 @@ class _ScreenSourceThumbnailState extends State<_ScreenSourceThumbnail> {
   Widget build(BuildContext context) {
     final thumbnail = _thumbnail;
     if (thumbnail == null || thumbnail.isEmpty || _imageError != null) {
-      return _ScreenSourceThumbnailFallback(
-        iconSize: widget.iconSize,
-      );
+      return _ScreenSourceThumbnailFallback(iconSize: widget.iconSize);
     }
 
     return ClipRect(
@@ -3661,9 +3655,7 @@ class _ScreenSourceThumbnailState extends State<_ScreenSourceThumbnail> {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) setState(() => _imageError = error);
             });
-            return _ScreenSourceThumbnailFallback(
-              iconSize: widget.iconSize,
-            );
+            return _ScreenSourceThumbnailFallback(iconSize: widget.iconSize);
           },
         ),
       ),
@@ -3672,22 +3664,16 @@ class _ScreenSourceThumbnailState extends State<_ScreenSourceThumbnail> {
 }
 
 class _ScreenSourceThumbnailFallback extends StatelessWidget {
-  const _ScreenSourceThumbnailFallback({
-    required this.iconSize,
-  });
+  const _ScreenSourceThumbnailFallback({required this.iconSize});
 
   final double iconSize;
 
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-        color: _primaryDarkLow,
-        child: Center(
-          child: Icon(
-            Icons.desktop_windows,
-            color: _textMuted,
-            size: iconSize,
-          ),
+      color: _primaryDarkLow,
+      child: Center(
+        child: Icon(Icons.desktop_windows, color: _textMuted, size: iconSize),
       ),
     );
   }
@@ -4221,8 +4207,8 @@ class _JoinRoomDialogState extends State<_JoinRoomDialog> {
       separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final room = _results[index];
-        final pending = room.joinState == 'pending' ||
-            _pendingRoomIds.contains(room.id);
+        final pending =
+            room.joinState == 'pending' || _pendingRoomIds.contains(room.id);
         return _JoinRoomResultTile(
           room: room,
           pending: pending,
@@ -4253,10 +4239,10 @@ class _JoinRoomResultTile extends StatelessWidget {
     final label = room.joined
         ? '已加入'
         : pending
-            ? '待审批'
-            : approval
-                ? '申请'
-                : '加入';
+        ? '待审批'
+        : approval
+        ? '申请'
+        : '加入';
     final actionable = !room.joined && !pending;
     return KeySurface(
       height: 64,
@@ -4268,7 +4254,9 @@ class _JoinRoomResultTile extends StatelessWidget {
         children: [
           _Avatar(
             label: room.name,
-            imageUrl: AppConfigScope.of(context).resolveAssetUrl(room.avatarUrl),
+            imageUrl: AppConfigScope.of(
+              context,
+            ).resolveAssetUrl(room.avatarUrl),
             defaultAvatarKey: room.defaultAvatarKey,
             size: 38,
           ),
@@ -4526,7 +4514,9 @@ class _JoinRequestTile extends StatelessWidget {
         children: [
           _Avatar(
             label: user.displayName,
-            imageUrl: AppConfigScope.of(context).resolveAssetUrl(user.avatarUrl),
+            imageUrl: AppConfigScope.of(
+              context,
+            ).resolveAssetUrl(user.avatarUrl),
             defaultAvatarKey: user.defaultAvatarKey,
             size: 38,
           ),
@@ -4819,22 +4809,22 @@ class _ErrorPane extends StatelessWidget {
     return ColoredBox(
       color: _primaryDarkLow,
       child: Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            message ?? 'Request failed',
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: _textSecondary),
-          ),
-          const SizedBox(height: 12),
-          KeyButton(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh),
-            child: const Text('Retry'),
-          ),
-        ],
-      ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              message ?? 'Request failed',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: _textSecondary),
+            ),
+            const SizedBox(height: 12),
+            KeyButton(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
       ),
     );
   }
