@@ -58,6 +58,7 @@ abstract interface class GangApi {
     required String assetId,
     required String name,
     int? sortOrder,
+    String? idempotencyKey,
   });
 
   Future<void> deleteSticker({
@@ -300,37 +301,36 @@ class GangApiClient implements GangApi {
     required String assetId,
     required String name,
     int? sortOrder,
+    String? idempotencyKey,
   }) async {
     final body = <String, Object?>{'asset_id': assetId, 'name': name};
     if (sortOrder != null) body['sort_order'] = sortOrder;
+    final requestIdempotencyKey = idempotencyKey ?? newUuid();
     Future<void> send() {
       return _sendJson((token) {
         return _httpClient.post(
           _uri('/sticker-packs/$packId/stickers'),
-          headers: _headers(token),
+          headers: _headers(token, idempotencyKey: requestIdempotencyKey),
           body: jsonEncode(body),
         );
       });
     }
 
-    try {
-      await send();
-    } on http.ClientException catch (e) {
-      if (!_isRetryableTransportFailure(e)) rethrow;
-      if (await _stickerAssetAlreadyLinked(packId: packId, assetId: assetId)) {
-        return;
-      }
+    const maxAttempts = 3;
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         await send();
-      } on http.ClientException catch (retryError) {
-        if (_isRetryableTransportFailure(retryError) &&
-            await _stickerAssetAlreadyLinked(
-              packId: packId,
-              assetId: assetId,
-            )) {
+        return;
+      } on http.ClientException catch (e) {
+        if (!_isRetryableTransportFailure(e)) rethrow;
+        if (await _stickerAssetAlreadyLinked(
+          packId: packId,
+          assetId: assetId,
+        )) {
           return;
         }
-        rethrow;
+        if (attempt == maxAttempts) rethrow;
+        await Future<void>.delayed(Duration(milliseconds: 120 * attempt));
       }
     }
   }

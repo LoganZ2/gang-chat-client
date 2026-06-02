@@ -274,6 +274,7 @@ void main() {
           case 2:
             expect(request.method, 'POST');
             expect(request.url.path, '/api/v1/sticker-packs/stkp_1/stickers');
+            expect(request.headers['idempotency-key'], isNotEmpty);
             expect(jsonDecode(request.body) as Map<String, Object?>, {
               'asset_id': 'asset_2',
               'name': 'hi',
@@ -347,6 +348,7 @@ void main() {
     'addSticker treats transient write failure as success when asset exists',
     () async {
       var requestIndex = 0;
+      final idempotencyKeys = <String>[];
       final api = GangApiClient(
         baseUrl: 'http://example.test/api/v1',
         accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
@@ -358,6 +360,7 @@ void main() {
             case 1:
               expect(request.method, 'POST');
               expect(request.url.path, '/api/v1/sticker-packs/stkp_1/stickers');
+              idempotencyKeys.add(request.headers['idempotency-key']!);
               throw http.ClientException(
                 'SocketException: Write failed (OS Error: connection aborted, errno = 10053)',
                 request.url,
@@ -381,6 +384,7 @@ void main() {
       await api.addSticker(packId: 'stkp_1', assetId: 'asset_2', name: 'hi');
 
       expect(requestIndex, 2);
+      expect(idempotencyKeys.single, isNotEmpty);
       api.close();
     },
   );
@@ -389,6 +393,7 @@ void main() {
     'addSticker retries once after transient write failure when not linked',
     () async {
       var requestIndex = 0;
+      final idempotencyKeys = <String>[];
       final api = GangApiClient(
         baseUrl: 'http://example.test/api/v1',
         accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
@@ -400,6 +405,7 @@ void main() {
             case 1:
               expect(request.method, 'POST');
               expect(request.url.path, '/api/v1/sticker-packs/stkp_1/stickers');
+              idempotencyKeys.add(request.headers['idempotency-key']!);
               throw http.ClientException(
                 'SocketException: Write failed (OS Error: connection aborted, errno = 10053)',
                 request.url,
@@ -415,6 +421,7 @@ void main() {
             case 3:
               expect(request.method, 'POST');
               expect(request.url.path, '/api/v1/sticker-packs/stkp_1/stickers');
+              idempotencyKeys.add(request.headers['idempotency-key']!);
               expect(jsonDecode(request.body) as Map<String, Object?>, {
                 'asset_id': 'asset_2',
                 'name': 'hi',
@@ -441,6 +448,69 @@ void main() {
       await api.addSticker(packId: 'stkp_1', assetId: 'asset_2', name: 'hi');
 
       expect(requestIndex, 3);
+      expect(idempotencyKeys, hasLength(2));
+      expect(idempotencyKeys.first, isNotEmpty);
+      expect(idempotencyKeys.first, idempotencyKeys.last);
+      api.close();
+    },
+  );
+
+  test(
+    'addSticker recovers after repeated transient write failures once linked',
+    () async {
+      var requestIndex = 0;
+      final idempotencyKeys = <String>[];
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          requestIndex += 1;
+          expect(request.headers['authorization'], 'Bearer token');
+
+          switch (requestIndex) {
+            case 1:
+              expect(request.method, 'POST');
+              expect(request.url.path, '/api/v1/sticker-packs/stkp_1/stickers');
+              idempotencyKeys.add(request.headers['idempotency-key']!);
+              throw http.ClientException(
+                'SocketException: Write failed (OS Error: connection aborted, errno = 10053)',
+                request.url,
+              );
+            case 2:
+              expect(request.method, 'GET');
+              expect(request.url.path, '/api/v1/sticker-packs');
+              return http.Response(
+                jsonEncode(_personalStickerPacksJson()),
+                200,
+              );
+            case 3:
+              expect(request.method, 'POST');
+              expect(request.url.path, '/api/v1/sticker-packs/stkp_1/stickers');
+              idempotencyKeys.add(request.headers['idempotency-key']!);
+              throw http.ClientException(
+                'SocketException: Write failed (OS Error: connection aborted, errno = 10053)',
+                request.url,
+              );
+            case 4:
+              expect(request.method, 'GET');
+              expect(request.url.path, '/api/v1/sticker-packs');
+              return http.Response(
+                jsonEncode(_personalStickerPacksJson(linkedAssetId: 'asset_2')),
+                200,
+              );
+          }
+
+          fail(
+            'unexpected request $requestIndex ${request.method} ${request.url}',
+          );
+        }),
+      );
+
+      await api.addSticker(packId: 'stkp_1', assetId: 'asset_2', name: 'hi');
+
+      expect(requestIndex, 4);
+      expect(idempotencyKeys, hasLength(2));
+      expect(idempotencyKeys.first, idempotencyKeys.last);
       api.close();
     },
   );
