@@ -3045,33 +3045,18 @@ class _AudioControlPanel extends StatelessWidget {
           children: [
             SizedBox(
               width: 96,
-              child: KeySurface(
+              child: KeyButton(
                 onPressed: disabled ? null : onToggleTest,
                 tooltip: testTooltip,
                 height: 42,
+                width: double.infinity,
+                tone: testing ? KeyButtonTone.primary : KeyButtonTone.neutral,
+                selected: testing,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
-                backgroundColor: const Color(0xFF5B6397),
-                selectedBackgroundColor: const Color(0xFF5B6397),
-                pressedBackgroundColor: const Color(0xFF454C7A),
-                disabledBackgroundColor: const Color(0xFF303542),
-                borderColor: const Color(0xFF5B6397),
-                selectedBorderColor: const Color(0xFF5B6397),
-                disabledBorderColor: _borderColor,
-                borderRadius: 2,
-                hoverLift: 0,
-                pressDepth: 0,
-                baseDepth: 0,
-                child: Center(
-                  child: Text(
-                    testing ? '停止测试' : '测试',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: disabled ? _textMuted : _textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
+                child: Text(
+                  testing ? '停止测试' : '测试',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ),
