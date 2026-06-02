@@ -166,6 +166,42 @@ jobs:
           $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
           flutter pub get
 
+      - name: Pre-download libwebrtc (mirror for China runner)
+        shell: powershell
+        run: |
+          $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
+          $webrtcVersion = "1.2.1"
+          $buildDir = "build\windows\x64"
+          $downloadDir = "$buildDir\plugins\flutter_webrtc\downloads"
+          $libDir = "$buildDir\plugins\flutter_webrtc\libwebrtc"
+          if (Test-Path "$libDir\include" -PathType Container) {
+            Write-Host "libwebrtc already cached, skipping download"
+            return
+          }
+          New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null
+          $zipPath = "$downloadDir\libwebrtc.zip"
+          $mirrors = @(
+            "https://gitcode.com/gh_mirrors/fl/flutter-webrtc/releases/download/v$webrtcVersion/libwebrtc.zip",
+            "https://github.com/flutter-webrtc/flutter-webrtc/releases/download/v$webrtcVersion/libwebrtc.zip"
+          )
+          $ok = $false
+          foreach ($u in $mirrors) {
+            try {
+              Write-Host "Trying: $u"
+              Invoke-WebRequest -Uri $u -OutFile $zipPath -TimeoutSec 120 -ErrorAction Stop
+              $ok = $true
+              break
+            } catch {
+              Write-Host "Failed: $_"
+            }
+          }
+          if (-not $ok) {
+            Write-Error "All mirrors failed for libwebrtc download"
+            exit 1
+          }
+          Expand-Archive -Path $zipPath -DestinationPath $libDir -Force
+          Write-Host "libwebrtc pre-downloaded and extracted"
+
       - name: Build Windows (release)
         shell: powershell
         run: |
