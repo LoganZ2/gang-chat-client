@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -7,6 +8,8 @@ import 'models.dart';
 import 'utf8_json.dart';
 
 typedef AccessTokenProvider = Future<String> Function({bool forceRefresh});
+typedef UploadProgressCallback =
+    void Function({required int sentBytes, required int totalBytes});
 
 class DownloadedFile {
   const DownloadedFile({
@@ -18,6 +21,47 @@ class DownloadedFile {
   final Uint8List bytes;
   final String filename;
   final String mimeType;
+}
+
+class UploadTransferController {
+  Completer<void>? _resumeCompleter;
+  bool _cancelled = false;
+
+  bool get isPaused => _resumeCompleter != null;
+  bool get isCancelled => _cancelled;
+
+  void pause() {
+    if (_cancelled || _resumeCompleter != null) return;
+    _resumeCompleter = Completer<void>();
+  }
+
+  void resume() {
+    final completer = _resumeCompleter;
+    if (completer == null) return;
+    _resumeCompleter = null;
+    if (!completer.isCompleted) completer.complete();
+  }
+
+  void cancel() {
+    if (_cancelled) return;
+    _cancelled = true;
+    resume();
+  }
+
+  Future<void> waitIfPaused() async {
+    while (!_cancelled) {
+      final completer = _resumeCompleter;
+      if (completer == null) return;
+      await completer.future;
+    }
+  }
+}
+
+class UploadCancelledException implements Exception {
+  const UploadCancelledException();
+
+  @override
+  String toString() => 'Upload cancelled';
 }
 
 abstract interface class GangApi {
@@ -43,6 +87,14 @@ abstract interface class GangApi {
     required Uint8List bytes,
     required String filename,
     String purpose = 'image',
+  });
+
+  Future<UploadedAsset> uploadFileAsset({
+    required Uint8List bytes,
+    required String filename,
+    String purpose = 'message_file',
+    UploadProgressCallback? onProgress,
+    UploadTransferController? controller,
   });
 
   Future<List<StickerPack>> listStickerPacks({
@@ -242,13 +294,57 @@ class GangApiClient implements GangApi {
     required String filename,
     String purpose = 'image',
   }) async {
+    return _uploadAsset(
+      path: '/uploads/images',
+      bytes: bytes,
+      filename: filename,
+      purpose: purpose,
+    );
+  }
+
+  @override
+  Future<UploadedAsset> uploadFileAsset({
+    required Uint8List bytes,
+    required String filename,
+    String purpose = 'message_file',
+    UploadProgressCallback? onProgress,
+    UploadTransferController? controller,
+  }) async {
+    return _uploadAsset(
+      path: '/uploads/files',
+      bytes: bytes,
+      filename: filename,
+      purpose: purpose,
+      onProgress: onProgress,
+      controller: controller,
+    );
+  }
+
+  Future<UploadedAsset> _uploadAsset({
+    required String path,
+    required Uint8List bytes,
+    required String filename,
+    required String purpose,
+    UploadProgressCallback? onProgress,
+    UploadTransferController? controller,
+  }) async {
     final decoded = await _sendJson((token) async {
-      final request = http.MultipartRequest('POST', _uri('/uploads/images'));
+      final request = http.MultipartRequest('POST', _uri(path));
       request.headers['authorization'] = 'Bearer $token';
       request.fields['purpose'] = purpose;
-      request.files.add(
-        http.MultipartFile.fromBytes('file', bytes, filename: filename),
-      );
+      final file = onProgress == null && controller == null
+          ? http.MultipartFile.fromBytes('file', bytes, filename: filename)
+          : http.MultipartFile(
+              'file',
+              _uploadByteStream(
+                bytes,
+                onProgress: onProgress,
+                controller: controller,
+              ),
+              bytes.length,
+              filename: filename,
+            );
+      request.files.add(file);
       final streamed = await _httpClient.send(request);
       return http.Response.fromStream(streamed);
     }, retryTransientFailures: true);
@@ -679,6 +775,7 @@ class GangApiClient implements GangApi {
     List<MessageAttachment> attachments = const [],
     String? idempotencyKey,
   }) async {
+    final requestIdempotencyKey = idempotencyKey ?? newUuid();
     final decoded = await _sendJson((token) {
       final requestBody = <String, Object?>{
         'client_message_id': clientMessageId,
@@ -692,10 +789,10 @@ class GangApiClient implements GangApi {
       }
       return _httpClient.post(
         _uri('/rooms/$roomId/messages'),
-        headers: _headers(token, idempotencyKey: idempotencyKey ?? newUuid()),
+        headers: _headers(token, idempotencyKey: requestIdempotencyKey),
         body: encodeJsonBody(requestBody),
       );
-    });
+    }, retryTransientFailures: true);
     return Message.fromJson(decoded['message']! as Map<String, Object?>);
   }
 
@@ -961,6 +1058,30 @@ class ApiException implements Exception {
   String toString() {
     if (requestId == null) return message;
     return '$message (request $requestId)';
+  }
+}
+
+Stream<List<int>> _uploadByteStream(
+  Uint8List bytes, {
+  UploadProgressCallback? onProgress,
+  UploadTransferController? controller,
+}) async* {
+  const chunkSize = 64 * 1024;
+  final total = bytes.length;
+  onProgress?.call(sentBytes: 0, totalBytes: total);
+  var sent = 0;
+  while (sent < total) {
+    if (controller?.isCancelled ?? false) {
+      throw const UploadCancelledException();
+    }
+    await controller?.waitIfPaused();
+    if (controller?.isCancelled ?? false) {
+      throw const UploadCancelledException();
+    }
+    final end = (sent + chunkSize) > total ? total : sent + chunkSize;
+    yield Uint8List.sublistView(bytes, sent, end);
+    sent = end;
+    onProgress?.call(sentBytes: sent, totalBytes: total);
   }
 }
 

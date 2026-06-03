@@ -62,30 +62,62 @@ void main() {
     },
   );
 
-  test('sendMessage does not retry a dropped connection', () async {
-    var requests = 0;
-    final api = GangApiClient(
-      baseUrl: 'http://example.test/api/v1',
-      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
-      httpClient: MockClient((request) async {
-        requests += 1;
-        expect(request.method, 'POST');
-        expect(request.url.path, '/api/v1/rooms/room_1/messages');
-        throw http.ClientException('Connection reset by peer', request.url);
-      }),
-    );
+  test(
+    'sendMessage retries a dropped connection with one idempotency key',
+    () async {
+      var requests = 0;
+      final idempotencyKeys = <String>[];
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          requests += 1;
+          expect(request.method, 'POST');
+          expect(request.url.path, '/api/v1/rooms/room_1/messages');
+          expect(
+            jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>,
+            {'client_message_id': 'cmsg_1', 'body': 'hello'},
+          );
+          idempotencyKeys.add(request.headers['idempotency-key']!);
 
-    await expectLater(
-      api.sendMessage(
+          if (requests == 1) {
+            throw http.ClientException('Connection reset by peer', request.url);
+          }
+
+          return http.Response(
+            jsonEncode({
+              'message': {
+                'id': 'msg_1',
+                'room_id': 'room_1',
+                'sender': {
+                  'id': 'user_1',
+                  'username': 'alice',
+                  'display_name': 'Alice',
+                },
+                'client_message_id': 'cmsg_1',
+                'body': 'hello',
+                'created_at': '2026-05-31T14:00:00Z',
+              },
+            }),
+            201,
+          );
+        }),
+      );
+
+      final message = await api.sendMessage(
         roomId: 'room_1',
         clientMessageId: 'cmsg_1',
         body: 'hello',
-      ),
-      throwsA(isA<http.ClientException>()),
-    );
-    expect(requests, 1);
-    api.close();
-  });
+      );
+
+      expect(requests, 2);
+      expect(idempotencyKeys, hasLength(2));
+      expect(idempotencyKeys.first, isNotEmpty);
+      expect(idempotencyKeys.first, idempotencyKeys.last);
+      expect(message.body, 'hello');
+      api.close();
+    },
+  );
 
   test(
     'sendMessage keeps Chinese JSON UTF-8 without response charset',
@@ -204,6 +236,72 @@ void main() {
     api.close();
   });
 
+  test('sendMessage can send and parse a file attachment', () async {
+    final fileAsset = UploadedAsset(
+      id: 'asset_1',
+      url: '/assets/asset_1/report.pdf',
+      thumbnailUrl: null,
+      mimeType: 'application/pdf',
+      filename: 'report.pdf',
+      sizeBytes: 4096,
+    );
+    final fileAttachment = MessageAttachment(
+      type: 'file',
+      name: 'report.pdf',
+      asset: fileAsset,
+    );
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/v1/rooms/room_1/messages');
+        expect(
+          jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>,
+          {
+            'client_message_id': 'cmsg_1',
+            'body': 'report.pdf',
+            'type': 'file',
+            'attachments': [fileAttachment.toJson()],
+          },
+        );
+
+        return http.Response(
+          jsonEncode({
+            'message': {
+              'id': 'msg_1',
+              'room_id': 'room_1',
+              'sender': {
+                'id': 'user_1',
+                'username': 'alice',
+                'display_name': 'Alice',
+              },
+              'client_message_id': 'cmsg_1',
+              'type': 'file',
+              'body': 'report.pdf',
+              'attachments': [fileAttachment.toJson()],
+              'created_at': '2026-05-31T14:00:00Z',
+            },
+          }),
+          201,
+        );
+      }),
+    );
+
+    final message = await api.sendMessage(
+      roomId: 'room_1',
+      clientMessageId: 'cmsg_1',
+      body: 'report.pdf',
+      type: 'file',
+      attachments: [fileAttachment],
+    );
+
+    expect(message.type, 'file');
+    expect(message.fileAttachments.single.asset?.filename, 'report.pdf');
+    expect(message.fileAttachments.single.asset?.sizeBytes, 4096);
+    api.close();
+  });
+
   test(
     'joinLive retries a transient socket write abort with one idempotency key',
     () async {
@@ -316,6 +414,57 @@ void main() {
 
     expect(asset.id, 'asset_1');
     expect(asset.mimeType, 'image/png');
+    api.close();
+  });
+
+  test('uploadFileAsset posts multipart file data', () async {
+    final progress = <int>[];
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/v1/uploads/files');
+        expect(request.headers['authorization'], 'Bearer token');
+        expect(
+          request.headers['content-type'],
+          startsWith('multipart/form-data'),
+        );
+        final body = utf8.decode(request.bodyBytes, allowMalformed: true);
+        expect(body, contains('name="purpose"'));
+        expect(body, contains('message_file'));
+        expect(body, contains('report.pdf'));
+        return http.Response(
+          jsonEncode({
+            'asset': {
+              'id': 'asset_1',
+              'filename': 'report.pdf',
+              'size_bytes': 4096,
+              'url': '/assets/asset_1/report.pdf',
+              'thumbnail_url': null,
+              'mime_type': 'application/pdf',
+            },
+          }),
+          201,
+        );
+      }),
+    );
+
+    final asset = await api.uploadFileAsset(
+      bytes: Uint8List.fromList([37, 80, 68, 70]),
+      filename: 'report.pdf',
+      onProgress: ({required sentBytes, required totalBytes}) {
+        expect(totalBytes, 4);
+        progress.add(sentBytes);
+      },
+    );
+
+    expect(asset.id, 'asset_1');
+    expect(asset.filename, 'report.pdf');
+    expect(asset.sizeBytes, 4096);
+    expect(asset.mimeType, 'application/pdf');
+    expect(progress.first, 0);
+    expect(progress.last, 4);
     api.close();
   });
 

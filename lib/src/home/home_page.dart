@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:livekit_client/livekit_client.dart' as lk;
 import 'package:window_manager/window_manager.dart';
 
@@ -61,17 +63,22 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
+  static const MethodChannel _clipboardChannel = MethodChannel(
+    'gang_chat/clipboard',
+  );
+
   late GangApi _api;
   late CurrentUser _currentUser;
   final LiveSession _liveSession = LiveSession();
   final AudioDeviceStore _audioDeviceStore = const AudioDeviceStore();
 
   final _messageController = TextEditingController();
-  final _messageFocus = FocusNode();
+  late final FocusNode _messageFocus;
   final Map<String, String> _messageDrafts = {};
 
   List<RoomCard> _rooms = [];
   List<Message> _messages = [];
+  final Map<String, _FileTransferState> _fileTransfers = {};
   RoomDetail? _selectedRoom;
   LiveState? _live;
   String? _selectedRoomId;
@@ -84,6 +91,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _loadingRooms = true;
   bool _loadingRoom = false;
   bool _sending = false;
+  bool _handlingMessagePaste = false;
   bool _joiningLive = false;
   bool _livePanelOpen = false;
   bool _settingsOpen = false;
@@ -116,6 +124,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    _messageFocus = FocusNode(onKeyEvent: _onMessageKeyEvent);
     WidgetsBinding.instance.addObserver(this);
     _currentUser = widget.session.user;
     _api = _newApiClient();
@@ -136,6 +145,94 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final roomId = _selectedRoomId;
     if (roomId == null) return;
     _messageDrafts[roomId] = _messageController.text;
+  }
+
+  KeyEventResult _onMessageKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final keyboard = HardwareKeyboard.instance;
+    final pasteShortcut =
+        event.logicalKey == LogicalKeyboardKey.keyV &&
+        (keyboard.isControlPressed || keyboard.isMetaPressed);
+    if (!pasteShortcut) return KeyEventResult.ignored;
+    unawaited(_handleMessagePaste());
+    return KeyEventResult.handled;
+  }
+
+  Future<void> _handleMessagePaste() async {
+    if (_handlingMessagePaste) return;
+    _handlingMessagePaste = true;
+    try {
+      final pastedFiles = await _pasteFilesFromClipboard();
+      if (pastedFiles) return;
+      await _pasteTextFromClipboard();
+    } finally {
+      _handlingMessagePaste = false;
+    }
+  }
+
+  Future<bool> _pasteFilesFromClipboard() async {
+    List<XFile> files;
+    try {
+      files = await _clipboardFiles();
+    } on MissingPluginException {
+      return false;
+    } on PlatformException catch (e) {
+      if (mounted) {
+        _showToast('Unable to read clipboard files: ${e.message ?? e.code}');
+      }
+      return false;
+    } catch (e) {
+      if (mounted) _showToast('Unable to read clipboard files: $e');
+      return false;
+    }
+    if (files.isEmpty) return false;
+    for (final file in files) {
+      if (!mounted) break;
+      unawaited(_sendFileFromXFile(file));
+    }
+    return true;
+  }
+
+  Future<List<XFile>> _clipboardFiles() async {
+    if (kIsWeb || !Platform.isWindows) return const <XFile>[];
+
+    final paths = await _clipboardChannel.invokeListMethod<String>(
+      'readFilePaths',
+    );
+    if (paths == null || paths.isEmpty) return const <XFile>[];
+
+    final seenPaths = <String>{};
+    final files = <XFile>[];
+    for (final path in paths) {
+      final trimmedPath = path.trim();
+      if (trimmedPath.isEmpty || !seenPaths.add(trimmedPath)) continue;
+      files.add(XFile(trimmedPath));
+    }
+    return files;
+  }
+
+  Future<void> _pasteTextFromClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text;
+    if (text == null || text.isEmpty) return;
+
+    final value = _messageController.value;
+    final selection = value.selection;
+    final start = selection.isValid
+        ? selection.start.clamp(0, value.text.length)
+        : value.text.length;
+    final end = selection.isValid
+        ? selection.end.clamp(0, value.text.length)
+        : value.text.length;
+    final replaceStart = start < end ? start : end;
+    final replaceEnd = start < end ? end : start;
+    final nextText = value.text.replaceRange(replaceStart, replaceEnd, text);
+    final nextOffset = replaceStart + text.length;
+    _messageController.value = value.copyWith(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: nextOffset),
+      composing: TextRange.empty,
+    );
   }
 
   void _saveCurrentMessageDraft() {
@@ -588,6 +685,170 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       type: 'sticker',
       attachments: [attachment],
     );
+  }
+
+  Future<void> _pickAndSendFile() async {
+    XFile? file;
+    try {
+      file = await openFile();
+    } catch (e) {
+      if (!mounted) return;
+      _showToast('Unable to open file picker: $e');
+      return;
+    }
+    if (file == null || !mounted) return;
+    unawaited(_sendFileFromXFile(file));
+  }
+
+  Future<void> _sendFileFromXFile(XFile file) async {
+    final room = _selectedRoom;
+    if (room == null) return;
+
+    final filename = _basename(file.name);
+    int length;
+    try {
+      length = await file.length();
+    } catch (e) {
+      if (!mounted) return;
+      _showToast('Unable to read file: $e');
+      return;
+    }
+    if (length == 0) {
+      _showToast('File is empty');
+      return;
+    }
+
+    final clientMessageId = newClientId('cmsg');
+    final transfer = _FileTransferState(
+      controller: UploadTransferController(),
+      totalBytes: length,
+    );
+    final localAttachment = MessageAttachment(
+      type: 'file',
+      name: filename,
+      asset: UploadedAsset(
+        id: 'local_$clientMessageId',
+        url: '',
+        thumbnailUrl: null,
+        mimeType: file.mimeType ?? _mimeTypeFromFilename(filename),
+        filename: filename,
+        sizeBytes: length,
+      ),
+    );
+    final local = Message.local(
+      roomId: room.id,
+      sender: _currentUser.toSummary(),
+      clientMessageId: clientMessageId,
+      body: filename,
+      type: 'file',
+      attachments: [localAttachment],
+    );
+
+    setState(() {
+      _fileTransfers[clientMessageId] = transfer;
+      _messages = [..._messages, local];
+      _error = null;
+    });
+
+    try {
+      final Uint8List bytes = await file.readAsBytes();
+      if (bytes.isEmpty) throw StateError('File is empty');
+      if (transfer.cancelled) return;
+
+      final asset = await _api.uploadFileAsset(
+        bytes: bytes,
+        filename: filename,
+        controller: transfer.controller,
+        onProgress: ({required sentBytes, required totalBytes}) {
+          if (!mounted) return;
+          final current = _fileTransfers[clientMessageId];
+          if (current == null || current.cancelled) return;
+          setState(() {
+            current.sentBytes = sentBytes;
+            current.totalBytes = totalBytes;
+          });
+        },
+      );
+      if (!mounted || transfer.cancelled) return;
+
+      final attachment = MessageAttachment(
+        type: 'file',
+        name: filename,
+        asset: asset,
+      );
+      setState(() {
+        transfer.sendingMessage = true;
+        transfer.sentBytes = transfer.totalBytes;
+        _messages = _updateMessageByClientId(
+          _messages,
+          clientMessageId,
+          (message) => _copyMessage(message, attachments: [attachment]),
+        );
+      });
+
+      final sent = await _api.sendMessage(
+        roomId: room.id,
+        clientMessageId: clientMessageId,
+        body: filename,
+        type: 'file',
+        attachments: [attachment],
+        idempotencyKey: newUuid(),
+      );
+      if (!mounted || transfer.cancelled) return;
+      setState(() {
+        _messages = _replaceMessageByClientId(_messages, sent);
+        _fileTransfers.remove(clientMessageId);
+      });
+      await _loadRooms();
+    } on UploadCancelledException {
+      if (!mounted) return;
+      _removeLocalFileMessage(clientMessageId);
+    } catch (e) {
+      if (!mounted) return;
+      if (transfer.cancelled) {
+        _removeLocalFileMessage(clientMessageId);
+        return;
+      }
+      setState(() {
+        transfer.failed = true;
+        transfer.error = e.toString();
+        _messages = _messages.map((message) {
+          return message.clientMessageId == clientMessageId
+              ? message.markFailed()
+              : message;
+        }).toList();
+      });
+      _showToast(e.toString());
+    }
+  }
+
+  void _pauseFileUpload(String clientMessageId) {
+    final transfer = _fileTransfers[clientMessageId];
+    if (transfer == null || !transfer.active || transfer.paused) return;
+    setState(() => transfer.controller.pause());
+  }
+
+  void _resumeFileUpload(String clientMessageId) {
+    final transfer = _fileTransfers[clientMessageId];
+    if (transfer == null || !transfer.paused) return;
+    setState(() => transfer.controller.resume());
+  }
+
+  void _cancelFileUpload(String clientMessageId) {
+    final transfer = _fileTransfers[clientMessageId];
+    if (transfer == null || !transfer.active) return;
+    transfer.controller.cancel();
+    _removeLocalFileMessage(clientMessageId);
+  }
+
+  void _removeLocalFileMessage(String clientMessageId) {
+    if (!mounted) return;
+    setState(() {
+      _fileTransfers.remove(clientMessageId);
+      _messages = _messages
+          .where((message) => message.clientMessageId != clientMessageId)
+          .toList();
+    });
   }
 
   Future<void> _sendMessagePayload({
@@ -1238,12 +1499,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     apiBaseUrl: widget.apiBaseUrl,
                     stickerPackStore: widget.stickerPackStore,
                     messages: _messages,
+                    fileTransfers: _fileTransfers,
                     currentUserId: _currentUser.id,
                     controller: _messageController,
                     focusNode: _messageFocus,
                     sending: _sending,
                     onSend: _sendMessage,
                     onStickerSend: _sendStickerMessage,
+                    onFileSend: _pickAndSendFile,
+                    onFilePause: _pauseFileUpload,
+                    onFileResume: _resumeFileUpload,
+                    onFileCancel: _cancelFileUpload,
                   ),
           ),
         ],
@@ -1983,6 +2249,25 @@ enum _ComposerPanel { stickers, voice, file, tools }
 
 enum _StickerSource { personal, room }
 
+class _FileTransferState {
+  _FileTransferState({required this.controller, required this.totalBytes});
+
+  final UploadTransferController controller;
+  int sentBytes = 0;
+  int totalBytes;
+  bool sendingMessage = false;
+  bool failed = false;
+  String? error;
+
+  bool get paused => controller.isPaused;
+  bool get cancelled => controller.isCancelled;
+  bool get active => !failed && !cancelled && !sendingMessage;
+  double get progress {
+    if (totalBytes <= 0) return 0;
+    return (sentBytes / totalBytes).clamp(0.0, 1.0).toDouble();
+  }
+}
+
 class _ChatPane extends StatefulWidget {
   const _ChatPane({
     required this.roomId,
@@ -1990,12 +2275,17 @@ class _ChatPane extends StatefulWidget {
     required this.apiBaseUrl,
     required this.stickerPackStore,
     required this.messages,
+    required this.fileTransfers,
     required this.currentUserId,
     required this.controller,
     required this.focusNode,
     required this.sending,
     required this.onSend,
     required this.onStickerSend,
+    required this.onFileSend,
+    required this.onFilePause,
+    required this.onFileResume,
+    required this.onFileCancel,
   });
 
   final String roomId;
@@ -2003,12 +2293,17 @@ class _ChatPane extends StatefulWidget {
   final String apiBaseUrl;
   final StickerPackStore stickerPackStore;
   final List<Message> messages;
+  final Map<String, _FileTransferState> fileTransfers;
   final String currentUserId;
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool sending;
   final VoidCallback onSend;
   final Future<void> Function(Sticker sticker) onStickerSend;
+  final Future<void> Function() onFileSend;
+  final ValueChanged<String> onFilePause;
+  final ValueChanged<String> onFileResume;
+  final ValueChanged<String> onFileCancel;
 
   @override
   State<_ChatPane> createState() => _ChatPaneState();
@@ -2193,7 +2488,12 @@ class _ChatPaneState extends State<_ChatPane> {
       sending: widget.sending,
       onStickers: () => _togglePanel(_ComposerPanel.stickers),
       onVoice: () => _togglePanel(_ComposerPanel.voice),
-      onFile: () => _togglePanel(_ComposerPanel.file),
+      onFile: widget.sending
+          ? null
+          : () {
+              _closePanel();
+              unawaited(widget.onFileSend());
+            },
       onTools: () => _togglePanel(_ComposerPanel.tools),
       onSend: () {
         _closePanel();
@@ -2305,6 +2605,14 @@ class _ChatPaneState extends State<_ChatPane> {
                           return _MessageBubble(
                             message: message,
                             mine: message.sender.id == widget.currentUserId,
+                            fileTransfer:
+                                widget.fileTransfers[message.clientMessageId],
+                            onFilePause: () =>
+                                widget.onFilePause(message.clientMessageId),
+                            onFileResume: () =>
+                                widget.onFileResume(message.clientMessageId),
+                            onFileCancel: () =>
+                                widget.onFileCancel(message.clientMessageId),
                           );
                         },
                       ),
@@ -2373,7 +2681,7 @@ class _ComposerActionBar extends StatelessWidget {
   final bool sending;
   final VoidCallback onStickers;
   final VoidCallback? onVoice;
-  final VoidCallback onFile;
+  final VoidCallback? onFile;
   final VoidCallback onTools;
   final VoidCallback onSend;
 
@@ -3007,14 +3315,26 @@ class _ToolboxButton extends StatelessWidget {
 }
 
 class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({required this.message, required this.mine});
+  const _MessageBubble({
+    required this.message,
+    required this.mine,
+    required this.fileTransfer,
+    required this.onFilePause,
+    required this.onFileResume,
+    required this.onFileCancel,
+  });
 
   final Message message;
   final bool mine;
+  final _FileTransferState? fileTransfer;
+  final VoidCallback onFilePause;
+  final VoidCallback onFileResume;
+  final VoidCallback onFileCancel;
 
   @override
   Widget build(BuildContext context) {
     final sticker = message.stickerAttachment;
+    final files = message.fileAttachments.toList();
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
       child: DecoratedBox(
@@ -3067,11 +3387,21 @@ class _MessageBubble extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    if (sticker == null)
-                      _MessageText(text: message.body)
-                    else
+                    if (sticker != null)
                       _StickerMessageImage(message: message, sticker: sticker),
-                    if (message.pending || message.failed) ...[
+                    if (sticker == null && files.isNotEmpty)
+                      _FileAttachmentList(
+                        message: message,
+                        attachments: files,
+                        transfer: fileTransfer,
+                        onPause: onFilePause,
+                        onResume: onFileResume,
+                        onCancel: onFileCancel,
+                      ),
+                    if (sticker == null && files.isEmpty)
+                      _MessageText(text: message.body),
+                    if (fileTransfer == null &&
+                        (message.pending || message.failed)) ...[
                       const SizedBox(height: 6),
                       Text(
                         message.failed ? 'Failed' : 'Sending',
@@ -3104,6 +3434,350 @@ class _MessageText extends StatelessWidget {
       cursorColor: _cyan,
       selectionColor: _cyan.withValues(alpha: 0.28),
       style: const TextStyle(color: _textPrimary, fontSize: 15, height: 1.4),
+    );
+  }
+}
+
+class _FileAttachmentList extends StatelessWidget {
+  const _FileAttachmentList({
+    required this.message,
+    required this.attachments,
+    required this.transfer,
+    required this.onPause,
+    required this.onResume,
+    required this.onCancel,
+  });
+
+  final Message message;
+  final List<MessageAttachment> attachments;
+  final _FileTransferState? transfer;
+  final VoidCallback onPause;
+  final VoidCallback onResume;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final body = message.body.trim();
+    final showBody =
+        body.isNotEmpty &&
+        (attachments.length != 1 ||
+            body != _fileAttachmentTitle(attachments[0]));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (showBody) ...[
+          _MessageText(text: message.body),
+          const SizedBox(height: 8),
+        ],
+        for (final entry in attachments.asMap().entries) ...[
+          if (entry.key > 0) const SizedBox(height: 8),
+          _FileAttachmentCard(
+            attachment: entry.value,
+            transfer: entry.key == 0 ? transfer : null,
+            onPause: onPause,
+            onResume: onResume,
+            onCancel: onCancel,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _FileAttachmentCard extends StatelessWidget {
+  const _FileAttachmentCard({
+    required this.attachment,
+    required this.transfer,
+    required this.onPause,
+    required this.onResume,
+    required this.onCancel,
+  });
+
+  final MessageAttachment attachment;
+  final _FileTransferState? transfer;
+  final VoidCallback onPause;
+  final VoidCallback onResume;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final asset = attachment.asset;
+    final transfer = this.transfer;
+    final config = AppConfigScope.of(context);
+    final url = config.resolveAssetUrl(asset?.url);
+    final title = _fileAttachmentTitle(attachment);
+    final meta = _fileAttachmentMeta(asset);
+    final previewUrl = asset != null && asset.mimeType.startsWith('image/')
+        ? config.resolveAssetUrl(asset.thumbnailUrl ?? asset.url)
+        : null;
+    final canDownload = url != null && transfer == null;
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 420),
+      child: Tooltip(
+        message: canDownload ? 'Download file' : title,
+        child: MouseRegion(
+          cursor: canDownload
+              ? SystemMouseCursors.click
+              : SystemMouseCursors.basic,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: canDownload
+                ? () => unawaited(_downloadAsset(context, attachment, url))
+                : null,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: _primaryDarkRaised,
+                border: Border.all(color: _borderColor),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        _FileAttachmentIcon(
+                          asset: asset,
+                          previewUrl: previewUrl,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: _textPrimary,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  height: 1.25,
+                                ),
+                              ),
+                              if (meta.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  meta,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: _textMuted,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _FileAttachmentTrailing(
+                          transfer: transfer,
+                          canDownload: canDownload,
+                          onPause: onPause,
+                          onResume: onResume,
+                          onCancel: onCancel,
+                        ),
+                      ],
+                    ),
+                    if (transfer != null) ...[
+                      const SizedBox(height: 10),
+                      _FileTransferProgress(transfer: transfer),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FileAttachmentTrailing extends StatelessWidget {
+  const _FileAttachmentTrailing({
+    required this.transfer,
+    required this.canDownload,
+    required this.onPause,
+    required this.onResume,
+    required this.onCancel,
+  });
+
+  final _FileTransferState? transfer;
+  final bool canDownload;
+  final VoidCallback onPause;
+  final VoidCallback onResume;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final transfer = this.transfer;
+    if (transfer != null) {
+      if (transfer.sendingMessage) {
+        return const SizedBox.square(
+          dimension: 30,
+          child: Center(
+            child: SizedBox.square(
+              dimension: 16,
+              child: CircularProgressIndicator(color: _cyan, strokeWidth: 2),
+            ),
+          ),
+        );
+      }
+      if (transfer.failed) {
+        return const Icon(Icons.error_outline, color: _danger, size: 20);
+      }
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _InlineIconButton(
+            tooltip: transfer.paused ? 'Resume upload' : 'Pause upload',
+            icon: transfer.paused ? Icons.play_arrow : Icons.pause,
+            onPressed: transfer.paused ? onResume : onPause,
+          ),
+          const SizedBox(width: 6),
+          _InlineIconButton(
+            tooltip: 'Cancel upload',
+            icon: Icons.close,
+            onPressed: onCancel,
+            danger: true,
+          ),
+        ],
+      );
+    }
+
+    if (!canDownload) {
+      return const Icon(Icons.insert_drive_file_outlined, color: _textMuted);
+    }
+    return const Icon(Icons.download_outlined, color: _textMuted, size: 20);
+  }
+}
+
+class _FileTransferProgress extends StatelessWidget {
+  const _FileTransferProgress({required this.transfer});
+
+  final _FileTransferState transfer;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = transfer.failed
+        ? 'Failed'
+        : transfer.sendingMessage
+        ? 'Sending'
+        : transfer.paused
+        ? 'Paused ${_formatPercent(transfer.progress)}'
+        : 'Uploading ${_formatPercent(transfer.progress)}';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: LinearProgressIndicator(
+            minHeight: 4,
+            value: transfer.sendingMessage ? 1 : transfer.progress,
+            backgroundColor: _borderColor,
+            valueColor: AlwaysStoppedAnimation<Color>(
+              transfer.failed ? _danger : _cyan,
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          transfer.error ?? label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: transfer.failed ? _danger : _textMuted,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _InlineIconButton extends StatelessWidget {
+  const _InlineIconButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+    this.danger = false,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = danger ? _danger : _cyan;
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onPressed,
+        child: Container(
+          width: 28,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: danger ? const Color(0xFF2E1F22) : const Color(0xFF1F2D27),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: danger ? const Color(0xFF6B3E45) : const Color(0xFF355C49),
+            ),
+          ),
+          child: Icon(icon, size: 17, color: color),
+        ),
+      ),
+    );
+  }
+}
+
+class _FileAttachmentIcon extends StatelessWidget {
+  const _FileAttachmentIcon({required this.asset, required this.previewUrl});
+
+  final UploadedAsset? asset;
+  final String? previewUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final previewUrl = this.previewUrl;
+    if (previewUrl != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: SizedBox.square(
+          dimension: 42,
+          child: Image.network(
+            previewUrl,
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => _fallbackIcon(),
+          ),
+        ),
+      );
+    }
+    return _fallbackIcon();
+  }
+
+  Widget _fallbackIcon() {
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: _selectedSurface,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFF355C49)),
+      ),
+      child: Icon(_fileIconForMime(asset?.mimeType), color: _cyan, size: 22),
     );
   }
 }
@@ -5274,6 +5948,37 @@ List<Message> _replaceMessageByClientId(List<Message> messages, Message sent) {
   return [...next, sent];
 }
 
+List<Message> _updateMessageByClientId(
+  List<Message> messages,
+  String clientMessageId,
+  Message Function(Message message) update,
+) {
+  return messages.map((message) {
+    if (message.clientMessageId != clientMessageId) return message;
+    return update(message);
+  }).toList();
+}
+
+Message _copyMessage(
+  Message message, {
+  List<MessageAttachment>? attachments,
+  bool? pending,
+  bool? failed,
+}) {
+  return Message(
+    id: message.id,
+    roomId: message.roomId,
+    sender: message.sender,
+    clientMessageId: message.clientMessageId,
+    type: message.type,
+    body: message.body,
+    createdAt: message.createdAt,
+    attachments: attachments ?? message.attachments,
+    pending: pending ?? message.pending,
+    failed: failed ?? message.failed,
+  );
+}
+
 LiveState? _mergeParticipant(LiveState? live, LiveParticipant participant) {
   if (live == null) return null;
   var replaced = false;
@@ -5314,6 +6019,154 @@ String _formatMessageTime(DateTime value) {
   final hour = local.hour.toString().padLeft(2, '0');
   final minute = local.minute.toString().padLeft(2, '0');
   return '$hour:$minute';
+}
+
+String _basename(String value) {
+  final normalized = value.replaceAll('\\', '/').trim();
+  if (normalized.isEmpty) return 'file';
+  final slash = normalized.lastIndexOf('/');
+  final name = slash >= 0 ? normalized.substring(slash + 1) : normalized;
+  final query = name.indexOf('?');
+  final fragment = name.indexOf('#');
+  final end = [
+    if (query >= 0) query,
+    if (fragment >= 0) fragment,
+  ].fold<int>(name.length, (min, value) => value < min ? value : min);
+  final clean = name.substring(0, end).trim();
+  return clean.isEmpty ? 'file' : clean;
+}
+
+String _fileAttachmentTitle(MessageAttachment attachment) {
+  final explicitName = attachment.name?.trim();
+  if (explicitName != null && explicitName.isNotEmpty) return explicitName;
+  final assetName = attachment.asset?.filename?.trim();
+  if (assetName != null && assetName.isNotEmpty) return assetName;
+  return _filenameFromAssetUrl(attachment.asset?.url) ?? 'file';
+}
+
+String? _filenameFromAssetUrl(String? url) {
+  if (url == null || url.trim().isEmpty) return null;
+  final uri = Uri.tryParse(url);
+  final raw = uri != null && uri.pathSegments.isNotEmpty
+      ? uri.pathSegments.last
+      : url;
+  final decoded = Uri.decodeComponent(raw);
+  final name = _basename(decoded);
+  return name.trim().isEmpty ? null : name;
+}
+
+String _fileAttachmentMeta(UploadedAsset? asset) {
+  if (asset == null) return '';
+  final parts = <String>[];
+  final mimeType = asset.mimeType.trim();
+  if (mimeType.isNotEmpty) parts.add(mimeType);
+  final sizeBytes = asset.sizeBytes;
+  if (sizeBytes != null) parts.add(_formatFileSize(sizeBytes));
+  return parts.join(' - ');
+}
+
+String _formatFileSize(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  var value = bytes / 1024;
+  var unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  final digits = value < 10 ? 1 : 0;
+  return '${value.toStringAsFixed(digits)} ${units[unitIndex]}';
+}
+
+String _formatPercent(double value) {
+  return '${(value.clamp(0.0, 1.0) * 100).round()}%';
+}
+
+String _mimeTypeFromFilename(String filename) {
+  final extension = _extensionOf(filename);
+  return switch (extension) {
+    'jpg' || 'jpeg' => 'image/jpeg',
+    'png' => 'image/png',
+    'webp' => 'image/webp',
+    'gif' => 'image/gif',
+    'pdf' => 'application/pdf',
+    'txt' => 'text/plain',
+    'json' => 'application/json',
+    'zip' => 'application/zip',
+    'mp3' => 'audio/mpeg',
+    'wav' => 'audio/wav',
+    'mp4' => 'video/mp4',
+    _ => 'application/octet-stream',
+  };
+}
+
+String _extensionOf(String filename) {
+  final name = _basename(filename).toLowerCase();
+  final dot = name.lastIndexOf('.');
+  if (dot < 0 || dot == name.length - 1) return '';
+  return name.substring(dot + 1);
+}
+
+IconData _fileIconForMime(String? mimeType) {
+  final value = (mimeType ?? '').toLowerCase();
+  if (value.startsWith('image/')) return Icons.image_outlined;
+  if (value == 'application/pdf') return Icons.picture_as_pdf_outlined;
+  if (value.startsWith('audio/')) return Icons.audio_file_outlined;
+  if (value.startsWith('video/')) return Icons.video_file_outlined;
+  if (value.contains('zip') ||
+      value.contains('tar') ||
+      value.contains('compressed')) {
+    return Icons.folder_zip_outlined;
+  }
+  if (value.startsWith('text/') || value.contains('json')) {
+    return Icons.description_outlined;
+  }
+  return Icons.insert_drive_file_outlined;
+}
+
+Future<void> _downloadAsset(
+  BuildContext context,
+  MessageAttachment attachment,
+  String url,
+) async {
+  final uri = Uri.tryParse(url);
+  if (uri == null) {
+    _showDownloadNotice(context, 'Cannot download file');
+    return;
+  }
+
+  final filename = _fileAttachmentTitle(attachment);
+  final location = await getSaveLocation(
+    suggestedName: filename,
+    confirmButtonText: 'Save',
+  );
+  if (location == null || !context.mounted) return;
+
+  try {
+    final response = await http.get(uri);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError('Download failed (${response.statusCode})');
+    }
+    final mimeType =
+        response.headers['content-type']?.split(';').first.trim() ??
+        attachment.asset?.mimeType ??
+        'application/octet-stream';
+    await XFile.fromData(
+      response.bodyBytes,
+      mimeType: mimeType,
+      name: filename,
+    ).saveTo(location.path);
+    if (context.mounted) _showDownloadNotice(context, 'File downloaded');
+  } catch (e) {
+    if (context.mounted) _showDownloadNotice(context, e.toString());
+  }
+}
+
+void _showDownloadNotice(BuildContext context, String message) {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  messenger?.showSnackBar(
+    SnackBar(content: Text(message), backgroundColor: _primaryDarkRaised),
+  );
 }
 
 Color _avatarColor(String key) {

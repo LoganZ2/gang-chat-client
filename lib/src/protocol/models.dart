@@ -145,6 +145,8 @@ class UploadedAsset {
     required this.url,
     required this.thumbnailUrl,
     required this.mimeType,
+    this.filename,
+    this.sizeBytes,
     this.width,
     this.height,
     this.createdAt,
@@ -154,6 +156,8 @@ class UploadedAsset {
   final String url;
   final String? thumbnailUrl;
   final String mimeType;
+  final String? filename;
+  final int? sizeBytes;
   final int? width;
   final int? height;
   final DateTime? createdAt;
@@ -164,6 +168,8 @@ class UploadedAsset {
       url: json['url']! as String,
       thumbnailUrl: json['thumbnail_url'] as String?,
       mimeType: json['mime_type'] as String? ?? 'application/octet-stream',
+      filename: json['filename'] as String?,
+      sizeBytes: _nullableInt(json['size_bytes']),
       width: _nullableInt(json['width']),
       height: _nullableInt(json['height']),
       createdAt: _parseDateTime(json['created_at']),
@@ -176,6 +182,8 @@ class UploadedAsset {
       'url': url,
       'thumbnail_url': thumbnailUrl,
       'mime_type': mimeType,
+      if (filename != null) 'filename': filename,
+      if (sizeBytes != null) 'size_bytes': sizeBytes,
       'width': width,
       'height': height,
       'created_at': createdAt?.toIso8601String(),
@@ -594,6 +602,10 @@ class Message {
       }
     }
     return null;
+  }
+
+  Iterable<MessageAttachment> get fileAttachments {
+    return attachments.where((attachment) => attachment.type == 'file');
   }
 
   factory Message.fromJson(Map<String, Object?> json) {
