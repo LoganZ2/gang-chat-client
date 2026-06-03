@@ -624,6 +624,7 @@ class _SettingsPageState extends State<SettingsPage> {
         throw StateError('没有找到可上传的图片');
       }
       final pack = await _ensureActiveStickerPack();
+      final uploadedAssetIds = <String>[];
       var sortIndex = pack.stickers.length;
       for (final entry in uploadItems.asMap().entries) {
         final item = entry.value;
@@ -632,6 +633,7 @@ class _SettingsPageState extends State<SettingsPage> {
           filename: _stickerUploadFilename(item.filename, entry.key),
           purpose: 'sticker',
         );
+        uploadedAssetIds.add(asset.id);
         await api.addSticker(
           packId: pack.id,
           assetId: asset.id,
@@ -641,6 +643,11 @@ class _SettingsPageState extends State<SettingsPage> {
         uploadedCount += 1;
       }
       await _loadStickers(forceReload: true);
+      await _pinUploadedStickerAssetsToFront(
+        api: api,
+        packId: pack.id,
+        assetIds: uploadedAssetIds,
+      );
       _showNotice('已添加 $uploadedCount 个表情');
     } catch (e) {
       if (!mounted) return;
@@ -648,6 +655,56 @@ class _SettingsPageState extends State<SettingsPage> {
     } finally {
       if (mounted) setState(() => _uploadingStickers = false);
     }
+  }
+
+  Future<void> _pinUploadedStickerAssetsToFront({
+    required GangApi api,
+    required String packId,
+    required List<String> assetIds,
+  }) async {
+    if (assetIds.isEmpty) return;
+
+    final pack = _stickerPackById(packId);
+    if (pack == null) return;
+
+    final stickersByAssetId = {
+      for (final sticker in pack.stickers) sticker.asset.id: sticker,
+    };
+    final uploadedStickerIds = <String>[];
+    for (final assetId in assetIds) {
+      final sticker = stickersByAssetId[assetId];
+      if (sticker != null) uploadedStickerIds.add(sticker.id);
+    }
+    if (uploadedStickerIds.isEmpty) return;
+
+    final uploadedStickerIdSet = uploadedStickerIds.toSet();
+    final currentOrder = _orderedStickers(
+      pack,
+    ).map((sticker) => sticker.id).toList();
+    final nextOrder = [
+      ...uploadedStickerIds,
+      for (final stickerId in currentOrder)
+        if (!uploadedStickerIdSet.contains(stickerId)) stickerId,
+    ];
+    if (_sameStringList(currentOrder, nextOrder)) return;
+
+    await api.reorderStickers(packId: pack.id, stickerIds: nextOrder);
+    await _loadStickers(forceReload: true);
+  }
+
+  StickerPack? _stickerPackById(String packId) {
+    for (final pack in _stickerPacks) {
+      if (pack.id == packId) return pack;
+    }
+    return null;
+  }
+
+  bool _sameStringList(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i += 1) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   void _toggleStickerManageMode() {
