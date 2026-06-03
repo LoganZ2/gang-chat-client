@@ -2015,12 +2015,14 @@ class _ChatPane extends StatefulWidget {
 }
 
 class _ChatPaneState extends State<_ChatPane> {
+  final Object _composerTapRegionGroup = Object();
   _ComposerPanel? _openPanel;
   _StickerSource _stickerSource = _StickerSource.personal;
   List<StickerPack> _personalStickerPacks = const [];
   List<StickerPack> _roomStickerPacks = const [];
   bool _loadingStickerPacks = false;
   String? _stickerPackError;
+  double _composerInputHeight = 76;
 
   @override
   void initState() {
@@ -2096,6 +2098,11 @@ class _ChatPaneState extends State<_ChatPane> {
     setState(() {
       _openPanel = _openPanel == panel ? null : panel;
     });
+  }
+
+  void _onComposerInputSize(Size size) {
+    if ((_composerInputHeight - size.height).abs() < 0.5) return;
+    setState(() => _composerInputHeight = size.height);
   }
 
   Widget _buildComposerInput() {
@@ -2207,62 +2214,103 @@ class _ChatPaneState extends State<_ChatPane> {
     );
   }
 
+  Widget _buildPanelOverlay() {
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: _composerInputHeight,
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: TapRegion(
+          groupId: _composerTapRegionGroup,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 140),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            child: KeyedSubtree(
+              key: ValueKey(_openPanel),
+              child: _buildPanel(),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
       color: _primaryDarkLow,
-      child: Column(
+      child: Stack(
         children: [
-          Expanded(
-            child: widget.messages.isEmpty
-                ? const Center(
-                    child: Text('还没有消息', style: TextStyle(color: _textMuted)),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(22, 18, 22, 18),
-                    itemCount: widget.messages.length,
-                    itemBuilder: (context, index) {
-                      final message = widget.messages[index];
-                      return _MessageBubble(
-                        message: message,
-                        mine: message.sender.id == widget.currentUserId,
-                      );
-                    },
-                  ),
-          ),
-          TapRegion(
-            onTapOutside: (_) => _closePanel(),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 140),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  layoutBuilder: (currentChild, previousChildren) {
-                    if (currentChild != null) return currentChild;
-                    return Stack(
-                      alignment: Alignment.bottomRight,
-                      clipBehavior: Clip.none,
-                      children: previousChildren,
-                    );
-                  },
-                  child: KeyedSubtree(
-                    key: ValueKey(_openPanel),
-                    child: _buildPanel(),
+          Column(
+            children: [
+              Expanded(
+                child: widget.messages.isEmpty
+                    ? const Center(
+                        child: Text(
+                          '还没有消息',
+                          style: TextStyle(color: _textMuted),
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(22, 18, 22, 18),
+                        itemCount: widget.messages.length,
+                        itemBuilder: (context, index) {
+                          final message = widget.messages[index];
+                          return _MessageBubble(
+                            message: message,
+                            mine: message.sender.id == widget.currentUserId,
+                          );
+                        },
+                      ),
+              ),
+              TapRegion(
+                groupId: _composerTapRegionGroup,
+                onTapOutside: (_) => _closePanel(),
+                child: _SizeReporter(
+                  onChange: _onComposerInputSize,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(18, 12, 18, 14),
+                    color: _primaryDarkLow,
+                    child: _buildComposerInput(),
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.fromLTRB(18, 12, 18, 14),
-                  color: _primaryDarkLow,
-                  child: _buildComposerInput(),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
+          if (_openPanel != null) _buildPanelOverlay(),
         ],
       ),
     );
+  }
+}
+
+class _SizeReporter extends StatefulWidget {
+  const _SizeReporter({required this.child, required this.onChange});
+
+  final Widget child;
+  final ValueChanged<Size> onChange;
+
+  @override
+  State<_SizeReporter> createState() => _SizeReporterState();
+}
+
+class _SizeReporterState extends State<_SizeReporter> {
+  Size? _lastSize;
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _reportSize());
+    return widget.child;
+  }
+
+  void _reportSize() {
+    if (!mounted) return;
+    final size = context.size;
+    if (size == null || size == _lastSize) return;
+    _lastSize = size;
+    widget.onChange(size);
   }
 }
 
@@ -2413,10 +2461,13 @@ class _ComposerPanelSurface extends StatelessWidget {
     _ComposerPanel.stickers: 216,
   };
 
-  double _tipRightPadding() {
+  double _tipRightPadding(double bubbleWidth) {
     final targetCenterFromRight = _buttonCenterFromRight[panel]!;
     final raw = targetCenterFromRight - (_tipWidth / 2);
-    final maxPadding = _bubbleWidth - _tipWidth - _tipSideInset;
+    final availableMax = bubbleWidth - _tipWidth - _tipSideInset;
+    final maxPadding = availableMax < _tipSideInset
+        ? _tipSideInset
+        : availableMax;
     return raw.clamp(_tipSideInset, maxPadding).toDouble();
   }
 
@@ -2431,35 +2482,42 @@ class _ComposerPanelSurface extends StatelessWidget {
           _horizontalInset,
           _tipHeight + _surfaceYOffset + _tipBottomClearance,
         ),
-        child: Align(
-          alignment: Alignment.centerRight,
-          child: SizedBox(
-            width: _bubbleWidth,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: _bubbleBackground,
-                      borderRadius: BorderRadius.circular(8),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final maxBubbleWidth = constraints.maxWidth.isFinite
+                ? constraints.maxWidth
+                : _bubbleWidth;
+            final bubbleWidth = maxBubbleWidth < _bubbleWidth
+                ? maxBubbleWidth
+                : _bubbleWidth;
+            return SizedBox(
+              width: bubbleWidth,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: _bubbleBackground,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                   ),
-                ),
-                child,
-                Positioned(
-                  right: _tipRightPadding(),
-                  bottom: -(_tipHeight - _tipOverlap),
-                  child: CustomPaint(
-                    size: const Size(_tipWidth, _tipHeight),
-                    painter: _BubbleTipPainter(
-                      color: tipColor ?? _bubbleBackground,
+                  child,
+                  Positioned(
+                    right: _tipRightPadding(bubbleWidth),
+                    bottom: -(_tipHeight - _tipOverlap),
+                    child: CustomPaint(
+                      size: const Size(_tipWidth, _tipHeight),
+                      painter: _BubbleTipPainter(
+                        color: tipColor ?? _bubbleBackground,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );
