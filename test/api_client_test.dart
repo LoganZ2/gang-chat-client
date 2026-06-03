@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 import 'package:client/src/protocol/api_client.dart';
+import 'package:client/src/protocol/models.dart';
 
 void main() {
   test(
@@ -138,6 +139,70 @@ void main() {
       api.close();
     },
   );
+
+  test('sendMessage can send and parse a sticker attachment', () async {
+    final stickerAsset = UploadedAsset(
+      id: 'asset_1',
+      url: '/assets/asset_1/ok.webp',
+      thumbnailUrl: null,
+      mimeType: 'image/webp',
+    );
+    final stickerAttachment = MessageAttachment(
+      type: 'sticker',
+      stickerId: 'sticker_1',
+      name: 'ok',
+      asset: stickerAsset,
+    );
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/v1/rooms/room_1/messages');
+        expect(
+          jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>,
+          {
+            'client_message_id': 'cmsg_1',
+            'body': '[ok]',
+            'type': 'sticker',
+            'attachments': [stickerAttachment.toJson()],
+          },
+        );
+
+        return http.Response(
+          jsonEncode({
+            'message': {
+              'id': 'msg_1',
+              'room_id': 'room_1',
+              'sender': {
+                'id': 'user_1',
+                'username': 'alice',
+                'display_name': 'Alice',
+              },
+              'client_message_id': 'cmsg_1',
+              'type': 'sticker',
+              'body': '[ok]',
+              'attachments': [stickerAttachment.toJson()],
+              'created_at': '2026-05-31T14:00:00Z',
+            },
+          }),
+          201,
+        );
+      }),
+    );
+
+    final message = await api.sendMessage(
+      roomId: 'room_1',
+      clientMessageId: 'cmsg_1',
+      body: '[ok]',
+      type: 'sticker',
+      attachments: [stickerAttachment],
+    );
+
+    expect(message.type, 'sticker');
+    expect(message.stickerAttachment?.asset?.url, '/assets/asset_1/ok.webp');
+    api.close();
+  });
 
   test(
     'joinLive retries a transient socket write abort with one idempotency key',

@@ -571,24 +571,51 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _sendMessage() async {
+    final body = _messageController.text.trimRight();
+    if (body.trim().isEmpty) return;
+    await _sendMessagePayload(body: body, clearDraft: true);
+  }
+
+  Future<void> _sendStickerMessage(Sticker sticker) async {
+    final attachment = MessageAttachment(
+      type: 'sticker',
+      stickerId: sticker.id,
+      name: sticker.name,
+      asset: sticker.asset,
+    );
+    await _sendMessagePayload(
+      body: '[${sticker.name}]',
+      type: 'sticker',
+      attachments: [attachment],
+    );
+  }
+
+  Future<void> _sendMessagePayload({
+    required String body,
+    String type = 'text',
+    List<MessageAttachment> attachments = const [],
+    bool clearDraft = false,
+  }) async {
     final room = _selectedRoom;
     if (room == null || _sending) return;
 
-    final body = _messageController.text.trimRight();
-    if (body.trim().isEmpty) return;
+    if (type == 'text' && body.trim().isEmpty) return;
+    if (type != 'text' && attachments.isEmpty) return;
 
     final clientMessageId = newClientId('cmsg');
     final local = Message.local(
       roomId: room.id,
       sender: _currentUser.toSummary(),
       clientMessageId: clientMessageId,
+      type: type,
       body: body,
+      attachments: attachments,
     );
 
     setState(() {
       _sending = true;
       _messages = [..._messages, local];
-      _messageController.clear();
+      if (clearDraft) _messageController.clear();
       _error = null;
     });
 
@@ -597,6 +624,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         roomId: room.id,
         clientMessageId: clientMessageId,
         body: body,
+        type: type,
+        attachments: attachments,
         idempotencyKey: newUuid(),
       );
       if (!mounted) return;
@@ -1214,6 +1243,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     focusNode: _messageFocus,
                     sending: _sending,
                     onSend: _sendMessage,
+                    onStickerSend: _sendStickerMessage,
                   ),
           ),
         ],
@@ -1965,6 +1995,7 @@ class _ChatPane extends StatefulWidget {
     required this.focusNode,
     required this.sending,
     required this.onSend,
+    required this.onStickerSend,
   });
 
   final String roomId;
@@ -1977,6 +2008,7 @@ class _ChatPane extends StatefulWidget {
   final FocusNode focusNode;
   final bool sending;
   final VoidCallback onSend;
+  final Future<void> Function(Sticker sticker) onStickerSend;
 
   @override
   State<_ChatPane> createState() => _ChatPaneState();
@@ -2064,34 +2096,6 @@ class _ChatPaneState extends State<_ChatPane> {
     setState(() {
       _openPanel = _openPanel == panel ? null : panel;
     });
-  }
-
-  void _insertComposerText(String value) {
-    final text = widget.controller.text;
-    final selection = widget.controller.selection;
-    var start = text.length;
-    var end = text.length;
-
-    if (selection.isValid) {
-      start = selection.start;
-      end = selection.end;
-      if (start < 0) start = 0;
-      if (end < 0) end = 0;
-      if (start > text.length) start = text.length;
-      if (end > text.length) end = text.length;
-      if (start > end) {
-        final previousStart = start;
-        start = end;
-        end = previousStart;
-      }
-    }
-
-    final next = text.replaceRange(start, end, value);
-    widget.controller.value = TextEditingValue(
-      text: next,
-      selection: TextSelection.collapsed(offset: start + value.length),
-    );
-    widget.focusNode.requestFocus();
   }
 
   Widget _buildComposerInput() {
@@ -2191,7 +2195,10 @@ class _ChatPaneState extends State<_ChatPane> {
           error: _stickerPackError,
           onRefresh: () => _loadStickerPacks(forceReload: true),
           onSourceChanged: (source) => setState(() => _stickerSource = source),
-          onStickerSelected: _insertComposerText,
+          onStickerSelected: (sticker) {
+            _closePanel();
+            unawaited(widget.onStickerSend(sticker));
+          },
         ),
         _ComposerPanel.voice => const _PlaceholderPanel(text: '语音输入开发中'),
         _ComposerPanel.file => const _PlaceholderPanel(text: '文件上传开发中'),
@@ -2478,7 +2485,7 @@ class _StickerPanel extends StatelessWidget {
   final String? error;
   final Future<void> Function() onRefresh;
   final ValueChanged<_StickerSource> onSourceChanged;
-  final ValueChanged<String> onStickerSelected;
+  final ValueChanged<Sticker> onStickerSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -2532,7 +2539,7 @@ class _StickerPanel extends StatelessWidget {
         for (final sticker in stickers)
           _StickerButton(
             sticker: sticker,
-            onPressed: () => onStickerSelected('[${sticker.name}]'),
+            onPressed: () => onStickerSelected(sticker),
           ),
       ],
     );
@@ -2905,6 +2912,7 @@ class _MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sticker = message.stickerAttachment;
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
       child: DecoratedBox(
@@ -2957,16 +2965,10 @@ class _MessageBubble extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    SelectableText(
-                      message.body,
-                      cursorColor: _cyan,
-                      selectionColor: _cyan.withValues(alpha: 0.28),
-                      style: const TextStyle(
-                        color: _textPrimary,
-                        fontSize: 15,
-                        height: 1.4,
-                      ),
-                    ),
+                    if (sticker == null)
+                      _MessageText(text: message.body)
+                    else
+                      _StickerMessageImage(message: message, sticker: sticker),
                     if (message.pending || message.failed) ...[
                       const SizedBox(height: 6),
                       Text(
@@ -2981,6 +2983,74 @@ class _MessageBubble extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MessageText extends StatelessWidget {
+  const _MessageText({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return SelectableText(
+      text,
+      cursorColor: _cyan,
+      selectionColor: _cyan.withValues(alpha: 0.28),
+      style: const TextStyle(color: _textPrimary, fontSize: 15, height: 1.4),
+    );
+  }
+}
+
+class _StickerMessageImage extends StatelessWidget {
+  const _StickerMessageImage({required this.message, required this.sticker});
+
+  final Message message;
+  final MessageAttachment sticker;
+
+  @override
+  Widget build(BuildContext context) {
+    final asset = sticker.asset;
+    final imageUrl = AppConfigScope.of(
+      context,
+    ).resolveAssetUrl(asset?.url ?? asset?.thumbnailUrl);
+    if (imageUrl == null) return _MessageText(text: message.body);
+
+    final label = sticker.name ?? message.body;
+    return Tooltip(
+      message: label,
+      child: Semantics(
+        image: true,
+        label: label,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 168, maxHeight: 168),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: Image.network(
+              imageUrl,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.medium,
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return const SizedBox.square(
+                  dimension: 72,
+                  child: Center(
+                    child: SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(
+                        color: _cyan,
+                        strokeWidth: 2,
+                      ),
+                    ),
+                  ),
+                );
+              },
+              errorBuilder: (_, _, _) => _MessageText(text: message.body),
+            ),
           ),
         ),
       ),

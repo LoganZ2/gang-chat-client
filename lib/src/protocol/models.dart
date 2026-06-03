@@ -259,6 +259,39 @@ class Sticker {
   }
 }
 
+class MessageAttachment {
+  const MessageAttachment({
+    required this.type,
+    this.stickerId,
+    this.name,
+    this.asset,
+  });
+
+  final String type;
+  final String? stickerId;
+  final String? name;
+  final UploadedAsset? asset;
+
+  factory MessageAttachment.fromJson(Map<String, Object?> json) {
+    final assetJson = _nullableMap(json['asset']);
+    return MessageAttachment(
+      type: json['type'] as String? ?? 'file',
+      stickerId: json['sticker_id'] as String?,
+      name: json['name'] as String?,
+      asset: assetJson == null ? null : UploadedAsset.fromJson(assetJson),
+    );
+  }
+
+  Map<String, Object?> toJson() {
+    return {
+      'type': type,
+      if (stickerId != null) 'sticker_id': stickerId,
+      if (name != null) 'name': name,
+      if (asset != null) 'asset': asset!.toJson(),
+    };
+  }
+}
+
 class LastMessagePreview {
   const LastMessagePreview({
     required this.id,
@@ -534,8 +567,10 @@ class Message {
     required this.roomId,
     required this.sender,
     required this.clientMessageId,
+    this.type = 'text',
     required this.body,
     required this.createdAt,
+    this.attachments = const [],
     this.pending = false,
     this.failed = false,
   });
@@ -544,10 +579,22 @@ class Message {
   final String roomId;
   final UserSummary sender;
   final String clientMessageId;
+  final String type;
   final String body;
   final DateTime createdAt;
+  final List<MessageAttachment> attachments;
   final bool pending;
   final bool failed;
+
+  MessageAttachment? get stickerAttachment {
+    if (type != 'sticker') return null;
+    for (final attachment in attachments) {
+      if (attachment.type == 'sticker' && attachment.asset != null) {
+        return attachment;
+      }
+    }
+    return null;
+  }
 
   factory Message.fromJson(Map<String, Object?> json) {
     return Message(
@@ -555,7 +602,11 @@ class Message {
       roomId: json['room_id']! as String,
       sender: UserSummary.fromJson(json['sender']! as Map<String, Object?>),
       clientMessageId: json['client_message_id']! as String,
-      body: json['body']! as String,
+      type: json['type'] as String? ?? 'text',
+      body: json['body'] as String? ?? '',
+      attachments: _listOfMaps(
+        json['attachments'],
+      ).map(MessageAttachment.fromJson).toList(),
       createdAt: DateTime.parse(json['created_at']! as String),
     );
   }
@@ -565,14 +616,18 @@ class Message {
     required UserSummary sender,
     required String clientMessageId,
     required String body,
+    String type = 'text',
+    List<MessageAttachment> attachments = const [],
   }) {
     return Message(
       id: clientMessageId,
       roomId: roomId,
       sender: sender,
       clientMessageId: clientMessageId,
+      type: type,
       body: body,
       createdAt: DateTime.now().toUtc(),
+      attachments: attachments,
       pending: true,
     );
   }
@@ -583,8 +638,10 @@ class Message {
       roomId: roomId,
       sender: sender,
       clientMessageId: clientMessageId,
+      type: type,
       body: body,
       createdAt: createdAt,
+      attachments: attachments,
       failed: true,
     );
   }
