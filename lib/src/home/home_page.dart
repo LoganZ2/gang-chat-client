@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:io' show File, IOSink, Platform;
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -79,6 +79,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   List<RoomCard> _rooms = [];
   List<Message> _messages = [];
   final Map<String, _FileTransferState> _fileTransfers = {};
+  final Map<String, _FileTransferState> _fileDownloads = {};
   RoomDetail? _selectedRoom;
   LiveState? _live;
   String? _selectedRoomId;
@@ -800,7 +801,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
 
     final clientMessageId = newClientId('cmsg');
-    final transfer = _FileTransferState(
+    final transfer = _FileTransferState.upload(
       controller: UploadTransferController(),
       totalBytes: length,
     );
@@ -845,8 +846,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           final current = _fileTransfers[clientMessageId];
           if (current == null || current.cancelled) return;
           setState(() {
-            current.sentBytes = sentBytes;
-            current.totalBytes = totalBytes;
+            current.updateProgress(
+              sentBytes: sentBytes,
+              totalBytes: totalBytes,
+            );
           });
         },
       );
@@ -859,7 +862,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       );
       setState(() {
         transfer.sendingMessage = true;
-        transfer.sentBytes = transfer.totalBytes;
+        transfer.updateProgress(
+          sentBytes: transfer.totalBytes,
+          totalBytes: transfer.totalBytes,
+        );
         _messages = _updateMessageByClientId(
           _messages,
           clientMessageId,
@@ -906,7 +912,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void _pauseFileUpload(String clientMessageId) {
     final transfer = _fileTransfers[clientMessageId];
     if (transfer == null || !transfer.active || transfer.paused) return;
-    setState(() => transfer.controller.pause());
+    setState(() {
+      transfer.controller.pause();
+      transfer.stopSpeed();
+    });
   }
 
   void _resumeFileUpload(String clientMessageId) {
@@ -930,6 +939,157 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           .where((message) => message.clientMessageId != clientMessageId)
           .toList();
     });
+  }
+
+  Future<void> _downloadFileAttachment({
+    required String downloadKey,
+    required MessageAttachment attachment,
+    required String url,
+  }) async {
+    if (_fileDownloads.containsKey(downloadKey)) return;
+
+    final uri = Uri.tryParse(url);
+    if (uri == null) {
+      _showToast('Cannot download file');
+      return;
+    }
+
+    final filename = _fileAttachmentTitle(attachment);
+    final location = await getSaveLocation(
+      suggestedName: filename,
+      confirmButtonText: 'Save',
+    );
+    if (location == null || !mounted) return;
+
+    final destinationPath = location.path;
+    final transfer = _FileTransferState.download(
+      controller: UploadTransferController(),
+      totalBytes: attachment.asset?.sizeBytes ?? 0,
+      destinationPath: destinationPath,
+    );
+    setState(() => _fileDownloads[downloadKey] = transfer);
+
+    http.Client? client;
+    IOSink? sink;
+    try {
+      client = http.Client();
+      transfer.downloadClient = client;
+      final request = http.Request('GET', uri);
+      final response = await client.send(request);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw StateError('Download failed (${response.statusCode})');
+      }
+
+      final totalBytes =
+          response.contentLength ?? attachment.asset?.sizeBytes ?? 0;
+      var receivedBytes = 0;
+      if (mounted && _fileDownloads[downloadKey] == transfer) {
+        setState(() {
+          transfer.updateProgress(sentBytes: 0, totalBytes: totalBytes);
+        });
+      }
+
+      final file = File(destinationPath);
+      sink = file.openWrite();
+      transfer.wroteDestination = true;
+      await for (final chunk in response.stream) {
+        await transfer.controller.waitIfPaused();
+        if (transfer.cancelled) throw const _DownloadCancelledException();
+
+        sink.add(chunk);
+        receivedBytes += chunk.length;
+        if (!mounted) continue;
+        final current = _fileDownloads[downloadKey];
+        if (current == null || current.cancelled) {
+          throw const _DownloadCancelledException();
+        }
+        setState(() {
+          current.updateProgress(
+            sentBytes: receivedBytes,
+            totalBytes: totalBytes,
+          );
+        });
+      }
+
+      await sink.flush();
+      await sink.close();
+      sink = null;
+
+      if (!mounted || transfer.cancelled) return;
+      setState(() => _fileDownloads.remove(downloadKey));
+      _showToast('File downloaded');
+    } on _DownloadCancelledException {
+      if (transfer.wroteDestination) {
+        await _deletePartialDownload(destinationPath);
+      }
+    } catch (e) {
+      if (transfer.cancelled) {
+        if (transfer.wroteDestination) {
+          await _deletePartialDownload(destinationPath);
+        }
+        return;
+      }
+      if (!mounted) return;
+      setState(() {
+        transfer.failed = true;
+        transfer.error = e.toString();
+        transfer.stopSpeed();
+      });
+      _showToast(e.toString());
+    } finally {
+      client?.close();
+      transfer.downloadClient = null;
+      if (sink != null) {
+        try {
+          await sink.close();
+        } catch (_) {
+          // The client may have been closed to cancel the response stream.
+        }
+      }
+      if (transfer.cancelled && mounted) {
+        setState(() => _fileDownloads.remove(downloadKey));
+      }
+    }
+  }
+
+  void _pauseFileDownload(String downloadKey) {
+    final transfer = _fileDownloads[downloadKey];
+    if (transfer == null || !transfer.active || transfer.paused) return;
+    setState(() {
+      transfer.controller.pause();
+      transfer.stopSpeed();
+    });
+  }
+
+  void _resumeFileDownload(String downloadKey) {
+    final transfer = _fileDownloads[downloadKey];
+    if (transfer == null || !transfer.paused) return;
+    setState(() => transfer.controller.resume());
+  }
+
+  void _cancelFileDownload(String downloadKey) {
+    final transfer = _fileDownloads[downloadKey];
+    if (transfer == null) return;
+    if (!transfer.active) {
+      setState(() => _fileDownloads.remove(downloadKey));
+      final destinationPath = transfer.destinationPath;
+      if (destinationPath != null && transfer.wroteDestination) {
+        unawaited(_deletePartialDownload(destinationPath));
+      }
+      return;
+    }
+    transfer.controller.cancel();
+    transfer.downloadClient?.close();
+    setState(() => _fileDownloads.remove(downloadKey));
+  }
+
+  Future<void> _deletePartialDownload(String path) async {
+    try {
+      final file = File(path);
+      if (await file.exists()) await file.delete();
+    } catch (_) {
+      // Best effort cleanup for a cancelled or failed partial download.
+    }
   }
 
   Future<void> _sendMessagePayload({
@@ -1289,6 +1449,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _liveSession.onForciblyRemoved = null;
     _liveSession.onPublishPermissionChanged = null;
     _liveSession.dispose();
+    for (final transfer in _fileDownloads.values) {
+      transfer.controller.cancel();
+      transfer.downloadClient?.close();
+      final destinationPath = transfer.destinationPath;
+      if (destinationPath != null && transfer.wroteDestination) {
+        unawaited(_deletePartialDownload(destinationPath));
+      }
+    }
     _api.close();
     _messageController.removeListener(_onMessageDraftChanged);
     _messageController.dispose();
@@ -1584,6 +1752,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     stickerPackStore: widget.stickerPackStore,
                     messages: _messages,
                     fileTransfers: _fileTransfers,
+                    fileDownloads: _fileDownloads,
                     currentUserId: _currentUser.id,
                     controller: _messageController,
                     focusNode: _messageFocus,
@@ -1594,6 +1763,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     onFilePause: _pauseFileUpload,
                     onFileResume: _resumeFileUpload,
                     onFileCancel: _cancelFileUpload,
+                    onFileDownload: _downloadFileAttachment,
+                    onFileDownloadPause: _pauseFileDownload,
+                    onFileDownloadResume: _resumeFileDownload,
+                    onFileDownloadCancel: _cancelFileDownload,
                     onOpenUserInfo: _showUserInfo,
                   ),
           ),
@@ -2334,22 +2507,75 @@ enum _ComposerPanel { stickers, voice, file, tools }
 
 enum _StickerSource { personal, room }
 
-class _FileTransferState {
-  _FileTransferState({required this.controller, required this.totalBytes});
+class _DownloadCancelledException implements Exception {
+  const _DownloadCancelledException();
 
+  @override
+  String toString() => 'Download cancelled';
+}
+
+enum _FileTransferDirection { upload, download }
+
+class _FileTransferState {
+  _FileTransferState.upload({
+    required this.controller,
+    required this.totalBytes,
+  }) : direction = _FileTransferDirection.upload,
+       destinationPath = null;
+
+  _FileTransferState.download({
+    required this.controller,
+    required this.totalBytes,
+    required this.destinationPath,
+  }) : direction = _FileTransferDirection.download;
+
+  final _FileTransferDirection direction;
   final UploadTransferController controller;
+  final String? destinationPath;
   int sentBytes = 0;
   int totalBytes;
+  double bytesPerSecond = 0;
+  http.Client? downloadClient;
+  bool wroteDestination = false;
   bool sendingMessage = false;
   bool failed = false;
   String? error;
+  DateTime? _speedSampleAt;
+  int _speedSampleBytes = 0;
 
+  bool get isDownload => direction == _FileTransferDirection.download;
   bool get paused => controller.isPaused;
   bool get cancelled => controller.isCancelled;
   bool get active => !failed && !cancelled && !sendingMessage;
+  bool get hasKnownTotal => totalBytes > 0;
   double get progress {
     if (totalBytes <= 0) return 0;
     return (sentBytes / totalBytes).clamp(0.0, 1.0).toDouble();
+  }
+
+  void updateProgress({required int sentBytes, required int totalBytes}) {
+    final now = DateTime.now();
+    if (_speedSampleAt == null) {
+      _speedSampleAt = now;
+      _speedSampleBytes = this.sentBytes;
+    } else {
+      final elapsed = now.difference(_speedSampleAt!).inMilliseconds;
+      if (elapsed >= 400 || sentBytes >= totalBytes && totalBytes > 0) {
+        final deltaBytes = sentBytes - _speedSampleBytes;
+        bytesPerSecond = elapsed > 0 ? deltaBytes * 1000 / elapsed : 0;
+        _speedSampleAt = now;
+        _speedSampleBytes = sentBytes;
+      }
+    }
+
+    this.sentBytes = sentBytes;
+    this.totalBytes = totalBytes;
+  }
+
+  void stopSpeed() {
+    bytesPerSecond = 0;
+    _speedSampleAt = null;
+    _speedSampleBytes = sentBytes;
   }
 }
 
@@ -2361,6 +2587,7 @@ class _ChatPane extends StatefulWidget {
     required this.stickerPackStore,
     required this.messages,
     required this.fileTransfers,
+    required this.fileDownloads,
     required this.currentUserId,
     required this.controller,
     required this.focusNode,
@@ -2371,6 +2598,10 @@ class _ChatPane extends StatefulWidget {
     required this.onFilePause,
     required this.onFileResume,
     required this.onFileCancel,
+    required this.onFileDownload,
+    required this.onFileDownloadPause,
+    required this.onFileDownloadResume,
+    required this.onFileDownloadCancel,
     required this.onOpenUserInfo,
   });
 
@@ -2380,6 +2611,7 @@ class _ChatPane extends StatefulWidget {
   final StickerPackStore stickerPackStore;
   final List<Message> messages;
   final Map<String, _FileTransferState> fileTransfers;
+  final Map<String, _FileTransferState> fileDownloads;
   final String currentUserId;
   final TextEditingController controller;
   final FocusNode focusNode;
@@ -2390,6 +2622,15 @@ class _ChatPane extends StatefulWidget {
   final ValueChanged<String> onFilePause;
   final ValueChanged<String> onFileResume;
   final ValueChanged<String> onFileCancel;
+  final Future<void> Function({
+    required String downloadKey,
+    required MessageAttachment attachment,
+    required String url,
+  })
+  onFileDownload;
+  final ValueChanged<String> onFileDownloadPause;
+  final ValueChanged<String> onFileDownloadResume;
+  final ValueChanged<String> onFileDownloadCancel;
   final ValueChanged<UserSummary> onOpenUserInfo;
 
   @override
@@ -2694,12 +2935,17 @@ class _ChatPaneState extends State<_ChatPane> {
                             mine: message.sender.id == widget.currentUserId,
                             fileTransfer:
                                 widget.fileTransfers[message.clientMessageId],
+                            fileDownloads: widget.fileDownloads,
                             onFilePause: () =>
                                 widget.onFilePause(message.clientMessageId),
                             onFileResume: () =>
                                 widget.onFileResume(message.clientMessageId),
                             onFileCancel: () =>
                                 widget.onFileCancel(message.clientMessageId),
+                            onFileDownload: widget.onFileDownload,
+                            onFileDownloadPause: widget.onFileDownloadPause,
+                            onFileDownloadResume: widget.onFileDownloadResume,
+                            onFileDownloadCancel: widget.onFileDownloadCancel,
                             onOpenUserInfo: () =>
                                 widget.onOpenUserInfo(message.sender),
                           );
@@ -3408,18 +3654,33 @@ class _MessageBubble extends StatelessWidget {
     required this.message,
     required this.mine,
     required this.fileTransfer,
+    required this.fileDownloads,
     required this.onFilePause,
     required this.onFileResume,
     required this.onFileCancel,
+    required this.onFileDownload,
+    required this.onFileDownloadPause,
+    required this.onFileDownloadResume,
+    required this.onFileDownloadCancel,
     required this.onOpenUserInfo,
   });
 
   final Message message;
   final bool mine;
   final _FileTransferState? fileTransfer;
+  final Map<String, _FileTransferState> fileDownloads;
   final VoidCallback onFilePause;
   final VoidCallback onFileResume;
   final VoidCallback onFileCancel;
+  final Future<void> Function({
+    required String downloadKey,
+    required MessageAttachment attachment,
+    required String url,
+  })
+  onFileDownload;
+  final ValueChanged<String> onFileDownloadPause;
+  final ValueChanged<String> onFileDownloadResume;
+  final ValueChanged<String> onFileDownloadCancel;
   final VoidCallback onOpenUserInfo;
 
   @override
@@ -3493,9 +3754,14 @@ class _MessageBubble extends StatelessWidget {
                         message: message,
                         attachments: files,
                         transfer: fileTransfer,
+                        downloads: fileDownloads,
                         onPause: onFilePause,
                         onResume: onFileResume,
                         onCancel: onFileCancel,
+                        onDownload: onFileDownload,
+                        onDownloadPause: onFileDownloadPause,
+                        onDownloadResume: onFileDownloadResume,
+                        onDownloadCancel: onFileDownloadCancel,
                       ),
                     if (sticker == null && files.isEmpty)
                       _MessageText(text: message.body),
@@ -3569,17 +3835,32 @@ class _FileAttachmentList extends StatelessWidget {
     required this.message,
     required this.attachments,
     required this.transfer,
+    required this.downloads,
     required this.onPause,
     required this.onResume,
     required this.onCancel,
+    required this.onDownload,
+    required this.onDownloadPause,
+    required this.onDownloadResume,
+    required this.onDownloadCancel,
   });
 
   final Message message;
   final List<MessageAttachment> attachments;
   final _FileTransferState? transfer;
+  final Map<String, _FileTransferState> downloads;
   final VoidCallback onPause;
   final VoidCallback onResume;
   final VoidCallback onCancel;
+  final Future<void> Function({
+    required String downloadKey,
+    required MessageAttachment attachment,
+    required String url,
+  })
+  onDownload;
+  final ValueChanged<String> onDownloadPause;
+  final ValueChanged<String> onDownloadResume;
+  final ValueChanged<String> onDownloadCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -3598,12 +3879,36 @@ class _FileAttachmentList extends StatelessWidget {
         ],
         for (final entry in attachments.asMap().entries) ...[
           if (entry.key > 0) const SizedBox(height: 8),
-          _FileAttachmentCard(
-            attachment: entry.value,
-            transfer: entry.key == 0 ? transfer : null,
-            onPause: onPause,
-            onResume: onResume,
-            onCancel: onCancel,
+          Builder(
+            builder: (context) {
+              final downloadKey = _fileDownloadKey(
+                message,
+                entry.value,
+                entry.key,
+              );
+              final uploadTransfer = entry.key == 0 ? transfer : null;
+              final downloadTransfer = downloads[downloadKey];
+              final activeTransfer = uploadTransfer ?? downloadTransfer;
+
+              return _FileAttachmentCard(
+                attachment: entry.value,
+                transfer: activeTransfer,
+                onDownload: ({required attachment, required url}) => onDownload(
+                  downloadKey: downloadKey,
+                  attachment: attachment,
+                  url: url,
+                ),
+                onPause: uploadTransfer != null
+                    ? onPause
+                    : () => onDownloadPause(downloadKey),
+                onResume: uploadTransfer != null
+                    ? onResume
+                    : () => onDownloadResume(downloadKey),
+                onCancel: uploadTransfer != null
+                    ? onCancel
+                    : () => onDownloadCancel(downloadKey),
+              );
+            },
           ),
         ],
       ],
@@ -3615,6 +3920,7 @@ class _FileAttachmentCard extends StatelessWidget {
   const _FileAttachmentCard({
     required this.attachment,
     required this.transfer,
+    required this.onDownload,
     required this.onPause,
     required this.onResume,
     required this.onCancel,
@@ -3622,6 +3928,11 @@ class _FileAttachmentCard extends StatelessWidget {
 
   final MessageAttachment attachment;
   final _FileTransferState? transfer;
+  final Future<void> Function({
+    required MessageAttachment attachment,
+    required String url,
+  })
+  onDownload;
   final VoidCallback onPause;
   final VoidCallback onResume;
   final VoidCallback onCancel;
@@ -3650,7 +3961,7 @@ class _FileAttachmentCard extends StatelessWidget {
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: canDownload
-                ? () => unawaited(_downloadAsset(context, attachment, url))
+                ? () => unawaited(onDownload(attachment: attachment, url: url))
                 : null,
             child: DecoratedBox(
               decoration: BoxDecoration(
@@ -3757,19 +4068,34 @@ class _FileAttachmentTrailing extends StatelessWidget {
         );
       }
       if (transfer.failed) {
-        return const Icon(Icons.error_outline, color: _danger, size: 20);
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, color: _danger, size: 20),
+            if (transfer.isDownload) ...[
+              const SizedBox(width: 6),
+              _InlineIconButton(
+                tooltip: 'Dismiss download',
+                icon: Icons.close,
+                onPressed: onCancel,
+                danger: true,
+              ),
+            ],
+          ],
+        );
       }
+      final action = transfer.isDownload ? 'download' : 'upload';
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           _InlineIconButton(
-            tooltip: transfer.paused ? 'Resume upload' : 'Pause upload',
+            tooltip: transfer.paused ? 'Resume $action' : 'Pause $action',
             icon: transfer.paused ? Icons.play_arrow : Icons.pause,
             onPressed: transfer.paused ? onResume : onPause,
           ),
           const SizedBox(width: 6),
           _InlineIconButton(
-            tooltip: 'Cancel upload',
+            tooltip: 'Cancel $action',
             icon: Icons.close,
             onPressed: onCancel,
             danger: true,
@@ -3792,13 +4118,7 @@ class _FileTransferProgress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = transfer.failed
-        ? 'Failed'
-        : transfer.sendingMessage
-        ? 'Sending'
-        : transfer.paused
-        ? 'Paused ${_formatPercent(transfer.progress)}'
-        : 'Uploading ${_formatPercent(transfer.progress)}';
+    final label = _fileTransferLabel(transfer);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3807,7 +4127,11 @@ class _FileTransferProgress extends StatelessWidget {
           borderRadius: BorderRadius.circular(999),
           child: LinearProgressIndicator(
             minHeight: 4,
-            value: transfer.sendingMessage ? 1 : transfer.progress,
+            value: transfer.sendingMessage
+                ? 1
+                : transfer.hasKnownTotal
+                ? transfer.progress
+                : null,
             backgroundColor: _borderColor,
             valueColor: AlwaysStoppedAnimation<Color>(
               transfer.failed ? _danger : _cyan,
@@ -6575,8 +6899,45 @@ String _formatFileSize(int bytes) {
   return '${value.toStringAsFixed(digits)} ${units[unitIndex]}';
 }
 
+String _formatFileSpeed(double bytesPerSecond) {
+  if (bytesPerSecond <= 0) return '0 B/s';
+  return '${_formatFileSize(bytesPerSecond.round())}/s';
+}
+
 String _formatPercent(double value) {
   return '${(value.clamp(0.0, 1.0) * 100).round()}%';
+}
+
+String _fileTransferLabel(_FileTransferState transfer) {
+  if (transfer.failed) return 'Failed';
+  if (transfer.sendingMessage) return 'Sending';
+
+  final status = transfer.paused
+      ? 'Paused'
+      : transfer.isDownload
+      ? 'Downloading'
+      : 'Uploading';
+  final progress = transfer.hasKnownTotal
+      ? _formatPercent(transfer.progress)
+      : _formatFileSize(transfer.sentBytes);
+  final speed = transfer.paused || transfer.bytesPerSecond <= 0
+      ? ''
+      : ' - ${_formatFileSpeed(transfer.bytesPerSecond)}';
+  return '$status $progress$speed';
+}
+
+String _fileDownloadKey(
+  Message message,
+  MessageAttachment attachment,
+  int index,
+) {
+  final asset = attachment.asset;
+  final assetKey =
+      asset?.id ??
+      asset?.url ??
+      attachment.name ??
+      _fileAttachmentTitle(attachment);
+  return '${message.clientMessageId}:$index:$assetKey';
 }
 
 String _mimeTypeFromFilename(String filename) {
@@ -6619,51 +6980,6 @@ IconData _fileIconForMime(String? mimeType) {
     return Icons.description_outlined;
   }
   return Icons.insert_drive_file_outlined;
-}
-
-Future<void> _downloadAsset(
-  BuildContext context,
-  MessageAttachment attachment,
-  String url,
-) async {
-  final uri = Uri.tryParse(url);
-  if (uri == null) {
-    _showDownloadNotice(context, 'Cannot download file');
-    return;
-  }
-
-  final filename = _fileAttachmentTitle(attachment);
-  final location = await getSaveLocation(
-    suggestedName: filename,
-    confirmButtonText: 'Save',
-  );
-  if (location == null || !context.mounted) return;
-
-  try {
-    final response = await http.get(uri);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw StateError('Download failed (${response.statusCode})');
-    }
-    final mimeType =
-        response.headers['content-type']?.split(';').first.trim() ??
-        attachment.asset?.mimeType ??
-        'application/octet-stream';
-    await XFile.fromData(
-      response.bodyBytes,
-      mimeType: mimeType,
-      name: filename,
-    ).saveTo(location.path);
-    if (context.mounted) _showDownloadNotice(context, 'File downloaded');
-  } catch (e) {
-    if (context.mounted) _showDownloadNotice(context, e.toString());
-  }
-}
-
-void _showDownloadNotice(BuildContext context, String message) {
-  final messenger = ScaffoldMessenger.maybeOf(context);
-  messenger?.showSnackBar(
-    SnackBar(content: Text(message), backgroundColor: _primaryDarkRaised),
-  );
 }
 
 Color _avatarColor(String key) {
