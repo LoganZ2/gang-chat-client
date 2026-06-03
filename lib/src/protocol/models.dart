@@ -1,3 +1,44 @@
+class UserCommonRoom {
+  const UserCommonRoom({
+    required this.id,
+    required this.rid,
+    required this.name,
+    this.visibility = 'private',
+    this.roomDisplayName,
+    this.roomRole,
+  });
+
+  final String id;
+  final String rid;
+  final String name;
+  final String visibility;
+  final String? roomDisplayName;
+  final String? roomRole;
+
+  factory UserCommonRoom.fromJson(Map<String, Object?> json) {
+    return UserCommonRoom(
+      id: _stringFromJson(json, const ['id', 'room_id']) ?? '',
+      rid: _stringFromJson(json, const ['rid', 'room_rid']) ?? '',
+      name: _stringFromJson(json, const ['name', 'room_name']) ?? '',
+      visibility:
+          _stringFromJson(json, const ['visibility', 'room_visibility']) ??
+          'private',
+      roomDisplayName: _stringFromJson(json, const [
+        'room_display_name',
+        'room_username',
+        'room_nickname',
+        'room_remark',
+        'member_display_name',
+      ]),
+      roomRole:
+          _stringFromJson(json, const ['room_role', 'membership_role']) ??
+          _stringFromJson(_nullableMap(json['membership']), const ['role']),
+    );
+  }
+
+  bool get isUsable => id.trim().isNotEmpty && name.trim().isNotEmpty;
+}
+
 class UserSummary {
   const UserSummary({
     required this.id,
@@ -5,6 +46,17 @@ class UserSummary {
     required this.displayName,
     required this.avatarUrl,
     required this.defaultAvatarKey,
+    this.uid,
+    this.bio,
+    this.gender,
+    this.email,
+    this.emailPublic,
+    this.phoneNumber,
+    this.phoneNumberPublic,
+    this.roomDisplayName,
+    this.roomRole,
+    this.isSuperuser = false,
+    this.commonRooms = const [],
   });
 
   final String id;
@@ -12,6 +64,17 @@ class UserSummary {
   final String displayName;
   final String? avatarUrl;
   final String defaultAvatarKey;
+  final String? uid;
+  final String? bio;
+  final String? gender;
+  final String? email;
+  final bool? emailPublic;
+  final String? phoneNumber;
+  final bool? phoneNumberPublic;
+  final String? roomDisplayName;
+  final String? roomRole;
+  final bool isSuperuser;
+  final List<UserCommonRoom> commonRooms;
 
   factory UserSummary.fromJson(Map<String, Object?> json) {
     final username = json['username']! as String;
@@ -21,6 +84,99 @@ class UserSummary {
       displayName: json['display_name'] as String? ?? username,
       avatarUrl: json['avatar_url'] as String?,
       defaultAvatarKey: json['default_avatar_key'] as String? ?? 'blue-3',
+      uid: _stringFromJson(json, const ['uid', 'user_uid']),
+      bio: _stringFromJson(json, const ['bio', 'signature']),
+      gender: _stringFromJson(json, const ['gender']),
+      email: _stringFromJson(json, const ['email']),
+      emailPublic: _boolFromJson(json, const ['email_public']),
+      phoneNumber: _stringFromJson(json, const ['phone_number', 'phone']),
+      phoneNumberPublic: _boolFromJson(json, const [
+        'phone_number_public',
+        'phone_public',
+      ]),
+      roomDisplayName: _stringFromJson(json, const [
+        'room_display_name',
+        'room_username',
+        'room_nickname',
+        'room_remark',
+        'remark_name',
+        'remark',
+      ]),
+      roomRole:
+          _stringFromJson(json, const ['room_role', 'membership_role']) ??
+          _stringFromJson(_nullableMap(json['membership']), const ['role']) ??
+          _stringFromJson(json, const ['role']),
+      isSuperuser: json['is_superuser'] as bool? ?? false,
+      commonRooms: _listOfMaps(
+        json['common_rooms'],
+      ).map(UserCommonRoom.fromJson).where((room) => room.isUsable).toList(),
+    );
+  }
+
+  UserSummary copyWith({
+    String? displayName,
+    String? avatarUrl,
+    String? defaultAvatarKey,
+    String? uid,
+    String? bio,
+    String? gender,
+    String? email,
+    bool? emailPublic,
+    String? phoneNumber,
+    bool? phoneNumberPublic,
+    String? roomDisplayName,
+    String? roomRole,
+    bool? isSuperuser,
+    List<UserCommonRoom>? commonRooms,
+  }) {
+    return UserSummary(
+      id: id,
+      username: username,
+      displayName: displayName ?? this.displayName,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      defaultAvatarKey: defaultAvatarKey ?? this.defaultAvatarKey,
+      uid: uid ?? this.uid,
+      bio: bio ?? this.bio,
+      gender: gender ?? this.gender,
+      email: email ?? this.email,
+      emailPublic: emailPublic ?? this.emailPublic,
+      phoneNumber: phoneNumber ?? this.phoneNumber,
+      phoneNumberPublic: phoneNumberPublic ?? this.phoneNumberPublic,
+      roomDisplayName: roomDisplayName ?? this.roomDisplayName,
+      roomRole: roomRole ?? this.roomRole,
+      isSuperuser: isSuperuser ?? this.isSuperuser,
+      commonRooms: commonRooms ?? this.commonRooms,
+    );
+  }
+
+  UserSummary mergeMissing(UserSummary fallback) {
+    String? nonEmptyOrFallback(String? value, String? fallback) {
+      if (value != null && value.trim().isNotEmpty) return value;
+      return fallback;
+    }
+
+    return UserSummary(
+      id: id,
+      username: username,
+      displayName: displayName.trim().isEmpty
+          ? fallback.displayName
+          : displayName,
+      avatarUrl: avatarUrl ?? fallback.avatarUrl,
+      defaultAvatarKey: defaultAvatarKey,
+      uid: nonEmptyOrFallback(uid, fallback.uid),
+      bio: nonEmptyOrFallback(bio, fallback.bio),
+      gender: nonEmptyOrFallback(gender, fallback.gender),
+      email: nonEmptyOrFallback(email, fallback.email),
+      emailPublic: emailPublic ?? fallback.emailPublic,
+      phoneNumber: nonEmptyOrFallback(phoneNumber, fallback.phoneNumber),
+      phoneNumberPublic: phoneNumberPublic ?? fallback.phoneNumberPublic,
+      roomDisplayName: nonEmptyOrFallback(
+        roomDisplayName,
+        fallback.roomDisplayName,
+      ),
+      roomRole: nonEmptyOrFallback(roomRole, fallback.roomRole),
+      isSuperuser: isSuperuser || fallback.isSuperuser,
+      commonRooms: commonRooms.isNotEmpty ? commonRooms : fallback.commonRooms,
     );
   }
 }
@@ -91,10 +247,18 @@ class CurrentUser {
   UserSummary toSummary() {
     return UserSummary(
       id: id,
+      uid: uid,
       username: username,
       displayName: displayName,
+      bio: bio,
+      gender: gender,
+      email: email,
+      emailPublic: emailPublic,
+      phoneNumber: phoneNumber,
+      phoneNumberPublic: phoneNumberPublic,
       avatarUrl: avatarUrl,
       defaultAvatarKey: defaultAvatarKey,
+      isSuperuser: isSuperuser,
     );
   }
 }
@@ -335,10 +499,14 @@ class RoomCard {
     required this.lastMessage,
     required this.unreadCount,
     required this.updatedAt,
+    this.rid = '',
+    this.visibility = 'private',
   });
 
   final String id;
   final String name;
+  final String rid;
+  final String visibility;
   final String? avatarUrl;
   final String defaultAvatarKey;
   final int memberCount;
@@ -352,6 +520,8 @@ class RoomCard {
     return RoomCard(
       id: json['id']! as String,
       name: json['name']! as String,
+      rid: json['rid'] as String? ?? '',
+      visibility: json['visibility'] as String? ?? 'private',
       avatarUrl: json['avatar_url'] as String?,
       defaultAvatarKey: json['default_avatar_key'] as String? ?? 'room-1',
       memberCount: json['member_count']! as int,
@@ -375,6 +545,8 @@ class RoomCard {
     return RoomCard(
       id: id,
       name: name,
+      rid: rid,
+      visibility: visibility,
       avatarUrl: avatarUrl,
       defaultAvatarKey: defaultAvatarKey,
       memberCount: memberCount,
@@ -496,10 +668,14 @@ class RoomDetail {
     required this.live,
     required this.createdAt,
     required this.updatedAt,
+    this.rid = '',
+    this.visibility = 'private',
   });
 
   final String id;
   final String name;
+  final String rid;
+  final String visibility;
   final String? avatarUrl;
   final String defaultAvatarKey;
   final int memberCount;
@@ -513,6 +689,8 @@ class RoomDetail {
     return RoomDetail(
       id: json['id']! as String,
       name: json['name']! as String,
+      rid: json['rid'] as String? ?? '',
+      visibility: json['visibility'] as String? ?? 'private',
       avatarUrl: json['avatar_url'] as String?,
       defaultAvatarKey: json['default_avatar_key'] as String? ?? 'room-1',
       memberCount: json['member_count']! as int,
@@ -542,6 +720,8 @@ class RoomDetail {
     return RoomDetail(
       id: id,
       name: name,
+      rid: rid,
+      visibility: visibility,
       avatarUrl: avatarUrl,
       defaultAvatarKey: defaultAvatarKey,
       memberCount: memberCount,
@@ -557,6 +737,8 @@ class RoomDetail {
     return RoomCard(
       id: id,
       name: name,
+      rid: rid,
+      visibility: visibility,
       avatarUrl: avatarUrl,
       defaultAvatarKey: defaultAvatarKey,
       memberCount: memberCount,
@@ -609,10 +791,27 @@ class Message {
   }
 
   factory Message.fromJson(Map<String, Object?> json) {
+    final senderCommonRooms = _listOfMaps(
+      json['sender_common_rooms'],
+    ).map(UserCommonRoom.fromJson).where((room) => room.isUsable).toList();
+    final sender = UserSummary.fromJson(json['sender']! as Map<String, Object?>)
+        .copyWith(
+          roomDisplayName: _stringFromJson(json, const [
+            'sender_room_display_name',
+            'sender_room_username',
+            'sender_room_nickname',
+            'sender_room_remark',
+          ]),
+          roomRole: _stringFromJson(json, const [
+            'sender_room_role',
+            'sender_membership_role',
+          ]),
+          commonRooms: senderCommonRooms.isEmpty ? null : senderCommonRooms,
+        );
     return Message(
       id: json['id']! as String,
       roomId: json['room_id']! as String,
-      sender: UserSummary.fromJson(json['sender']! as Map<String, Object?>),
+      sender: sender,
       clientMessageId: json['client_message_id']! as String,
       type: json['type'] as String? ?? 'text',
       body: json['body'] as String? ?? '',
@@ -689,9 +888,26 @@ class LiveParticipant {
   final String connectionState;
 
   factory LiveParticipant.fromJson(Map<String, Object?> json) {
+    final commonRooms = _listOfMaps(
+      json['common_rooms'],
+    ).map(UserCommonRoom.fromJson).where((room) => room.isUsable).toList();
+    final user = UserSummary.fromJson(json['user']! as Map<String, Object?>)
+        .copyWith(
+          roomDisplayName: _stringFromJson(json, const [
+            'room_display_name',
+            'room_username',
+            'room_nickname',
+            'room_remark',
+          ]),
+          roomRole: _stringFromJson(json, const [
+            'room_role',
+            'membership_role',
+          ]),
+          commonRooms: commonRooms.isEmpty ? null : commonRooms,
+        );
     return LiveParticipant(
       liveSessionId: json['live_session_id']! as String,
-      user: UserSummary.fromJson(json['user']! as Map<String, Object?>),
+      user: user,
       joinedAt: DateTime.parse(json['joined_at']! as String),
       micMuted: json['mic_muted']! as bool,
       headphonesMuted: json['headphones_muted'] as bool? ?? false,
@@ -783,6 +999,29 @@ List<Map<String, Object?>> _listOfMaps(Object? value) {
 
 Map<String, Object?>? _nullableMap(Object? value) {
   return value == null ? null : value as Map<String, Object?>;
+}
+
+String? _stringFromJson(Map<String, Object?>? json, List<String> keys) {
+  if (json == null) return null;
+  for (final key in keys) {
+    final value = json[key];
+    final text = switch (value) {
+      String text => text,
+      int number => number.toString(),
+      _ => null,
+    };
+    if (text != null && text.trim().isNotEmpty) return text;
+  }
+  return null;
+}
+
+bool? _boolFromJson(Map<String, Object?>? json, List<String> keys) {
+  if (json == null) return null;
+  for (final key in keys) {
+    final value = json[key];
+    if (value is bool) return value;
+  }
+  return null;
 }
 
 DateTime? _parseDateTime(Object? value) {

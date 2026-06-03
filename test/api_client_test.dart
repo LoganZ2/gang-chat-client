@@ -236,6 +236,72 @@ void main() {
     api.close();
   });
 
+  test('Message parses rich sender fields for profile popups', () {
+    final message = Message.fromJson({
+      'id': 'msg_1',
+      'room_id': 'room_1',
+      'sender': {
+        'id': 'user_1',
+        'uid': '1000001',
+        'username': 'alice',
+        'display_name': 'Alice',
+        'bio': 'Building quietly.',
+        'gender': 'female',
+        'email': 'alice@example.test',
+        'email_public': true,
+        'phone_number': '+8613800000000',
+        'phone_number_public': true,
+        'avatar_url': '/assets/asset_1/avatar.png',
+        'default_avatar_key': 'rose-2',
+        'is_superuser': true,
+        'common_rooms': [
+          {
+            'room_id': 'room_2',
+            'rid': 'R10002',
+            'room_name': 'Side Room',
+            'visibility': 'private',
+            'room_username': 'Alice Side',
+            'membership_role': 'member',
+          },
+        ],
+      },
+      'sender_room_username': 'A. Chen',
+      'sender_room_role': 'admin',
+      'sender_common_rooms': [
+        {
+          'room_id': 'room_3',
+          'rid': 'R10003',
+          'room_name': 'Admin Room',
+          'visibility': 'public',
+          'room_username': 'Alice Admin',
+          'membership_role': 'admin',
+        },
+      ],
+      'client_message_id': 'cmsg_1',
+      'body': 'hello',
+      'created_at': '2026-05-31T14:00:00Z',
+    });
+
+    final sender = message.sender;
+    expect(sender.uid, '1000001');
+    expect(sender.bio, 'Building quietly.');
+    expect(sender.gender, 'female');
+    expect(sender.email, 'alice@example.test');
+    expect(sender.emailPublic, isTrue);
+    expect(sender.phoneNumber, '+8613800000000');
+    expect(sender.phoneNumberPublic, isTrue);
+    expect(sender.roomDisplayName, 'A. Chen');
+    expect(sender.roomRole, 'admin');
+    expect(sender.isSuperuser, isTrue);
+    expect(sender.commonRooms, hasLength(1));
+    expect(sender.commonRooms.single.id, 'room_3');
+    expect(sender.commonRooms.single.rid, 'R10003');
+    expect(sender.commonRooms.single.name, 'Admin Room');
+    expect(sender.commonRooms.single.visibility, 'public');
+    expect(sender.commonRooms.single.roomDisplayName, 'Alice Admin');
+    expect(sender.commonRooms.single.roomRole, 'admin');
+  });
+
   test('sendMessage can send and parse a file attachment', () async {
     final fileAsset = UploadedAsset(
       id: 'asset_1',

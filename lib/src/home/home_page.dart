@@ -423,6 +423,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _rooms[idx] = RoomCard(
           id: existing.id,
           name: existing.name,
+          rid: existing.rid,
+          visibility: existing.visibility,
           avatarUrl: existing.avatarUrl,
           defaultAvatarKey: existing.defaultAvatarKey,
           memberCount: existing.memberCount,
@@ -664,6 +666,85 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       });
     } catch (_) {
       // Best-effort refresh; the SSE/next fetch will reconcile.
+    }
+  }
+
+  void _showUserInfo(UserSummary user) {
+    final room = _selectedRoom;
+    if (room == null) return;
+    final profile = _profileForDialog(user, room);
+    showDialog<void>(
+      context: context,
+      builder: (context) => _UserInfoDialog(
+        user: profile,
+        room: room,
+        commonRooms: profile.id == _currentUser.id
+            ? const []
+            : _commonRoomsForProfile(profile, room),
+        onOpenRoom: _openUserInfoRoom,
+      ),
+    );
+  }
+
+  UserSummary _profileForDialog(UserSummary user, RoomDetail room) {
+    var profile = user;
+    if (user.id == room.createdBy.id) {
+      profile = profile.mergeMissing(room.createdBy);
+    }
+    if (user.id == _currentUser.id) {
+      profile = profile.mergeMissing(_currentUser.toSummary());
+    }
+    final roomRole =
+        profile.roomRole ??
+        (user.id == room.createdBy.id
+            ? 'owner'
+            : user.id == _currentUser.id
+            ? room.myMembership.role
+            : null);
+    return profile.copyWith(roomRole: roomRole);
+  }
+
+  List<UserCommonRoom> _commonRoomsForProfile(
+    UserSummary user,
+    RoomDetail room,
+  ) {
+    return [
+      UserCommonRoom(
+        id: room.id,
+        rid: room.rid,
+        name: room.name,
+        visibility: room.visibility,
+        roomDisplayName: user.roomDisplayName,
+        roomRole: user.roomRole,
+      ),
+      for (final commonRoom in user.commonRooms)
+        if (commonRoom.id != room.id) commonRoom,
+    ];
+  }
+
+  void _openUserInfoRoom(String roomId) {
+    if (roomId == _selectedRoomId) return;
+    for (final room in _rooms) {
+      if (room.id == roomId) {
+        unawaited(_openRoom(room));
+        return;
+      }
+    }
+    unawaited(_fetchAndOpenRoom(roomId));
+  }
+
+  Future<void> _fetchAndOpenRoom(String roomId) async {
+    try {
+      final detail = await _api.getRoom(roomId);
+      if (!mounted) return;
+      final card = detail.toCard();
+      setState(() {
+        _rooms = _upsertRoomCard(_rooms, card);
+      });
+      await _openRoom(card);
+    } catch (e) {
+      if (!mounted) return;
+      _showToast('无法打开房间：$e');
     }
   }
 
@@ -1075,6 +1156,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _rooms[idx] = RoomCard(
         id: existing.id,
         name: existing.name,
+        rid: existing.rid,
+        visibility: existing.visibility,
         avatarUrl: existing.avatarUrl,
         defaultAvatarKey: existing.defaultAvatarKey,
         memberCount: existing.memberCount,
@@ -1491,6 +1574,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     onToggleShare: _toggleScreenShare,
                     onCollapse: () => setState(() => _livePanelOpen = false),
                     onEnterFullScreen: _enterShareFullScreen,
+                    onOpenUserInfo: _showUserInfo,
                     localUserId: _currentUser.id,
                   )
                 : _ChatPane(
@@ -1510,6 +1594,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     onFilePause: _pauseFileUpload,
                     onFileResume: _resumeFileUpload,
                     onFileCancel: _cancelFileUpload,
+                    onOpenUserInfo: _showUserInfo,
                   ),
           ),
         ],
@@ -2286,6 +2371,7 @@ class _ChatPane extends StatefulWidget {
     required this.onFilePause,
     required this.onFileResume,
     required this.onFileCancel,
+    required this.onOpenUserInfo,
   });
 
   final String roomId;
@@ -2304,6 +2390,7 @@ class _ChatPane extends StatefulWidget {
   final ValueChanged<String> onFilePause;
   final ValueChanged<String> onFileResume;
   final ValueChanged<String> onFileCancel;
+  final ValueChanged<UserSummary> onOpenUserInfo;
 
   @override
   State<_ChatPane> createState() => _ChatPaneState();
@@ -2613,6 +2700,8 @@ class _ChatPaneState extends State<_ChatPane> {
                                 widget.onFileResume(message.clientMessageId),
                             onFileCancel: () =>
                                 widget.onFileCancel(message.clientMessageId),
+                            onOpenUserInfo: () =>
+                                widget.onOpenUserInfo(message.sender),
                           );
                         },
                       ),
@@ -3322,6 +3411,7 @@ class _MessageBubble extends StatelessWidget {
     required this.onFilePause,
     required this.onFileResume,
     required this.onFileCancel,
+    required this.onOpenUserInfo,
   });
 
   final Message message;
@@ -3330,6 +3420,7 @@ class _MessageBubble extends StatelessWidget {
   final VoidCallback onFilePause;
   final VoidCallback onFileResume;
   final VoidCallback onFileCancel;
+  final VoidCallback onOpenUserInfo;
 
   @override
   Widget build(BuildContext context) {
@@ -3346,13 +3437,17 @@ class _MessageBubble extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _Avatar(
-                label: message.sender.displayName,
-                imageUrl: AppConfigScope.of(
-                  context,
-                ).resolveAssetUrl(message.sender.avatarUrl),
-                defaultAvatarKey: message.sender.defaultAvatarKey,
-                size: 32,
+              _UserInfoTapTarget(
+                tooltip: '查看用户信息',
+                onTap: onOpenUserInfo,
+                child: _Avatar(
+                  label: message.sender.displayName,
+                  imageUrl: AppConfigScope.of(
+                    context,
+                  ).resolveAssetUrl(message.sender.avatarUrl),
+                  defaultAvatarKey: message.sender.defaultAvatarKey,
+                  size: 32,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -3362,18 +3457,22 @@ class _MessageBubble extends StatelessWidget {
                     Row(
                       children: [
                         Expanded(
-                          child: Text(
-                            mine ? 'You' : message.sender.displayName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: message.failed
-                                  ? _danger
-                                  : mine
-                                  ? _cyan
-                                  : _textSecondary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
+                          child: _UserInfoTapTarget(
+                            tooltip: '查看用户信息',
+                            onTap: onOpenUserInfo,
+                            child: Text(
+                              mine ? 'You' : message.sender.displayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: message.failed
+                                    ? _danger
+                                    : mine
+                                    ? _cyan
+                                    : _textSecondary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
                         ),
@@ -3434,6 +3533,33 @@ class _MessageText extends StatelessWidget {
       cursorColor: _cyan,
       selectionColor: _cyan.withValues(alpha: 0.28),
       style: const TextStyle(color: _textPrimary, fontSize: 15, height: 1.4),
+    );
+  }
+}
+
+class _UserInfoTapTarget extends StatelessWidget {
+  const _UserInfoTapTarget({
+    required this.child,
+    required this.onTap,
+    required this.tooltip,
+  });
+
+  final Widget child;
+  final VoidCallback onTap;
+  final String tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: child,
+        ),
+      ),
     );
   }
 }
@@ -3855,6 +3981,7 @@ class _LivePanel extends StatelessWidget {
     required this.onToggleShare,
     required this.onCollapse,
     required this.onEnterFullScreen,
+    required this.onOpenUserInfo,
     required this.localUserId,
   });
 
@@ -3879,6 +4006,7 @@ class _LivePanel extends StatelessWidget {
   final VoidCallback onCollapse;
   // Invoked with the share track to enter immersive full-screen.
   final void Function(LiveVideoTrack track) onEnterFullScreen;
+  final ValueChanged<UserSummary> onOpenUserInfo;
   // The local user's id. Used to decide whether the staged share belongs to us:
   // a sharer can't full-screen their own share (a local screen-capture track
   // can attach to only one renderer at a time), so the button is hidden for it.
@@ -3952,6 +4080,8 @@ class _LivePanel extends StatelessWidget {
                                 cameraTrack: liveSession.cameraFor(
                                   participant.user.id,
                                 ),
+                                onOpenUserInfo: () =>
+                                    onOpenUserInfo(participant.user),
                               );
                             },
                           ),
@@ -4001,11 +4131,13 @@ class _LiveParticipantCard extends StatelessWidget {
   const _LiveParticipantCard({
     required this.participant,
     required this.speaking,
+    required this.onOpenUserInfo,
     this.cameraTrack,
   });
 
   final LiveParticipant participant;
   final bool speaking;
+  final VoidCallback onOpenUserInfo;
   final LiveVideoTrack? cameraTrack;
 
   @override
@@ -4020,7 +4152,8 @@ class _LiveParticipantCard extends StatelessWidget {
         height: 148,
         interactive: true,
         pressRequiresHover: true,
-        onPressed: () {},
+        onPressed: onOpenUserInfo,
+        tooltip: '查看用户信息',
         backgroundColor: _primaryDark,
         selectedBackgroundColor: _primaryDark,
         borderColor: highlight ? _cyan : _borderColor,
@@ -4052,9 +4185,10 @@ class _LiveParticipantCard extends StatelessWidget {
     }
     return KeySurface(
       height: 148,
-      interactive: broadcasting,
+      interactive: true,
       pressRequiresHover: true,
-      onPressed: broadcasting ? () {} : null,
+      onPressed: onOpenUserInfo,
+      tooltip: '查看用户信息',
       backgroundColor: _primaryDarkRaised,
       selectedBackgroundColor: _primaryDarkRaised,
       borderColor: _borderColor,
@@ -4062,24 +4196,32 @@ class _LiveParticipantCard extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _Avatar(
-            label: participant.user.displayName,
-            imageUrl: AppConfigScope.of(
-              context,
-            ).resolveAssetUrl(participant.user.avatarUrl),
-            defaultAvatarKey: participant.user.defaultAvatarKey,
-            size: 54,
-            borderColor: highlight ? _cyan : _borderColor,
-            borderWidth: highlight ? 2.4 : 1,
+          _UserInfoTapTarget(
+            tooltip: '查看用户信息',
+            onTap: onOpenUserInfo,
+            child: _Avatar(
+              label: participant.user.displayName,
+              imageUrl: AppConfigScope.of(
+                context,
+              ).resolveAssetUrl(participant.user.avatarUrl),
+              defaultAvatarKey: participant.user.defaultAvatarKey,
+              size: 54,
+              borderColor: highlight ? _cyan : _borderColor,
+              borderWidth: highlight ? 2.4 : 1,
+            ),
           ),
           const SizedBox(height: 12),
-          Text(
-            participant.user.displayName,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: highlight ? _textPrimary : _textSecondary,
-              fontWeight: FontWeight.w700,
+          _UserInfoTapTarget(
+            tooltip: '查看用户信息',
+            onTap: onOpenUserInfo,
+            child: Text(
+              participant.user.displayName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: highlight ? _textPrimary : _textSecondary,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
           const SizedBox(height: 10),
@@ -4896,6 +5038,306 @@ class _LiveControlKey extends StatelessWidget {
                 ),
               )
             : Icon(icon),
+      ),
+    );
+  }
+}
+
+class _UserInfoDialog extends StatelessWidget {
+  const _UserInfoDialog({
+    required this.user,
+    required this.room,
+    required this.commonRooms,
+    required this.onOpenRoom,
+  });
+
+  final UserSummary user;
+  final RoomDetail room;
+  final List<UserCommonRoom> commonRooms;
+  final ValueChanged<String> onOpenRoom;
+
+  @override
+  Widget build(BuildContext context) {
+    final appConfig = AppConfigScope.of(context);
+    final roleLabel = _roomRoleLabel(user, room);
+    final primaryName = _userInfoPrimaryName(user);
+    return Dialog(
+      backgroundColor: _primaryDarkRaised,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.zero,
+        side: BorderSide(color: _borderColor),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520, maxHeight: 680),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _Avatar(
+                    label: primaryName,
+                    imageUrl: appConfig.resolveAssetUrl(user.avatarUrl),
+                    defaultAvatarKey: user.defaultAvatarKey,
+                    size: 72,
+                    borderColor: _cyan,
+                    borderWidth: 1.4,
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            primaryName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: _textPrimary,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            '@${user.username}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: _textMuted,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          _UserRoleBadge(label: roleLabel),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  KeyIconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                    tooltip: '关闭',
+                    size: 32,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 22),
+              const Divider(height: 1, color: _borderColor),
+              const SizedBox(height: 4),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      _UserInfoField(label: 'UID', value: user.uid ?? user.id),
+                      if (commonRooms.isNotEmpty)
+                        _CommonRoomsSection(
+                          rooms: commonRooms,
+                          onOpenRoom: (roomId) {
+                            Navigator.of(context).pop();
+                            onOpenRoom(roomId);
+                          },
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CommonRoomsSection extends StatelessWidget {
+  const _CommonRoomsSection({required this.rooms, required this.onOpenRoom});
+
+  final List<UserCommonRoom> rooms;
+  final ValueChanged<String> onOpenRoom;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: _borderColor)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(
+              width: 102,
+              child: Text(
+                '共同房间',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: _textMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final entry in rooms.asMap().entries) ...[
+                    if (entry.key > 0) const SizedBox(height: 8),
+                    _CommonRoomLink(
+                      room: entry.value,
+                      onOpen: () => onOpenRoom(entry.value.id),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CommonRoomLink extends StatelessWidget {
+  const _CommonRoomLink({required this.room, required this.onOpen});
+
+  final UserCommonRoom room;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = _commonRoomTitle(room);
+    final meta = _commonRoomMeta(room);
+    return Tooltip(
+      message: '打开房间',
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onOpen,
+          child: RichText(
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            text: TextSpan(
+              style: const TextStyle(
+                color: _textPrimary,
+                fontSize: 14,
+                height: 1.36,
+                fontWeight: FontWeight.w600,
+              ),
+              children: [
+                TextSpan(
+                  text: '$title · ${_visibilityLabel(room.visibility)}',
+                  style: const TextStyle(
+                    color: _cyan,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                if (meta != null)
+                  TextSpan(
+                    text: ' ($meta)',
+                    style: const TextStyle(
+                      color: _textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UserRoleBadge extends StatelessWidget {
+  const _UserRoleBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _selectedSurface,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: const Color(0xFF22332B)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: _cyan,
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UserInfoField extends StatelessWidget {
+  const _UserInfoField({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: _borderColor)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 102,
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _textMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: SelectableText(
+                value,
+                maxLines: 3,
+                style: const TextStyle(
+                  color: _textPrimary,
+                  fontSize: 14,
+                  height: 1.36,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -5926,6 +6368,8 @@ RoomCard _withLive(RoomCard room, LiveState live) {
   return RoomCard(
     id: room.id,
     name: room.name,
+    rid: room.rid,
+    visibility: room.visibility,
     avatarUrl: room.avatarUrl,
     defaultAvatarKey: room.defaultAvatarKey,
     memberCount: room.memberCount,
@@ -6012,6 +6456,59 @@ String _initials(String value) {
   final parts = trimmed.split(RegExp(r'\s+')).where((part) => part.isNotEmpty);
   final initials = parts.take(2).map((part) => part.characters.first).join();
   return initials.toUpperCase();
+}
+
+String? _nonEmpty(String? value) {
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty) return null;
+  return trimmed;
+}
+
+String _userInfoPrimaryName(UserSummary user) {
+  return _nonEmpty(user.roomDisplayName) ??
+      _nonEmpty(user.displayName) ??
+      user.username;
+}
+
+String _roomRoleLabel(UserSummary user, RoomDetail room) {
+  final role = _nonEmpty(user.roomRole)?.toLowerCase();
+  if (user.isSuperuser || role == 'superuser') return '超级用户';
+  if (user.id == room.createdBy.id || role == 'owner' || role == 'creator') {
+    return '创建者';
+  }
+  if (role == 'admin' || role == 'administrator') return '管理员';
+  return '普通成员';
+}
+
+String _commonRoomTitle(UserCommonRoom room) {
+  final rid = _nonEmpty(room.rid);
+  if (rid == null) return room.name;
+  return '$rid · ${room.name}';
+}
+
+String _visibilityLabel(String value) {
+  return switch (value.toLowerCase()) {
+    'public' => '公开',
+    _ => '私有',
+  };
+}
+
+String? _commonRoomMeta(UserCommonRoom room) {
+  final roomDisplayName = _nonEmpty(room.roomDisplayName);
+  final roleLabel = _roomRoleLabelFromValue(room.roomRole);
+  final parts = [?roomDisplayName, ?roleLabel];
+  if (parts.isEmpty) return null;
+  return parts.join(' · ');
+}
+
+String? _roomRoleLabelFromValue(String? value) {
+  return switch (_nonEmpty(value)?.toLowerCase()) {
+    'superuser' => '超级用户',
+    'owner' || 'creator' => '创建者',
+    'admin' || 'administrator' => '管理员',
+    'member' => '普通成员',
+    _ => null,
+  };
 }
 
 String _formatMessageTime(DateTime value) {

@@ -7,9 +7,9 @@ void main() {
     expect(
       resolveLiveKitServerUrl(
         serverUrl: 'http://127.0.0.1:7880',
-        apiBaseUrl: 'http://103.47.83.189:21116/api/v1',
+        apiBaseUrl: 'http://64.90.4.129:21116/api/v1',
       ),
-      'ws://103.47.83.189:7880',
+      'ws://64.90.4.129:7880',
     );
   });
 
@@ -27,7 +27,7 @@ void main() {
     expect(
       resolveLiveKitServerUrl(
         serverUrl: 'wss://voice.example.com',
-        apiBaseUrl: 'http://103.47.83.189:21116/api/v1',
+        apiBaseUrl: 'http://64.90.4.129:21116/api/v1',
       ),
       'wss://voice.example.com',
     );
@@ -36,10 +36,10 @@ void main() {
   test('normalizes public HTTP LiveKit URL to WebSocket scheme', () {
     expect(
       resolveLiveKitServerUrl(
-        serverUrl: 'http://103.47.83.189:7880',
-        apiBaseUrl: 'http://103.47.83.189:21116/api/v1',
+        serverUrl: 'http://64.90.4.129:7880',
+        apiBaseUrl: 'http://64.90.4.129:21116/api/v1',
       ),
-      'ws://103.47.83.189:7880',
+      'ws://64.90.4.129:7880',
     );
   });
 
