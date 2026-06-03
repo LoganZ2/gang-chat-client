@@ -128,7 +128,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
     _loadRooms();
     _startLiveStream();
-    unawaited(_warmPersonalStickerBackup());
+    unawaited(_warmPersonalStickerCache());
     unawaited(_restoreStoredAudioSettings());
   }
 
@@ -427,7 +427,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.session.user.id != widget.session.user.id) {
       _currentUser = widget.session.user;
-      unawaited(_warmPersonalStickerBackup());
+      unawaited(_warmPersonalStickerCache());
     }
     if (oldWidget.apiBaseUrl == widget.apiBaseUrl &&
         oldWidget.api == widget.api) {
@@ -439,7 +439,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _streamClient?.dispose();
     _startLiveStream();
     _loadRooms();
-    unawaited(_warmPersonalStickerBackup());
+    unawaited(_warmPersonalStickerCache());
   }
 
   GangApi _newApiClient() {
@@ -451,7 +451,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _warmPersonalStickerBackup() async {
+  Future<void> _warmPersonalStickerCache() async {
     final userId = _currentUser.id;
     final cached = await widget.stickerPackStore.readPersonalPacks(
       userId: userId,
@@ -2021,13 +2021,13 @@ class _ChatPaneState extends State<_ChatPane> {
   List<StickerPack> _personalStickerPacks = const [];
   List<StickerPack> _roomStickerPacks = const [];
   bool _loadingStickerPacks = false;
+  bool _stickerPacksLoaded = false;
   String? _stickerPackError;
   double _composerInputHeight = 76;
 
   @override
   void initState() {
     super.initState();
-    unawaited(_loadStickerPacks());
   }
 
   @override
@@ -2035,12 +2035,29 @@ class _ChatPaneState extends State<_ChatPane> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.roomId != widget.roomId) {
       _openPanel = null;
-      unawaited(_loadStickerPacks());
+      _resetStickerPacks();
     } else if (oldWidget.api != widget.api ||
         oldWidget.apiBaseUrl != widget.apiBaseUrl ||
         oldWidget.currentUserId != widget.currentUserId) {
-      unawaited(_loadStickerPacks());
+      _resetStickerPacks();
+      if (_openPanel == _ComposerPanel.stickers) {
+        unawaited(_ensureStickerPacksLoaded());
+      }
     }
+  }
+
+  void _resetStickerPacks() {
+    _personalStickerPacks = const [];
+    _roomStickerPacks = const [];
+    _loadingStickerPacks = false;
+    _stickerPacksLoaded = false;
+    _stickerPackError = null;
+  }
+
+  Future<void> _ensureStickerPacksLoaded({bool forceReload = false}) async {
+    if (_loadingStickerPacks) return;
+    if (!forceReload && _stickerPacksLoaded) return;
+    await _loadStickerPacks(forceReload: forceReload);
   }
 
   Future<void> _loadStickerPacks({bool forceReload = false}) async {
@@ -2059,6 +2076,7 @@ class _ChatPaneState extends State<_ChatPane> {
       if (!mounted || widget.roomId != roomId) return;
       if (cachedPersonal != null) {
         setState(() => _personalStickerPacks = cachedPersonal);
+        _precacheStickerThumbnails(cachedPersonal, limit: 30);
       }
       final shouldFetchPersonal = forceReload || cachedPersonal == null;
       final packs = await Future.wait([
@@ -2071,7 +2089,9 @@ class _ChatPaneState extends State<_ChatPane> {
       setState(() {
         _personalStickerPacks = packs[0];
         _roomStickerPacks = packs[1];
+        _stickerPacksLoaded = true;
       });
+      _precacheStickerThumbnails([...packs[0], ...packs[1]]);
       if (shouldFetchPersonal) {
         await widget.stickerPackStore.writePersonalPacks(
           userId: widget.currentUserId,
@@ -2089,15 +2109,39 @@ class _ChatPaneState extends State<_ChatPane> {
     }
   }
 
+  void _precacheStickerThumbnails(List<StickerPack> packs, {int limit = 60}) {
+    if (!mounted || packs.isEmpty || limit <= 0) return;
+    final config = AppConfigScope.of(context);
+    final seen = <String>{};
+    var count = 0;
+    for (final pack in packs) {
+      for (final sticker in pack.stickers) {
+        final imageUrl = config.resolveAssetUrl(
+          sticker.asset.thumbnailUrl ?? sticker.asset.url,
+        );
+        if (imageUrl == null || !seen.add(imageUrl)) continue;
+        unawaited(
+          precacheImage(NetworkImage(imageUrl), context).catchError((_) {}),
+        );
+        count += 1;
+        if (count >= limit) return;
+      }
+    }
+  }
+
   void _closePanel() {
     if (_openPanel == null) return;
     setState(() => _openPanel = null);
   }
 
   void _togglePanel(_ComposerPanel panel) {
+    final opening = _openPanel != panel;
     setState(() {
-      _openPanel = _openPanel == panel ? null : panel;
+      _openPanel = opening ? panel : null;
     });
+    if (opening && panel == _ComposerPanel.stickers) {
+      unawaited(_ensureStickerPacksLoaded());
+    }
   }
 
   void _onComposerInputSize(Size size) {

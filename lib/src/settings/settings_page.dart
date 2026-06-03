@@ -235,7 +235,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final api = widget.api;
     if (api == null) return;
     if (!forceReload) {
-      final cached = await _readStickerBackup();
+      final cached = await _readStickerCache();
       if (!mounted) return;
       if (cached != null) {
         setState(() {
@@ -253,7 +253,7 @@ class _SettingsPageState extends State<SettingsPage> {
       final packs = await api.listStickerPacks(scope: 'personal');
       if (!mounted) return;
       setState(() => _replaceStickerPacks(packs));
-      await _writeStickerBackup(packs);
+      await _writeStickerCache(packs);
     } catch (e) {
       if (!mounted) return;
       setState(() => _stickerError = e.toString());
@@ -262,7 +262,7 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  Future<List<StickerPack>?> _readStickerBackup() {
+  Future<List<StickerPack>?> _readStickerCache() {
     final userId = _user?.id ?? widget.currentUser?.id ?? '';
     return widget.stickerPackStore.readPersonalPacks(
       userId: userId,
@@ -270,7 +270,7 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Future<void> _writeStickerBackup(List<StickerPack> packs) {
+  Future<void> _writeStickerCache(List<StickerPack> packs) {
     final userId = _user?.id ?? widget.currentUser?.id ?? '';
     return widget.stickerPackStore.writePersonalPacks(
       userId: userId,
