@@ -87,6 +87,59 @@ void main() {
   });
 
   test(
+    'sendMessage keeps Chinese JSON UTF-8 without response charset',
+    () async {
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          expect(request.method, 'POST');
+          expect(request.url.path, '/api/v1/rooms/room_1/messages');
+          expect(request.headers['accept'], 'application/json');
+          expect(
+            request.headers['content-type'],
+            'application/json; charset=utf-8',
+          );
+          expect(
+            jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>,
+            {'client_message_id': 'cmsg_1', 'body': '你好，世界'},
+          );
+
+          return http.Response.bytes(
+            utf8.encode(
+              jsonEncode({
+                'message': {
+                  'id': 'msg_1',
+                  'room_id': 'room_1',
+                  'sender': {
+                    'id': 'user_1',
+                    'username': 'alice',
+                    'display_name': 'Alice',
+                  },
+                  'client_message_id': 'cmsg_1',
+                  'body': '服务端中文',
+                  'created_at': '2026-05-31T14:00:00Z',
+                },
+              }),
+            ),
+            201,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+
+      final message = await api.sendMessage(
+        roomId: 'room_1',
+        clientMessageId: 'cmsg_1',
+        body: '你好，世界',
+      );
+
+      expect(message.body, '服务端中文');
+      api.close();
+    },
+  );
+
+  test(
     'joinLive retries a transient socket write abort with one idempotency key',
     () async {
       var requests = 0;
@@ -198,6 +251,98 @@ void main() {
 
     expect(asset.id, 'asset_1');
     expect(asset.mimeType, 'image/png');
+    api.close();
+  });
+
+  test('uploadImageAsset retries a transient socket write abort', () async {
+    var requests = 0;
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        requests += 1;
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/v1/uploads/images');
+        expect(request.headers['authorization'], 'Bearer token');
+        expect(
+          request.headers['content-type'],
+          startsWith('multipart/form-data'),
+        );
+        expect(request.bodyBytes, isNotEmpty);
+
+        if (requests == 1) {
+          throw http.ClientException(
+            'SocketException: Write failed (OS Error: '
+            '你的主机中的软件中止了一个已建立的连接。, errno = 10053)',
+            request.url,
+          );
+        }
+
+        return http.Response(
+          jsonEncode({
+            'asset': {
+              'id': 'asset_1',
+              'url': '/assets/asset_1/sticker.png',
+              'thumbnail_url': '/assets/asset_1/sticker.png',
+              'mime_type': 'image/png',
+              'width': 128,
+              'height': 128,
+            },
+          }),
+          201,
+        );
+      }),
+    );
+
+    final asset = await api.uploadImageAsset(
+      bytes: Uint8List.fromList([1, 2, 3]),
+      filename: 'sticker.png',
+      purpose: 'sticker',
+    );
+
+    expect(requests, 2);
+    expect(asset.id, 'asset_1');
+    expect(asset.width, 128);
+    api.close();
+  });
+
+  test('uploadImageAsset retries a transient 503 response', () async {
+    var requests = 0;
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        requests += 1;
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/v1/uploads/images');
+        expect(request.headers['authorization'], 'Bearer token');
+
+        if (requests == 1) {
+          return http.Response('service unavailable', 503);
+        }
+
+        return http.Response(
+          jsonEncode({
+            'asset': {
+              'id': 'asset_1',
+              'url': '/assets/asset_1/sticker.png',
+              'thumbnail_url': '/assets/asset_1/sticker.png',
+              'mime_type': 'image/png',
+            },
+          }),
+          201,
+        );
+      }),
+    );
+
+    final asset = await api.uploadImageAsset(
+      bytes: Uint8List.fromList([1, 2, 3]),
+      filename: 'sticker.png',
+      purpose: 'sticker',
+    );
+
+    expect(requests, 2);
+    expect(asset.id, 'asset_1');
     api.close();
   });
 
@@ -428,6 +573,171 @@ void main() {
       expect(downloaded.mimeType, 'application/zip');
       expect(downloaded.bytes, [80, 75, 3, 4]);
       expect(requestIndex, 3);
+      api.close();
+    },
+  );
+
+  test('downloadStickers prefers UTF-8 filename star header', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/api/v1/stickers/download');
+        return http.Response.bytes(
+          Uint8List.fromList([80, 75, 3, 4]),
+          200,
+          headers: {
+            'content-type': 'application/zip',
+            'content-disposition':
+                'attachment; filename="stickers.zip"; '
+                "filename*=UTF-8''%E8%A1%A8%E6%83%85.zip",
+          },
+        );
+      }),
+    );
+
+    final downloaded = await api.downloadStickers(stickerIds: ['stk_1']);
+
+    expect(downloaded.filename, '表情.zip');
+    api.close();
+  });
+
+  test(
+    'deleteSticker treats transient close as success when sticker is gone',
+    () async {
+      var requestIndex = 0;
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          requestIndex += 1;
+          expect(request.headers['authorization'], 'Bearer token');
+
+          switch (requestIndex) {
+            case 1:
+              expect(request.method, 'DELETE');
+              expect(
+                request.url.path,
+                '/api/v1/sticker-packs/stkp_1/stickers/stk_2',
+              );
+              throw http.ClientException(
+                'Connection closed before full header was received',
+                request.url,
+              );
+            case 2:
+              expect(request.method, 'GET');
+              expect(request.url.path, '/api/v1/sticker-packs');
+              expect(request.url.queryParameters['scope'], 'personal');
+              return http.Response(
+                jsonEncode(_personalStickerPacksJson()),
+                200,
+              );
+          }
+
+          fail(
+            'unexpected request $requestIndex ${request.method} ${request.url}',
+          );
+        }),
+      );
+
+      await api.deleteSticker(packId: 'stkp_1', stickerId: 'stk_2');
+
+      expect(requestIndex, 2);
+      api.close();
+    },
+  );
+
+  test(
+    'deleteSticker retries a transient close when sticker remains',
+    () async {
+      var requestIndex = 0;
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          requestIndex += 1;
+          expect(request.headers['authorization'], 'Bearer token');
+
+          switch (requestIndex) {
+            case 1:
+              expect(request.method, 'DELETE');
+              expect(
+                request.url.path,
+                '/api/v1/sticker-packs/stkp_1/stickers/stk_2',
+              );
+              throw http.ClientException(
+                'Connection closed before full header was received',
+                request.url,
+              );
+            case 2:
+              expect(request.method, 'GET');
+              expect(request.url.path, '/api/v1/sticker-packs');
+              expect(request.url.queryParameters['scope'], 'personal');
+              return http.Response(
+                jsonEncode(_personalStickerPacksJson(linkedAssetId: 'asset_2')),
+                200,
+              );
+            case 3:
+              expect(request.method, 'DELETE');
+              expect(
+                request.url.path,
+                '/api/v1/sticker-packs/stkp_1/stickers/stk_2',
+              );
+              return http.Response(jsonEncode({'ok': true}), 200);
+          }
+
+          fail(
+            'unexpected request $requestIndex ${request.method} ${request.url}',
+          );
+        }),
+      );
+
+      await api.deleteSticker(packId: 'stkp_1', stickerId: 'stk_2');
+
+      expect(requestIndex, 3);
+      api.close();
+    },
+  );
+
+  test(
+    'deleteSticker treats transient 503 as success when sticker is gone',
+    () async {
+      var requestIndex = 0;
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          requestIndex += 1;
+          expect(request.headers['authorization'], 'Bearer token');
+
+          switch (requestIndex) {
+            case 1:
+              expect(request.method, 'DELETE');
+              expect(
+                request.url.path,
+                '/api/v1/sticker-packs/stkp_1/stickers/stk_2',
+              );
+              return http.Response('service unavailable', 503);
+            case 2:
+              expect(request.method, 'GET');
+              expect(request.url.path, '/api/v1/sticker-packs');
+              expect(request.url.queryParameters['scope'], 'personal');
+              return http.Response(
+                jsonEncode(_personalStickerPacksJson()),
+                200,
+              );
+          }
+
+          fail(
+            'unexpected request $requestIndex ${request.method} ${request.url}',
+          );
+        }),
+      );
+
+      await api.deleteSticker(packId: 'stkp_1', stickerId: 'stk_2');
+
+      expect(requestIndex, 2);
       api.close();
     },
   );

@@ -1,10 +1,10 @@
-import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
 import 'models.dart';
+import 'utf8_json.dart';
 
 typedef AccessTokenProvider = Future<String> Function({bool forceRefresh});
 
@@ -204,7 +204,7 @@ class GangApiClient implements GangApi {
       return _httpClient.patch(
         _uri('/users/me/account'),
         headers: _headers(token),
-        body: jsonEncode(body),
+        body: encodeJsonBody(body),
       );
     });
     return CurrentUser.fromJson(decoded['user']! as Map<String, Object?>);
@@ -228,7 +228,7 @@ class GangApiClient implements GangApi {
       return _httpClient.patch(
         _uri('/users/me/profile'),
         headers: _headers(token),
-        body: jsonEncode(body),
+        body: encodeJsonBody(body),
       );
     }, retryTransientFailures: true);
     return CurrentUser.fromJson(decoded['user']! as Map<String, Object?>);
@@ -249,7 +249,7 @@ class GangApiClient implements GangApi {
       );
       final streamed = await _httpClient.send(request);
       return http.Response.fromStream(streamed);
-    });
+    }, retryTransientFailures: true);
     return UploadedAsset.fromJson(decoded['asset']! as Map<String, Object?>);
   }
 
@@ -286,7 +286,7 @@ class GangApiClient implements GangApi {
       return _httpClient.post(
         _uri('/sticker-packs'),
         headers: _headers(token),
-        body: jsonEncode(body),
+        body: encodeJsonBody(body),
       );
     });
     return StickerPack.fromJson(decoded['pack']! as Map<String, Object?>);
@@ -305,7 +305,7 @@ class GangApiClient implements GangApi {
       return _httpClient.patch(
         _uri('/sticker-packs/$packId'),
         headers: _headers(token),
-        body: jsonEncode(body),
+        body: encodeJsonBody(body),
       );
     });
     return StickerPack.fromJson(decoded['pack']! as Map<String, Object?>);
@@ -337,7 +337,7 @@ class GangApiClient implements GangApi {
         return _httpClient.post(
           _uri('/sticker-packs/$packId/stickers'),
           headers: _headers(token, idempotencyKey: requestIdempotencyKey),
-          body: jsonEncode(body),
+          body: encodeJsonBody(body),
         );
       });
     }
@@ -347,6 +347,16 @@ class GangApiClient implements GangApi {
       try {
         await send();
         return;
+      } on ApiException catch (e) {
+        if (!_isRetryableHttpFailure(e.statusCode)) rethrow;
+        if (await _stickerAssetAlreadyLinked(
+          packId: packId,
+          assetId: assetId,
+        )) {
+          return;
+        }
+        if (attempt == maxAttempts) rethrow;
+        await Future<void>.delayed(Duration(milliseconds: 120 * attempt));
       } on http.ClientException catch (e) {
         if (!_isRetryableTransportFailure(e)) rethrow;
         if (await _stickerAssetAlreadyLinked(
@@ -379,17 +389,64 @@ class GangApiClient implements GangApi {
     return false;
   }
 
+  Future<bool> _stickerAlreadyDeleted({
+    required String packId,
+    required String stickerId,
+  }) async {
+    try {
+      final packs = await listStickerPacks(scope: 'personal');
+      for (final pack in packs) {
+        if (pack.id != packId) continue;
+        return !pack.stickers.any((sticker) => sticker.id == stickerId);
+      }
+    } catch (_) {
+      // If verification also fails, let the delete path retry.
+    }
+    return false;
+  }
+
   @override
   Future<void> deleteSticker({
     required String packId,
     required String stickerId,
   }) async {
-    await _sendJson((token) {
-      return _httpClient.delete(
-        _uri('/sticker-packs/$packId/stickers/$stickerId'),
-        headers: _headers(token),
-      );
-    });
+    Future<void> send() {
+      return _sendJson((token) {
+        return _httpClient.delete(
+          _uri('/sticker-packs/$packId/stickers/$stickerId'),
+          headers: _headers(token),
+        );
+      });
+    }
+
+    const maxAttempts = 3;
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        await send();
+        return;
+      } on ApiException catch (e) {
+        if (e.statusCode == 404) return;
+        if (!_isRetryableHttpFailure(e.statusCode)) rethrow;
+        if (await _stickerAlreadyDeleted(
+          packId: packId,
+          stickerId: stickerId,
+        )) {
+          return;
+        }
+        if (attempt == maxAttempts) rethrow;
+        await Future<void>.delayed(Duration(milliseconds: 120 * attempt));
+      } on http.ClientException catch (e) {
+        if (!_isRetryableTransportFailure(e)) rethrow;
+        if (await _stickerAlreadyDeleted(
+          packId: packId,
+          stickerId: stickerId,
+        )) {
+          return;
+        }
+        if (attempt == maxAttempts) rethrow;
+        await Future<void>.delayed(Duration(milliseconds: 120 * attempt));
+      }
+    }
   }
 
   @override
@@ -406,7 +463,7 @@ class GangApiClient implements GangApi {
       return _httpClient.patch(
         _uri('/sticker-packs/$packId/stickers/$stickerId'),
         headers: _headers(token),
-        body: jsonEncode(body),
+        body: encodeJsonBody(body),
       );
     });
     return Sticker.fromJson(decoded['sticker']! as Map<String, Object?>);
@@ -421,7 +478,7 @@ class GangApiClient implements GangApi {
       return _httpClient.post(
         _uri('/sticker-packs/$packId/stickers/reorder'),
         headers: _headers(token),
-        body: jsonEncode({'sticker_ids': stickerIds}),
+        body: encodeJsonBody({'sticker_ids': stickerIds}),
       );
     });
     return StickerPack.fromJson(decoded['pack']! as Map<String, Object?>);
@@ -455,7 +512,7 @@ class GangApiClient implements GangApi {
       return _httpClient.post(
         _uri('/auth/password'),
         headers: _headers(token),
-        body: jsonEncode({
+        body: encodeJsonBody({
           'current_password': currentPassword,
           'new_password': newPassword,
           'revoke_other_sessions': revokeOtherSessions,
@@ -488,7 +545,7 @@ class GangApiClient implements GangApi {
       return _httpClient.delete(
         _uri('/users/me/account'),
         headers: _headers(token),
-        body: jsonEncode({'confirm': confirm}),
+        body: encodeJsonBody({'confirm': confirm}),
       );
     });
   }
@@ -515,7 +572,7 @@ class GangApiClient implements GangApi {
       return _httpClient.post(
         _uri('/rooms'),
         headers: _headers(token, idempotencyKey: idempotencyKey ?? newUuid()),
-        body: jsonEncode(body),
+        body: encodeJsonBody(body),
       );
     });
     return RoomDetail.fromJson(decoded['room']! as Map<String, Object?>);
@@ -589,7 +646,7 @@ class GangApiClient implements GangApi {
       return _httpClient.patch(
         _uri('/rooms/$roomId/join-requests/$requestId'),
         headers: _headers(token),
-        body: jsonEncode({'decision': approve ? 'approve' : 'reject'}),
+        body: encodeJsonBody({'decision': approve ? 'approve' : 'reject'}),
       );
     });
   }
@@ -622,7 +679,10 @@ class GangApiClient implements GangApi {
       return _httpClient.post(
         _uri('/rooms/$roomId/messages'),
         headers: _headers(token, idempotencyKey: idempotencyKey ?? newUuid()),
-        body: jsonEncode({'client_message_id': clientMessageId, 'body': body}),
+        body: encodeJsonBody({
+          'client_message_id': clientMessageId,
+          'body': body,
+        }),
       );
     });
     return Message.fromJson(decoded['message']! as Map<String, Object?>);
@@ -637,7 +697,7 @@ class GangApiClient implements GangApi {
       return _httpClient.post(
         _uri('/rooms/$roomId/read'),
         headers: _headers(token),
-        body: jsonEncode({'last_read_message_id': lastReadMessageId}),
+        body: encodeJsonBody({'last_read_message_id': lastReadMessageId}),
       );
     });
     return decoded['unread_count']! as int;
@@ -666,7 +726,7 @@ class GangApiClient implements GangApi {
       return _httpClient.post(
         _uri('/rooms/$roomId/live/join'),
         headers: _headers(token, idempotencyKey: requestIdempotencyKey),
-        body: jsonEncode({
+        body: encodeJsonBody({
           'client_live_session_id': clientLiveSessionId,
           'source': source,
         }),
@@ -691,7 +751,7 @@ class GangApiClient implements GangApi {
       return _httpClient.patch(
         _uri('/rooms/$roomId/live/me'),
         headers: _headers(token),
-        body: jsonEncode(body),
+        body: encodeJsonBody(body),
       );
     });
     return LiveParticipant.fromJson(
@@ -723,9 +783,13 @@ class GangApiClient implements GangApi {
       }
       response = await _sendWithAuth(send);
     }
+    if (retryTransientFailures &&
+        _isRetryableHttpFailure(response.statusCode)) {
+      response = await _sendWithAuth(send);
+    }
     _throwIfFailed(response);
-    if (response.body.isEmpty) return {};
-    return jsonDecode(response.body);
+    final decoded = decodeJsonBody(response);
+    return decoded ?? {};
   }
 
   Future<http.Response> _sendWithAuth(
@@ -751,6 +815,10 @@ class GangApiClient implements GangApi {
         message.contains('errno=10053');
   }
 
+  bool _isRetryableHttpFailure(int statusCode) {
+    return statusCode == 502 || statusCode == 503 || statusCode == 504;
+  }
+
   void _throwIfFailed(http.Response response) {
     if (response.statusCode >= 200 && response.statusCode < 300) return;
     throw ApiException.fromResponse(response);
@@ -768,7 +836,8 @@ class GangApiClient implements GangApi {
   Map<String, String> _headers(String accessToken, {String? idempotencyKey}) {
     final headers = {
       'authorization': 'Bearer $accessToken',
-      'content-type': 'application/json',
+      'accept': jsonAcceptHeader,
+      'content-type': jsonUtf8ContentType,
     };
     if (idempotencyKey != null) headers['idempotency-key'] = idempotencyKey;
     return headers;
@@ -776,6 +845,13 @@ class GangApiClient implements GangApi {
 
   String _downloadFilename(http.Response response) {
     final disposition = response.headers['content-disposition'] ?? '';
+    final encoded = RegExp(
+      r"filename\*=UTF-8''([^;]+)",
+      caseSensitive: false,
+    ).firstMatch(disposition);
+    if (encoded != null) {
+      return Uri.decodeComponent(encoded.group(1)!);
+    }
     final quoted = RegExp(r'filename="([^"]+)"').firstMatch(disposition);
     if (quoted != null) return quoted.group(1)!;
     final unquoted = RegExp(r'filename=([^;]+)').firstMatch(disposition);
@@ -844,7 +920,7 @@ class ApiException implements Exception {
   factory ApiException.fromResponse(http.Response response) {
     final headerRequestId = response.headers['x-request-id'];
     try {
-      final decoded = jsonDecode(response.body) as Map<String, Object?>;
+      final decoded = decodeJsonBody(response) as Map<String, Object?>;
       final error = decoded['error'] as Map<String, Object?>?;
       final message = error?['message'] as String?;
       final code = error?['code'] as String?;

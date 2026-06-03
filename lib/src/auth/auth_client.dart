@@ -1,8 +1,7 @@
-import 'dart:convert';
-
 import 'package:http/http.dart' as http;
 
 import '../protocol/models.dart';
+import '../protocol/utf8_json.dart';
 
 class AuthClient {
   AuthClient({required this.baseUrl, http.Client? httpClient})
@@ -35,7 +34,7 @@ class AuthClient {
     final response = await _httpClient.post(
       _uri('/auth/logout'),
       headers: _headers(accessToken: accessToken),
-      body: jsonEncode({'refresh_token': refreshToken}),
+      body: encodeJsonBody({'refresh_token': refreshToken}),
     );
     _throwIfFailed(response);
   }
@@ -47,7 +46,7 @@ class AuthClient {
     );
     _throwIfFailed(response);
     return CurrentUser.fromJson(
-      jsonDecode(response.body) as Map<String, Object?>,
+      decodeJsonBody(response)! as Map<String, Object?>,
     );
   }
 
@@ -57,7 +56,7 @@ class AuthClient {
       headers: _headers(accessToken: accessToken),
     );
     _throwIfFailed(response);
-    final decoded = jsonDecode(response.body) as List<Object?>;
+    final decoded = decodeJsonBody(response) as List<Object?>;
     return decoded
         .cast<Map<String, Object?>>()
         .map(UserSession.fromJson)
@@ -84,7 +83,7 @@ class AuthClient {
     final response = await _httpClient.post(
       _uri('/auth/password'),
       headers: _headers(accessToken: accessToken),
-      body: jsonEncode({
+      body: encodeJsonBody({
         'current_password': currentPassword,
         'new_password': newPassword,
         'revoke_other_sessions': revokeOtherSessions,
@@ -97,11 +96,11 @@ class AuthClient {
     final response = await _httpClient.post(
       _uri(path),
       headers: _headers(),
-      body: jsonEncode(body),
+      body: encodeJsonBody(body),
     );
     _throwIfFailed(response);
     return AuthSession.fromJson(
-      jsonDecode(response.body) as Map<String, Object?>,
+      decodeJsonBody(response)! as Map<String, Object?>,
     );
   }
 
@@ -119,7 +118,8 @@ class AuthClient {
 
   Map<String, String> _headers({String? accessToken}) {
     return {
-      'content-type': 'application/json',
+      'accept': jsonAcceptHeader,
+      'content-type': jsonUtf8ContentType,
       if (accessToken != null) 'authorization': 'Bearer $accessToken',
     };
   }
@@ -170,7 +170,7 @@ class AuthException implements Exception {
 
   factory AuthException.fromResponse(http.Response response) {
     try {
-      final decoded = jsonDecode(response.body) as Map<String, Object?>;
+      final decoded = decodeJsonBody(response) as Map<String, Object?>;
       final error = decoded['error'] as Map<String, Object?>?;
       final message = error?['message'] as String?;
       final code = error?['code'] as String?;

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:archive/archive.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +14,7 @@ import 'audio_device_store.dart';
 import '../config/app_config.dart';
 import '../protocol/api_client.dart';
 import '../protocol/models.dart';
+import '../protocol/sticker_pack_store.dart';
 import '../ui/key_button.dart';
 import '../ui/title_bar.dart';
 
@@ -24,6 +26,9 @@ const _textPrimary = Color(0xFFECEFF1);
 const _textSecondary = Color(0xFFB0B8C0);
 const _textMuted = Color(0xFF6F7785);
 const _danger = Color(0xFFE58383);
+const _stickerImageExtensions = {'png', 'jpg', 'jpeg', 'webp', 'gif'};
+const _maxStickerUploadsPerBatch = 500;
+const _maxStickerImageBytes = 25 * 1024 * 1024;
 
 enum _SettingsSection { profile, security, voice, stickers }
 
@@ -33,6 +38,8 @@ class SettingsPage extends StatefulWidget {
     this.isSubWindow = false,
     this.audioDeviceStore = const AudioDeviceStore(),
     this.api,
+    this.apiBaseUrl = '',
+    this.stickerPackStore = const StickerPackStore(),
     this.currentUser,
     this.onUserUpdated,
     this.onDeviceSelected,
@@ -44,6 +51,8 @@ class SettingsPage extends StatefulWidget {
   final bool isSubWindow;
   final AudioDeviceStore audioDeviceStore;
   final GangApi? api;
+  final String apiBaseUrl;
+  final StickerPackStore stickerPackStore;
   final CurrentUser? currentUser;
   final ValueChanged<CurrentUser>? onUserUpdated;
   final void Function(String kind, String deviceId)? onDeviceSelected;
@@ -219,12 +228,23 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _ensureStickersLoaded({bool forceReload = false}) async {
     if (_loadingStickers) return;
     if (!forceReload && _stickerPacks.isNotEmpty) return;
-    await _loadStickers();
+    await _loadStickers(forceReload: forceReload);
   }
 
-  Future<void> _loadStickers() async {
+  Future<void> _loadStickers({bool forceReload = false}) async {
     final api = widget.api;
     if (api == null) return;
+    if (!forceReload) {
+      final cached = await _readStickerBackup();
+      if (!mounted) return;
+      if (cached != null) {
+        setState(() {
+          _stickerError = null;
+          _replaceStickerPacks(cached);
+        });
+        return;
+      }
+    }
     setState(() {
       _loadingStickers = true;
       _stickerError = null;
@@ -232,20 +252,8 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       final packs = await api.listStickerPacks(scope: 'personal');
       if (!mounted) return;
-      setState(() {
-        _stickerPacks = packs;
-        _selectedStickerIds = <String>[];
-        _stickerOrderDrafts
-          ..clear()
-          ..addEntries(
-            packs.map(
-              (pack) => MapEntry(
-                pack.id,
-                pack.stickers.map((sticker) => sticker.id).toList(),
-              ),
-            ),
-          );
-      });
+      setState(() => _replaceStickerPacks(packs));
+      await _writeStickerBackup(packs);
     } catch (e) {
       if (!mounted) return;
       setState(() => _stickerError = e.toString());
@@ -254,13 +262,45 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Future<List<StickerPack>?> _readStickerBackup() {
+    final userId = _user?.id ?? widget.currentUser?.id ?? '';
+    return widget.stickerPackStore.readPersonalPacks(
+      userId: userId,
+      apiBaseUrl: widget.apiBaseUrl,
+    );
+  }
+
+  Future<void> _writeStickerBackup(List<StickerPack> packs) {
+    final userId = _user?.id ?? widget.currentUser?.id ?? '';
+    return widget.stickerPackStore.writePersonalPacks(
+      userId: userId,
+      apiBaseUrl: widget.apiBaseUrl,
+      packs: packs,
+    );
+  }
+
+  void _replaceStickerPacks(List<StickerPack> packs) {
+    _stickerPacks = packs;
+    _selectedStickerIds = <String>[];
+    _stickerOrderDrafts
+      ..clear()
+      ..addEntries(
+        packs.map(
+          (pack) => MapEntry(
+            pack.id,
+            pack.stickers.map((sticker) => sticker.id).toList(),
+          ),
+        ),
+      );
+  }
+
   Future<void> _refreshActiveSection() async {
     switch (_section) {
       case _SettingsSection.profile:
         await _loadAccount();
         break;
       case _SettingsSection.stickers:
-        await _loadStickers();
+        await _loadStickers(forceReload: true);
         break;
       case _SettingsSection.security:
         await Future.wait([_loadAccount(), _loadSessions()]);
@@ -560,8 +600,8 @@ class _SettingsPageState extends State<SettingsPage> {
       files = await openFiles(
         acceptedTypeGroups: const [
           XTypeGroup(
-            label: 'Images',
-            extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'],
+            label: 'Images and ZIP',
+            extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'zip'],
           ),
         ],
       );
@@ -579,28 +619,28 @@ class _SettingsPageState extends State<SettingsPage> {
     });
     var uploadedCount = 0;
     try {
+      final uploadItems = await _stickerUploadItemsFromFiles(files);
+      if (uploadItems.isEmpty) {
+        throw StateError('没有找到可上传的图片');
+      }
       final pack = await _ensureActiveStickerPack();
       var sortIndex = pack.stickers.length;
-      for (final entry in files.asMap().entries) {
-        final file = entry.value;
-        final bytes = await file.readAsBytes();
-        if (bytes.isEmpty) {
-          throw StateError('${file.name} 文件为空');
-        }
+      for (final entry in uploadItems.asMap().entries) {
+        final item = entry.value;
         final asset = await api.uploadImageAsset(
-          bytes: bytes,
-          filename: _stickerUploadFilename(file.name, entry.key),
+          bytes: item.bytes,
+          filename: _stickerUploadFilename(item.filename, entry.key),
           purpose: 'sticker',
         );
         await api.addSticker(
           packId: pack.id,
           assetId: asset.id,
-          name: _stickerNameFromFilename(file.name),
+          name: _stickerNameFromFilename(item.filename),
           sortOrder: (++sortIndex) * 10,
         );
         uploadedCount += 1;
       }
-      await _loadStickers();
+      await _loadStickers(forceReload: true);
       _showNotice('已添加 $uploadedCount 个表情');
     } catch (e) {
       if (!mounted) return;
@@ -678,7 +718,7 @@ class _SettingsPageState extends State<SettingsPage> {
         if (item == null) continue;
         await api.deleteSticker(packId: item.pack.id, stickerId: stickerId);
       }
-      await _loadStickers();
+      await _loadStickers(forceReload: true);
       _showNotice('已删除 ${selectedIds.length} 个表情');
     } catch (e) {
       if (!mounted) return;
@@ -766,7 +806,7 @@ class _SettingsPageState extends State<SettingsPage> {
           stickerIds: [...selectedInPack, ...remaining],
         );
       }
-      await _loadStickers();
+      await _loadStickers(forceReload: true);
       _showNotice('已置顶 ${selectedIds.length} 个表情');
     } catch (e) {
       if (!mounted) return;
@@ -828,7 +868,7 @@ class _SettingsPageState extends State<SettingsPage> {
         stickerId: item.sticker.id,
         name: trimmed,
       );
-      await _loadStickers();
+      await _loadStickers(forceReload: true);
       return updated.name;
     } catch (e) {
       if (!mounted) return null;
@@ -860,7 +900,7 @@ class _SettingsPageState extends State<SettingsPage> {
     });
     try {
       await api.deleteSticker(packId: item.pack.id, stickerId: item.sticker.id);
-      await _loadStickers();
+      await _loadStickers(forceReload: true);
       _showNotice('表情已删除');
       return true;
     } catch (e) {
@@ -902,7 +942,7 @@ class _SettingsPageState extends State<SettingsPage> {
         packId: placement.item.pack.id,
         stickerIds: ids,
       );
-      await _loadStickers();
+      await _loadStickers(forceReload: true);
       _showNotice(delta < 0 ? '表情已上移一位' : '表情已下移一位');
       return _stickerPlacement(item.sticker.id);
     } catch (e) {
@@ -940,7 +980,7 @@ class _SettingsPageState extends State<SettingsPage> {
         packId: placement.item.pack.id,
         stickerIds: ids,
       );
-      await _loadStickers();
+      await _loadStickers(forceReload: true);
       _showNotice('表情已置顶');
       return _stickerPlacement(item.sticker.id);
     } catch (e) {
@@ -3559,9 +3599,6 @@ class _StickerPreviewDialogState extends State<_StickerPreviewDialog> {
   @override
   Widget build(BuildContext context) {
     final asset = _sticker.asset;
-    final dimensions = asset.width != null && asset.height != null
-        ? '${asset.width}x${asset.height}'
-        : '未知尺寸';
     return Dialog(
       backgroundColor: _primaryDarkLow,
       shape: const RoundedRectangleBorder(
@@ -3651,16 +3688,7 @@ class _StickerPreviewDialogState extends State<_StickerPreviewDialog> {
                 onSubmitted: (_) => unawaited(_saveName()),
               ),
               const SizedBox(height: 8),
-              Text(
-                '${asset.mimeType} · $dimensions',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: _textMuted,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+              _StickerDimensionsLine(asset: asset, imageUrl: widget.imageUrl),
               if (_error != null) ...[
                 const SizedBox(height: 10),
                 _SettingsError(message: _error!),
@@ -3748,6 +3776,133 @@ class _StickerPreviewDialogState extends State<_StickerPreviewDialog> {
       ),
     );
   }
+}
+
+class _StickerDimensionsLine extends StatefulWidget {
+  const _StickerDimensionsLine({required this.asset, required this.imageUrl});
+
+  final UploadedAsset asset;
+  final String imageUrl;
+
+  @override
+  State<_StickerDimensionsLine> createState() => _StickerDimensionsLineState();
+}
+
+class _StickerDimensionsLineState extends State<_StickerDimensionsLine> {
+  ImageStream? _stream;
+  ImageStreamListener? _listener;
+  _ImageDimensions? _resolvedDimensions;
+  bool _resolving = false;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveIfNeeded();
+  }
+
+  @override
+  void didUpdateWidget(_StickerDimensionsLine oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.asset != widget.asset ||
+        oldWidget.imageUrl != widget.imageUrl) {
+      _resolvedDimensions = null;
+      _failed = false;
+      _resolveIfNeeded();
+    }
+  }
+
+  @override
+  void dispose() {
+    _removeListener();
+    super.dispose();
+  }
+
+  void _resolveIfNeeded() {
+    if (widget.asset.width != null && widget.asset.height != null) {
+      _removeListener();
+      if (_resolving || _resolvedDimensions != null || _failed) {
+        setState(() {
+          _resolving = false;
+          _resolvedDimensions = null;
+          _failed = false;
+        });
+      }
+      return;
+    }
+    _removeListener();
+    _resolving = true;
+    final stream = NetworkImage(
+      widget.imageUrl,
+    ).resolve(ImageConfiguration.empty);
+    final listener = ImageStreamListener(
+      (image, _) {
+        if (!mounted) return;
+        setState(() {
+          _resolvedDimensions = _ImageDimensions(
+            width: image.image.width,
+            height: image.image.height,
+          );
+          _resolving = false;
+          _failed = false;
+        });
+      },
+      onError: (_, _) {
+        if (!mounted) return;
+        setState(() {
+          _resolving = false;
+          _failed = true;
+        });
+      },
+    );
+    _stream = stream;
+    _listener = listener;
+    stream.addListener(listener);
+  }
+
+  void _removeListener() {
+    final stream = _stream;
+    final listener = _listener;
+    if (stream != null && listener != null) {
+      stream.removeListener(listener);
+    }
+    _stream = null;
+    _listener = null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dimensions = _stickerDimensionsText(
+      widget.asset,
+      resolved: _resolvedDimensions,
+      resolving: _resolving,
+      failed: _failed,
+    );
+    return Text(
+      '${widget.asset.mimeType} · $dimensions',
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(
+        color: _textMuted,
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+      ),
+    );
+  }
+}
+
+String _stickerDimensionsText(
+  UploadedAsset asset, {
+  _ImageDimensions? resolved,
+  required bool resolving,
+  required bool failed,
+}) {
+  final width = asset.width ?? resolved?.width;
+  final height = asset.height ?? resolved?.height;
+  if (width != null && height != null) return '${width}x$height';
+  if (resolving) return '正在读取尺寸';
+  if (failed) return '尺寸读取失败';
+  return '未知尺寸';
 }
 
 class _StickerPreviewActionRow extends StatelessWidget {
@@ -4417,6 +4572,128 @@ String _normalizedGender(String value) {
     'male' || 'female' || 'secret' => value,
     _ => 'secret',
   };
+}
+
+class _StickerUploadItem {
+  const _StickerUploadItem({required this.filename, required this.bytes});
+
+  final String filename;
+  final Uint8List bytes;
+}
+
+class _ImageDimensions {
+  const _ImageDimensions({required this.width, required this.height});
+
+  final int width;
+  final int height;
+
+  @override
+  String toString() => '${width}x$height';
+}
+
+Future<List<_StickerUploadItem>> _stickerUploadItemsFromFiles(
+  List<XFile> files,
+) async {
+  final items = <_StickerUploadItem>[];
+  for (final file in files) {
+    final filename = _basename(file.name);
+    if (_isZipFilename(filename)) {
+      items.addAll(await _stickerUploadItemsFromZip(file));
+    } else if (_isStickerImageFilename(filename)) {
+      items.add(
+        await _stickerUploadItemFromBytes(filename, await file.readAsBytes()),
+      );
+    }
+    if (items.length > _maxStickerUploadsPerBatch) {
+      throw StateError('一次最多上传 $_maxStickerUploadsPerBatch 个表情');
+    }
+  }
+  return items;
+}
+
+Future<List<_StickerUploadItem>> _stickerUploadItemsFromZip(XFile file) async {
+  final bytes = await file.readAsBytes();
+  if (bytes.isEmpty) throw StateError('${file.name} 文件为空');
+
+  final archive = ZipDecoder().decodeBytes(bytes);
+  final items = <_StickerUploadItem>[];
+  for (final entry in archive.files) {
+    final entryName = entry.name;
+    if (!entry.isFile ||
+        _isIgnoredZipEntry(entryName) ||
+        !_isStickerImageFilename(entryName)) {
+      continue;
+    }
+    if (entry.size > _maxStickerImageBytes) {
+      throw StateError('${_basename(entryName)} 超过 25MB');
+    }
+    final content = entry.readBytes();
+    if (content == null) continue;
+    items.add(await _stickerUploadItemFromBytes(_basename(entryName), content));
+    if (items.length > _maxStickerUploadsPerBatch) {
+      throw StateError('一次最多上传 $_maxStickerUploadsPerBatch 个表情');
+    }
+  }
+  return items;
+}
+
+Future<_StickerUploadItem> _stickerUploadItemFromBytes(
+  String filename,
+  Uint8List bytes,
+) async {
+  if (bytes.isEmpty) throw StateError('$filename 文件为空');
+  if (bytes.length > _maxStickerImageBytes) {
+    throw StateError('$filename 超过 25MB');
+  }
+  try {
+    await _decodeImageDimensions(bytes);
+  } catch (_) {
+    throw StateError('$filename 不是可识别的图片');
+  }
+  return _StickerUploadItem(filename: filename, bytes: bytes);
+}
+
+Future<_ImageDimensions> _decodeImageDimensions(Uint8List bytes) async {
+  ui.Codec? codec;
+  ui.FrameInfo? frame;
+  try {
+    codec = await ui.instantiateImageCodec(bytes);
+    frame = await codec.getNextFrame();
+    return _ImageDimensions(
+      width: frame.image.width,
+      height: frame.image.height,
+    );
+  } finally {
+    frame?.image.dispose();
+    codec?.dispose();
+  }
+}
+
+bool _isStickerImageFilename(String filename) {
+  return _stickerImageExtensions.contains(_extensionOf(filename));
+}
+
+bool _isZipFilename(String filename) => _extensionOf(filename) == 'zip';
+
+bool _isIgnoredZipEntry(String name) {
+  final normalized = name.replaceAll('\\', '/');
+  final parts = normalized.split('/').where((part) => part.isNotEmpty);
+  if (parts.any((part) => part == '__MACOSX')) return true;
+  return _basename(normalized).startsWith('.');
+}
+
+String _basename(String path) {
+  final normalized = path.replaceAll('\\', '/');
+  final parts = normalized.split('/').where((part) => part.isNotEmpty);
+  final name = parts.isEmpty ? '' : parts.last;
+  return name.isEmpty ? 'sticker' : name;
+}
+
+String _extensionOf(String filename) {
+  final name = _basename(filename).toLowerCase();
+  final index = name.lastIndexOf('.');
+  if (index < 0 || index == name.length - 1) return '';
+  return name.substring(index + 1);
 }
 
 String _formatDateTime(DateTime? value) {

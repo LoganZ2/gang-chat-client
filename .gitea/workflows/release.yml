@@ -91,6 +91,9 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: UTF-8 encoding check
+        run: dart tool/check_utf8.dart
+
       - name: Build macOS (release)
         run: flutter build macos --release --build-name="${{ needs.prepare.outputs.version }}"
 
@@ -165,6 +168,12 @@ jobs:
         run: |
           $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
           flutter pub get
+
+      - name: UTF-8 encoding check
+        shell: powershell
+        run: |
+          $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
+          dart tool/check_utf8.dart
 
       - name: Build Windows (release)
         shell: powershell

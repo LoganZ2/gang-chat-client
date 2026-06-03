@@ -164,10 +164,22 @@ class UploadedAsset {
       url: json['url']! as String,
       thumbnailUrl: json['thumbnail_url'] as String?,
       mimeType: json['mime_type'] as String? ?? 'application/octet-stream',
-      width: json['width'] as int?,
-      height: json['height'] as int?,
+      width: _nullableInt(json['width']),
+      height: _nullableInt(json['height']),
       createdAt: _parseDateTime(json['created_at']),
     );
+  }
+
+  Map<String, Object?> toJson() {
+    return {
+      'id': id,
+      'url': url,
+      'thumbnail_url': thumbnailUrl,
+      'mime_type': mimeType,
+      'width': width,
+      'height': height,
+      'created_at': createdAt?.toIso8601String(),
+    };
   }
 }
 
@@ -197,9 +209,21 @@ class StickerPack {
       roomId: json['room_id'] as String?,
       name: json['name'] as String? ?? 'Stickers',
       stickers: _listOfMaps(json['stickers']).map(Sticker.fromJson).toList(),
-      sortOrder: json['sort_order'] as int? ?? 10,
+      sortOrder: _nullableInt(json['sort_order']) ?? 10,
       updatedAt: _parseDateTime(json['updated_at']),
     );
+  }
+
+  Map<String, Object?> toJson() {
+    return {
+      'id': id,
+      'scope': scope,
+      'room_id': roomId,
+      'name': name,
+      'stickers': stickers.map((sticker) => sticker.toJson()).toList(),
+      'sort_order': sortOrder,
+      'updated_at': updatedAt?.toIso8601String(),
+    };
   }
 }
 
@@ -220,9 +244,18 @@ class Sticker {
     return Sticker(
       id: json['id']! as String,
       name: json['name'] as String? ?? 'sticker',
-      sortOrder: json['sort_order'] as int? ?? 10,
+      sortOrder: _nullableInt(json['sort_order']) ?? 10,
       asset: UploadedAsset.fromJson(json['asset']! as Map<String, Object?>),
     );
+  }
+
+  Map<String, Object?> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'sort_order': sortOrder,
+      'asset': asset.toJson(),
+    };
   }
 }
 
@@ -686,6 +719,13 @@ Map<String, Object?>? _nullableMap(Object? value) {
 DateTime? _parseDateTime(Object? value) {
   if (value is! String || value.isEmpty) return null;
   return DateTime.tryParse(value);
+}
+
+int? _nullableInt(Object? value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value);
+  return null;
 }
 
 DateTime _fromUnixSeconds(int value) {

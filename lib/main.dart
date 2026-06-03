@@ -662,7 +662,7 @@ class _AuthGateState extends State<_AuthGate> {
       // _LoginPage's initState would lock the window to the login size,
       // undoing the authenticated-startup window prep.
       if (widget.startsAuthenticated && !_initialRestoreDone) {
-        return const ColoredBox(color: _windowBackground);
+        return const _LoadingPage();
       }
       return _LoginPage(
         apiBaseUrl: _apiBaseUrl,
@@ -675,6 +675,51 @@ class _AuthGateState extends State<_AuthGate> {
       apiBaseUrl: _apiBaseUrl,
       accessTokenProvider: _accessToken,
       onLogout: _logout,
+    );
+  }
+}
+
+class _LoadingPage extends StatelessWidget {
+  const _LoadingPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      backgroundColor: _windowBackground,
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Gang Chat',
+              style: TextStyle(
+                color: Color(0xFFECEFF1),
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0,
+              ),
+            ),
+            SizedBox(height: 20),
+            SizedBox.square(
+              dimension: 28,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: Color(0xFF6FCFA6),
+              ),
+            ),
+            SizedBox(height: 14),
+            Text(
+              '正在加载',
+              style: TextStyle(
+                color: Color(0xFFB0B8C0),
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

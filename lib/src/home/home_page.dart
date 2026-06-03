@@ -15,6 +15,7 @@ import '../live/live_stream_client.dart';
 import '../live/livekit_url.dart';
 import '../protocol/api_client.dart';
 import '../protocol/models.dart';
+import '../protocol/sticker_pack_store.dart';
 import '../settings/audio_device_store.dart';
 import '../settings/settings_page.dart';
 import '../ui/key_button.dart';
@@ -45,6 +46,7 @@ class HomePage extends StatefulWidget {
     required this.accessTokenProvider,
     required this.onLogout,
     this.api,
+    this.stickerPackStore = const StickerPackStore(),
   });
 
   final AuthSession session;
@@ -52,6 +54,7 @@ class HomePage extends StatefulWidget {
   final AccessTokenProvider accessTokenProvider;
   final Future<void> Function() onLogout;
   final GangApi? api;
+  final StickerPackStore stickerPackStore;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -125,6 +128,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
     _loadRooms();
     _startLiveStream();
+    unawaited(_warmPersonalStickerBackup());
     unawaited(_restoreStoredAudioSettings());
   }
 
@@ -423,6 +427,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.session.user.id != widget.session.user.id) {
       _currentUser = widget.session.user;
+      unawaited(_warmPersonalStickerBackup());
     }
     if (oldWidget.apiBaseUrl == widget.apiBaseUrl &&
         oldWidget.api == widget.api) {
@@ -434,6 +439,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _streamClient?.dispose();
     _startLiveStream();
     _loadRooms();
+    unawaited(_warmPersonalStickerBackup());
   }
 
   GangApi _newApiClient() {
@@ -443,6 +449,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       baseUrl: widget.apiBaseUrl,
       accessTokenProvider: widget.accessTokenProvider,
     );
+  }
+
+  Future<void> _warmPersonalStickerBackup() async {
+    final userId = _currentUser.id;
+    final cached = await widget.stickerPackStore.readPersonalPacks(
+      userId: userId,
+      apiBaseUrl: widget.apiBaseUrl,
+    );
+    if (cached != null) return;
+    try {
+      final packs = await _api.listStickerPacks(scope: 'personal');
+      await widget.stickerPackStore.writePersonalPacks(
+        userId: userId,
+        apiBaseUrl: widget.apiBaseUrl,
+        packs: packs,
+      );
+    } catch (_) {}
   }
 
   Future<void> _loadRooms() async {
@@ -1106,6 +1129,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         isSubWindow: true,
         audioDeviceStore: _audioDeviceStore,
         api: _api,
+        apiBaseUrl: widget.apiBaseUrl,
+        stickerPackStore: widget.stickerPackStore,
         currentUser: _currentUser,
         onUserUpdated: (user) => setState(() => _currentUser = user),
         onVolumeChanged: (kind, volume) {
@@ -1181,6 +1206,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 : _ChatPane(
                     roomId: _selectedRoomId!,
                     api: _api,
+                    apiBaseUrl: widget.apiBaseUrl,
+                    stickerPackStore: widget.stickerPackStore,
                     messages: _messages,
                     currentUserId: _currentUser.id,
                     controller: _messageController,
@@ -1930,6 +1957,8 @@ class _ChatPane extends StatefulWidget {
   const _ChatPane({
     required this.roomId,
     required this.api,
+    required this.apiBaseUrl,
+    required this.stickerPackStore,
     required this.messages,
     required this.currentUserId,
     required this.controller,
@@ -1940,6 +1969,8 @@ class _ChatPane extends StatefulWidget {
 
   final String roomId;
   final GangApi api;
+  final String apiBaseUrl;
+  final StickerPackStore stickerPackStore;
   final List<Message> messages;
   final String currentUserId;
   final TextEditingController controller;
@@ -1971,20 +2002,35 @@ class _ChatPaneState extends State<_ChatPane> {
     if (oldWidget.roomId != widget.roomId) {
       _openPanel = null;
       unawaited(_loadStickerPacks());
-    } else if (oldWidget.api != widget.api) {
+    } else if (oldWidget.api != widget.api ||
+        oldWidget.apiBaseUrl != widget.apiBaseUrl ||
+        oldWidget.currentUserId != widget.currentUserId) {
       unawaited(_loadStickerPacks());
     }
   }
 
-  Future<void> _loadStickerPacks() async {
+  Future<void> _loadStickerPacks({bool forceReload = false}) async {
     final roomId = widget.roomId;
     setState(() {
       _loadingStickerPacks = true;
       _stickerPackError = null;
     });
     try {
+      final cachedPersonal = forceReload
+          ? null
+          : await widget.stickerPackStore.readPersonalPacks(
+              userId: widget.currentUserId,
+              apiBaseUrl: widget.apiBaseUrl,
+            );
+      if (!mounted || widget.roomId != roomId) return;
+      if (cachedPersonal != null) {
+        setState(() => _personalStickerPacks = cachedPersonal);
+      }
+      final shouldFetchPersonal = forceReload || cachedPersonal == null;
       final packs = await Future.wait([
-        widget.api.listStickerPacks(scope: 'personal'),
+        shouldFetchPersonal
+            ? widget.api.listStickerPacks(scope: 'personal')
+            : Future<List<StickerPack>>.value(cachedPersonal),
         widget.api.listStickerPacks(scope: 'room', roomId: roomId),
       ]);
       if (!mounted || widget.roomId != roomId) return;
@@ -1992,6 +2038,13 @@ class _ChatPaneState extends State<_ChatPane> {
         _personalStickerPacks = packs[0];
         _roomStickerPacks = packs[1];
       });
+      if (shouldFetchPersonal) {
+        await widget.stickerPackStore.writePersonalPacks(
+          userId: widget.currentUserId,
+          apiBaseUrl: widget.apiBaseUrl,
+          packs: packs[0],
+        );
+      }
     } catch (e) {
       if (!mounted || widget.roomId != roomId) return;
       setState(() => _stickerPackError = e.toString());
@@ -2136,7 +2189,7 @@ class _ChatPaneState extends State<_ChatPane> {
           roomPacks: _roomStickerPacks,
           loading: _loadingStickerPacks,
           error: _stickerPackError,
-          onRefresh: _loadStickerPacks,
+          onRefresh: () => _loadStickerPacks(forceReload: true),
           onSourceChanged: (source) => setState(() => _stickerSource = source),
           onStickerSelected: _insertComposerText,
         ),
@@ -2695,9 +2748,9 @@ class _StickerButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final imageUrl = AppConfigScope.of(context).resolveAssetUrl(
-      sticker.asset.thumbnailUrl ?? sticker.asset.url,
-    );
+    final imageUrl = AppConfigScope.of(
+      context,
+    ).resolveAssetUrl(sticker.asset.thumbnailUrl ?? sticker.asset.url);
     final fallback = Icon(
       Icons.image_not_supported_outlined,
       color: _textMuted,
