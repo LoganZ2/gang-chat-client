@@ -20,6 +20,7 @@ import '../protocol/models.dart';
 import '../protocol/sticker_pack_store.dart';
 import '../settings/audio_device_store.dart';
 import '../settings/settings_page.dart';
+import '../ui/avatar_crop_dialog.dart';
 import '../ui/ui.dart';
 
 const _primaryDark = Color(0xFF14171D);
@@ -2354,7 +2355,7 @@ class _ExpandedRoomTile extends StatelessWidget {
                 child: Row(
                   children: [
                     _Avatar(
-                      label: room.displayName,
+                      label: room.name,
                       imageUrl: AppConfigScope.of(
                         context,
                       ).resolveAssetUrl(room.avatarUrl),
@@ -2534,7 +2535,7 @@ class _CollapsedRoomTileState extends State<_CollapsedRoomTile> {
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: Center(
                       child: _Avatar(
-                        label: widget.room.displayName,
+                        label: widget.room.name,
                         imageUrl: AppConfigScope.of(
                           context,
                         ).resolveAssetUrl(widget.room.avatarUrl),
@@ -5899,6 +5900,7 @@ class _RoomInfoDialogState extends State<_RoomInfoDialog> {
   String? _pendingAvatarAssetId;
   String? _pendingAvatarUrl;
   bool _usingGlobalProfile = false;
+  late bool _usingProfilePresetAvatar;
   bool _saving = false;
   bool _leaving = false;
   bool _uploadingAvatar = false;
@@ -5920,6 +5922,8 @@ class _RoomInfoDialogState extends State<_RoomInfoDialog> {
     );
     _defaultAvatarKey =
         profile.defaultAvatarKey ?? widget.currentUser.defaultAvatarKey;
+    _usingProfilePresetAvatar =
+        profile.avatarUrl == null && profile.defaultAvatarKey != null;
   }
 
   @override
@@ -5945,22 +5949,15 @@ class _RoomInfoDialogState extends State<_RoomInfoDialog> {
 
   Future<void> _pickAvatar() async {
     if (_uploadingAvatar) return;
-    XFile? file;
+    _CroppedAvatarFile? cropped;
     try {
-      file = await openFile(
-        acceptedTypeGroups: const [
-          XTypeGroup(
-            label: 'Images',
-            extensions: ['png', 'jpg', 'jpeg', 'webp'],
-          ),
-        ],
-      );
+      cropped = await _pickAndCropAvatarFile(context, title: '裁剪房间内头像');
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = '无法打开文件选择器：$e');
+      setState(() => _error = e.toString());
       return;
     }
-    if (file == null) return;
+    if (cropped == null) return;
 
     setState(() {
       _uploadingAvatar = true;
@@ -5968,10 +5965,9 @@ class _RoomInfoDialogState extends State<_RoomInfoDialog> {
       _notice = null;
     });
     try {
-      final bytes = await file.readAsBytes();
       final asset = await widget.api.uploadImageAsset(
-        bytes: bytes,
-        filename: _basename(file.name),
+        bytes: cropped.bytes,
+        filename: cropped.filename,
         purpose: 'avatar',
       );
       if (!mounted) return;
@@ -5979,6 +5975,7 @@ class _RoomInfoDialogState extends State<_RoomInfoDialog> {
         _pendingAvatarAssetId = asset.id;
         _pendingAvatarUrl = asset.url;
         _usingGlobalProfile = false;
+        _usingProfilePresetAvatar = false;
       });
     } catch (e) {
       if (!mounted) return;
@@ -5994,6 +5991,7 @@ class _RoomInfoDialogState extends State<_RoomInfoDialog> {
       _roomDisplayNameController.clear();
       _pendingAvatarAssetId = null;
       _pendingAvatarUrl = null;
+      _usingProfilePresetAvatar = false;
       _defaultAvatarKey = widget.currentUser.defaultAvatarKey;
       _notice = '保存后将使用全局默认用户名和默认头像';
       _error = null;
@@ -6015,7 +6013,7 @@ class _RoomInfoDialogState extends State<_RoomInfoDialog> {
         roomDisplayName: _usingGlobalProfile
             ? ''
             : _roomDisplayNameController.text.trim(),
-        avatarAssetId: _usingGlobalProfile ? '' : _pendingAvatarAssetId,
+        avatarAssetId: _profileAvatarAssetIdForSave,
         defaultAvatarKey: _usingGlobalProfile ? '' : _defaultAvatarKey,
       );
       if (!mounted) return;
@@ -6080,18 +6078,41 @@ class _RoomInfoDialogState extends State<_RoomInfoDialog> {
     }
   }
 
+  String? _profileAvatarPreviewUrl(AppConfig appConfig) {
+    if (_usingGlobalProfile) {
+      return appConfig.resolveAssetUrl(widget.currentUser.avatarUrl);
+    }
+    final pendingUrl = _pendingAvatarUrl;
+    if (pendingUrl != null) return appConfig.resolveAssetUrl(pendingUrl);
+    if (_usingProfilePresetAvatar) return null;
+    return appConfig.resolveAssetUrl(
+      widget.room.personalProfile.avatarUrl ?? widget.currentUser.avatarUrl,
+    );
+  }
+
+  String? get _profileAvatarAssetIdForSave {
+    if (_usingGlobalProfile) return '';
+    final pending = _pendingAvatarAssetId;
+    if (pending != null) return pending;
+    if (_usingProfilePresetAvatar) return '';
+    return null;
+  }
+
+  bool get _profileUploadedAvatarSelected {
+    return !_usingGlobalProfile &&
+        !_usingProfilePresetAvatar &&
+        (_pendingAvatarUrl != null ||
+            widget.room.personalProfile.avatarUrl != null);
+  }
+
+  bool get _profilePresetAvatarSelected {
+    return !_usingGlobalProfile && _usingProfilePresetAvatar;
+  }
+
   @override
   Widget build(BuildContext context) {
     final appConfig = AppConfigScope.of(context);
-    final profile = widget.room.personalProfile;
-    final roomProfileAvatarUrl = _usingGlobalProfile
-        ? widget.currentUser.avatarUrl
-        : _pendingAvatarUrl ??
-              profile.avatarUrl ??
-              widget.currentUser.avatarUrl;
-    final resolvedProfileAvatar = appConfig.resolveAssetUrl(
-      roomProfileAvatarUrl,
-    );
+    final resolvedProfileAvatar = _profileAvatarPreviewUrl(appConfig);
     final profileName = _usingGlobalProfile
         ? widget.currentUser.displayName
         : _nonEmpty(_roomDisplayNameController.text) ??
@@ -6178,18 +6199,25 @@ class _RoomInfoDialogState extends State<_RoomInfoDialog> {
                         displayName: profileName,
                         avatarUrl: resolvedProfileAvatar,
                         defaultAvatarKey: _defaultAvatarKey,
+                        uploadedSelected: _profileUploadedAvatarSelected,
+                        presetSelected: _profilePresetAvatarSelected,
                         uploading: _uploadingAvatar,
+                        avatarKeys: _RoomAvatarPicker.profileKeys,
+                        uploadLabel: '上传头像',
+                        presetLabel: '预设头像',
                         onUpload: _pickAvatar,
                         onPresetChanged: (key) => setState(() {
                           _defaultAvatarKey = key;
                           _pendingAvatarAssetId = null;
                           _pendingAvatarUrl = null;
                           _usingGlobalProfile = false;
+                          _usingProfilePresetAvatar = true;
                         }),
                         onUsePreset: () => setState(() {
                           _pendingAvatarAssetId = null;
                           _pendingAvatarUrl = null;
                           _usingGlobalProfile = false;
+                          _usingProfilePresetAvatar = true;
                         }),
                       ),
                       const SizedBox(height: 10),
@@ -6274,6 +6302,7 @@ class _RoomManagementDialogState extends State<_RoomManagementDialog> {
   late String _defaultAvatarKey;
   String? _pendingAvatarAssetId;
   String? _pendingAvatarUrl;
+  late bool _usingPresetAvatar;
   bool _uploadingAvatar = false;
   bool _saving = false;
   bool _deleting = false;
@@ -6300,6 +6329,7 @@ class _RoomManagementDialogState extends State<_RoomManagementDialog> {
     _joinPolicy = _normalizedJoinPolicy(_room.joinPolicy);
     _aiVoiceAnnouncementsEnabled = _room.aiVoiceAnnouncementsEnabled;
     _defaultAvatarKey = _room.defaultAvatarKey;
+    _usingPresetAvatar = _room.avatarUrl == null;
     _loadMembers();
   }
 
@@ -6348,22 +6378,15 @@ class _RoomManagementDialogState extends State<_RoomManagementDialog> {
 
   Future<void> _pickAvatar() async {
     if (_uploadingAvatar) return;
-    XFile? file;
+    _CroppedAvatarFile? cropped;
     try {
-      file = await openFile(
-        acceptedTypeGroups: const [
-          XTypeGroup(
-            label: 'Images',
-            extensions: ['png', 'jpg', 'jpeg', 'webp'],
-          ),
-        ],
-      );
+      cropped = await _pickAndCropAvatarFile(context, title: '裁剪房间图标');
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = '无法打开文件选择器：$e');
+      setState(() => _error = e.toString());
       return;
     }
-    if (file == null) return;
+    if (cropped == null) return;
     setState(() {
       _uploadingAvatar = true;
       _error = null;
@@ -6371,14 +6394,15 @@ class _RoomManagementDialogState extends State<_RoomManagementDialog> {
     });
     try {
       final asset = await widget.api.uploadImageAsset(
-        bytes: await file.readAsBytes(),
-        filename: _basename(file.name),
+        bytes: cropped.bytes,
+        filename: cropped.filename,
         purpose: 'avatar',
       );
       if (!mounted) return;
       setState(() {
         _pendingAvatarAssetId = asset.id;
         _pendingAvatarUrl = asset.url;
+        _usingPresetAvatar = false;
       });
     } catch (e) {
       if (!mounted) return;
@@ -6408,7 +6432,7 @@ class _RoomManagementDialogState extends State<_RoomManagementDialog> {
         visibility: _visibility,
         joinPolicy: _joinPolicy,
         aiVoiceAnnouncementsEnabled: _aiVoiceAnnouncementsEnabled,
-        avatarAssetId: _pendingAvatarAssetId,
+        avatarAssetId: _avatarAssetIdForSave,
         defaultAvatarKey: _defaultAvatarKey,
       );
       if (!mounted) return;
@@ -6417,6 +6441,7 @@ class _RoomManagementDialogState extends State<_RoomManagementDialog> {
         _changed = true;
         _pendingAvatarAssetId = null;
         _pendingAvatarUrl = null;
+        _usingPresetAvatar = _room.avatarUrl == null;
         _notice = '房间信息已保存';
       });
     } catch (e) {
@@ -6530,6 +6555,7 @@ class _RoomManagementDialogState extends State<_RoomManagementDialog> {
   @override
   Widget build(BuildContext context) {
     final appConfig = AppConfigScope.of(context);
+    final roomAvatarUrl = _roomAvatarPreviewUrl(appConfig);
     return Dialog(
       backgroundColor: _primaryDarkRaised,
       insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
@@ -6545,9 +6571,7 @@ class _RoomManagementDialogState extends State<_RoomManagementDialog> {
             _RoomDialogRoomSummary(
               roomName: _room.name,
               avatarLabel: _room.name,
-              avatarUrl: appConfig.resolveAssetUrl(
-                _pendingAvatarUrl ?? _room.avatarUrl,
-              ),
+              avatarUrl: roomAvatarUrl,
               defaultAvatarKey: _defaultAvatarKey,
             ),
             Expanded(
@@ -6584,6 +6608,20 @@ class _RoomManagementDialogState extends State<_RoomManagementDialog> {
     );
   }
 
+  String? _roomAvatarPreviewUrl(AppConfig appConfig) {
+    if (_usingPresetAvatar) return null;
+    return appConfig.resolveAssetUrl(_pendingAvatarUrl ?? _room.avatarUrl);
+  }
+
+  String? get _avatarAssetIdForSave {
+    final pending = _pendingAvatarAssetId;
+    if (pending != null) return pending;
+    if (_usingPresetAvatar) return '';
+    return null;
+  }
+
+  bool get _uploadedAvatarSelected => !_usingPresetAvatar;
+
   Widget _buildSection(AppConfig appConfig) {
     return switch (_section) {
       _RoomManagementSection.info => _buildInfoSection(appConfig),
@@ -6615,20 +6653,22 @@ class _RoomManagementDialogState extends State<_RoomManagementDialog> {
             _RoomAvatarPicker(
               label: '房间图标',
               displayName: _nameController.text,
-              avatarUrl: appConfig.resolveAssetUrl(
-                _pendingAvatarUrl ?? _room.avatarUrl,
-              ),
+              avatarUrl: _roomAvatarPreviewUrl(appConfig),
               defaultAvatarKey: _defaultAvatarKey,
+              uploadedSelected: _uploadedAvatarSelected,
+              presetSelected: _usingPresetAvatar,
               uploading: _uploadingAvatar,
               onUpload: _pickAvatar,
               onPresetChanged: (key) => setState(() {
                 _defaultAvatarKey = key;
                 _pendingAvatarAssetId = null;
                 _pendingAvatarUrl = null;
+                _usingPresetAvatar = true;
               }),
               onUsePreset: () => setState(() {
                 _pendingAvatarAssetId = null;
                 _pendingAvatarUrl = null;
+                _usingPresetAvatar = true;
               }),
             ),
             const SizedBox(height: 14),
@@ -7531,14 +7571,40 @@ class _RoomAvatarPicker extends StatelessWidget {
     required this.displayName,
     required this.avatarUrl,
     required this.defaultAvatarKey,
+    required this.uploadedSelected,
+    required this.presetSelected,
     required this.uploading,
     required this.onUpload,
     required this.onPresetChanged,
     required this.onUsePreset,
+    this.avatarKeys = roomKeys,
+    this.uploadLabel = '上传图片',
+    this.presetLabel = '预设图标',
   });
 
-  static const _keys = [
+  static const roomKeys = [
     'room-1',
+    'blue-3',
+    'sky-2',
+    'cyan-2',
+    'mint-2',
+    'green-2',
+    'lime-2',
+    'amber-2',
+    'orange-2',
+    'coral-2',
+    'pink-2',
+    'violet-2',
+    'indigo-2',
+    'rose-2',
+    'teal-2',
+    'olive-2',
+    'slate-2',
+    'steel-2',
+    'graphite-2',
+  ];
+
+  static const profileKeys = [
     'blue-3',
     'sky-2',
     'cyan-2',
@@ -7563,15 +7629,18 @@ class _RoomAvatarPicker extends StatelessWidget {
   final String displayName;
   final String? avatarUrl;
   final String defaultAvatarKey;
+  final bool uploadedSelected;
+  final bool presetSelected;
   final bool uploading;
   final VoidCallback onUpload;
   final ValueChanged<String> onPresetChanged;
   final VoidCallback onUsePreset;
+  final List<String> avatarKeys;
+  final String uploadLabel;
+  final String presetLabel;
 
   @override
   Widget build(BuildContext context) {
-    final uploadedSelected = avatarUrl != null;
-    final presetSelected = !uploadedSelected;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -7599,7 +7668,7 @@ class _RoomAvatarPicker extends StatelessWidget {
                 spacing: 10,
                 runSpacing: 10,
                 children: [
-                  for (final key in _keys)
+                  for (final key in avatarKeys)
                     _AvatarSwatch(
                       keyName: key,
                       selected: presetSelected && key == defaultAvatarKey,
@@ -7625,7 +7694,7 @@ class _RoomAvatarPicker extends StatelessWidget {
                 height: 38,
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 width: double.infinity,
-                child: const Text('上传图片'),
+                child: Text(uploadLabel),
               ),
             ),
             const SizedBox(width: 10),
@@ -7638,7 +7707,7 @@ class _RoomAvatarPicker extends StatelessWidget {
                 height: 38,
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 width: double.infinity,
-                child: const Text('预设图标'),
+                child: Text(presetLabel),
               ),
             ),
           ],
@@ -10725,6 +10794,71 @@ String _basename(String value) {
   ].fold<int>(name.length, (min, value) => value < min ? value : min);
   final clean = name.substring(0, end).trim();
   return clean.isEmpty ? 'file' : clean;
+}
+
+class _CroppedAvatarFile {
+  const _CroppedAvatarFile({required this.bytes, required this.filename});
+
+  final Uint8List bytes;
+  final String filename;
+}
+
+class _AvatarPickException implements Exception {
+  const _AvatarPickException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+Future<_CroppedAvatarFile?> _pickAndCropAvatarFile(
+  BuildContext context, {
+  required String title,
+}) async {
+  XFile? file;
+  try {
+    file = await openFile(
+      acceptedTypeGroups: const [
+        XTypeGroup(label: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp']),
+      ],
+    );
+  } catch (e) {
+    throw _AvatarPickException('无法打开文件选择器：$e');
+  }
+  if (file == null) return null;
+
+  Uint8List bytes;
+  try {
+    bytes = await file.readAsBytes();
+  } catch (e) {
+    throw _AvatarPickException('无法读取图片：$e');
+  }
+  if (bytes.isEmpty) {
+    throw const _AvatarPickException('图片文件为空');
+  }
+  if (!context.mounted) return null;
+
+  final cropped = await showDialog<Uint8List>(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => AvatarCropDialog(bytes: bytes, title: title),
+  );
+  if (cropped == null) return null;
+  return _CroppedAvatarFile(
+    bytes: cropped,
+    filename: _avatarUploadFilename(file.name),
+  );
+}
+
+String _avatarUploadFilename(String originalName) {
+  final cleaned = _basename(originalName)
+      .trim()
+      .replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '-')
+      .replaceAll(RegExp(r'-+'), '-');
+  final stem = cleaned.replaceFirst(RegExp(r'\.[A-Za-z0-9]+$'), '');
+  final safeStem = stem.isEmpty ? 'avatar' : stem;
+  return '$safeStem-${DateTime.now().millisecondsSinceEpoch}.png';
 }
 
 String _fileAttachmentTitle(MessageAttachment attachment) {
