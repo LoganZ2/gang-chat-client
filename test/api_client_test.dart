@@ -302,6 +302,262 @@ void main() {
     expect(sender.commonRooms.single.roomRole, 'admin');
   });
 
+  test('RoomMember parses room names, remarks, presence, and role fields', () {
+    final page = RoomMemberPage.fromJson({
+      'next_cursor': 'cursor_2',
+      'members': [
+        {
+          'user': {
+            'id': 'user_1',
+            'uid': '1000001',
+            'username': 'alice',
+            'display_name': 'Alice',
+            'avatar_url': '/assets/asset_1/avatar.png',
+            'default_avatar_key': 'rose-2',
+            'is_superuser': true,
+          },
+          'role': 'admin',
+          'room_display_name': 'Alice In Room',
+          'remark_name': 'Ops lead',
+          'text_muted_until': 'permanent',
+          'presence': {'status': 'connected'},
+          'joined_at': '2026-05-31T14:00:00Z',
+        },
+      ],
+    });
+
+    final member = page.members.single;
+    expect(page.nextCursor, 'cursor_2');
+    expect(member.user.uid, '1000001');
+    expect(member.user.roomDisplayName, 'Alice In Room');
+    expect(member.user.roomRole, 'admin');
+    expect(member.user.isSuperuser, isTrue);
+    expect(member.roomDisplayName, 'Alice In Room');
+    expect(member.remarkName, 'Ops lead');
+    expect(member.textMutedUntil, 'permanent');
+    expect(member.isOnline, isTrue);
+    expect(
+      member.joinedAt.toUtc().toIso8601String(),
+      '2026-05-31T14:00:00.000Z',
+    );
+  });
+
+  test('listRoomMembers requests room members with pagination', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/api/v1/rooms/room_1/members');
+        expect(request.url.queryParameters, {
+          'limit': '100',
+          'cursor': 'cursor_1',
+        });
+        expect(request.headers['authorization'], 'Bearer token');
+
+        return http.Response(
+          jsonEncode({
+            'members': [
+              {
+                'user': {
+                  'id': 'user_1',
+                  'uid': '1000001',
+                  'username': 'alice',
+                  'display_name': 'Alice',
+                },
+                'role': 'owner',
+                'joined_at': '2026-05-31T14:00:00Z',
+              },
+            ],
+            'next_cursor': null,
+          }),
+          200,
+        );
+      }),
+    );
+
+    final page = await api.listRoomMembers(
+      'room_1',
+      limit: 100,
+      cursor: 'cursor_1',
+    );
+
+    expect(page.members.single.role, 'owner');
+    expect(page.members.single.user.username, 'alice');
+    api.close();
+  });
+
+  test(
+    'searchUsers calls the user search endpoint and parses summaries',
+    () async {
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          expect(request.method, 'GET');
+          expect(request.url.path, '/api/v1/users/search');
+          expect(request.url.queryParameters, {'q': '1000001', 'limit': '20'});
+          expect(request.headers['authorization'], 'Bearer token');
+
+          return http.Response(
+            jsonEncode({
+              'users': [
+                {
+                  'id': 'user_1',
+                  'uid': '1000001',
+                  'username': 'alice',
+                  'display_name': 'Alice',
+                  'avatar_url': '/assets/asset_1/avatar.png',
+                  'default_avatar_key': 'rose-2',
+                },
+              ],
+              'next_cursor': null,
+            }),
+            200,
+          );
+        }),
+      );
+
+      final users = await api.searchUsers(query: '1000001');
+
+      expect(users.single.id, 'user_1');
+      expect(users.single.uid, '1000001');
+      expect(users.single.avatarUrl, '/assets/asset_1/avatar.png');
+      api.close();
+    },
+  );
+
+  test('inviteMember posts the target user id and parses the invite', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/v1/rooms/room_1/invites');
+        expect(request.headers['authorization'], 'Bearer token');
+        expect(request.headers['idempotency-key'], isNotEmpty);
+        expect(
+          jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>,
+          {'user_id': 'user_2'},
+        );
+
+        return http.Response(jsonEncode({'invite': _roomInviteJson()}), 201);
+      }),
+    );
+
+    final invite = await api.inviteMember(roomId: 'room_1', userId: 'user_2');
+
+    expect(invite.id, 'rinv_1');
+    expect(invite.status, 'pending');
+    expect(invite.room.name, 'Invite Room');
+    expect(invite.inviter.username, 'alice');
+    api.close();
+  });
+
+  test(
+    'listRoomInvites requests pending invites for the current user',
+    () async {
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          expect(request.method, 'GET');
+          expect(request.url.path, '/api/v1/room-invites');
+          expect(request.url.queryParameters, {'status': 'pending'});
+          expect(request.headers['authorization'], 'Bearer token');
+
+          return http.Response(
+            jsonEncode({
+              'invites': [_roomInviteJson()],
+              'next_cursor': null,
+            }),
+            200,
+          );
+        }),
+      );
+
+      final invites = await api.listRoomInvites();
+
+      expect(invites.single.id, 'rinv_1');
+      expect(invites.single.room.rid, '900001');
+      api.close();
+    },
+  );
+
+  test(
+    'reviewRoomInvite accepts an invite and parses the joined room',
+    () async {
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          expect(request.method, 'PATCH');
+          expect(request.url.path, '/api/v1/room-invites/rinv_1');
+          expect(request.headers['authorization'], 'Bearer token');
+          expect(
+            jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>,
+            {'decision': 'accept'},
+          );
+
+          return http.Response(
+            jsonEncode({
+              'ok': true,
+              'invite': _roomInviteJson(status: 'accepted'),
+              'room': _roomDetailJson(),
+            }),
+            200,
+          );
+        }),
+      );
+
+      final result = await api.reviewRoomInvite(
+        inviteId: 'rinv_1',
+        accept: true,
+      );
+
+      expect(result.joined, isTrue);
+      expect(result.room?.name, 'Invite Room');
+      api.close();
+    },
+  );
+
+  test(
+    'reviewRoomInvite parses a pending join request after accepting',
+    () async {
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          expect(request.method, 'PATCH');
+          expect(request.url.path, '/api/v1/room-invites/rinv_1');
+
+          return http.Response(
+            jsonEncode({
+              'ok': true,
+              'invite': _roomInviteJson(status: 'accepted'),
+              'join_request': {
+                'id': 'jrq_1',
+                'room_id': 'room_1',
+                'status': 'pending',
+                'created_at': '2026-01-01T00:00:00Z',
+              },
+            }),
+            202,
+          );
+        }),
+      );
+
+      final result = await api.reviewRoomInvite(
+        inviteId: 'rinv_1',
+        accept: true,
+      );
+
+      expect(result.joined, isFalse);
+      expect(result.pending, isTrue);
+      api.close();
+    },
+  );
+
   test('sendMessage can send and parse a file attachment', () async {
     final fileAsset = UploadedAsset(
       id: 'asset_1',
@@ -1237,6 +1493,62 @@ void main() {
     expect(user.avatarUrl, '/assets/asset_1/avatar.png');
     api.close();
   });
+}
+
+Map<String, Object?> _roomInviteJson({String status = 'pending'}) {
+  return {
+    'id': 'rinv_1',
+    'status': status,
+    'created_at': '2026-05-31T13:00:00Z',
+    'updated_at': '2026-05-31T13:00:00Z',
+    'room': {
+      'id': 'room_1',
+      'rid': '900001',
+      'name': 'Invite Room',
+      'avatar_url': null,
+      'default_avatar_key': 'room-1',
+      'visibility': 'private',
+      'join_policy': 'closed',
+      'member_count': 1,
+      'live_participant_count': 0,
+      'joined': false,
+      'join_state': 'none',
+    },
+    'inviter': {
+      'id': 'user_1',
+      'uid': '1000001',
+      'username': 'alice',
+      'display_name': 'Alice',
+      'avatar_url': null,
+      'default_avatar_key': 'blue-3',
+    },
+  };
+}
+
+Map<String, Object?> _roomDetailJson() {
+  return {
+    'id': 'room_1',
+    'rid': '900001',
+    'name': 'Invite Room',
+    'avatar_url': null,
+    'default_avatar_key': 'room-1',
+    'member_count': 2,
+    'created_by': {
+      'id': 'user_1',
+      'uid': '1000001',
+      'username': 'alice',
+      'display_name': 'Alice',
+    },
+    'my_membership': {'joined_at': '2026-05-31T14:00:00Z', 'role': 'member'},
+    'live': {
+      'room_id': 'room_1',
+      'participant_count': 0,
+      'participants': <Object?>[],
+      'updated_at': '2026-05-31T14:00:00Z',
+    },
+    'created_at': '2026-05-31T13:00:00Z',
+    'updated_at': '2026-05-31T14:00:00Z',
+  };
 }
 
 Map<String, Object?> _liveJoinJson() {

@@ -656,6 +656,136 @@ class JoinRequest {
   }
 }
 
+class RoomMemberPage {
+  const RoomMemberPage({required this.members, required this.nextCursor});
+
+  final List<RoomMember> members;
+  final String? nextCursor;
+
+  factory RoomMemberPage.fromJson(Map<String, Object?> json) {
+    return RoomMemberPage(
+      members: _listOfMaps(json['members']).map(RoomMember.fromJson).toList(),
+      nextCursor: _stringFromJson(json, const ['next_cursor']),
+    );
+  }
+}
+
+class RoomMember {
+  const RoomMember({
+    required this.user,
+    required this.role,
+    required this.joinedAt,
+    this.roomDisplayName,
+    this.remarkName,
+    this.textMutedUntil,
+    this.isOnline,
+  });
+
+  final UserSummary user;
+  final String role;
+  final DateTime joinedAt;
+  final String? roomDisplayName;
+  final String? remarkName;
+  final String? textMutedUntil;
+  final bool? isOnline;
+
+  factory RoomMember.fromJson(Map<String, Object?> json) {
+    final userJson = json['user']! as Map<String, Object?>;
+    final baseUser = UserSummary.fromJson(userJson);
+    final membership = _nullableMap(json['membership']);
+    final role =
+        _stringFromJson(json, const ['role', 'room_role', 'membership_role']) ??
+        _stringFromJson(membership, const ['role']) ??
+        baseUser.roomRole ??
+        'member';
+    final roomDisplayName =
+        _stringFromJson(json, const [
+          'room_display_name',
+          'room_username',
+          'room_nickname',
+          'member_display_name',
+        ]) ??
+        _stringFromJson(membership, const [
+          'room_display_name',
+          'room_username',
+          'room_nickname',
+          'member_display_name',
+        ]) ??
+        baseUser.roomDisplayName;
+    final remarkName =
+        _stringFromJson(json, const ['remark_name', 'remark']) ??
+        _stringFromJson(membership, const ['remark_name', 'remark']);
+    final textMutedUntil =
+        _stringFromJson(json, const ['text_muted_until']) ??
+        _stringFromJson(membership, const ['text_muted_until']);
+    final isOnline =
+        _boolFromJson(json, const ['is_online', 'online']) ??
+        _boolFromJson(_nullableMap(json['presence']), const [
+          'is_online',
+          'online',
+        ]) ??
+        _onlineFromStatus(
+          _stringFromJson(json, const [
+                'presence',
+                'presence_status',
+                'status',
+                'connection_state',
+              ]) ??
+              _stringFromJson(_nullableMap(json['presence']), const [
+                'status',
+                'connection_state',
+              ]),
+        );
+    final user = baseUser.copyWith(
+      roomDisplayName: roomDisplayName,
+      roomRole: role,
+    );
+    return RoomMember(
+      user: user,
+      role: role,
+      joinedAt:
+          _parseDateTime(json['joined_at']) ??
+          _parseDateTime(membership?['joined_at']) ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      roomDisplayName: roomDisplayName,
+      remarkName: remarkName,
+      textMutedUntil: textMutedUntil,
+      isOnline: isOnline,
+    );
+  }
+}
+
+class RoomInvite {
+  const RoomInvite({
+    required this.id,
+    required this.status,
+    required this.room,
+    required this.inviter,
+    required this.createdAt,
+    this.updatedAt,
+  });
+
+  final String id;
+  final String status;
+  final PublicRoom room;
+  final UserSummary inviter;
+  final DateTime createdAt;
+  final DateTime? updatedAt;
+
+  factory RoomInvite.fromJson(Map<String, Object?> json) {
+    return RoomInvite(
+      id: json['id']! as String,
+      status: json['status'] as String? ?? 'pending',
+      room: PublicRoom.fromJson(json['room']! as Map<String, Object?>),
+      inviter: UserSummary.fromJson(json['inviter']! as Map<String, Object?>),
+      createdAt:
+          _parseDateTime(json['created_at']) ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      updatedAt: _parseDateTime(json['updated_at']),
+    );
+  }
+}
+
 class RoomDetail {
   const RoomDetail({
     required this.id,
@@ -1022,6 +1152,16 @@ bool? _boolFromJson(Map<String, Object?>? json, List<String> keys) {
     if (value is bool) return value;
   }
   return null;
+}
+
+bool? _onlineFromStatus(String? value) {
+  final status = value?.trim().toLowerCase();
+  if (status == null || status.isEmpty) return null;
+  return switch (status) {
+    'online' || 'active' || 'connected' || 'joining' || 'joined' => true,
+    'offline' || 'inactive' || 'disconnected' || 'left' => false,
+    _ => null,
+  };
 }
 
 DateTime? _parseDateTime(Object? value) {

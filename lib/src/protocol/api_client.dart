@@ -168,6 +168,29 @@ abstract interface class GangApi {
 
   Future<JoinRoomResult> joinRoom(String roomId);
 
+  Future<RoomMemberPage> listRoomMembers(
+    String roomId, {
+    int limit = 100,
+    String? cursor,
+  });
+
+  Future<RoomInvite> inviteMember({
+    required String roomId,
+    required String userId,
+  });
+
+  Future<List<RoomInvite>> listRoomInvites({String status = 'pending'});
+
+  Future<JoinRoomResult> reviewRoomInvite({
+    required String inviteId,
+    required bool accept,
+  });
+
+  Future<List<UserSummary>> searchUsers({
+    required String query,
+    int limit = 20,
+  });
+
   Future<List<JoinRequest>> listJoinRequests(
     String roomId, {
     String status = 'pending',
@@ -715,6 +738,91 @@ class GangApiClient implements GangApi {
     }
     // approval_required path: server returns {"join_request": {...}} with 202.
     return const JoinRoomResult(pending: true);
+  }
+
+  @override
+  Future<RoomMemberPage> listRoomMembers(
+    String roomId, {
+    int limit = 100,
+    String? cursor,
+  }) async {
+    final query = {'limit': '$limit'};
+    if (cursor != null) query['cursor'] = cursor;
+    final decoded = await _sendJson((token) {
+      return _httpClient.get(
+        _uri('/rooms/$roomId/members', query),
+        headers: _headers(token),
+      );
+    }, retryTransientFailures: true);
+    return RoomMemberPage.fromJson(decoded);
+  }
+
+  @override
+  Future<RoomInvite> inviteMember({
+    required String roomId,
+    required String userId,
+  }) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.post(
+        _uri('/rooms/$roomId/invites'),
+        headers: _headers(token, idempotencyKey: newUuid()),
+        body: encodeJsonBody({'user_id': userId}),
+      );
+    });
+    return RoomInvite.fromJson(decoded['invite']! as Map<String, Object?>);
+  }
+
+  @override
+  Future<List<RoomInvite>> listRoomInvites({String status = 'pending'}) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.get(
+        _uri('/room-invites', {'status': status}),
+        headers: _headers(token),
+      );
+    }, retryTransientFailures: true);
+    return (decoded['invites'] as List<Object?>? ?? const [])
+        .cast<Map<String, Object?>>()
+        .map(RoomInvite.fromJson)
+        .toList();
+  }
+
+  @override
+  Future<JoinRoomResult> reviewRoomInvite({
+    required String inviteId,
+    required bool accept,
+  }) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.patch(
+        _uri('/room-invites/$inviteId'),
+        headers: _headers(token),
+        body: encodeJsonBody({'decision': accept ? 'accept' : 'reject'}),
+      );
+    });
+    final roomJson = decoded['room'] as Map<String, Object?>?;
+    if (roomJson != null) {
+      return JoinRoomResult(room: RoomDetail.fromJson(roomJson));
+    }
+    if (decoded['join_request'] != null) {
+      return const JoinRoomResult(pending: true);
+    }
+    return const JoinRoomResult();
+  }
+
+  @override
+  Future<List<UserSummary>> searchUsers({
+    required String query,
+    int limit = 20,
+  }) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.get(
+        _uri('/users/search', {'q': query, 'limit': '$limit'}),
+        headers: _headers(token),
+      );
+    }, retryTransientFailures: true);
+    return (decoded['users'] as List<Object?>? ?? const [])
+        .cast<Map<String, Object?>>()
+        .map(UserSummary.fromJson)
+        .toList();
   }
 
   @override

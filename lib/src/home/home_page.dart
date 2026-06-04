@@ -94,6 +94,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Timer? _toastTimer;
   bool _loadingRooms = true;
   bool _loadingRoom = false;
+  bool _hasPendingRoomInvites = false;
+  bool _selectedRoomHasPendingJoinRequests = false;
   bool _sending = false;
   bool _handlingMessagePaste = false;
   bool _joiningLive = false;
@@ -140,6 +142,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       () => _shutdownLive(reason: 'app_exit'),
     );
     _loadRooms();
+    unawaited(_refreshRoomInviteBadge());
     _startLiveStream();
     unawaited(_warmPersonalStickerCache());
     unawaited(_restoreStoredAudioSettings());
@@ -269,8 +272,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void _onStreamReconnect() {
     if (!mounted) return;
     unawaited(_loadRoomsSilently());
+    unawaited(_refreshRoomInviteBadge());
     final selected = _selectedRoomId;
-    if (selected != null) unawaited(_refreshLiveSilently(selected));
+    if (selected != null) {
+      unawaited(_refreshLiveSilently(selected));
+      unawaited(_refreshSelectedJoinRequestBadge());
+    }
   }
 
   /// Background room-list refresh with no spinners or error banners; the SSE
@@ -318,6 +325,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       case 'room_role_changed':
         _applyRoomRoleChanged(ev.data);
         break;
+      case 'room_invites_updated':
+        unawaited(_refreshRoomInviteBadge());
+        break;
+      case 'room_join_requests_updated':
+        _applyRoomJoinRequestsUpdated(ev.data);
+        break;
       default:
         // Other event types aren't wired yet.
         break;
@@ -356,6 +369,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       next[idx] = incoming.copyWith(unreadCount: existing.unreadCount);
       _rooms = next;
     });
+    if (_selectedRoomId == incoming.id && (_selectedRoom?.isAdmin ?? false)) {
+      unawaited(_refreshSelectedJoinRequestBadge());
+    }
+  }
+
+  void _applyRoomJoinRequestsUpdated(Map<String, dynamic> data) {
+    final roomId = data['room_id'] as String?;
+    if (roomId == null || roomId != _selectedRoomId) return;
+    if (!(_selectedRoom?.isAdmin ?? false)) return;
+    unawaited(_refreshSelectedJoinRequestBadge());
   }
 
   /// We lost a room (left, were removed, or it was deleted). Drop the card and,
@@ -369,6 +392,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (wasSelected) {
         _selectedRoomId = null;
         _selectedRoom = null;
+        _selectedRoomHasPendingJoinRequests = false;
         _messages = const [];
         _live = null;
         _livePanelOpen = false;
@@ -394,9 +418,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (roomId == null || role == null || !mounted) return;
     final current = _selectedRoom;
     if (current == null || current.id != roomId) return;
+    final updated = current.copyWithRole(role);
     setState(() {
-      _selectedRoom = current.copyWithRole(role);
+      _selectedRoom = updated;
     });
+    unawaited(_refreshSelectedJoinRequestBadge(updated));
   }
 
   RoomCard? _roomCardFromSnapshot(Map<String, dynamic> data) {
@@ -530,6 +556,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.session.user.id != widget.session.user.id) {
       _currentUser = widget.session.user;
+      _setPendingRoomInviteBadge(false);
+      _setSelectedJoinRequestBadge(false);
+      unawaited(_refreshRoomInviteBadge());
       unawaited(_warmPersonalStickerCache());
     }
     if (oldWidget.apiBaseUrl == widget.apiBaseUrl &&
@@ -541,7 +570,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     // The stream is keyed to apiBaseUrl, so restart it against the new host.
     _streamClient?.dispose();
     _startLiveStream();
+    setState(() {
+      _hasPendingRoomInvites = false;
+      _selectedRoomHasPendingJoinRequests = false;
+    });
     _loadRooms();
+    unawaited(_refreshRoomInviteBadge());
     unawaited(_warmPersonalStickerCache());
   }
 
@@ -588,7 +622,47 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _openRoom(RoomCard room, {bool joinLive = false}) async {
+  Future<void> _refreshRoomInviteBadge() async {
+    try {
+      final invites = await _api.listRoomInvites();
+      if (!mounted) return;
+      _setPendingRoomInviteBadge(invites.isNotEmpty);
+    } catch (_) {
+      // Keep the last known badge state; transient failures should not clear it.
+    }
+  }
+
+  Future<void> _refreshSelectedJoinRequestBadge([RoomDetail? room]) async {
+    final target = room ?? _selectedRoom;
+    if (target == null || !target.isAdmin) {
+      if (mounted) _setSelectedJoinRequestBadge(false);
+      return;
+    }
+    try {
+      final requests = await _api.listJoinRequests(target.id);
+      if (!mounted || _selectedRoomId != target.id) return;
+      _setSelectedJoinRequestBadge(requests.isNotEmpty);
+    } catch (_) {
+      // Keep the last known badge state; permission or network failures should
+      // not create a distracting flicker.
+    }
+  }
+
+  void _setPendingRoomInviteBadge(bool hasPending) {
+    if (!mounted || _hasPendingRoomInvites == hasPending) return;
+    setState(() => _hasPendingRoomInvites = hasPending);
+  }
+
+  void _setSelectedJoinRequestBadge(bool hasPending) {
+    if (!mounted || _selectedRoomHasPendingJoinRequests == hasPending) return;
+    setState(() => _selectedRoomHasPendingJoinRequests = hasPending);
+  }
+
+  Future<void> _openRoom(
+    RoomCard room, {
+    bool joinLive = false,
+    RoomDetail? optimisticDetail,
+  }) async {
     if (_loadingRoom && _selectedRoomId == room.id) return;
     _saveCurrentMessageDraft();
     setState(() {
@@ -596,6 +670,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _selectedRoomId = room.id;
       _loadingRoom = true;
       _error = null;
+      _selectedRoomHasPendingJoinRequests = false;
+      if (optimisticDetail != null) {
+        _selectedRoom = optimisticDetail;
+        _messages = const [];
+        _live = optimisticDetail.live;
+      }
       if (!joinLive) _livePanelOpen = false;
     });
     _restoreMessageDraft(room.id);
@@ -611,10 +691,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _live = live;
         _livePanelOpen = joinLive;
       });
+      unawaited(_refreshSelectedJoinRequestBadge(detail));
       if (joinLive) await _joinLive('room_card_speaker');
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = e.toString());
+      if (optimisticDetail != null && _selectedRoomId == room.id) {
+        _showToast('房间刷新失败，已先打开当前房间');
+      } else {
+        setState(() => _error = e.toString());
+      }
     } finally {
       if (mounted && _selectedRoomId == room.id) {
         setState(() => _loadingRoom = false);
@@ -631,7 +716,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     setState(() {
       _rooms = _upsertRoomCard(_rooms, created.toCard());
     });
-    await _openRoom(created.toCard());
+    await _openRoom(created.toCard(), optimisticDetail: created);
   }
 
   /// Opens the search-and-join dialog. On a successful join the dialog returns
@@ -640,26 +725,37 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _joinRoom() async {
     final joined = await showDialog<RoomDetail>(
       context: context,
-      builder: (context) => _JoinRoomDialog(api: _api),
+      builder: (context) => _JoinRoomDialog(
+        api: _api,
+        onOpenUserInfo: (user) => _showUserInfo(user, basic: true),
+        onPendingInvitesChanged: _setPendingRoomInviteBadge,
+      ),
     );
+    unawaited(_refreshRoomInviteBadge());
     if (joined == null || !mounted) return;
     setState(() {
       _rooms = _upsertRoomCard(_rooms, joined.toCard());
     });
-    await _openRoom(joined.toCard());
+    await _openRoom(joined.toCard(), optimisticDetail: joined);
   }
 
-  /// Opens the admin join-request review queue for the current room. After it
-  /// closes (some requests may have been approved, adding members), refresh the
-  /// room so the member count stays accurate.
-  Future<void> _reviewJoinRequests() async {
+  /// Opens the room member list. After it closes (invites or approvals may
+  /// have added members), refresh the room so the member count stays accurate.
+  Future<void> _openRoomMembers() async {
     final room = _selectedRoom;
     if (room == null) return;
     final changed = await showDialog<bool>(
       context: context,
-      builder: (context) =>
-          _JoinRequestsDialog(api: _api, roomId: room.id, roomName: room.name),
+      builder: (context) => _RoomMembersDialog(
+        api: _api,
+        room: room,
+        initialLive: _live ?? room.live,
+        canReviewRequests: room.isAdmin,
+        onOpenUserInfo: _showUserInfo,
+        onPendingRequestsChanged: _setSelectedJoinRequestBadge,
+      ),
     );
+    unawaited(_refreshSelectedJoinRequestBadge(room));
     if (changed != true || !mounted) return;
     try {
       final detail = await _api.getRoom(room.id);
@@ -673,9 +769,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  void _showUserInfo(UserSummary user) {
+  void _showUserInfo(
+    UserSummary user, {
+    bool includeSelectedRoom = true,
+    bool basic = false,
+  }) {
     final room = _selectedRoom;
-    if (room == null) return;
+    if (basic || room == null) {
+      showDialog<void>(
+        context: context,
+        builder: (context) => _BasicUserInfoDialog(
+          user: user,
+          onCopyUid: (uid) => unawaited(_copyUserInfoUid(uid)),
+        ),
+      );
+      return;
+    }
     final profile = _profileForDialog(user, room);
     showDialog<void>(
       context: context,
@@ -684,7 +793,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         room: room,
         commonRooms: profile.id == _currentUser.id
             ? const []
-            : _commonRoomsForProfile(profile, room),
+            : includeSelectedRoom
+            ? _commonRoomsForProfile(profile, room)
+            : profile.commonRooms,
         onOpenRoom: _openUserInfoRoom,
         onCopyUid: (uid) => unawaited(_copyUserInfoUid(uid)),
       ),
@@ -1216,25 +1327,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _rooms = _patchRoomLiveCount(_rooms, room.id, result.live);
       });
       try {
-        final liveKitUrl = resolveLiveKitServerUrl(
-          serverUrl: result.liveKit.serverUrl,
-          apiBaseUrl: widget.apiBaseUrl,
-        );
-        await _restoreStoredAudioSettings();
-        await _liveSession.connect(
-          url: liveKitUrl,
-          token: result.liveKit.token,
-          roomName: result.liveKit.roomName,
-          micMuted: result.participant.micMuted,
-        );
+        await _connectLiveKitWithRetry(result);
       } catch (e) {
-        // We never reached LiveKit, so no webhook will fire. Make sure the
-        // transport is fully torn down; the server-side live_participants row
-        // is reconciled by the webhook once any prior connection drops, and
-        // by the next joinLive snapshot.
-        try {
-          await _liveSession.disconnect();
-        } catch (_) {}
         if (!mounted) return;
         _showToast('Failed to connect to voice: $e');
         return;
@@ -1250,6 +1344,36 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     } finally {
       if (mounted) setState(() => _joiningLive = false);
     }
+  }
+
+  Future<void> _connectLiveKitWithRetry(LiveJoinResult result) async {
+    Object? lastError;
+    for (var attempt = 0; attempt < 2; attempt += 1) {
+      if (attempt > 0) {
+        await Future<void>.delayed(const Duration(milliseconds: 650));
+      }
+      if (!mounted) throw 'Join cancelled';
+      try {
+        final liveKitUrl = resolveLiveKitServerUrl(
+          serverUrl: result.liveKit.serverUrl,
+          apiBaseUrl: widget.apiBaseUrl,
+        );
+        await _restoreStoredAudioSettings();
+        await _liveSession.connect(
+          url: liveKitUrl,
+          token: result.liveKit.token,
+          roomName: result.liveKit.roomName,
+          micMuted: result.participant.micMuted,
+        );
+        return;
+      } catch (e) {
+        lastError = e;
+        try {
+          await _liveSession.disconnect();
+        } catch (_) {}
+      }
+    }
+    throw lastError ?? 'LiveKit connection failed';
   }
 
   Future<void> _restoreStoredAudioSettings() async {
@@ -1587,6 +1711,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       currentUser: _currentUser,
                       collapsed: _sidebarCollapsed,
                       settingsActive: _settingsOpen,
+                      hasPendingRoomInvites: _hasPendingRoomInvites,
                       onCreateRoom: _createRoom,
                       onJoinRoom: _joinRoom,
                       onOpenSettings: _toggleSettings,
@@ -1730,7 +1855,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               joining: _joiningLive,
               onExpand: () => setState(() => _livePanelOpen = true),
               onJoin: () => _joinLive('live_header'),
-              onReviewRequests: room.isAdmin ? _reviewJoinRequests : null,
+              onOpenMembers: _openRoomMembers,
+              showMemberRequestBadge:
+                  room.isAdmin && _selectedRoomHasPendingJoinRequests,
             ),
           Expanded(
             child: _livePanelOpen
@@ -1794,6 +1921,40 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 }
 
+class _BadgeAnchor extends StatelessWidget {
+  const _BadgeAnchor({required this.show, required this.child});
+
+  final bool show;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        child,
+        if (show) const Positioned(top: -3, right: -3, child: _BadgeDot()),
+      ],
+    );
+  }
+}
+
+class _BadgeDot extends StatelessWidget {
+  const _BadgeDot();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _danger,
+        shape: BoxShape.circle,
+        border: Border.all(color: _primaryDarkLow, width: 2),
+      ),
+      child: const SizedBox.square(dimension: 10),
+    );
+  }
+}
+
 class _RoomListPane extends StatelessWidget {
   const _RoomListPane({
     required this.rooms,
@@ -1802,6 +1963,7 @@ class _RoomListPane extends StatelessWidget {
     required this.currentUser,
     required this.collapsed,
     required this.settingsActive,
+    required this.hasPendingRoomInvites,
     required this.onCreateRoom,
     required this.onJoinRoom,
     required this.onOpenSettings,
@@ -1816,6 +1978,7 @@ class _RoomListPane extends StatelessWidget {
   final CurrentUser currentUser;
   final bool collapsed;
   final bool settingsActive;
+  final bool hasPendingRoomInvites;
   final VoidCallback onCreateRoom;
   final VoidCallback onJoinRoom;
   final VoidCallback onOpenSettings;
@@ -1881,11 +2044,14 @@ class _RoomListPane extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: KeyButton(
-                      width: double.infinity,
-                      onPressed: onJoinRoom,
-                      icon: const Icon(Icons.group_add),
-                      child: const Text('加入房间'),
+                    child: _BadgeAnchor(
+                      show: hasPendingRoomInvites,
+                      child: KeyButton(
+                        width: double.infinity,
+                        onPressed: onJoinRoom,
+                        icon: const Icon(Icons.group_add),
+                        child: const Text('加入房间'),
+                      ),
                     ),
                   ),
                 ],
@@ -2322,7 +2488,8 @@ class _LiveHeader extends StatelessWidget {
     required this.joining,
     required this.onExpand,
     required this.onJoin,
-    this.onReviewRequests,
+    required this.onOpenMembers,
+    required this.showMemberRequestBadge,
   });
 
   final RoomDetail room;
@@ -2331,9 +2498,8 @@ class _LiveHeader extends StatelessWidget {
   final bool joining;
   final VoidCallback onExpand;
   final VoidCallback onJoin;
-  // When non-null the current user is an admin and a join-request review
-  // button is shown; null hides it for non-admins.
-  final VoidCallback? onReviewRequests;
+  final VoidCallback onOpenMembers;
+  final bool showMemberRequestBadge;
 
   @override
   Widget build(BuildContext context) {
@@ -2401,18 +2567,19 @@ class _LiveHeader extends StatelessWidget {
                   ),
                 ),
               ),
-              if (onReviewRequests != null) ...[
-                Transform.translate(
-                  offset: const Offset(0, 2),
+              Transform.translate(
+                offset: const Offset(0, 2),
+                child: _BadgeAnchor(
+                  show: showMemberRequestBadge,
                   child: KeyIconButton(
-                    tooltip: '加入申请',
-                    onPressed: onReviewRequests,
-                    icon: const Icon(Icons.how_to_reg),
+                    tooltip: '成员列表',
+                    onPressed: onOpenMembers,
+                    icon: const Icon(Icons.groups_2_outlined),
                     size: 36,
                   ),
                 ),
-                const SizedBox(width: 10),
-              ],
+              ),
+              const SizedBox(width: 10),
               _LiveHeaderActions(
                 live: live,
                 joined: joined,
@@ -5513,6 +5680,102 @@ class _UserInfoDialog extends StatelessWidget {
   }
 }
 
+class _BasicUserInfoDialog extends StatelessWidget {
+  const _BasicUserInfoDialog({required this.user, required this.onCopyUid});
+
+  final UserSummary user;
+  final ValueChanged<String> onCopyUid;
+
+  @override
+  Widget build(BuildContext context) {
+    final appConfig = AppConfigScope.of(context);
+    final uidValue = user.uid ?? user.id;
+    final primaryName = _userInfoPrimaryName(user);
+    return Dialog(
+      backgroundColor: _primaryDarkRaised,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.zero,
+        side: BorderSide(color: _borderColor),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _Avatar(
+                    label: primaryName,
+                    imageUrl: appConfig.resolveAssetUrl(user.avatarUrl),
+                    defaultAvatarKey: user.defaultAvatarKey,
+                    size: 64,
+                    borderColor: _cyan,
+                    borderWidth: 1.4,
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          primaryName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _textPrimary,
+                            fontSize: 19,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          '@${user.username}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _textMuted,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  KeyIconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                    tooltip: '关闭',
+                    size: 32,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              const Divider(height: 1, color: _borderColor),
+              _UserInfoField(
+                label: 'UID',
+                value: uidValue,
+                trailing: KeyIconButton(
+                  onPressed: () => onCopyUid(uidValue),
+                  icon: const Icon(Icons.copy),
+                  tooltip: '复制 UID',
+                  size: 30,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _CommonRoomsSection extends StatelessWidget {
   const _CommonRoomsSection({required this.rooms, required this.onOpenRoom});
 
@@ -5825,9 +6088,15 @@ class _CreateRoomDialogState extends State<_CreateRoomDialog> {
 /// rooms are listed and can be joined directly (open rooms) or applied to
 /// (approval-required rooms). Returns the joined [RoomDetail] on success.
 class _JoinRoomDialog extends StatefulWidget {
-  const _JoinRoomDialog({required this.api});
+  const _JoinRoomDialog({
+    required this.api,
+    required this.onOpenUserInfo,
+    required this.onPendingInvitesChanged,
+  });
 
   final GangApi api;
+  final ValueChanged<UserSummary> onOpenUserInfo;
+  final ValueChanged<bool> onPendingInvitesChanged;
 
   @override
   State<_JoinRoomDialog> createState() => _JoinRoomDialogState();
@@ -5838,10 +6107,20 @@ class _JoinRoomDialogState extends State<_JoinRoomDialog> {
   Timer? _debounce;
   int _searchSeq = 0;
   bool _searching = false;
+  bool _loadingInvites = true;
   String? _error;
+  String? _inviteError;
   String? _busyRoomId;
+  String? _busyInviteId;
   List<PublicRoom> _results = const [];
+  List<RoomInvite> _invites = const [];
   final Set<String> _pendingRoomIds = <String>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInvites();
+  }
 
   @override
   void dispose() {
@@ -5882,6 +6161,28 @@ class _JoinRoomDialogState extends State<_JoinRoomDialog> {
       setState(() {
         _searching = false;
         _error = e.toString();
+      });
+    }
+  }
+
+  Future<void> _loadInvites() async {
+    setState(() {
+      _loadingInvites = true;
+      _inviteError = null;
+    });
+    try {
+      final invites = await widget.api.listRoomInvites();
+      if (!mounted) return;
+      setState(() {
+        _invites = invites;
+        _loadingInvites = false;
+      });
+      widget.onPendingInvitesChanged(invites.isNotEmpty);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _inviteError = e.toString();
+        _loadingInvites = false;
       });
     }
   }
@@ -5927,8 +6228,42 @@ class _JoinRoomDialogState extends State<_JoinRoomDialog> {
     }
   }
 
+  Future<void> _decideInvite(RoomInvite invite, bool accept) async {
+    if (_busyInviteId != null || _busyRoomId != null) return;
+    setState(() {
+      _busyInviteId = invite.id;
+      _inviteError = null;
+    });
+    try {
+      final result = await widget.api.reviewRoomInvite(
+        inviteId: invite.id,
+        accept: accept,
+      );
+      if (!mounted) return;
+      if (accept && result.room != null) {
+        Navigator.of(context).pop(result.room);
+        return;
+      }
+      setState(() {
+        if (accept && result.pending) {
+          _pendingRoomIds.add(invite.room.id);
+        }
+        _invites = _invites.where((item) => item.id != invite.id).toList();
+      });
+      widget.onPendingInvitesChanged(_invites.isNotEmpty);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _inviteError = e.toString());
+    } finally {
+      if (mounted) setState(() => _busyInviteId = null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final dialogHeight = (MediaQuery.sizeOf(context).height - 64)
+        .clamp(360.0, 480.0)
+        .toDouble();
     return Dialog(
       backgroundColor: _primaryDarkRaised,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
@@ -5938,88 +6273,144 @@ class _JoinRoomDialogState extends State<_JoinRoomDialog> {
       ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 460, maxHeight: 560),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 22, 24, 18),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  const Text(
-                    '加入房间',
-                    style: TextStyle(
-                      color: _textPrimary,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
+        child: SizedBox(
+          height: dialogHeight,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 22, 24, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      '加入房间',
+                      style: TextStyle(
+                        color: _textPrimary,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const Spacer(),
+                    KeyIconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close),
+                      tooltip: '关闭',
+                      size: 32,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                DecoratedBox(
+                  decoration: const BoxDecoration(color: _primaryDarkLow),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.search, size: 18, color: _textMuted),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _queryController,
+                            autofocus: true,
+                            onChanged: _onQueryChanged,
+                            cursorColor: _textSecondary,
+                            style: const TextStyle(
+                              color: _textPrimary,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            decoration: const InputDecoration(
+                              isDense: true,
+                              filled: false,
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              disabledBorder: InputBorder.none,
+                              hintText: '按房间名或 RID 搜索',
+                              hintStyle: TextStyle(color: _textMuted),
+                              contentPadding: EdgeInsets.symmetric(
+                                vertical: 13,
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (_searching)
+                          const SizedBox.square(
+                            dimension: 15,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: _cyan,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
-                  const Spacer(),
-                  KeyIconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close),
-                    tooltip: '关闭',
-                    size: 32,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              DecoratedBox(
-                decoration: const BoxDecoration(color: _primaryDarkLow),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.search, size: 18, color: _textMuted),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextField(
-                          controller: _queryController,
-                          autofocus: true,
-                          onChanged: _onQueryChanged,
-                          cursorColor: _textSecondary,
-                          style: const TextStyle(
-                            color: _textPrimary,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                          ),
-                          decoration: const InputDecoration(
-                            isDense: true,
-                            filled: false,
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            disabledBorder: InputBorder.none,
-                            hintText: '按房间名或 RID 搜索',
-                            hintStyle: TextStyle(color: _textMuted),
-                            contentPadding: EdgeInsets.symmetric(vertical: 13),
-                          ),
-                        ),
-                      ),
-                      if (_searching)
-                        const SizedBox.square(
-                          dimension: 15,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: _cyan,
-                          ),
-                        ),
-                    ],
-                  ),
                 ),
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 10),
-                Text(_error!, style: const TextStyle(color: _danger)),
-              ],
-              if (_queryController.text.trim().isNotEmpty) ...[
+                if (_error != null) ...[
+                  const SizedBox(height: 10),
+                  Text(_error!, style: const TextStyle(color: _danger)),
+                ],
+                if (_inviteError != null) ...[
+                  const SizedBox(height: 10),
+                  Text(_inviteError!, style: const TextStyle(color: _danger)),
+                ],
                 const SizedBox(height: 14),
-                Flexible(child: _buildResults()),
+                Expanded(child: _buildBody()),
               ],
-            ],
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildBody() {
+    final children = <Widget>[];
+    if (_queryController.text.trim().isNotEmpty) {
+      children.add(_buildResults());
+    }
+    if (_loadingInvites || _invites.isNotEmpty) {
+      if (children.isNotEmpty) children.add(const SizedBox(height: 14));
+      children.add(_buildInvitesSection());
+    }
+    return ListView(children: children);
+  }
+
+  Widget _buildInvitesSection() {
+    if (_loadingInvites) {
+      return const SizedBox(
+        height: 64,
+        child: Center(
+          child: SizedBox.square(
+            dimension: 18,
+            child: CircularProgressIndicator(strokeWidth: 2, color: _cyan),
+          ),
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          '待处理邀请',
+          style: TextStyle(
+            color: _textPrimary,
+            fontSize: 14,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 8),
+        for (final invite in _invites) ...[
+          _PendingRoomInviteTile(
+            invite: invite,
+            busy: _busyInviteId == invite.id,
+            onAccept: () => _decideInvite(invite, true),
+            onReject: () => _decideInvite(invite, false),
+            onOpenInviter: () => widget.onOpenUserInfo(invite.inviter),
+          ),
+          if (invite != _invites.last) const SizedBox(height: 8),
+        ],
+      ],
     );
   }
 
@@ -6032,22 +6423,21 @@ class _JoinRoomDialogState extends State<_JoinRoomDialog> {
         ),
       );
     }
-    return ListView.separated(
-      shrinkWrap: true,
-      itemCount: _results.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        final room = _results[index];
-        final pending =
-            room.joinState == 'pending' || _pendingRoomIds.contains(room.id);
-        return _JoinRoomResultTile(
-          room: room,
-          pending: pending,
-          busy: _busyRoomId == room.id,
-          onJoin: () => _join(room),
-          onOpen: () => _openJoined(room),
-        );
-      },
+    return Column(
+      children: [
+        for (final entry in _results.asMap().entries) ...[
+          _JoinRoomResultTile(
+            room: entry.value,
+            pending:
+                entry.value.joinState == 'pending' ||
+                _pendingRoomIds.contains(entry.value.id),
+            busy: _busyRoomId == entry.value.id,
+            onJoin: () => _join(entry.value),
+            onOpen: () => _openJoined(entry.value),
+          ),
+          if (entry.key != _results.length - 1) const SizedBox(height: 8),
+        ],
+      ],
     );
   }
 }
@@ -6145,50 +6535,224 @@ class _JoinRoomResultTile extends StatelessWidget {
   }
 }
 
-/// Admin-only review queue for a room's pending join requests. Lists each
-/// pending requester and lets the admin approve (adds them as a member) or
-/// reject. Pops `true` if any decision was made so the caller can refresh the
-/// room's member count.
-class _JoinRequestsDialog extends StatefulWidget {
-  const _JoinRequestsDialog({
+class _PendingRoomInviteTile extends StatelessWidget {
+  const _PendingRoomInviteTile({
+    required this.invite,
+    required this.busy,
+    required this.onAccept,
+    required this.onReject,
+    required this.onOpenInviter,
+  });
+
+  final RoomInvite invite;
+  final bool busy;
+  final VoidCallback onAccept;
+  final VoidCallback onReject;
+  final VoidCallback onOpenInviter;
+
+  @override
+  Widget build(BuildContext context) {
+    final room = invite.room;
+    final inviter = invite.inviter;
+    return KeySurface(
+      height: 92,
+      backgroundColor: _primaryDarkLow,
+      selectedBackgroundColor: _primaryDarkLow,
+      borderColor: _borderColor,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        children: [
+          _Avatar(
+            label: room.name,
+            imageUrl: AppConfigScope.of(
+              context,
+            ).resolveAssetUrl(room.avatarUrl),
+            defaultAvatarKey: room.defaultAvatarKey,
+            size: 42,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  room.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Row(
+                  children: [
+                    const Text(
+                      '邀请人',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: _textMuted, fontSize: 12),
+                    ),
+                    const SizedBox(width: 7),
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onOpenInviter,
+                      child: _Avatar(
+                        label: inviter.displayName,
+                        imageUrl: AppConfigScope.of(
+                          context,
+                        ).resolveAssetUrl(inviter.avatarUrl),
+                        defaultAvatarKey: inviter.defaultAvatarKey,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                    Flexible(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: onOpenInviter,
+                        child: Text(
+                          inviter.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _cyan,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  room.rid.isNotEmpty ? '邀请你加入 · RID ${room.rid}' : '邀请你加入',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: _textMuted, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          if (busy)
+            const SizedBox.square(
+              dimension: 18,
+              child: CircularProgressIndicator(strokeWidth: 2, color: _cyan),
+            )
+          else ...[
+            KeyIconButton(
+              tooltip: '拒绝',
+              onPressed: onReject,
+              icon: const Icon(Icons.close),
+              tone: KeyButtonTone.danger,
+              size: 34,
+            ),
+            const SizedBox(width: 8),
+            KeyIconButton(
+              tooltip: '接受',
+              onPressed: onAccept,
+              icon: const Icon(Icons.check),
+              tone: KeyButtonTone.primary,
+              size: 34,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+enum _MemberPresenceFilter { all, online, offline }
+
+enum _MemberRoleFilter { all, member, admin }
+
+enum _MemberPresence { live, online, offline }
+
+class _RoomMembersDialog extends StatefulWidget {
+  const _RoomMembersDialog({
     required this.api,
-    required this.roomId,
-    required this.roomName,
+    required this.room,
+    required this.initialLive,
+    required this.canReviewRequests,
+    required this.onOpenUserInfo,
+    required this.onPendingRequestsChanged,
   });
 
   final GangApi api;
-  final String roomId;
-  final String roomName;
+  final RoomDetail room;
+  final LiveState initialLive;
+  final bool canReviewRequests;
+  final void Function(UserSummary user, {bool includeSelectedRoom, bool basic})
+  onOpenUserInfo;
+  final ValueChanged<bool> onPendingRequestsChanged;
 
   @override
-  State<_JoinRequestsDialog> createState() => _JoinRequestsDialogState();
+  State<_RoomMembersDialog> createState() => _RoomMembersDialogState();
 }
 
-class _JoinRequestsDialogState extends State<_JoinRequestsDialog> {
+class _RoomMembersDialogState extends State<_RoomMembersDialog> {
+  final _filterController = TextEditingController();
+  final Set<String> _busyRequestIds = <String>{};
+
+  List<RoomMember> _members = const [];
   List<JoinRequest> _requests = const [];
-  final Set<String> _busyIds = <String>{};
+  LiveState? _live;
   bool _loading = true;
   bool _changed = false;
   String? _error;
+  String? _requestError;
+  _MemberPresenceFilter _presenceFilter = _MemberPresenceFilter.all;
+  _MemberRoleFilter _roleFilter = _MemberRoleFilter.all;
 
   @override
   void initState() {
     super.initState();
+    _live = widget.initialLive;
+    _filterController.addListener(_onFilterChanged);
     _load();
   }
+
+  @override
+  void dispose() {
+    _filterController.dispose();
+    super.dispose();
+  }
+
+  void _onFilterChanged() => setState(() {});
 
   Future<void> _load() async {
     setState(() {
       _loading = true;
       _error = null;
+      _requestError = null;
     });
     try {
-      final requests = await widget.api.listJoinRequests(widget.roomId);
+      final members = await _loadAllMembers();
+      final live = await _loadLiveSnapshot();
+      List<JoinRequest> requests = const [];
+      String? requestError;
+      if (widget.canReviewRequests) {
+        try {
+          requests = await widget.api.listJoinRequests(widget.room.id);
+        } catch (e) {
+          requestError = e.toString();
+        }
+      }
       if (!mounted) return;
       setState(() {
+        _members = members;
+        _live = live;
         _requests = requests;
+        _requestError = requestError;
         _loading = false;
       });
+      if (!widget.canReviewRequests || requestError == null) {
+        widget.onPendingRequestsChanged(requests.isNotEmpty);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -6198,15 +6762,71 @@ class _JoinRequestsDialogState extends State<_JoinRequestsDialog> {
     }
   }
 
+  Future<List<RoomMember>> _loadAllMembers() async {
+    final members = <RoomMember>[];
+    String? cursor;
+    var pageCount = 0;
+    do {
+      final page = await widget.api.listRoomMembers(
+        widget.room.id,
+        limit: 100,
+        cursor: cursor,
+      );
+      members.addAll(page.members);
+      cursor = _nonEmpty(page.nextCursor);
+      pageCount += 1;
+    } while (cursor != null && pageCount < 50);
+    return members;
+  }
+
+  Future<LiveState> _loadLiveSnapshot() async {
+    try {
+      return await widget.api.getLiveState(widget.room.id);
+    } catch (_) {
+      return widget.initialLive;
+    }
+  }
+
+  Future<void> _reloadMembersAndLive() async {
+    try {
+      final members = await _loadAllMembers();
+      final live = await _loadLiveSnapshot();
+      if (!mounted) return;
+      setState(() {
+        _members = members;
+        _live = live;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    }
+  }
+
+  Future<void> _reloadRequests() async {
+    if (!widget.canReviewRequests) return;
+    try {
+      final requests = await widget.api.listJoinRequests(widget.room.id);
+      if (!mounted) return;
+      setState(() {
+        _requests = requests;
+        _requestError = null;
+      });
+      widget.onPendingRequestsChanged(requests.isNotEmpty);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _requestError = e.toString());
+    }
+  }
+
   Future<void> _decide(JoinRequest request, bool approve) async {
-    if (_busyIds.contains(request.id)) return;
+    if (_busyRequestIds.contains(request.id)) return;
     setState(() {
-      _busyIds.add(request.id);
-      _error = null;
+      _busyRequestIds.add(request.id);
+      _requestError = null;
     });
     try {
       await widget.api.reviewJoinRequest(
-        roomId: widget.roomId,
+        roomId: widget.room.id,
         requestId: request.id,
         approve: approve,
       );
@@ -6214,19 +6834,690 @@ class _JoinRequestsDialogState extends State<_JoinRequestsDialog> {
       setState(() {
         _changed = true;
         _requests = _requests.where((r) => r.id != request.id).toList();
-        _busyIds.remove(request.id);
+        _busyRequestIds.remove(request.id);
+      });
+      widget.onPendingRequestsChanged(_requests.isNotEmpty);
+      if (approve) unawaited(_reloadMembersAndLive());
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _requestError = e.toString();
+        _busyRequestIds.remove(request.id);
+      });
+    }
+  }
+
+  List<RoomMember> _visibleMembers() {
+    final query = _filterController.text.trim().toLowerCase();
+    final members = _members.where((member) {
+      final presence = _presenceFor(member);
+      if (_presenceFilter == _MemberPresenceFilter.online &&
+          presence == _MemberPresence.offline) {
+        return false;
+      }
+      if (_presenceFilter == _MemberPresenceFilter.offline &&
+          presence != _MemberPresence.offline) {
+        return false;
+      }
+      if (!_matchesRoleFilter(member)) return false;
+      if (query.isEmpty) return true;
+      return _memberSearchRank(member, query) < 99;
+    }).toList();
+    members.sort((a, b) => _compareMembers(a, b, query));
+    return members;
+  }
+
+  bool _matchesRoleFilter(RoomMember member) {
+    return switch (_roleFilter) {
+      _MemberRoleFilter.all => true,
+      _MemberRoleFilter.member =>
+        !_isSuperuserMember(member) &&
+            !_isOwnerMember(member) &&
+            !_isAdminMember(member),
+      _MemberRoleFilter.admin =>
+        _isSuperuserMember(member) ||
+            _isOwnerMember(member) ||
+            _isAdminMember(member),
+    };
+  }
+
+  int _compareMembers(RoomMember a, RoomMember b, String query) {
+    final presence =
+        _presenceRank(_presenceFor(a)) - _presenceRank(_presenceFor(b));
+    if (presence != 0) return presence;
+    final role = _memberRoleRank(a) - _memberRoleRank(b);
+    if (role != 0) return role;
+    if (query.isNotEmpty) {
+      final search = _memberSearchRank(a, query) - _memberSearchRank(b, query);
+      if (search != 0) return search;
+    }
+    final name = _memberDisplayName(
+      a,
+    ).toLowerCase().compareTo(_memberDisplayName(b).toLowerCase());
+    if (name != 0) return name;
+    return (a.user.uid ?? a.user.id).compareTo(b.user.uid ?? b.user.id);
+  }
+
+  _MemberPresence _presenceFor(RoomMember member) {
+    final live = _live ?? widget.initialLive;
+    final inLive = live.participants.any((p) => p.user.id == member.user.id);
+    if (inLive) return _MemberPresence.live;
+    if (member.isOnline ?? false) return _MemberPresence.online;
+    return _MemberPresence.offline;
+  }
+
+  int _presenceRank(_MemberPresence value) {
+    return switch (value) {
+      _MemberPresence.live => 0,
+      _MemberPresence.online => 1,
+      _MemberPresence.offline => 2,
+    };
+  }
+
+  int _memberRoleRank(RoomMember member) {
+    if (_isSuperuserMember(member)) return 0;
+    if (_isOwnerMember(member)) return 1;
+    if (_isAdminMember(member)) return 2;
+    return 3;
+  }
+
+  bool _isSuperuserMember(RoomMember member) {
+    final role = member.role.toLowerCase();
+    return member.user.isSuperuser || role == 'superuser';
+  }
+
+  bool _isOwnerMember(RoomMember member) {
+    final role = member.role.toLowerCase();
+    return member.user.id == widget.room.createdBy.id ||
+        role == 'owner' ||
+        role == 'creator';
+  }
+
+  bool _isAdminMember(RoomMember member) {
+    final role = member.role.toLowerCase();
+    return role == 'admin' || role == 'administrator';
+  }
+
+  String _memberDisplayName(RoomMember member) {
+    return _nonEmpty(member.roomDisplayName) ??
+        _nonEmpty(member.user.roomDisplayName) ??
+        _nonEmpty(member.user.displayName) ??
+        member.user.username;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: _primaryDarkRaised,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.zero,
+        side: BorderSide(color: _borderColor),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760, maxHeight: 720),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 22, 24, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildHeader(),
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                Text(_error!, style: const TextStyle(color: _danger)),
+              ],
+              const SizedBox(height: 14),
+              _MemberSearchField(
+                controller: _filterController,
+                hintText: '输入成员 UID / 房间内用户名 / 备注名',
+                icon: Icons.search,
+              ),
+              const SizedBox(height: 10),
+              _SegmentedFilterRow<_MemberPresenceFilter>(
+                options: const [
+                  _FilterOption(_MemberPresenceFilter.all, '全部'),
+                  _FilterOption(_MemberPresenceFilter.online, '在线'),
+                  _FilterOption(_MemberPresenceFilter.offline, '离线'),
+                ],
+                value: _presenceFilter,
+                onChanged: (value) => setState(() => _presenceFilter = value),
+              ),
+              const SizedBox(height: 8),
+              _SegmentedFilterRow<_MemberRoleFilter>(
+                options: const [
+                  _FilterOption(_MemberRoleFilter.all, '全部'),
+                  _FilterOption(_MemberRoleFilter.member, '普通成员'),
+                  _FilterOption(_MemberRoleFilter.admin, '管理员'),
+                ],
+                value: _roleFilter,
+                onChanged: (value) => setState(() => _roleFilter = value),
+              ),
+              const SizedBox(height: 12),
+              Expanded(child: _buildMemberBody()),
+              const SizedBox(height: 12),
+              _buildInviteSection(),
+              if (widget.canReviewRequests) ...[
+                const SizedBox(height: 12),
+                _buildRequestsSection(),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                '成员列表',
+                style: TextStyle(
+                  color: _textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '${widget.room.name} · ${_members.length} 名成员',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: _textMuted, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+        KeyIconButton(
+          onPressed: () => Navigator.of(context).pop(_changed),
+          icon: const Icon(Icons.close),
+          tooltip: '关闭',
+          size: 32,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMemberBody() {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator(color: _cyan));
+    }
+    final members = _visibleMembers();
+    if (members.isEmpty) {
+      return const Center(
+        child: Text('暂无匹配成员', style: TextStyle(color: _textMuted)),
+      );
+    }
+    final groups = <_MemberPresence, List<RoomMember>>{
+      _MemberPresence.live: [],
+      _MemberPresence.online: [],
+      _MemberPresence.offline: [],
+    };
+    for (final member in members) {
+      groups[_presenceFor(member)]!.add(member);
+    }
+    final children = <Widget>[];
+    for (final presence in _MemberPresence.values) {
+      final items = groups[presence]!;
+      if (items.isEmpty) continue;
+      if (children.isNotEmpty) children.add(const SizedBox(height: 12));
+      children.add(
+        _MemberSectionHeader(presence: presence, count: items.length),
+      );
+      children.add(const SizedBox(height: 8));
+      for (final item in items) {
+        children.add(
+          _RoomMemberTile(
+            member: item,
+            room: widget.room,
+            presence: presence,
+            onOpenUserInfo: () => widget.onOpenUserInfo(item.user),
+          ),
+        );
+        if (item != items.last) children.add(const SizedBox(height: 8));
+      }
+    }
+    return ListView(children: children);
+  }
+
+  Widget _buildInviteSection() {
+    return KeyButton(
+      onPressed: _openInviteDialog,
+      height: 40,
+      icon: const Icon(Icons.person_add_alt_1),
+      tone: KeyButtonTone.primary,
+      child: const Text('邀请成员'),
+    );
+  }
+
+  Future<void> _openInviteDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => _InviteMemberDialog(
+        api: widget.api,
+        room: widget.room,
+        members: _members,
+        onOpenUserInfo: widget.onOpenUserInfo,
+      ),
+    );
+  }
+
+  Widget _buildRequestsSection() {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: _borderColor)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    '待审批用户',
+                    style: TextStyle(
+                      color: _textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                KeyIconButton(
+                  onPressed: _reloadRequests,
+                  icon: const Icon(Icons.refresh),
+                  tooltip: '刷新',
+                  size: 30,
+                ),
+              ],
+            ),
+            if (_requestError != null) ...[
+              const SizedBox(height: 8),
+              Text(_requestError!, style: const TextStyle(color: _danger)),
+            ],
+            const SizedBox(height: 8),
+            if (_requests.isEmpty)
+              const SizedBox(
+                height: 42,
+                child: Center(
+                  child: Text('暂无待审批用户', style: TextStyle(color: _textMuted)),
+                ),
+              )
+            else
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 156),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: _requests.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    final request = _requests[index];
+                    return _JoinRequestTile(
+                      request: request,
+                      busy: _busyRequestIds.contains(request.id),
+                      onApprove: () => _decide(request, true),
+                      onReject: () => _decide(request, false),
+                      onOpenUserInfo: () => widget.onOpenUserInfo(
+                        request.user.copyWith(roomRole: 'pending'),
+                        includeSelectedRoom: false,
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FilterOption<T> {
+  const _FilterOption(this.value, this.label);
+
+  final T value;
+  final String label;
+}
+
+class _SegmentedFilterRow<T> extends StatelessWidget {
+  const _SegmentedFilterRow({
+    required this.options,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final List<_FilterOption<T>> options;
+  final T value;
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final option in options) ...[
+            KeyButton(
+              onPressed: () => onChanged(option.value),
+              selected: option.value == value,
+              tone: option.value == value
+                  ? KeyButtonTone.primary
+                  : KeyButtonTone.neutral,
+              height: 30,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text(option.label),
+            ),
+            if (option != options.last) const SizedBox(width: 8),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MemberSearchField extends StatelessWidget {
+  const _MemberSearchField({
+    required this.controller,
+    required this.hintText,
+    required this.icon,
+    this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final String hintText;
+  final IconData icon;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _primaryDarkLow,
+        border: Border.all(color: _borderColor),
+      ),
+      child: SizedBox(
+        height: 42,
+        child: TextField(
+          controller: controller,
+          onChanged: onChanged,
+          style: const TextStyle(color: _textPrimary, fontSize: 14),
+          cursorColor: _cyan,
+          decoration: InputDecoration(
+            border: InputBorder.none,
+            prefixIcon: Icon(icon, color: _textMuted, size: 18),
+            hintText: hintText,
+            hintStyle: const TextStyle(color: _textMuted),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 12,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MemberSectionHeader extends StatelessWidget {
+  const _MemberSectionHeader({required this.presence, required this.count});
+
+  final _MemberPresence presence;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(_presenceIcon(presence), color: _textMuted, size: 16),
+        const SizedBox(width: 6),
+        Text(
+          '${_presenceLabel(presence)} · $count',
+          style: const TextStyle(
+            color: _textMuted,
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RoomMemberTile extends StatelessWidget {
+  const _RoomMemberTile({
+    required this.member,
+    required this.room,
+    required this.presence,
+    required this.onOpenUserInfo,
+  });
+
+  final RoomMember member;
+  final RoomDetail room;
+  final _MemberPresence presence;
+  final VoidCallback onOpenUserInfo;
+
+  @override
+  Widget build(BuildContext context) {
+    final user = member.user;
+    final name = _memberTileName(member);
+    final meta = _memberTileMeta(member);
+    return KeySurface(
+      onPressed: onOpenUserInfo,
+      height: 72,
+      backgroundColor: _primaryDarkLow,
+      selectedBackgroundColor: _primaryDarkLow,
+      borderColor: _borderColor,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        children: [
+          _Avatar(
+            label: name,
+            imageUrl: AppConfigScope.of(
+              context,
+            ).resolveAssetUrl(user.avatarUrl),
+            defaultAvatarKey: user.defaultAvatarKey,
+            size: 42,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  meta,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: _textMuted, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          _StatusPill(label: _presenceLabel(presence)),
+          const SizedBox(width: 8),
+          _UserRoleBadge(label: _roomRoleLabel(user, room)),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _primaryDarkRaised,
+        border: Border.all(color: _borderColor),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: _textSecondary,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InviteMemberDialog extends StatefulWidget {
+  const _InviteMemberDialog({
+    required this.api,
+    required this.room,
+    required this.members,
+    required this.onOpenUserInfo,
+  });
+
+  final GangApi api;
+  final RoomDetail room;
+  final List<RoomMember> members;
+  final void Function(UserSummary user, {bool includeSelectedRoom, bool basic})
+  onOpenUserInfo;
+
+  @override
+  State<_InviteMemberDialog> createState() => _InviteMemberDialogState();
+}
+
+class _InviteMemberDialogState extends State<_InviteMemberDialog> {
+  final _queryController = TextEditingController();
+  final Set<String> _busyUserIds = <String>{};
+  final Set<String> _pendingInviteUserIds = <String>{};
+  Timer? _debounce;
+  int _searchSeq = 0;
+  bool _searching = false;
+  String? _error;
+  List<UserSummary> _results = const [];
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _queryController.dispose();
+    super.dispose();
+  }
+
+  void _onQueryChanged() {
+    _debounce?.cancel();
+    final query = _queryController.text.trim();
+    if (query.isEmpty) {
+      _searchSeq += 1;
+      setState(() {
+        _results = const [];
+        _searching = false;
+        _error = null;
+      });
+      return;
+    }
+    final seq = ++_searchSeq;
+    setState(() {
+      _searching = true;
+      _error = null;
+    });
+    _debounce = Timer(const Duration(milliseconds: 260), () {
+      unawaited(_search(query, seq));
+    });
+  }
+
+  Future<void> _search(String query, int seq) async {
+    try {
+      final users = await widget.api.searchUsers(query: query, limit: 20);
+      if (!mounted || seq != _searchSeq) return;
+      setState(() {
+        _results = users;
+        _searching = false;
+      });
+    } catch (e) {
+      if (!mounted || seq != _searchSeq) return;
+      setState(() {
+        _error = e.toString();
+        _searching = false;
+      });
+    }
+  }
+
+  Future<void> _invite(UserSummary user) async {
+    if (_existingMember(user.id) != null ||
+        _pendingInviteUserIds.contains(user.id) ||
+        _busyUserIds.contains(user.id)) {
+      return;
+    }
+    setState(() {
+      _busyUserIds.add(user.id);
+      _error = null;
+    });
+    try {
+      await widget.api.inviteMember(roomId: widget.room.id, userId: user.id);
+      if (!mounted) return;
+      setState(() {
+        _pendingInviteUserIds.add(user.id);
+        _busyUserIds.remove(user.id);
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _error = e.toString();
-        _busyIds.remove(request.id);
+        _busyUserIds.remove(user.id);
       });
     }
   }
 
+  RoomMember? _existingMember(String userId) {
+    for (final member in widget.members) {
+      if (member.user.id == userId) return member;
+    }
+    return null;
+  }
+
+  List<UserSummary> _candidates() {
+    final query = _queryController.text.trim().toLowerCase();
+    final candidates = <UserSummary>[];
+    final seen = <String>{};
+    void add(UserSummary user) {
+      if (seen.add(user.id)) candidates.add(user);
+    }
+
+    for (final user in _results) {
+      add(user);
+    }
+    if (query.isNotEmpty) {
+      for (final member in widget.members) {
+        if (_memberSearchRank(member, query) < 99) add(member.user);
+      }
+    }
+    return candidates;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final candidates = _candidates();
     return Dialog(
       backgroundColor: _primaryDarkRaised,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
@@ -6235,7 +7526,7 @@ class _JoinRequestsDialogState extends State<_JoinRequestsDialog> {
         side: BorderSide(color: _borderColor),
       ),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 460, maxHeight: 560),
+        constraints: const BoxConstraints(maxWidth: 520, maxHeight: 560),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 22, 24, 18),
           child: Column(
@@ -6250,7 +7541,7 @@ class _JoinRequestsDialogState extends State<_JoinRequestsDialog> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const Text(
-                          '加入申请',
+                          '邀请成员',
                           style: TextStyle(
                             color: _textPrimary,
                             fontSize: 18,
@@ -6259,7 +7550,7 @@ class _JoinRequestsDialogState extends State<_JoinRequestsDialog> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          widget.roomName,
+                          widget.room.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -6271,19 +7562,26 @@ class _JoinRequestsDialogState extends State<_JoinRequestsDialog> {
                     ),
                   ),
                   KeyIconButton(
-                    onPressed: () => Navigator.of(context).pop(_changed),
+                    onPressed: () => Navigator.of(context).pop(),
                     icon: const Icon(Icons.close),
                     tooltip: '关闭',
                     size: 32,
                   ),
                 ],
               ),
+              const SizedBox(height: 16),
+              _MemberSearchField(
+                controller: _queryController,
+                hintText: 'UID / Username / 用户名关键字 / 备注名关键字',
+                icon: Icons.person_search,
+                onChanged: (_) => _onQueryChanged(),
+              ),
               if (_error != null) ...[
                 const SizedBox(height: 10),
                 Text(_error!, style: const TextStyle(color: _danger)),
               ],
-              const SizedBox(height: 14),
-              Flexible(child: _buildBody()),
+              const SizedBox(height: 12),
+              Flexible(child: _buildBody(candidates)),
             ],
           ),
         ),
@@ -6291,34 +7589,147 @@ class _JoinRequestsDialogState extends State<_JoinRequestsDialog> {
     );
   }
 
-  Widget _buildBody() {
-    if (_loading) {
+  Widget _buildBody(List<UserSummary> candidates) {
+    if (_searching) {
       return const SizedBox(
-        height: 120,
+        height: 100,
         child: Center(child: CircularProgressIndicator(color: _cyan)),
       );
     }
-    if (_requests.isEmpty) {
+    if (_queryController.text.trim().isEmpty) {
       return const SizedBox(
-        height: 120,
+        height: 100,
         child: Center(
-          child: Text('暂无加入申请', style: TextStyle(color: _textMuted)),
+          child: Text('输入关键词搜索用户', style: TextStyle(color: _textMuted)),
+        ),
+      );
+    }
+    if (candidates.isEmpty) {
+      return const SizedBox(
+        height: 100,
+        child: Center(
+          child: Text('未找到用户', style: TextStyle(color: _textMuted)),
         ),
       );
     }
     return ListView.separated(
       shrinkWrap: true,
-      itemCount: _requests.length,
+      itemCount: candidates.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
-        final request = _requests[index];
-        return _JoinRequestTile(
-          request: request,
-          busy: _busyIds.contains(request.id),
-          onApprove: () => _decide(request, true),
-          onReject: () => _decide(request, false),
+        final user = candidates[index];
+        final existing = _existingMember(user.id) != null;
+        final pending = _pendingInviteUserIds.contains(user.id);
+        return _InviteCandidateTile(
+          user: user,
+          existing: existing,
+          pending: pending,
+          busy: _busyUserIds.contains(user.id),
+          onInvite: existing || pending ? null : () => _invite(user),
+          onOpenUserInfo: () => widget.onOpenUserInfo(
+            user,
+            includeSelectedRoom: existing,
+            basic: !existing,
+          ),
         );
       },
+    );
+  }
+}
+
+class _InviteCandidateTile extends StatelessWidget {
+  const _InviteCandidateTile({
+    required this.user,
+    required this.existing,
+    required this.pending,
+    required this.busy,
+    required this.onInvite,
+    required this.onOpenUserInfo,
+  });
+
+  final UserSummary user;
+  final bool existing;
+  final bool pending;
+  final bool busy;
+  final VoidCallback? onInvite;
+  final VoidCallback onOpenUserInfo;
+
+  @override
+  Widget build(BuildContext context) {
+    return KeySurface(
+      height: 60,
+      backgroundColor: _primaryDarkLow,
+      selectedBackgroundColor: _primaryDarkLow,
+      borderColor: _borderColor,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onOpenUserInfo,
+            child: _Avatar(
+              label: user.displayName,
+              imageUrl: AppConfigScope.of(
+                context,
+              ).resolveAssetUrl(user.avatarUrl),
+              defaultAvatarKey: user.defaultAvatarKey,
+              size: 36,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onOpenUserInfo,
+                  child: Text(
+                    user.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${user.uid ?? user.id} · @${user.username}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: _textMuted, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          KeyButton(
+            onPressed: onInvite,
+            loading: busy,
+            height: 34,
+            tone: existing ? KeyButtonTone.neutral : KeyButtonTone.primary,
+            child: busy
+                ? const SizedBox.square(
+                    dimension: 15,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: _cyan,
+                    ),
+                  )
+                : Text(
+                    existing
+                        ? '已在房间'
+                        : pending
+                        ? '已邀请'
+                        : '邀请',
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -6329,12 +7740,14 @@ class _JoinRequestTile extends StatelessWidget {
     required this.busy,
     required this.onApprove,
     required this.onReject,
+    required this.onOpenUserInfo,
   });
 
   final JoinRequest request;
   final bool busy;
   final VoidCallback onApprove;
   final VoidCallback onReject;
+  final VoidCallback onOpenUserInfo;
 
   @override
   Widget build(BuildContext context) {
@@ -6347,38 +7760,46 @@ class _JoinRequestTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         children: [
-          _Avatar(
-            label: user.displayName,
-            imageUrl: AppConfigScope.of(
-              context,
-            ).resolveAssetUrl(user.avatarUrl),
-            defaultAvatarKey: user.defaultAvatarKey,
-            size: 38,
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onOpenUserInfo,
+            child: _Avatar(
+              label: user.displayName,
+              imageUrl: AppConfigScope.of(
+                context,
+              ).resolveAssetUrl(user.avatarUrl),
+              defaultAvatarKey: user.defaultAvatarKey,
+              size: 38,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  user.displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _textPrimary,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onOpenUserInfo,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    user.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  '@${user.username}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _textMuted, fontSize: 12),
-                ),
-              ],
+                  const SizedBox(height: 3),
+                  Text(
+                    '${user.uid ?? user.id} · @${user.username}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: _textMuted, fontSize: 12),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(width: 10),
@@ -6860,12 +8281,61 @@ String _userInfoPrimaryName(UserSummary user) {
 
 String _roomRoleLabel(UserSummary user, RoomDetail room) {
   final role = _nonEmpty(user.roomRole)?.toLowerCase();
+  if (role == 'pending') return '待审批';
   if (user.isSuperuser || role == 'superuser') return '超级用户';
   if (user.id == room.createdBy.id || role == 'owner' || role == 'creator') {
     return '创建者';
   }
   if (role == 'admin' || role == 'administrator') return '管理员';
   return '普通成员';
+}
+
+IconData _presenceIcon(_MemberPresence presence) {
+  return switch (presence) {
+    _MemberPresence.live => Icons.call,
+    _MemberPresence.online => Icons.circle,
+    _MemberPresence.offline => Icons.circle_outlined,
+  };
+}
+
+String _presenceLabel(_MemberPresence presence) {
+  return switch (presence) {
+    _MemberPresence.live => '语音房',
+    _MemberPresence.online => '在线',
+    _MemberPresence.offline => '离线',
+  };
+}
+
+String _memberTileName(RoomMember member) {
+  return _nonEmpty(member.roomDisplayName) ??
+      _nonEmpty(member.user.roomDisplayName) ??
+      _nonEmpty(member.user.displayName) ??
+      member.user.username;
+}
+
+int _memberSearchRank(RoomMember member, String query) {
+  bool contains(String? value) {
+    final text = _nonEmpty(value)?.toLowerCase();
+    return text != null && text.contains(query);
+  }
+
+  if (contains(member.user.uid) || contains(member.user.id)) return 0;
+  if (contains(member.roomDisplayName) ||
+      contains(member.user.roomDisplayName) ||
+      contains(member.user.displayName) ||
+      contains(member.user.username)) {
+    return 1;
+  }
+  if (contains(member.remarkName)) return 2;
+  return 99;
+}
+
+String _memberTileMeta(RoomMember member) {
+  final uid = member.user.uid ?? member.user.id;
+  final remark = _nonEmpty(member.remarkName);
+  final parts = <String>[uid, '@${member.user.username}'];
+  if (remark != null) parts.add('备注 $remark');
+  return parts.join(' · ');
 }
 
 String _commonRoomTitle(UserCommonRoom room) {
@@ -6895,6 +8365,7 @@ String? _roomRoleLabelFromValue(String? value) {
     'owner' || 'creator' => '创建者',
     'admin' || 'administrator' => '管理员',
     'member' => '普通成员',
+    'pending' => '待审批',
     _ => null,
   };
 }
