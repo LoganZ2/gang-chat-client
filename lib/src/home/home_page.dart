@@ -6110,11 +6110,13 @@ class _RoomInfoDialogState extends State<_RoomInfoDialog> {
           children: [
             _RoomDialogHeader(
               title: '房间信息',
-              subtitle: widget.room.name,
+              onClose: () => Navigator.of(context).pop(),
+            ),
+            _RoomDialogRoomSummary(
+              roomName: widget.room.name,
               avatarLabel: widget.room.name,
               avatarUrl: appConfig.resolveAssetUrl(widget.room.avatarUrl),
               defaultAvatarKey: widget.room.defaultAvatarKey,
-              onClose: () => Navigator.of(context).pop(),
             ),
             Expanded(
               child: ListView(
@@ -6539,15 +6541,14 @@ class _RoomManagementDialogState extends State<_RoomManagementDialog> {
         constraints: const BoxConstraints(maxWidth: 900, maxHeight: 760),
         child: Column(
           children: [
-            _RoomDialogHeader(
-              title: '房间管理',
-              subtitle: _room.name,
+            _RoomDialogHeader(title: '房间管理', onClose: _close),
+            _RoomDialogRoomSummary(
+              roomName: _room.name,
               avatarLabel: _room.name,
               avatarUrl: appConfig.resolveAssetUrl(
                 _pendingAvatarUrl ?? _room.avatarUrl,
               ),
               defaultAvatarKey: _defaultAvatarKey,
-              onClose: _close,
             ),
             Expanded(
               child: Row(
@@ -7073,21 +7074,53 @@ class _RoomStickerManagerState extends State<_RoomStickerManager> {
 }
 
 class _RoomDialogHeader extends StatelessWidget {
-  const _RoomDialogHeader({
-    required this.title,
-    required this.subtitle,
+  const _RoomDialogHeader({required this.title, required this.onClose});
+
+  final String title;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 20, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          ButtonIcon(
+            tooltip: '关闭',
+            onPressed: onClose,
+            icon: const Icon(Icons.close),
+            size: 32,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RoomDialogRoomSummary extends StatelessWidget {
+  const _RoomDialogRoomSummary({
+    required this.roomName,
     required this.avatarLabel,
     required this.avatarUrl,
     required this.defaultAvatarKey,
-    required this.onClose,
   });
 
-  final String title;
-  final String subtitle;
+  final String roomName;
   final String avatarLabel;
   final String? avatarUrl;
   final String defaultAvatarKey;
-  final VoidCallback onClose;
 
   @override
   Widget build(BuildContext context) {
@@ -7096,7 +7129,7 @@ class _RoomDialogHeader extends StatelessWidget {
         border: Border(bottom: BorderSide(color: _borderColor)),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 20, 20, 18),
+        padding: const EdgeInsets.fromLTRB(24, 14, 20, 18),
         child: Row(
           children: [
             _Avatar(
@@ -7109,39 +7142,16 @@ class _RoomDialogHeader extends StatelessWidget {
             ),
             const SizedBox(width: 14),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: _textPrimary,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: _textMuted,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
+              child: Text(
+                roomName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
-            ),
-            ButtonIcon(
-              tooltip: '关闭',
-              onPressed: onClose,
-              icon: const Icon(Icons.close),
-              size: 32,
             ),
           ],
         ),

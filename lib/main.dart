@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' show Platform, exit;
+import 'dart:io' show HttpClient, HttpOverrides, Platform, SecurityContext, exit;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -38,6 +38,7 @@ Future<void> main() async {
   final binding = WidgetsFlutterBinding.ensureInitialized();
 
   final config = await AppConfig.load();
+  _installConfiguredHostProxyBypass(config);
 
   // Pre-read the refresh token so we can size the initial window correctly
   // (login vs full app) before it ever renders. Without this, an
@@ -79,6 +80,41 @@ Future<void> main() async {
     // render. This avoids a brief flash of the wrong layout — both the
     // login-sized window before an auth refresh resizes it up, and the empty
     // pre-restore home screen before the session is loaded.
+  }
+}
+
+void _installConfiguredHostProxyBypass(AppConfig config) {
+  if (kIsWeb) return;
+  final directHosts = <String>{
+    _hostFromUrl(config.apiBaseUrl),
+    _hostFromUrl(config.assetBaseUrl),
+  }..remove('');
+  if (directHosts.isEmpty) return;
+  HttpOverrides.global = _GangHttpOverrides(
+    directHosts: directHosts,
+    parent: HttpOverrides.current,
+  );
+}
+
+String _hostFromUrl(String value) {
+  return Uri.tryParse(value)?.host.toLowerCase() ?? '';
+}
+
+class _GangHttpOverrides extends HttpOverrides {
+  _GangHttpOverrides({required this.directHosts, required this.parent});
+
+  final Set<String> directHosts;
+  final HttpOverrides? parent;
+
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    final client =
+        parent?.createHttpClient(context) ?? super.createHttpClient(context);
+    client.findProxy = (uri) {
+      if (directHosts.contains(uri.host.toLowerCase())) return 'DIRECT';
+      return HttpClient.findProxyFromEnvironment(uri);
+    };
+    return client;
   }
 }
 
