@@ -35,6 +35,8 @@ const _textSecondary = Color(0xFFB0B8C0);
 const _textMuted = Color(0xFF6F7785);
 const _danger = Color(0xFFE58383);
 
+enum _ToastKind { error, success }
+
 /// True on desktop platforms where window_manager (and thus OS full-screen) is
 /// supported. Mirrors the gate used in main.dart.
 bool get _supportsWindowManagement =>
@@ -88,6 +90,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   // Transient, centered toast (antd Message style) for action errors. Kept
   // separate from _error (which drives the full-pane load-failure view).
   String? _toast;
+  _ToastKind _toastKind = _ToastKind.error;
   Timer? _toastTimer;
   bool _loadingRooms = true;
   bool _loadingRoom = false;
@@ -1017,7 +1020,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
       if (!mounted || transfer.cancelled) return;
       setState(() => _fileDownloads.remove(downloadKey));
-      _showToast('File downloaded');
+      _showToast('File downloaded', kind: _ToastKind.success);
     } on _DownloadCancelledException {
       if (transfer.wroteDestination) {
         await _deletePartialDownload(destinationPath);
@@ -1467,8 +1470,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// Shows a transient, horizontally-centered message near the top (antd
   /// Message style) that auto-dismisses. Used for action errors so they no
   /// longer sit in a top bar that overlaps the custom window controls.
-  void _showToast(String message) {
-    setState(() => _toast = message);
+  void _showToast(String message, {_ToastKind kind = _ToastKind.error}) {
+    setState(() {
+      _toast = message;
+      _toastKind = kind;
+    });
     _toastTimer?.cancel();
     _toastTimer = Timer(const Duration(seconds: 4), () {
       if (mounted) setState(() => _toast = null);
@@ -1636,7 +1642,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   top: titleBarHeight + 10,
                   left: 0,
                   right: 0,
-                  child: _MessageToast(message: _toast!),
+                  child: _MessageToast(message: _toast!, kind: _toastKind),
                 ),
               if (fullScreenShare != null)
                 Positioned.fill(
@@ -6611,12 +6617,18 @@ class _ErrorPane extends StatelessWidget {
 /// (antd Message style). Fades/slides in and is auto-dismissed by the caller.
 /// IgnorePointer keeps it from intercepting clicks on the content beneath.
 class _MessageToast extends StatelessWidget {
-  const _MessageToast({required this.message});
+  const _MessageToast({required this.message, required this.kind});
 
   final String message;
+  final _ToastKind kind;
 
   @override
   Widget build(BuildContext context) {
+    final icon = kind == _ToastKind.success
+        ? Icons.check_circle_outline
+        : Icons.error_outline;
+    final iconColor = kind == _ToastKind.success ? _cyan : _danger;
+
     return IgnorePointer(
       child: Align(
         alignment: Alignment.topCenter,
@@ -6649,7 +6661,7 @@ class _MessageToast extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.error_outline, color: _danger, size: 18),
+                Icon(icon, color: iconColor, size: 18),
                 const SizedBox(width: 10),
                 Flexible(
                   child: Text(
