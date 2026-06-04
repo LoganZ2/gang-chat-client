@@ -35,6 +35,8 @@ const _danger = Color(0xFFE58383);
 
 enum _ToastKind { error, success }
 
+enum _RoomDialogCloseResult { left, deleted }
+
 /// True on desktop platforms where window_manager (and thus OS full-screen) is
 /// supported. Mirrors the gate used in main.dart.
 bool get _supportsWindowManagement =>
@@ -453,6 +455,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           name: existing.name,
           rid: existing.rid,
           visibility: existing.visibility,
+          remarkName: existing.remarkName,
+          description: existing.description,
+          notificationPolicy: existing.notificationPolicy,
           avatarUrl: existing.avatarUrl,
           defaultAvatarKey: existing.defaultAvatarKey,
           memberCount: existing.memberCount,
@@ -632,7 +637,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> _refreshSelectedJoinRequestBadge([RoomDetail? room]) async {
     final target = room ?? _selectedRoom;
-    if (target == null || !target.isAdmin) {
+    if (target == null || (!target.isAdmin && !_currentUser.isSuperuser)) {
       if (mounted) _setSelectedJoinRequestBadge(false);
       return;
     }
@@ -748,7 +753,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         api: _api,
         room: room,
         initialLive: _live ?? room.live,
-        canReviewRequests: room.isAdmin,
+        canReviewRequests: room.isAdmin || _currentUser.isSuperuser,
         onOpenUserInfo: _showUserInfo,
         onPendingRequestsChanged: _setSelectedJoinRequestBadge,
       ),
@@ -764,6 +769,52 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       });
     } catch (_) {
       // Best-effort refresh; the SSE/next fetch will reconcile.
+    }
+  }
+
+  Future<void> _openRoomInfo() async {
+    final room = _selectedRoom;
+    if (room == null) return;
+    final result = await showDialog<Object?>(
+      context: context,
+      builder: (context) => _RoomInfoDialog(
+        api: _api,
+        room: room,
+        currentUser: _currentUser,
+        isInLive: _joinedLiveRoomId == room.id,
+        onLeaveLive: _leaveLive,
+      ),
+    );
+    _handleRoomDialogResult(room.id, result);
+  }
+
+  Future<void> _openRoomManagement() async {
+    final room = _selectedRoom;
+    if (room == null || (!room.isAdmin && !_currentUser.isSuperuser)) return;
+    final result = await showDialog<Object?>(
+      context: context,
+      builder: (context) => _RoomManagementDialog(
+        api: _api,
+        room: room,
+        currentUser: _currentUser,
+      ),
+    );
+    _handleRoomDialogResult(room.id, result);
+  }
+
+  void _handleRoomDialogResult(String roomId, Object? result) {
+    if (!mounted || result == null) return;
+    if (result is RoomDetail) {
+      setState(() {
+        _selectedRoom = result;
+        _rooms = _upsertRoomCard(_rooms, result.toCard());
+      });
+      unawaited(_refreshSelectedJoinRequestBadge(result));
+      return;
+    }
+    if (result == _RoomDialogCloseResult.left ||
+        result == _RoomDialogCloseResult.deleted) {
+      _applyRoomDeleted({'room_id': roomId});
     }
   }
 
@@ -789,11 +840,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       builder: (context) => _UserInfoDialog(
         user: profile,
         room: room,
-        commonRooms: profile.id == _currentUser.id
-            ? const []
-            : includeSelectedRoom
-            ? _commonRoomsForProfile(profile, room)
-            : profile.commonRooms,
+        commonRooms: _commonRoomsForDialog(
+          profile,
+          room,
+          includeSelectedRoom: includeSelectedRoom,
+        ),
         onOpenRoom: _openUserInfoRoom,
         onCopyUid: (uid) => unawaited(_copyUserInfoUid(uid)),
       ),
@@ -813,20 +864,35 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   UserSummary _profileForDialog(UserSummary user, RoomDetail room) {
     var profile = user;
-    if (user.id == room.createdBy.id) {
-      profile = profile.mergeMissing(room.createdBy);
+    final createdBy = room.createdBy;
+    if (createdBy != null && user.id == createdBy.id) {
+      profile = profile.mergeMissing(createdBy);
     }
     if (user.id == _currentUser.id) {
       profile = profile.mergeMissing(_currentUser.toSummary());
     }
     final roomRole =
         profile.roomRole ??
-        (user.id == room.createdBy.id
+        (createdBy != null && user.id == createdBy.id
             ? 'owner'
             : user.id == _currentUser.id
             ? room.myMembership.role
             : null);
     return profile.copyWith(roomRole: roomRole);
+  }
+
+  List<UserCommonRoom> _commonRoomsForDialog(
+    UserSummary user,
+    RoomDetail room, {
+    required bool includeSelectedRoom,
+  }) {
+    if (user.id == _currentUser.id || user.isSuperuser) {
+      return const [];
+    }
+    if (_currentUser.isSuperuser || includeSelectedRoom) {
+      return _commonRoomsForProfile(user, room);
+    }
+    return user.commonRooms;
   }
 
   List<UserCommonRoom> _commonRoomsForProfile(
@@ -1455,6 +1521,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         name: existing.name,
         rid: existing.rid,
         visibility: existing.visibility,
+        remarkName: existing.remarkName,
+        description: existing.description,
+        notificationPolicy: existing.notificationPolicy,
         avatarUrl: existing.avatarUrl,
         defaultAvatarKey: existing.defaultAvatarKey,
         memberCount: existing.memberCount,
@@ -1853,9 +1922,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               joining: _joiningLive,
               onExpand: () => setState(() => _livePanelOpen = true),
               onJoin: () => _joinLive('live_header'),
+              onOpenRoomManagement: _openRoomManagement,
+              onOpenRoomInfo: _openRoomInfo,
               onOpenMembers: _openRoomMembers,
+              showManagementButton: room.isAdmin || _currentUser.isSuperuser,
               showMemberRequestBadge:
-                  room.isAdmin && _selectedRoomHasPendingJoinRequests,
+                  (room.isAdmin || _currentUser.isSuperuser) &&
+                  _selectedRoomHasPendingJoinRequests,
             ),
           Expanded(
             child: _livePanelOpen
@@ -2281,7 +2354,7 @@ class _ExpandedRoomTile extends StatelessWidget {
                 child: Row(
                   children: [
                     _Avatar(
-                      label: room.name,
+                      label: room.displayName,
                       imageUrl: AppConfigScope.of(
                         context,
                       ).resolveAssetUrl(room.avatarUrl),
@@ -2295,7 +2368,7 @@ class _ExpandedRoomTile extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            room.name,
+                            room.displayName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -2461,7 +2534,7 @@ class _CollapsedRoomTileState extends State<_CollapsedRoomTile> {
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: Center(
                       child: _Avatar(
-                        label: widget.room.name,
+                        label: widget.room.displayName,
                         imageUrl: AppConfigScope.of(
                           context,
                         ).resolveAssetUrl(widget.room.avatarUrl),
@@ -2486,7 +2559,10 @@ class _LiveHeader extends StatelessWidget {
     required this.joining,
     required this.onExpand,
     required this.onJoin,
+    required this.onOpenRoomManagement,
+    required this.onOpenRoomInfo,
     required this.onOpenMembers,
+    required this.showManagementButton,
     required this.showMemberRequestBadge,
   });
 
@@ -2496,7 +2572,10 @@ class _LiveHeader extends StatelessWidget {
   final bool joining;
   final VoidCallback onExpand;
   final VoidCallback onJoin;
+  final VoidCallback onOpenRoomManagement;
+  final VoidCallback onOpenRoomInfo;
   final VoidCallback onOpenMembers;
+  final bool showManagementButton;
   final bool showMemberRequestBadge;
 
   @override
@@ -2567,14 +2646,35 @@ class _LiveHeader extends StatelessWidget {
               ),
               Transform.translate(
                 offset: const Offset(0, 2),
-                child: _BadgeAnchor(
-                  show: showMemberRequestBadge,
-                  child: ButtonIcon(
-                    tooltip: '成员列表',
-                    onPressed: onOpenMembers,
-                    icon: const Icon(Icons.groups_2_outlined),
-                    size: 36,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (showManagementButton) ...[
+                      ButtonIcon(
+                        tooltip: '房间管理',
+                        onPressed: onOpenRoomManagement,
+                        icon: const Icon(Icons.admin_panel_settings_outlined),
+                        size: 36,
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    ButtonIcon(
+                      tooltip: '房间信息',
+                      onPressed: onOpenRoomInfo,
+                      icon: const Icon(Icons.info_outline),
+                      size: 36,
+                    ),
+                    const SizedBox(width: 8),
+                    _BadgeAnchor(
+                      show: showMemberRequestBadge,
+                      child: ButtonIcon(
+                        tooltip: '成员列表',
+                        onPressed: onOpenMembers,
+                        icon: const Icon(Icons.groups_2_outlined),
+                        size: 36,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(width: 10),
@@ -5372,10 +5472,10 @@ class _UserInfoDialog extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            primaryName,
+                          _NameWithGender(
+                            name: primaryName,
+                            gender: user.gender,
                             maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: _textPrimary,
                               fontSize: 20,
@@ -5488,10 +5588,10 @@ class _BasicUserInfoDialog extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          primaryName,
+                        _NameWithGender(
+                          name: primaryName,
+                          gender: user.gender,
                           maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: _textPrimary,
                             fontSize: 19,
@@ -5539,6 +5639,47 @@ class _BasicUserInfoDialog extends StatelessWidget {
       ),
     );
   }
+}
+
+class _NameWithGender extends StatelessWidget {
+  const _NameWithGender({
+    required this.name,
+    required this.gender,
+    required this.style,
+    this.maxLines = 1,
+  });
+
+  final String name;
+  final String? gender;
+  final TextStyle style;
+  final int maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    final mark = _genderMark(gender);
+    return RichText(
+      maxLines: maxLines,
+      overflow: TextOverflow.ellipsis,
+      text: TextSpan(
+        style: style,
+        children: [
+          TextSpan(text: name),
+          if (mark != null)
+            TextSpan(
+              text: ' ${mark.symbol}',
+              style: style.copyWith(color: mark.color),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GenderMarkData {
+  const _GenderMarkData({required this.symbol, required this.color});
+
+  final String symbol;
+  final Color color;
 }
 
 class _CommonRoomsSection extends StatelessWidget {
@@ -5725,6 +5866,2352 @@ class _UserInfoField extends StatelessWidget {
             ),
             if (trailing != null) ...[const SizedBox(width: 8), trailing!],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RoomInfoDialog extends StatefulWidget {
+  const _RoomInfoDialog({
+    required this.api,
+    required this.room,
+    required this.currentUser,
+    required this.isInLive,
+    required this.onLeaveLive,
+  });
+
+  final GangApi api;
+  final RoomDetail room;
+  final CurrentUser currentUser;
+  final bool isInLive;
+  final Future<void> Function() onLeaveLive;
+
+  @override
+  State<_RoomInfoDialog> createState() => _RoomInfoDialogState();
+}
+
+class _RoomInfoDialogState extends State<_RoomInfoDialog> {
+  late final TextEditingController _remarkController;
+  late final TextEditingController _roomDisplayNameController;
+  late String _notificationPolicy;
+  late String _defaultAvatarKey;
+  String? _pendingAvatarAssetId;
+  String? _pendingAvatarUrl;
+  bool _usingGlobalProfile = false;
+  bool _saving = false;
+  bool _leaving = false;
+  bool _uploadingAvatar = false;
+  String? _error;
+  String? _notice;
+
+  @override
+  void initState() {
+    super.initState();
+    final profile = widget.room.personalProfile;
+    _remarkController = TextEditingController(
+      text: widget.room.remarkName ?? '',
+    );
+    _roomDisplayNameController = TextEditingController(
+      text: profile.displayName ?? '',
+    );
+    _notificationPolicy = _normalizedNotificationPolicy(
+      widget.room.notificationPolicy,
+    );
+    _defaultAvatarKey =
+        profile.defaultAvatarKey ?? widget.currentUser.defaultAvatarKey;
+  }
+
+  @override
+  void dispose() {
+    _remarkController.dispose();
+    _roomDisplayNameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _copyText(String value, String label) async {
+    try {
+      await Clipboard.setData(ClipboardData(text: value));
+      if (!mounted) return;
+      setState(() {
+        _notice = '$label 已复制';
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '无法复制：$e');
+    }
+  }
+
+  Future<void> _pickAvatar() async {
+    if (_uploadingAvatar) return;
+    XFile? file;
+    try {
+      file = await openFile(
+        acceptedTypeGroups: const [
+          XTypeGroup(
+            label: 'Images',
+            extensions: ['png', 'jpg', 'jpeg', 'webp'],
+          ),
+        ],
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '无法打开文件选择器：$e');
+      return;
+    }
+    if (file == null) return;
+
+    setState(() {
+      _uploadingAvatar = true;
+      _error = null;
+      _notice = null;
+    });
+    try {
+      final bytes = await file.readAsBytes();
+      final asset = await widget.api.uploadImageAsset(
+        bytes: bytes,
+        filename: _basename(file.name),
+        purpose: 'avatar',
+      );
+      if (!mounted) return;
+      setState(() {
+        _pendingAvatarAssetId = asset.id;
+        _pendingAvatarUrl = asset.url;
+        _usingGlobalProfile = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _uploadingAvatar = false);
+    }
+  }
+
+  void _useGlobalProfile() {
+    setState(() {
+      _usingGlobalProfile = true;
+      _roomDisplayNameController.clear();
+      _pendingAvatarAssetId = null;
+      _pendingAvatarUrl = null;
+      _defaultAvatarKey = widget.currentUser.defaultAvatarKey;
+      _notice = '保存后将使用全局默认用户名和默认头像';
+      _error = null;
+    });
+  }
+
+  Future<void> _save() async {
+    if (_saving || _leaving) return;
+    setState(() {
+      _saving = true;
+      _error = null;
+      _notice = null;
+    });
+    try {
+      final updated = await widget.api.updateMyRoomSettings(
+        roomId: widget.room.id,
+        remarkName: _remarkController.text.trim(),
+        notificationPolicy: _notificationPolicy,
+        roomDisplayName: _usingGlobalProfile
+            ? ''
+            : _roomDisplayNameController.text.trim(),
+        avatarAssetId: _usingGlobalProfile ? '' : _pendingAvatarAssetId,
+        defaultAvatarKey: _usingGlobalProfile ? '' : _defaultAvatarKey,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop(updated);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _leaveRoom() async {
+    if (_saving || _leaving) return;
+    final needsStrongConfirm =
+        widget.room.isCreator && widget.room.memberCount <= 1;
+    final confirmed = needsStrongConfirm
+        ? await showDialog<bool>(
+            context: context,
+            builder: (context) => _StrongConfirmDialog(
+              title: '退出并删除房间',
+              body: '这是房间里的最后一位成员。退出会删除房间和所有房间内数据，请输入房间名确认。',
+              expectedText: widget.room.name,
+              confirmLabel: '退出并删除',
+              confirmIcon: Icons.logout,
+            ),
+          )
+        : await showDialog<bool>(
+            context: context,
+            builder: (context) => _ConfirmActionDialog(
+              title: '退出房间',
+              body: widget.isInLive
+                  ? '退出后会离开当前房间，并同时离开 Live Channel。'
+                  : '退出后你会从房间成员中移除，房间会从列表中消失。',
+              confirmLabel: '退出',
+              confirmIcon: Icons.logout,
+              danger: true,
+            ),
+          );
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _leaving = true;
+      _error = null;
+      _notice = null;
+    });
+    try {
+      if (widget.isInLive) {
+        await widget.onLeaveLive();
+      }
+      await widget.api.leaveRoom(
+        roomId: widget.room.id,
+        confirmDeleteIfEmpty: needsStrongConfirm,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop(_RoomDialogCloseResult.left);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _leaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appConfig = AppConfigScope.of(context);
+    final profile = widget.room.personalProfile;
+    final roomProfileAvatarUrl = _usingGlobalProfile
+        ? widget.currentUser.avatarUrl
+        : _pendingAvatarUrl ??
+              profile.avatarUrl ??
+              widget.currentUser.avatarUrl;
+    final resolvedProfileAvatar = appConfig.resolveAssetUrl(
+      roomProfileAvatarUrl,
+    );
+    final profileName = _usingGlobalProfile
+        ? widget.currentUser.displayName
+        : _nonEmpty(_roomDisplayNameController.text) ??
+              widget.currentUser.displayName;
+
+    return Dialog(
+      backgroundColor: _primaryDarkRaised,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.zero,
+        side: BorderSide(color: _borderColor),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 620, maxHeight: 760),
+        child: Column(
+          children: [
+            _RoomDialogHeader(
+              title: '房间信息',
+              subtitle: widget.room.name,
+              avatarLabel: widget.room.name,
+              avatarUrl: appConfig.resolveAssetUrl(widget.room.avatarUrl),
+              defaultAvatarKey: widget.room.defaultAvatarKey,
+              onClose: () => Navigator.of(context).pop(),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
+                children: [
+                  if (_notice != null) ...[
+                    _RoomNotice(message: _notice!),
+                    const SizedBox(height: 12),
+                  ],
+                  if (_error != null) ...[
+                    _RoomError(message: _error!),
+                    const SizedBox(height: 12),
+                  ],
+                  _RoomSettingsGroup(
+                    title: '基础信息',
+                    children: [
+                      _CopyableRoomField(
+                        label: '房间永久 RID',
+                        value: widget.room.rid.isEmpty
+                            ? widget.room.id
+                            : widget.room.rid,
+                        onCopy: () => _copyText(
+                          widget.room.rid.isEmpty
+                              ? widget.room.id
+                              : widget.room.rid,
+                          'RID',
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      _CopyableRoomField(
+                        label: '房间介绍',
+                        value: widget.room.description.isEmpty
+                            ? '暂无介绍'
+                            : widget.room.description,
+                        maxLines: 3,
+                        onCopy: () =>
+                            _copyText(widget.room.description, '房间介绍'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _RoomSettingsGroup(
+                    title: '我的房间设置',
+                    children: [
+                      _RoomTextField(
+                        label: '房间备注名',
+                        controller: _remarkController,
+                        helperText: '仅影响你的房间列表，显示为“备注名 (原房间名)”。',
+                      ),
+                      const SizedBox(height: 14),
+                      _RoomTextField(
+                        label: '房间内昵称',
+                        controller: _roomDisplayNameController,
+                        helperText: '为空时使用全局默认用户名。',
+                      ),
+                      const SizedBox(height: 14),
+                      _RoomAvatarPicker(
+                        label: '房间内头像',
+                        displayName: profileName,
+                        avatarUrl: resolvedProfileAvatar,
+                        defaultAvatarKey: _defaultAvatarKey,
+                        uploading: _uploadingAvatar,
+                        onUpload: _pickAvatar,
+                        onPresetChanged: (key) => setState(() {
+                          _defaultAvatarKey = key;
+                          _pendingAvatarAssetId = null;
+                          _pendingAvatarUrl = null;
+                          _usingGlobalProfile = false;
+                        }),
+                        onUsePreset: () => setState(() {
+                          _pendingAvatarAssetId = null;
+                          _pendingAvatarUrl = null;
+                          _usingGlobalProfile = false;
+                        }),
+                      ),
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Button(
+                          onPressed: _useGlobalProfile,
+                          height: 34,
+                          icon: const Icon(Icons.person_outline),
+                          child: const Text('使用全局默认资料'),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      _RoomSegmentedSetting(
+                        label: '消息通知',
+                        value: _notificationPolicy,
+                        options: const [
+                          _RoomOption('all', '全部消息'),
+                          _RoomOption('mentions', '仅提及'),
+                          _RoomOption('muted', '免打扰'),
+                        ],
+                        onChanged: (value) =>
+                            setState(() => _notificationPolicy = value),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _RoomSettingsGroup(
+                    title: '退出房间',
+                    danger: true,
+                    children: [
+                      Button(
+                        onPressed: _leaving || _saving ? null : _leaveRoom,
+                        loading: _leaving,
+                        tone: ButtonTone.danger,
+                        icon: const Icon(Icons.logout),
+                        width: double.infinity,
+                        child: const Text('退出房间'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            _RoomDialogFooter(
+              saving: _saving,
+              onCancel: () => Navigator.of(context).pop(),
+              onSave: _save,
+              saveLabel: '保存房间信息',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+enum _RoomManagementSection { info, stickers }
+
+class _RoomManagementDialog extends StatefulWidget {
+  const _RoomManagementDialog({
+    required this.api,
+    required this.room,
+    required this.currentUser,
+  });
+
+  final GangApi api;
+  final RoomDetail room;
+  final CurrentUser currentUser;
+
+  @override
+  State<_RoomManagementDialog> createState() => _RoomManagementDialogState();
+}
+
+class _RoomManagementDialogState extends State<_RoomManagementDialog> {
+  late RoomDetail _room;
+  late final TextEditingController _nameController;
+  late final TextEditingController _descriptionController;
+  late String _visibility;
+  late String _joinPolicy;
+  late bool _aiVoiceAnnouncementsEnabled;
+  late String _defaultAvatarKey;
+  String? _pendingAvatarAssetId;
+  String? _pendingAvatarUrl;
+  bool _uploadingAvatar = false;
+  bool _saving = false;
+  bool _deleting = false;
+  bool _loadingMembers = false;
+  bool _changed = false;
+  String? _error;
+  String? _notice;
+  _RoomManagementSection _section = _RoomManagementSection.info;
+  List<RoomMember> _members = const [];
+  final Set<String> _busyMemberIds = <String>{};
+
+  bool get _canEditCreatorOnly =>
+      _room.isCreator || _room.isSuperuser || widget.currentUser.isSuperuser;
+
+  bool get _canDeleteRoom => _room.canDelete || widget.currentUser.isSuperuser;
+
+  @override
+  void initState() {
+    super.initState();
+    _room = widget.room;
+    _nameController = TextEditingController(text: _room.name);
+    _descriptionController = TextEditingController(text: _room.description);
+    _visibility = _normalizedVisibility(_room.visibility);
+    _joinPolicy = _normalizedJoinPolicy(_room.joinPolicy);
+    _aiVoiceAnnouncementsEnabled = _room.aiVoiceAnnouncementsEnabled;
+    _defaultAvatarKey = _room.defaultAvatarKey;
+    _loadMembers();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  void _close() => Navigator.of(context).pop(_changed ? _room : null);
+
+  Future<void> _loadMembers() async {
+    if (_loadingMembers) return;
+    setState(() {
+      _loadingMembers = true;
+      _error = null;
+    });
+    try {
+      final members = <RoomMember>[];
+      String? cursor;
+      var pageCount = 0;
+      do {
+        final page = await widget.api.listRoomMembers(
+          _room.id,
+          limit: 100,
+          cursor: cursor,
+        );
+        members.addAll(page.members);
+        cursor = _nonEmpty(page.nextCursor);
+        pageCount += 1;
+      } while (cursor != null && pageCount < 50);
+      if (!mounted) return;
+      setState(() {
+        _members = members;
+        _loadingMembers = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loadingMembers = false;
+      });
+    }
+  }
+
+  Future<void> _pickAvatar() async {
+    if (_uploadingAvatar) return;
+    XFile? file;
+    try {
+      file = await openFile(
+        acceptedTypeGroups: const [
+          XTypeGroup(
+            label: 'Images',
+            extensions: ['png', 'jpg', 'jpeg', 'webp'],
+          ),
+        ],
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '无法打开文件选择器：$e');
+      return;
+    }
+    if (file == null) return;
+    setState(() {
+      _uploadingAvatar = true;
+      _error = null;
+      _notice = null;
+    });
+    try {
+      final asset = await widget.api.uploadImageAsset(
+        bytes: await file.readAsBytes(),
+        filename: _basename(file.name),
+        purpose: 'avatar',
+      );
+      if (!mounted) return;
+      setState(() {
+        _pendingAvatarAssetId = asset.id;
+        _pendingAvatarUrl = asset.url;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _uploadingAvatar = false);
+    }
+  }
+
+  Future<void> _saveInfo() async {
+    if (_saving || _deleting) return;
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      setState(() => _error = '房间名不能为空');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+      _notice = null;
+    });
+    try {
+      final updated = await widget.api.updateRoom(
+        roomId: _room.id,
+        name: name,
+        description: _descriptionController.text.trim(),
+        visibility: _visibility,
+        joinPolicy: _joinPolicy,
+        aiVoiceAnnouncementsEnabled: _aiVoiceAnnouncementsEnabled,
+        avatarAssetId: _pendingAvatarAssetId,
+        defaultAvatarKey: _defaultAvatarKey,
+      );
+      if (!mounted) return;
+      setState(() {
+        _room = updated;
+        _changed = true;
+        _pendingAvatarAssetId = null;
+        _pendingAvatarUrl = null;
+        _notice = '房间信息已保存';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _deleteRoom() async {
+    if (!_canDeleteRoom || _deleting || _saving) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => _StrongConfirmDialog(
+        title: '删除房间',
+        body: '将清空房间所有数据。这个动作不可恢复，请输入房间名确认。',
+        expectedText: _room.name,
+        confirmLabel: '删除房间',
+        confirmIcon: Icons.delete_forever_outlined,
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _deleting = true;
+      _error = null;
+      _notice = null;
+    });
+    try {
+      await widget.api.deleteRoom(roomId: _room.id, confirmName: _room.name);
+      if (!mounted) return;
+      Navigator.of(context).pop(_RoomDialogCloseResult.deleted);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
+  }
+
+  Future<void> _setMemberRole(RoomMember member, String role) async {
+    if (_busyMemberIds.contains(member.user.id)) return;
+    setState(() {
+      _busyMemberIds.add(member.user.id);
+      _error = null;
+      _notice = null;
+    });
+    try {
+      final updated = await widget.api.updateRoomMemberRole(
+        roomId: _room.id,
+        userId: member.user.id,
+        role: role,
+      );
+      if (!mounted) return;
+      setState(() {
+        _members = _members
+            .map((item) => item.user.id == updated.user.id ? updated : item)
+            .toList();
+        _busyMemberIds.remove(member.user.id);
+        _changed = true;
+        _notice = role == 'admin' ? '管理员已设置' : '管理员权限已撤回';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _busyMemberIds.remove(member.user.id);
+      });
+    }
+  }
+
+  Future<void> _transferCreator(RoomMember member) async {
+    if (_busyMemberIds.contains(member.user.id)) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => _ConfirmActionDialog(
+        title: '转让创建者',
+        body: '创建者身份会转让给 ${_memberTileName(member)}，你将成为管理员。',
+        confirmLabel: '转让',
+        confirmIcon: Icons.swap_horiz,
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _busyMemberIds.add(member.user.id);
+      _error = null;
+      _notice = null;
+    });
+    try {
+      final updated = await widget.api.transferRoomCreator(
+        roomId: _room.id,
+        userId: member.user.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _room = updated;
+        _changed = true;
+        _notice = '创建者已转让';
+        _busyMemberIds.remove(member.user.id);
+      });
+      unawaited(_loadMembers());
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _busyMemberIds.remove(member.user.id);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appConfig = AppConfigScope.of(context);
+    return Dialog(
+      backgroundColor: _primaryDarkRaised,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.zero,
+        side: BorderSide(color: _borderColor),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 900, maxHeight: 760),
+        child: Column(
+          children: [
+            _RoomDialogHeader(
+              title: '房间管理',
+              subtitle: _room.name,
+              avatarLabel: _room.name,
+              avatarUrl: appConfig.resolveAssetUrl(
+                _pendingAvatarUrl ?? _room.avatarUrl,
+              ),
+              defaultAvatarKey: _defaultAvatarKey,
+              onClose: _close,
+            ),
+            Expanded(
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 170,
+                    child: _RoomManagementNav(
+                      selected: _section,
+                      onChanged: (section) => setState(() {
+                        _section = section;
+                        if (section == _RoomManagementSection.stickers) {
+                          _notice = null;
+                          _error = null;
+                        }
+                      }),
+                    ),
+                  ),
+                  const VerticalDivider(width: 1, color: _borderColor),
+                  Expanded(child: _buildSection(appConfig)),
+                ],
+              ),
+            ),
+            if (_section == _RoomManagementSection.info)
+              _RoomDialogFooter(
+                saving: _saving,
+                onCancel: _close,
+                onSave: _saveInfo,
+                saveLabel: '保存房间管理',
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSection(AppConfig appConfig) {
+    return switch (_section) {
+      _RoomManagementSection.info => _buildInfoSection(appConfig),
+      _RoomManagementSection.stickers => _RoomStickerManager(
+        api: widget.api,
+        roomId: _room.id,
+      ),
+    };
+  }
+
+  Widget _buildInfoSection(AppConfig appConfig) {
+    final busy = _saving || _deleting;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 22),
+      children: [
+        if (_notice != null) ...[
+          _RoomNotice(message: _notice!),
+          const SizedBox(height: 12),
+        ],
+        if (_error != null) ...[
+          _RoomError(message: _error!),
+          const SizedBox(height: 12),
+        ],
+        _RoomSettingsGroup(
+          title: '房间信息',
+          children: [
+            _RoomTextField(label: '房间重命名', controller: _nameController),
+            const SizedBox(height: 14),
+            _RoomAvatarPicker(
+              label: '房间图标',
+              displayName: _nameController.text,
+              avatarUrl: appConfig.resolveAssetUrl(
+                _pendingAvatarUrl ?? _room.avatarUrl,
+              ),
+              defaultAvatarKey: _defaultAvatarKey,
+              uploading: _uploadingAvatar,
+              onUpload: _pickAvatar,
+              onPresetChanged: (key) => setState(() {
+                _defaultAvatarKey = key;
+                _pendingAvatarAssetId = null;
+                _pendingAvatarUrl = null;
+              }),
+              onUsePreset: () => setState(() {
+                _pendingAvatarAssetId = null;
+                _pendingAvatarUrl = null;
+              }),
+            ),
+            const SizedBox(height: 14),
+            _RoomTextField(
+              label: '房间介绍',
+              controller: _descriptionController,
+              maxLines: 4,
+            ),
+            const SizedBox(height: 14),
+            _RoomSegmentedSetting(
+              label: '房间公开性',
+              value: _visibility,
+              options: const [
+                _RoomOption('public', '公开'),
+                _RoomOption('private', '私密'),
+              ],
+              onChanged: (value) => setState(() => _visibility = value),
+            ),
+            const SizedBox(height: 14),
+            _RoomSegmentedSetting(
+              label: '加入策略',
+              value: _joinPolicy,
+              options: const [
+                _RoomOption('approval_required', '管理员审核'),
+                _RoomOption('open', '任何人加入'),
+                _RoomOption('closed', '不允许加入'),
+              ],
+              onChanged: (value) => setState(() => _joinPolicy = value),
+            ),
+            const SizedBox(height: 14),
+            _RoomSwitchSetting(
+              label: 'AI 语音自动播报',
+              value: _aiVoiceAnnouncementsEnabled,
+              onChanged: (value) =>
+                  setState(() => _aiVoiceAnnouncementsEnabled = value),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _RoomSettingsGroup(
+          title: '成员权限',
+          trailing: _loadingMembers
+              ? const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(
+                    color: _cyan,
+                    strokeWidth: 2,
+                  ),
+                )
+              : ButtonIcon(
+                  tooltip: '刷新成员',
+                  onPressed: _loadMembers,
+                  icon: const Icon(Icons.refresh),
+                  size: 30,
+                ),
+          children: [
+            if (_members.isEmpty && _loadingMembers)
+              const SizedBox(
+                height: 80,
+                child: Center(child: CircularProgressIndicator(color: _cyan)),
+              )
+            else if (_members.isEmpty)
+              const _RoomEmptyState(text: '暂无成员')
+            else
+              for (final member in _members) ...[
+                _RoomMemberPermissionTile(
+                  member: member,
+                  room: _room,
+                  currentUser: widget.currentUser,
+                  busy: _busyMemberIds.contains(member.user.id),
+                  canEditCreatorOnly: _canEditCreatorOnly,
+                  onSetAdmin: () => _setMemberRole(member, 'admin'),
+                  onUnsetAdmin: () => _setMemberRole(member, 'member'),
+                  onTransferCreator: () => _transferCreator(member),
+                ),
+                if (member != _members.last) const SizedBox(height: 8),
+              ],
+          ],
+        ),
+        if (_canDeleteRoom) ...[
+          const SizedBox(height: 16),
+          _RoomSettingsGroup(
+            title: '删除房间',
+            danger: true,
+            children: [
+              Button(
+                onPressed: busy ? null : _deleteRoom,
+                loading: _deleting,
+                tone: ButtonTone.danger,
+                icon: const Icon(Icons.delete_forever_outlined),
+                width: double.infinity,
+                child: const Text('删除房间'),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _RoomStickerManager extends StatefulWidget {
+  const _RoomStickerManager({required this.api, required this.roomId});
+
+  final GangApi api;
+  final String roomId;
+
+  @override
+  State<_RoomStickerManager> createState() => _RoomStickerManagerState();
+}
+
+class _RoomStickerManagerState extends State<_RoomStickerManager> {
+  List<StickerPack> _packs = const [];
+  bool _loading = true;
+  bool _uploading = false;
+  bool _deleting = false;
+  bool _savingOrder = false;
+  String? _error;
+  String? _notice;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  List<Sticker> get _stickers {
+    return [
+      for (final pack in _packs)
+        ...pack.stickers.toList()
+          ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder)),
+    ];
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final packs = await widget.api.listStickerPacks(
+        scope: 'room',
+        roomId: widget.roomId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _packs = packs;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  Future<StickerPack> _ensurePack() async {
+    if (_packs.isNotEmpty) return _packs.first;
+    final created = await widget.api.createStickerPack(
+      name: '房间表情包',
+      scope: 'room',
+      roomId: widget.roomId,
+      sortOrder: 10,
+    );
+    if (mounted) setState(() => _packs = [created]);
+    return created;
+  }
+
+  Future<void> _upload() async {
+    if (_uploading || _deleting || _savingOrder) return;
+    List<XFile> files;
+    try {
+      files = await openFiles(
+        acceptedTypeGroups: const [
+          XTypeGroup(
+            label: 'Images',
+            extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'],
+          ),
+        ],
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '无法打开文件选择器：$e');
+      return;
+    }
+    if (files.isEmpty) return;
+    setState(() {
+      _uploading = true;
+      _error = null;
+      _notice = null;
+    });
+    try {
+      final pack = await _ensurePack();
+      var sortIndex = pack.stickers.length;
+      for (final file in files) {
+        final asset = await widget.api.uploadImageAsset(
+          bytes: await file.readAsBytes(),
+          filename: _basename(file.name),
+          purpose: 'sticker',
+        );
+        await widget.api.addSticker(
+          packId: pack.id,
+          assetId: asset.id,
+          name: _stickerNameFromFilename(file.name),
+          sortOrder: (++sortIndex) * 10,
+          scope: 'room',
+          roomId: widget.roomId,
+        );
+      }
+      await _load();
+      if (!mounted) return;
+      setState(() => _notice = '已添加 ${files.length} 个房间表情');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  Future<void> _delete(Sticker sticker) async {
+    if (_deleting) return;
+    final pack = _packForSticker(sticker.id);
+    if (pack == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => _ConfirmActionDialog(
+        title: '删除房间表情',
+        body: '将从这个房间的表情包中删除「${sticker.name}」。',
+        confirmLabel: '删除',
+        confirmIcon: Icons.delete_outline,
+        danger: true,
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _deleting = true;
+      _error = null;
+      _notice = null;
+    });
+    try {
+      await widget.api.deleteSticker(
+        packId: pack.id,
+        stickerId: sticker.id,
+        scope: 'room',
+        roomId: widget.roomId,
+      );
+      await _load();
+      if (!mounted) return;
+      setState(() => _notice = '房间表情已删除');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
+  }
+
+  Future<void> _rename(Sticker sticker, String name) async {
+    final pack = _packForSticker(sticker.id);
+    if (pack == null || name.trim().isEmpty) return;
+    try {
+      await widget.api.updateSticker(
+        packId: pack.id,
+        stickerId: sticker.id,
+        name: name.trim(),
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    }
+  }
+
+  Future<void> _move(Sticker sticker, int delta) async {
+    if (_savingOrder) return;
+    final pack = _packForSticker(sticker.id);
+    if (pack == null) return;
+    final ordered = pack.stickers.toList()
+      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    final from = ordered.indexWhere((item) => item.id == sticker.id);
+    if (from < 0) return;
+    final to = (from + delta).clamp(0, ordered.length - 1).toInt();
+    if (from == to) return;
+    final moving = ordered.removeAt(from);
+    ordered.insert(to, moving);
+    setState(() {
+      _savingOrder = true;
+      _error = null;
+      _notice = null;
+    });
+    try {
+      await widget.api.reorderStickers(
+        packId: pack.id,
+        stickerIds: ordered.map((item) => item.id).toList(),
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _savingOrder = false);
+    }
+  }
+
+  Future<void> _download(Sticker sticker) async {
+    try {
+      final file = await widget.api.downloadStickers(stickerIds: [sticker.id]);
+      final location = await getSaveLocation(
+        suggestedName: file.filename,
+        acceptedTypeGroups: const [
+          XTypeGroup(
+            label: 'Images',
+            extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'zip'],
+          ),
+        ],
+        confirmButtonText: '保存',
+      );
+      if (location == null) return;
+      await XFile.fromData(
+        file.bytes,
+        mimeType: file.mimeType,
+        name: file.filename,
+      ).saveTo(location.path);
+      if (!mounted) return;
+      setState(() => _notice = '房间表情已下载');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    }
+  }
+
+  StickerPack? _packForSticker(String stickerId) {
+    for (final pack in _packs) {
+      if (pack.stickers.any((sticker) => sticker.id == stickerId)) return pack;
+    }
+    return null;
+  }
+
+  void _preview(Sticker sticker) {
+    final imageUrl = AppConfigScope.of(
+      context,
+    ).resolveAssetUrl(sticker.asset.url);
+    if (imageUrl == null) return;
+    showDialog<void>(
+      context: context,
+      builder: (context) => _RoomStickerPreviewDialog(
+        sticker: sticker,
+        imageUrl: imageUrl,
+        onRename: _rename,
+        onDelete: _delete,
+        onMoveUp: () => _move(sticker, -1),
+        onMoveDown: () => _move(sticker, 1),
+        onDownload: () => _download(sticker),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final stickers = _stickers;
+    final busy = _uploading || _deleting || _savingOrder;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 22),
+      children: [
+        if (_notice != null) ...[
+          _RoomNotice(message: _notice!),
+          const SizedBox(height: 12),
+        ],
+        if (_error != null) ...[
+          _RoomError(message: _error!),
+          const SizedBox(height: 12),
+        ],
+        _RoomSettingsGroup(
+          title: '房间表情包',
+          trailing: Text(
+            '${stickers.length} 个',
+            style: const TextStyle(
+              color: _textMuted,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Button(
+                    onPressed: busy ? null : _upload,
+                    loading: _uploading,
+                    tone: ButtonTone.primary,
+                    icon: const Icon(Icons.upload_file),
+                    child: const Text('本地上传'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                ButtonIcon(
+                  tooltip: '刷新',
+                  onPressed: _loading ? null : _load,
+                  icon: const Icon(Icons.refresh),
+                  size: 40,
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            if (_loading && stickers.isEmpty)
+              const SizedBox(
+                height: 160,
+                child: Center(child: CircularProgressIndicator(color: _cyan)),
+              )
+            else if (stickers.isEmpty)
+              const _RoomEmptyState(text: '房间表情包为空，上传后只在本房间可用')
+            else
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: stickers.length,
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 120,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  childAspectRatio: 0.92,
+                ),
+                itemBuilder: (context, index) {
+                  final sticker = stickers[index];
+                  final imageUrl = AppConfigScope.of(
+                    context,
+                  ).resolveAssetUrl(sticker.asset.url);
+                  return _RoomStickerTile(
+                    sticker: sticker,
+                    imageUrl: imageUrl,
+                    onTap: () => _preview(sticker),
+                  );
+                },
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _RoomDialogHeader extends StatelessWidget {
+  const _RoomDialogHeader({
+    required this.title,
+    required this.subtitle,
+    required this.avatarLabel,
+    required this.avatarUrl,
+    required this.defaultAvatarKey,
+    required this.onClose,
+  });
+
+  final String title;
+  final String subtitle;
+  final String avatarLabel;
+  final String? avatarUrl;
+  final String defaultAvatarKey;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: _borderColor)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 20, 20, 18),
+        child: Row(
+          children: [
+            _Avatar(
+              label: avatarLabel,
+              imageUrl: avatarUrl,
+              defaultAvatarKey: defaultAvatarKey,
+              size: 56,
+              borderColor: _cyan,
+              borderWidth: 1.2,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _textPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _textMuted,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            ButtonIcon(
+              tooltip: '关闭',
+              onPressed: onClose,
+              icon: const Icon(Icons.close),
+              size: 32,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RoomDialogFooter extends StatelessWidget {
+  const _RoomDialogFooter({
+    required this.saving,
+    required this.onCancel,
+    required this.onSave,
+    required this.saveLabel,
+  });
+
+  final bool saving;
+  final VoidCallback onCancel;
+  final VoidCallback onSave;
+  final String saveLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: _borderColor)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            Button(
+              onPressed: saving ? null : onCancel,
+              child: const Text('取消'),
+            ),
+            const SizedBox(width: 10),
+            Button(
+              onPressed: saving ? null : onSave,
+              loading: saving,
+              tone: ButtonTone.primary,
+              icon: const Icon(Icons.save_outlined),
+              child: Text(saveLabel),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RoomSettingsGroup extends StatelessWidget {
+  const _RoomSettingsGroup({
+    required this.title,
+    required this.children,
+    this.trailing,
+    this.danger = false,
+  });
+
+  final String title;
+  final List<Widget> children;
+  final Widget? trailing;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _primaryDarkLow,
+        border: Border.all(
+          color: danger ? const Color(0xFF3A2A2E) : _borderColor,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 15, 16, 17),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      color: danger ? _danger : _textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                ?trailing,
+              ],
+            ),
+            const SizedBox(height: 14),
+            ...children,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RoomNotice extends StatelessWidget {
+  const _RoomNotice({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return _RoomBanner(
+      message: message,
+      icon: Icons.check_circle_outline,
+      color: _cyan,
+    );
+  }
+}
+
+class _RoomError extends StatelessWidget {
+  const _RoomError({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return _RoomBanner(
+      message: message,
+      icon: Icons.error_outline,
+      color: _danger,
+    );
+  }
+}
+
+class _RoomBanner extends StatelessWidget {
+  const _RoomBanner({
+    required this.message,
+    required this.icon,
+    required this.color,
+  });
+
+  final String message;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _primaryDark,
+        border: Border.all(color: color.withValues(alpha: 0.55)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 18),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(
+                message,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RoomFieldLabel extends StatelessWidget {
+  const _RoomFieldLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(
+        color: _textMuted,
+        fontSize: 12,
+        fontWeight: FontWeight.w900,
+      ),
+    );
+  }
+}
+
+class _CopyableRoomField extends StatelessWidget {
+  const _CopyableRoomField({
+    required this.label,
+    required this.value,
+    required this.onCopy,
+    this.maxLines = 1,
+  });
+
+  final String label;
+  final String value;
+  final VoidCallback onCopy;
+  final int maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _RoomFieldLabel(label),
+        const SizedBox(height: 8),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: _primaryDark,
+            border: Border.all(color: _borderColor),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: SelectableText(
+                    value,
+                    maxLines: maxLines,
+                    style: const TextStyle(
+                      color: _textSecondary,
+                      fontSize: 14,
+                      height: 1.35,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ButtonIcon(
+                  tooltip: '复制',
+                  onPressed: onCopy,
+                  icon: const Icon(Icons.copy),
+                  size: 30,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RoomTextField extends StatelessWidget {
+  const _RoomTextField({
+    required this.label,
+    required this.controller,
+    this.maxLines = 1,
+    this.helperText,
+  });
+
+  final String label;
+  final TextEditingController controller;
+  final int maxLines;
+  final String? helperText;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _RoomFieldLabel(label),
+        const SizedBox(height: 8),
+        TextField(
+          controller: controller,
+          maxLines: maxLines,
+          cursorColor: _textSecondary,
+          style: const TextStyle(
+            color: _textPrimary,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+          decoration: const InputDecoration(isDense: true),
+        ),
+        if (helperText != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            helperText!,
+            style: const TextStyle(color: _textMuted, fontSize: 12),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _RoomOption {
+  const _RoomOption(this.value, this.label);
+
+  final String value;
+  final String label;
+}
+
+class _RoomSegmentedSetting extends StatelessWidget {
+  const _RoomSegmentedSetting({
+    required this.label,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+
+  final String label;
+  final String value;
+  final List<_RoomOption> options;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _RoomFieldLabel(label),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final option in options)
+              Button(
+                onPressed: () => onChanged(option.value),
+                selected: option.value == value,
+                tone: option.value == value
+                    ? ButtonTone.primary
+                    : ButtonTone.neutral,
+                height: 34,
+                child: Text(option.label),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _RoomSwitchSetting extends StatelessWidget {
+  const _RoomSwitchSetting({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(child: _RoomFieldLabel(label)),
+        Switch(
+          value: value,
+          activeThumbColor: _cyan,
+          activeTrackColor: _cyan.withValues(alpha: 0.28),
+          inactiveThumbColor: _textMuted,
+          inactiveTrackColor: _borderColor,
+          onChanged: onChanged,
+        ),
+      ],
+    );
+  }
+}
+
+class _RoomAvatarPicker extends StatelessWidget {
+  const _RoomAvatarPicker({
+    required this.label,
+    required this.displayName,
+    required this.avatarUrl,
+    required this.defaultAvatarKey,
+    required this.uploading,
+    required this.onUpload,
+    required this.onPresetChanged,
+    required this.onUsePreset,
+  });
+
+  static const _keys = [
+    'room-1',
+    'blue-3',
+    'mint-2',
+    'amber-2',
+    'coral-2',
+    'violet-2',
+    'teal-2',
+    'slate-2',
+  ];
+
+  final String label;
+  final String displayName;
+  final String? avatarUrl;
+  final String defaultAvatarKey;
+  final bool uploading;
+  final VoidCallback onUpload;
+  final ValueChanged<String> onPresetChanged;
+  final VoidCallback onUsePreset;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _RoomFieldLabel(label),
+        const SizedBox(height: 10),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _Avatar(
+              label: displayName,
+              imageUrl: avatarUrl,
+              defaultAvatarKey: defaultAvatarKey,
+              size: 64,
+              borderColor: _cyan,
+              borderWidth: 1.2,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final key in _keys)
+                        _AvatarSwatch(
+                          keyName: key,
+                          selected: key == defaultAvatarKey,
+                          onPressed: () => onPresetChanged(key),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Button(
+                          onPressed: uploading ? null : onUpload,
+                          loading: uploading,
+                          icon: const Icon(Icons.upload_file),
+                          child: const Text('上传图片'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      ButtonIcon(
+                        tooltip: '使用预设',
+                        onPressed: onUsePreset,
+                        icon: const Icon(Icons.auto_awesome_mosaic_outlined),
+                        size: 40,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _AvatarSwatch extends StatelessWidget {
+  const _AvatarSwatch({
+    required this.keyName,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final String keyName;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: keyName,
+      child: InkWell(
+        onTap: onPressed,
+        child: Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            color: _avatarColor(keyName),
+            border: Border.all(color: selected ? _cyan : _borderColor),
+          ),
+          child: selected
+              ? const Icon(Icons.check, color: _textPrimary, size: 16)
+              : null,
+        ),
+      ),
+    );
+  }
+}
+
+class _RoomManagementNav extends StatelessWidget {
+  const _RoomManagementNav({required this.selected, required this.onChanged});
+
+  final _RoomManagementSection selected;
+  final ValueChanged<_RoomManagementSection> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: _primaryDark,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
+        children: [
+          _RoomNavButton(
+            selected: selected == _RoomManagementSection.info,
+            icon: Icons.info_outline,
+            label: '房间信息',
+            onPressed: () => onChanged(_RoomManagementSection.info),
+          ),
+          const SizedBox(height: 8),
+          _RoomNavButton(
+            selected: selected == _RoomManagementSection.stickers,
+            icon: Icons.emoji_emotions_outlined,
+            label: '房间表情包',
+            onPressed: () => onChanged(_RoomManagementSection.stickers),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RoomNavButton extends StatelessWidget {
+  const _RoomNavButton({
+    required this.selected,
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final bool selected;
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Button(
+      onPressed: onPressed,
+      selected: selected,
+      tone: selected ? ButtonTone.primary : ButtonTone.neutral,
+      icon: Icon(icon),
+      width: double.infinity,
+      mainAxisSize: MainAxisSize.max,
+      child: Text(label),
+    );
+  }
+}
+
+class _RoomMemberPermissionTile extends StatelessWidget {
+  const _RoomMemberPermissionTile({
+    required this.member,
+    required this.room,
+    required this.currentUser,
+    required this.busy,
+    required this.canEditCreatorOnly,
+    required this.onSetAdmin,
+    required this.onUnsetAdmin,
+    required this.onTransferCreator,
+  });
+
+  final RoomMember member;
+  final RoomDetail room;
+  final CurrentUser currentUser;
+  final bool busy;
+  final bool canEditCreatorOnly;
+  final VoidCallback onSetAdmin;
+  final VoidCallback onUnsetAdmin;
+  final VoidCallback onTransferCreator;
+
+  bool get _isSuperuser =>
+      member.user.isSuperuser || member.role == 'superuser';
+  bool get _isOwner =>
+      member.user.id == room.createdBy?.id ||
+      member.role == 'owner' ||
+      member.role == 'creator';
+  bool get _isAdmin => member.role == 'admin' || member.role == 'administrator';
+
+  @override
+  Widget build(BuildContext context) {
+    final name = _memberTileName(member);
+    final canRoleEdit =
+        canEditCreatorOnly &&
+        !_isSuperuser &&
+        !_isOwner &&
+        member.user.id != currentUser.id;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _primaryDark,
+        border: Border.all(color: _borderColor),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Row(
+          children: [
+            _Avatar(
+              label: name,
+              imageUrl: AppConfigScope.of(
+                context,
+              ).resolveAssetUrl(member.user.avatarUrl),
+              defaultAvatarKey: member.user.defaultAvatarKey,
+              size: 38,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    _roomRoleLabel(
+                      member.user.copyWith(roomRole: member.role),
+                      room,
+                    ),
+                    style: const TextStyle(color: _textMuted, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            if (busy)
+              const SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(color: _cyan, strokeWidth: 2),
+              )
+            else if (canRoleEdit) ...[
+              Button(
+                onPressed: _isAdmin ? onUnsetAdmin : onSetAdmin,
+                height: 32,
+                icon: Icon(
+                  _isAdmin
+                      ? Icons.person_remove_alt_1_outlined
+                      : Icons.admin_panel_settings_outlined,
+                ),
+                child: Text(_isAdmin ? '撤回管理员' : '设为管理员'),
+              ),
+              const SizedBox(width: 8),
+              Button(
+                onPressed: onTransferCreator,
+                height: 32,
+                icon: const Icon(Icons.swap_horiz),
+                child: const Text('设为创建者'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RoomStickerTile extends StatelessWidget {
+  const _RoomStickerTile({
+    required this.sticker,
+    required this.imageUrl,
+    required this.onTap,
+  });
+
+  final Sticker sticker;
+  final String? imageUrl;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableSurface(
+      onPressed: onTap,
+      height: 110,
+      backgroundColor: _primaryDark,
+      borderColor: _borderColor,
+      padding: const EdgeInsets.all(8),
+      child: Column(
+        children: [
+          Expanded(
+            child: imageUrl == null
+                ? const Icon(Icons.broken_image_outlined, color: _textMuted)
+                : Image.network(
+                    imageUrl!,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) =>
+                        const Icon(Icons.broken_image_outlined),
+                  ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            sticker.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: _textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RoomStickerPreviewDialog extends StatefulWidget {
+  const _RoomStickerPreviewDialog({
+    required this.sticker,
+    required this.imageUrl,
+    required this.onRename,
+    required this.onDelete,
+    required this.onMoveUp,
+    required this.onMoveDown,
+    required this.onDownload,
+  });
+
+  final Sticker sticker;
+  final String imageUrl;
+  final Future<void> Function(Sticker sticker, String name) onRename;
+  final Future<void> Function(Sticker sticker) onDelete;
+  final Future<void> Function() onMoveUp;
+  final Future<void> Function() onMoveDown;
+  final Future<void> Function() onDownload;
+
+  @override
+  State<_RoomStickerPreviewDialog> createState() =>
+      _RoomStickerPreviewDialogState();
+}
+
+class _RoomStickerPreviewDialogState extends State<_RoomStickerPreviewDialog> {
+  late final TextEditingController _nameController;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.sticker.name);
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _run(
+    Future<void> Function() action, {
+    bool close = false,
+  }) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await action();
+      if (close && mounted) Navigator.of(context).pop();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: _primaryDarkRaised,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.zero,
+        side: BorderSide(color: _borderColor),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.sticker.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _textPrimary,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  ButtonIcon(
+                    tooltip: '关闭',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                    size: 32,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 220,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: _primaryDark,
+                    border: Border.all(color: _borderColor),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Image.network(widget.imageUrl, fit: BoxFit.contain),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              _RoomTextField(label: '表情名称', controller: _nameController),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  Button(
+                    onPressed: _busy
+                        ? null
+                        : () => _run(
+                            () => widget.onRename(
+                              widget.sticker,
+                              _nameController.text,
+                            ),
+                          ),
+                    icon: const Icon(Icons.drive_file_rename_outline),
+                    child: const Text('重命名'),
+                  ),
+                  Button(
+                    onPressed: _busy ? null : () => _run(widget.onMoveUp),
+                    icon: const Icon(Icons.keyboard_arrow_up),
+                    child: const Text('上移'),
+                  ),
+                  Button(
+                    onPressed: _busy ? null : () => _run(widget.onMoveDown),
+                    icon: const Icon(Icons.keyboard_arrow_down),
+                    child: const Text('下移'),
+                  ),
+                  Button(
+                    onPressed: _busy ? null : () => _run(widget.onDownload),
+                    icon: const Icon(Icons.download_outlined),
+                    child: const Text('下载'),
+                  ),
+                  Button(
+                    onPressed: _busy
+                        ? null
+                        : () => _run(
+                            () => widget.onDelete(widget.sticker),
+                            close: true,
+                          ),
+                    tone: ButtonTone.danger,
+                    icon: const Icon(Icons.delete_outline),
+                    child: const Text('删除'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RoomEmptyState extends StatelessWidget {
+  const _RoomEmptyState({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 112,
+      child: Center(
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: _textMuted, fontSize: 13),
+        ),
+      ),
+    );
+  }
+}
+
+class _ConfirmActionDialog extends StatelessWidget {
+  const _ConfirmActionDialog({
+    required this.title,
+    required this.body,
+    required this.confirmLabel,
+    required this.confirmIcon,
+    this.danger = false,
+  });
+
+  final String title;
+  final String body;
+  final String confirmLabel;
+  final IconData confirmIcon;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: _primaryDarkRaised,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.zero,
+        side: BorderSide(color: _borderColor),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: danger ? _danger : _textPrimary,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                body,
+                style: const TextStyle(
+                  color: _textSecondary,
+                  height: 1.4,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Button(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('取消'),
+                  ),
+                  const SizedBox(width: 10),
+                  Button(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    tone: danger ? ButtonTone.danger : ButtonTone.primary,
+                    icon: Icon(confirmIcon),
+                    child: Text(confirmLabel),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StrongConfirmDialog extends StatefulWidget {
+  const _StrongConfirmDialog({
+    required this.title,
+    required this.body,
+    required this.expectedText,
+    required this.confirmLabel,
+    required this.confirmIcon,
+  });
+
+  final String title;
+  final String body;
+  final String expectedText;
+  final String confirmLabel;
+  final IconData confirmIcon;
+
+  @override
+  State<_StrongConfirmDialog> createState() => _StrongConfirmDialogState();
+}
+
+class _StrongConfirmDialogState extends State<_StrongConfirmDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final matched = _controller.text.trim() == widget.expectedText;
+    return Dialog(
+      backgroundColor: _primaryDarkRaised,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.zero,
+        side: BorderSide(color: _borderColor),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 440),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                widget.title,
+                style: const TextStyle(
+                  color: _danger,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                widget.body,
+                style: const TextStyle(
+                  color: _textSecondary,
+                  height: 1.4,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 14),
+              _RoomTextField(
+                label: '输入房间名确认：${widget.expectedText}',
+                controller: _controller,
+              ),
+              const SizedBox(height: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Button(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('取消'),
+                  ),
+                  const SizedBox(width: 10),
+                  Button(
+                    onPressed: matched
+                        ? () => Navigator.of(context).pop(true)
+                        : null,
+                    tone: ButtonTone.danger,
+                    icon: Icon(widget.confirmIcon),
+                    child: Text(widget.confirmLabel),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -6693,7 +9180,7 @@ class _RoomMembersDialogState extends State<_RoomMembersDialog> {
 
   bool _isOwnerMember(RoomMember member) {
     final role = member.role.toLowerCase();
-    return member.user.id == widget.room.createdBy.id ||
+    return member.user.id == widget.room.createdBy?.id ||
         role == 'owner' ||
         role == 'creator';
   }
@@ -7944,6 +10431,9 @@ RoomCard _withLive(RoomCard room, LiveState live) {
     name: room.name,
     rid: room.rid,
     visibility: room.visibility,
+    remarkName: room.remarkName,
+    description: room.description,
+    notificationPolicy: room.notificationPolicy,
     avatarUrl: room.avatarUrl,
     defaultAvatarKey: room.defaultAvatarKey,
     memberCount: room.memberCount,
@@ -8048,7 +10538,7 @@ String _roomRoleLabel(UserSummary user, RoomDetail room) {
   final role = _nonEmpty(user.roomRole)?.toLowerCase();
   if (role == 'pending') return '待审批';
   if (user.isSuperuser || role == 'superuser') return '超级用户';
-  if (user.id == room.createdBy.id || role == 'owner' || role == 'creator') {
+  if (user.id == room.createdBy?.id || role == 'owner' || role == 'creator') {
     return '创建者';
   }
   if (role == 'admin' || role == 'administrator') return '管理员';
@@ -8133,6 +10623,49 @@ String? _roomRoleLabelFromValue(String? value) {
     'pending' => '待审批',
     _ => null,
   };
+}
+
+_GenderMarkData? _genderMark(String? value) {
+  return switch (_nonEmpty(value)?.toLowerCase()) {
+    'male' ||
+    'm' ||
+    'man' => const _GenderMarkData(symbol: '♂', color: Color(0xFF5AA7FF)),
+    'female' ||
+    'f' ||
+    'woman' => const _GenderMarkData(symbol: '♀', color: Color(0xFFFF6F8F)),
+    _ => null,
+  };
+}
+
+String _normalizedNotificationPolicy(String value) {
+  return switch (value.trim().toLowerCase()) {
+    'mention' || 'mentions' || 'only_mentions' || 'mention_only' => 'mentions',
+    'mute' || 'muted' || 'do_not_disturb' || 'dnd' => 'muted',
+    _ => 'all',
+  };
+}
+
+String _normalizedVisibility(String value) {
+  return switch (value.trim().toLowerCase()) {
+    'private' => 'private',
+    _ => 'public',
+  };
+}
+
+String _normalizedJoinPolicy(String value) {
+  return switch (value.trim().toLowerCase()) {
+    'open' || 'allow_anyone' || 'anyone' => 'open',
+    'closed' || 'none' || 'deny_all' || 'no_one' => 'closed',
+    _ => 'approval_required',
+  };
+}
+
+String _stickerNameFromFilename(String filename) {
+  final base = _basename(filename);
+  final dot = base.lastIndexOf('.');
+  final withoutExtension = dot <= 0 ? base : base.substring(0, dot);
+  final trimmed = withoutExtension.trim();
+  return trimmed.isEmpty ? 'sticker' : trimmed;
 }
 
 String _formatMessageTime(DateTime value) {

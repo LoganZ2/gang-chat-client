@@ -123,11 +123,15 @@ abstract interface class GangApi {
     required String name,
     int? sortOrder,
     String? idempotencyKey,
+    String scope = 'personal',
+    String? roomId,
   });
 
   Future<void> deleteSticker({
     required String packId,
     required String stickerId,
+    String scope = 'personal',
+    String? roomId,
   });
 
   Future<Sticker> updateSticker({
@@ -159,10 +163,52 @@ abstract interface class GangApi {
   Future<RoomDetail> createRoom({
     required String name,
     String? avatarAssetId,
+    String? defaultAvatarKey,
     String? idempotencyKey,
   });
 
   Future<RoomDetail> getRoom(String roomId);
+
+  Future<RoomDetail> updateRoom({
+    required String roomId,
+    String? name,
+    String? description,
+    String? visibility,
+    String? joinPolicy,
+    bool? aiVoiceAnnouncementsEnabled,
+    String? avatarAssetId,
+    String? defaultAvatarKey,
+  });
+
+  Future<RoomDetail> updateMyRoomSettings({
+    required String roomId,
+    String? remarkName,
+    String? notificationPolicy,
+    String? roomDisplayName,
+    String? avatarAssetId,
+    String? defaultAvatarKey,
+  });
+
+  Future<void> leaveRoom({
+    required String roomId,
+    bool confirmDeleteIfEmpty = false,
+  });
+
+  Future<void> deleteRoom({
+    required String roomId,
+    required String confirmName,
+  });
+
+  Future<RoomMember> updateRoomMemberRole({
+    required String roomId,
+    required String userId,
+    required String role,
+  });
+
+  Future<RoomDetail> transferRoomCreator({
+    required String roomId,
+    required String userId,
+  });
 
   Future<List<PublicRoom>> searchRooms({required String query, int limit = 20});
 
@@ -449,6 +495,8 @@ class GangApiClient implements GangApi {
     required String name,
     int? sortOrder,
     String? idempotencyKey,
+    String scope = 'personal',
+    String? roomId,
   }) async {
     final body = <String, Object?>{'asset_id': assetId, 'name': name};
     if (sortOrder != null) body['sort_order'] = sortOrder;
@@ -473,6 +521,8 @@ class GangApiClient implements GangApi {
         if (await _stickerAssetAlreadyLinked(
           packId: packId,
           assetId: assetId,
+          scope: scope,
+          roomId: roomId,
         )) {
           return;
         }
@@ -483,6 +533,8 @@ class GangApiClient implements GangApi {
         if (await _stickerAssetAlreadyLinked(
           packId: packId,
           assetId: assetId,
+          scope: scope,
+          roomId: roomId,
         )) {
           return;
         }
@@ -495,9 +547,11 @@ class GangApiClient implements GangApi {
   Future<bool> _stickerAssetAlreadyLinked({
     required String packId,
     required String assetId,
+    required String scope,
+    String? roomId,
   }) async {
     try {
-      final packs = await listStickerPacks(scope: 'personal');
+      final packs = await listStickerPacks(scope: scope, roomId: roomId);
       for (final pack in packs) {
         if (pack.id != packId) continue;
         for (final sticker in pack.stickers) {
@@ -513,9 +567,11 @@ class GangApiClient implements GangApi {
   Future<bool> _stickerAlreadyDeleted({
     required String packId,
     required String stickerId,
+    required String scope,
+    String? roomId,
   }) async {
     try {
-      final packs = await listStickerPacks(scope: 'personal');
+      final packs = await listStickerPacks(scope: scope, roomId: roomId);
       for (final pack in packs) {
         if (pack.id != packId) continue;
         return !pack.stickers.any((sticker) => sticker.id == stickerId);
@@ -530,6 +586,8 @@ class GangApiClient implements GangApi {
   Future<void> deleteSticker({
     required String packId,
     required String stickerId,
+    String scope = 'personal',
+    String? roomId,
   }) async {
     Future<void> send() {
       return _sendJson((token) {
@@ -551,6 +609,8 @@ class GangApiClient implements GangApi {
         if (await _stickerAlreadyDeleted(
           packId: packId,
           stickerId: stickerId,
+          scope: scope,
+          roomId: roomId,
         )) {
           return;
         }
@@ -561,6 +621,8 @@ class GangApiClient implements GangApi {
         if (await _stickerAlreadyDeleted(
           packId: packId,
           stickerId: stickerId,
+          scope: scope,
+          roomId: roomId,
         )) {
           return;
         }
@@ -685,11 +747,15 @@ class GangApiClient implements GangApi {
   Future<RoomDetail> createRoom({
     required String name,
     String? avatarAssetId,
+    String? defaultAvatarKey,
     String? idempotencyKey,
   }) async {
     final decoded = await _sendJson((token) {
       final body = <String, Object?>{'name': name};
       if (avatarAssetId != null) body['avatar_asset_id'] = avatarAssetId;
+      if (defaultAvatarKey != null) {
+        body['default_avatar_key'] = defaultAvatarKey;
+      }
       return _httpClient.post(
         _uri('/rooms'),
         headers: _headers(token, idempotencyKey: idempotencyKey ?? newUuid()),
@@ -704,6 +770,125 @@ class GangApiClient implements GangApi {
     final decoded = await _sendJson((token) {
       return _httpClient.get(_uri('/rooms/$roomId'), headers: _headers(token));
     }, retryTransientFailures: true);
+    return RoomDetail.fromJson(decoded['room']! as Map<String, Object?>);
+  }
+
+  @override
+  Future<RoomDetail> updateRoom({
+    required String roomId,
+    String? name,
+    String? description,
+    String? visibility,
+    String? joinPolicy,
+    bool? aiVoiceAnnouncementsEnabled,
+    String? avatarAssetId,
+    String? defaultAvatarKey,
+  }) async {
+    final body = <String, Object?>{};
+    if (name != null) body['name'] = name;
+    if (description != null) body['description'] = description;
+    if (visibility != null) body['visibility'] = visibility;
+    if (joinPolicy != null) body['join_policy'] = joinPolicy;
+    if (aiVoiceAnnouncementsEnabled != null) {
+      body['ai_voice_announcements_enabled'] = aiVoiceAnnouncementsEnabled;
+    }
+    if (avatarAssetId != null) body['avatar_asset_id'] = avatarAssetId;
+    if (defaultAvatarKey != null) body['default_avatar_key'] = defaultAvatarKey;
+    final decoded = await _sendJson((token) {
+      return _httpClient.patch(
+        _uri('/rooms/$roomId'),
+        headers: _headers(token),
+        body: encodeJsonBody(body),
+      );
+    }, retryTransientFailures: true);
+    return RoomDetail.fromJson(decoded['room']! as Map<String, Object?>);
+  }
+
+  @override
+  Future<RoomDetail> updateMyRoomSettings({
+    required String roomId,
+    String? remarkName,
+    String? notificationPolicy,
+    String? roomDisplayName,
+    String? avatarAssetId,
+    String? defaultAvatarKey,
+  }) async {
+    final body = <String, Object?>{};
+    if (remarkName != null) body['remark_name'] = remarkName;
+    if (notificationPolicy != null) {
+      body['notification_policy'] = notificationPolicy;
+    }
+    if (roomDisplayName != null) body['room_display_name'] = roomDisplayName;
+    if (avatarAssetId != null) body['avatar_asset_id'] = avatarAssetId;
+    if (defaultAvatarKey != null) body['default_avatar_key'] = defaultAvatarKey;
+    final decoded = await _sendJson((token) {
+      return _httpClient.patch(
+        _uri('/rooms/$roomId/me'),
+        headers: _headers(token),
+        body: encodeJsonBody(body),
+      );
+    }, retryTransientFailures: true);
+    return RoomDetail.fromJson(decoded['room']! as Map<String, Object?>);
+  }
+
+  @override
+  Future<void> leaveRoom({
+    required String roomId,
+    bool confirmDeleteIfEmpty = false,
+  }) async {
+    await _sendJson((token) {
+      return _httpClient.delete(
+        _uri('/rooms/$roomId/members/me'),
+        headers: _headers(token),
+        body: encodeJsonBody({
+          if (confirmDeleteIfEmpty) 'confirm_delete_if_empty': true,
+        }),
+      );
+    });
+  }
+
+  @override
+  Future<void> deleteRoom({
+    required String roomId,
+    required String confirmName,
+  }) async {
+    await _sendJson((token) {
+      return _httpClient.delete(
+        _uri('/rooms/$roomId'),
+        headers: _headers(token),
+        body: encodeJsonBody({'confirm_name': confirmName}),
+      );
+    });
+  }
+
+  @override
+  Future<RoomMember> updateRoomMemberRole({
+    required String roomId,
+    required String userId,
+    required String role,
+  }) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.patch(
+        _uri('/rooms/$roomId/members/$userId'),
+        headers: _headers(token),
+        body: encodeJsonBody({'role': role}),
+      );
+    });
+    return RoomMember.fromJson(decoded['member']! as Map<String, Object?>);
+  }
+
+  @override
+  Future<RoomDetail> transferRoomCreator({
+    required String roomId,
+    required String userId,
+  }) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.patch(
+        _uri('/rooms/$roomId/creator'),
+        headers: _headers(token),
+        body: encodeJsonBody({'user_id': userId}),
+      );
+    });
     return RoomDetail.fromJson(decoded['room']! as Map<String, Object?>);
   }
 

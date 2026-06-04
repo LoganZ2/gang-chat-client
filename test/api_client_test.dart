@@ -1449,6 +1449,202 @@ void main() {
     },
   );
 
+  test('RoomDetail parses room settings and nullable creator', () {
+    final room = RoomDetail.fromJson({
+      ..._roomDetailJson(),
+      'created_by': null,
+      'description': 'A room for launch planning',
+      'visibility': 'public',
+      'join_policy': 'open',
+      'remark_name': 'Launch',
+      'notification_policy': 'mentions',
+      'personal_profile': {
+        'display_name': 'Alice Ops',
+        'avatar_url': '/assets/asset_2/room-avatar.png',
+        'default_avatar_key': 'mint-2',
+      },
+      'ai_voice_announcements_enabled': false,
+      'can_delete_room': true,
+      'my_membership': {
+        'joined_at': '2026-05-31T14:00:00Z',
+        'role': 'superuser',
+      },
+    });
+
+    expect(room.createdBy, isNull);
+    expect(room.description, 'A room for launch planning');
+    expect(room.visibility, 'public');
+    expect(room.joinPolicy, 'open');
+    expect(room.remarkName, 'Launch');
+    expect(room.notificationPolicy, 'mentions');
+    expect(room.personalProfile.displayName, 'Alice Ops');
+    expect(room.personalProfile.avatarUrl, '/assets/asset_2/room-avatar.png');
+    expect(room.personalProfile.defaultAvatarKey, 'mint-2');
+    expect(room.aiVoiceAnnouncementsEnabled, isFalse);
+    expect(room.isAdmin, isTrue);
+    expect(room.isSuperuser, isTrue);
+    expect(room.canDelete, isTrue);
+    expect(room.toCard().displayName, 'Launch (Invite Room)');
+  });
+
+  test('room management endpoints use server room routes', () async {
+    var requests = 0;
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        requests += 1;
+        expect(request.headers['authorization'], 'Bearer token');
+        switch (requests) {
+          case 1:
+            expect(request.method, 'PATCH');
+            expect(request.url.path, '/api/v1/rooms/room_1');
+            expect(jsonDecode(utf8.decode(request.bodyBytes)), {
+              'name': 'New Room',
+              'description': 'Updated',
+              'visibility': 'private',
+              'join_policy': 'closed',
+              'ai_voice_announcements_enabled': false,
+              'avatar_asset_id': 'asset_1',
+              'default_avatar_key': 'teal-2',
+            });
+            return http.Response(
+              jsonEncode({
+                'room': {
+                  ..._roomDetailJson(),
+                  'name': 'New Room',
+                  'description': 'Updated',
+                  'visibility': 'private',
+                  'join_policy': 'closed',
+                  'ai_voice_announcements_enabled': false,
+                  'avatar_url': '/assets/asset_1/room.png',
+                  'default_avatar_key': 'teal-2',
+                },
+              }),
+              200,
+            );
+          case 2:
+            expect(request.method, 'PATCH');
+            expect(request.url.path, '/api/v1/rooms/room_1/me');
+            expect(jsonDecode(utf8.decode(request.bodyBytes)), {
+              'remark_name': 'Ops',
+              'notification_policy': 'muted',
+              'room_display_name': 'Alice Ops',
+              'avatar_asset_id': 'asset_2',
+              'default_avatar_key': 'mint-2',
+            });
+            return http.Response(
+              jsonEncode({
+                'room': {
+                  ..._roomDetailJson(),
+                  'remark_name': 'Ops',
+                  'notification_policy': 'muted',
+                  'personal_profile': {
+                    'display_name': 'Alice Ops',
+                    'avatar_url': '/assets/asset_2/avatar.png',
+                    'default_avatar_key': 'mint-2',
+                  },
+                },
+              }),
+              200,
+            );
+          case 3:
+            expect(request.method, 'DELETE');
+            expect(request.url.path, '/api/v1/rooms/room_1/members/me');
+            expect(jsonDecode(utf8.decode(request.bodyBytes)), {
+              'confirm_delete_if_empty': true,
+            });
+            return http.Response('{}', 200);
+          case 4:
+            expect(request.method, 'DELETE');
+            expect(request.url.path, '/api/v1/rooms/room_1');
+            expect(jsonDecode(utf8.decode(request.bodyBytes)), {
+              'confirm_name': 'New Room',
+            });
+            return http.Response('{}', 200);
+          case 5:
+            expect(request.method, 'PATCH');
+            expect(request.url.path, '/api/v1/rooms/room_1/members/user_2');
+            expect(jsonDecode(utf8.decode(request.bodyBytes)), {
+              'role': 'admin',
+            });
+            return http.Response(
+              jsonEncode({
+                'member': {
+                  'user': {
+                    'id': 'user_2',
+                    'username': 'bob',
+                    'display_name': 'Bob',
+                  },
+                  'role': 'admin',
+                  'joined_at': '2026-05-31T14:00:00Z',
+                },
+              }),
+              200,
+            );
+          case 6:
+            expect(request.method, 'PATCH');
+            expect(request.url.path, '/api/v1/rooms/room_1/creator');
+            expect(jsonDecode(utf8.decode(request.bodyBytes)), {
+              'user_id': 'user_2',
+            });
+            return http.Response(
+              jsonEncode({
+                'room': {
+                  ..._roomDetailJson(),
+                  'created_by': {
+                    'id': 'user_2',
+                    'username': 'bob',
+                    'display_name': 'Bob',
+                  },
+                },
+              }),
+              200,
+            );
+          default:
+            fail('unexpected request ${request.method} ${request.url}');
+        }
+      }),
+    );
+
+    final updatedRoom = await api.updateRoom(
+      roomId: 'room_1',
+      name: 'New Room',
+      description: 'Updated',
+      visibility: 'private',
+      joinPolicy: 'closed',
+      aiVoiceAnnouncementsEnabled: false,
+      avatarAssetId: 'asset_1',
+      defaultAvatarKey: 'teal-2',
+    );
+    final myRoom = await api.updateMyRoomSettings(
+      roomId: 'room_1',
+      remarkName: 'Ops',
+      notificationPolicy: 'muted',
+      roomDisplayName: 'Alice Ops',
+      avatarAssetId: 'asset_2',
+      defaultAvatarKey: 'mint-2',
+    );
+    await api.leaveRoom(roomId: 'room_1', confirmDeleteIfEmpty: true);
+    await api.deleteRoom(roomId: 'room_1', confirmName: 'New Room');
+    final member = await api.updateRoomMemberRole(
+      roomId: 'room_1',
+      userId: 'user_2',
+      role: 'admin',
+    );
+    final transferred = await api.transferRoomCreator(
+      roomId: 'room_1',
+      userId: 'user_2',
+    );
+
+    expect(updatedRoom.name, 'New Room');
+    expect(myRoom.remarkName, 'Ops');
+    expect(member.role, 'admin');
+    expect(transferred.createdBy?.id, 'user_2');
+    expect(requests, 6);
+    api.close();
+  });
+
   test('updateProfile retries a transient socket write abort', () async {
     var requests = 0;
     final api = GangApiClient(

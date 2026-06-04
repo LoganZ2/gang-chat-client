@@ -501,12 +501,18 @@ class RoomCard {
     required this.updatedAt,
     this.rid = '',
     this.visibility = 'private',
+    this.remarkName,
+    this.description = '',
+    this.notificationPolicy = 'all',
   });
 
   final String id;
   final String name;
   final String rid;
   final String visibility;
+  final String? remarkName;
+  final String description;
+  final String notificationPolicy;
   final String? avatarUrl;
   final String defaultAvatarKey;
   final int memberCount;
@@ -522,6 +528,11 @@ class RoomCard {
       name: json['name']! as String,
       rid: json['rid'] as String? ?? '',
       visibility: json['visibility'] as String? ?? 'private',
+      remarkName: _stringFromJson(json, const ['remark_name', 'room_remark']),
+      description:
+          _stringFromJson(json, const ['description', 'intro', 'bio']) ?? '',
+      notificationPolicy:
+          _stringFromJson(json, const ['notification_policy']) ?? 'all',
       avatarUrl: json['avatar_url'] as String?,
       defaultAvatarKey: json['default_avatar_key'] as String? ?? 'room-1',
       memberCount: json['member_count']! as int,
@@ -537,6 +548,12 @@ class RoomCard {
     );
   }
 
+  String get displayName {
+    final remark = _nonEmptyString(remarkName);
+    if (remark == null) return name;
+    return '$remark ($name)';
+  }
+
   /// Returns a copy with selected fields overridden. Used when merging a
   /// server-pushed public snapshot (room_updated) over an existing card: the
   /// snapshot carries no per-user fields, so the caller re-supplies the local
@@ -547,6 +564,9 @@ class RoomCard {
       name: name,
       rid: rid,
       visibility: visibility,
+      remarkName: remarkName,
+      description: description,
+      notificationPolicy: notificationPolicy,
       avatarUrl: avatarUrl,
       defaultAvatarKey: defaultAvatarKey,
       memberCount: memberCount,
@@ -629,6 +649,37 @@ class RoomMembership {
       role: json['role'] as String? ?? 'member',
     );
   }
+}
+
+class RoomPersonalProfile {
+  const RoomPersonalProfile({
+    this.displayName,
+    this.avatarUrl,
+    this.defaultAvatarKey,
+  });
+
+  final String? displayName;
+  final String? avatarUrl;
+  final String? defaultAvatarKey;
+
+  factory RoomPersonalProfile.fromJson(Map<String, Object?>? json) {
+    if (json == null) return const RoomPersonalProfile();
+    return RoomPersonalProfile(
+      displayName: _stringFromJson(json, const [
+        'display_name',
+        'room_display_name',
+        'room_username',
+        'room_nickname',
+      ]),
+      avatarUrl: _stringFromJson(json, const ['avatar_url']),
+      defaultAvatarKey: _stringFromJson(json, const ['default_avatar_key']),
+    );
+  }
+
+  bool get isEmpty =>
+      _nonEmptyString(displayName) == null &&
+      _nonEmptyString(avatarUrl) == null &&
+      _nonEmptyString(defaultAvatarKey) == null;
 }
 
 /// A pending request to join an approval-required room, as seen by an admin
@@ -793,23 +844,37 @@ class RoomDetail {
     required this.avatarUrl,
     required this.defaultAvatarKey,
     required this.memberCount,
-    required this.createdBy,
     required this.myMembership,
     required this.live,
     required this.createdAt,
     required this.updatedAt,
+    this.createdBy,
     this.rid = '',
     this.visibility = 'private',
+    this.description = '',
+    this.joinPolicy = 'approval_required',
+    this.remarkName,
+    this.notificationPolicy = 'all',
+    this.personalProfile = const RoomPersonalProfile(),
+    this.aiVoiceAnnouncementsEnabled = true,
+    this.canDeleteRoom,
   });
 
   final String id;
   final String name;
   final String rid;
   final String visibility;
+  final String description;
+  final String joinPolicy;
+  final String? remarkName;
+  final String notificationPolicy;
+  final RoomPersonalProfile personalProfile;
+  final bool aiVoiceAnnouncementsEnabled;
+  final bool? canDeleteRoom;
   final String? avatarUrl;
   final String defaultAvatarKey;
   final int memberCount;
-  final UserSummary createdBy;
+  final UserSummary? createdBy;
   final RoomMembership myMembership;
   final LiveState live;
   final DateTime createdAt;
@@ -821,12 +886,33 @@ class RoomDetail {
       name: json['name']! as String,
       rid: json['rid'] as String? ?? '',
       visibility: json['visibility'] as String? ?? 'private',
+      description:
+          _stringFromJson(json, const ['description', 'intro', 'bio']) ?? '',
+      joinPolicy: json['join_policy'] as String? ?? 'approval_required',
+      remarkName: _stringFromJson(json, const ['remark_name', 'room_remark']),
+      notificationPolicy:
+          _stringFromJson(json, const ['notification_policy']) ?? 'all',
+      personalProfile: RoomPersonalProfile.fromJson(
+        _nullableMap(json['personal_profile']) ??
+            _nullableMap(json['my_room_profile']) ??
+            _nullableMap(json['room_profile']),
+      ),
+      aiVoiceAnnouncementsEnabled:
+          _boolFromJson(json, const [
+            'ai_voice_announcements_enabled',
+            'ai_voice_auto_broadcast',
+          ]) ??
+          true,
+      canDeleteRoom: _boolFromJson(json, const [
+        'can_delete_room',
+        'can_delete',
+      ]),
       avatarUrl: json['avatar_url'] as String?,
       defaultAvatarKey: json['default_avatar_key'] as String? ?? 'room-1',
       memberCount: json['member_count']! as int,
-      createdBy: UserSummary.fromJson(
-        json['created_by']! as Map<String, Object?>,
-      ),
+      createdBy: _nullableMap(json['created_by']) == null
+          ? null
+          : UserSummary.fromJson(_nullableMap(json['created_by'])!),
       myMembership: RoomMembership.fromJson(
         json['my_membership']! as Map<String, Object?>,
       ),
@@ -838,10 +924,23 @@ class RoomDetail {
 
   /// Whether the current user can administer this room (review join requests,
   /// etc.). Mirrors the server's admin check: owner, admin, or superuser.
-  bool get isAdmin =>
-      myMembership.role == 'owner' ||
-      myMembership.role == 'admin' ||
-      myMembership.role == 'superuser';
+  bool get isAdmin {
+    final role = myMembership.role.toLowerCase();
+    return role == 'owner' ||
+        role == 'creator' ||
+        role == 'admin' ||
+        role == 'administrator' ||
+        role == 'superuser';
+  }
+
+  bool get isCreator {
+    final role = myMembership.role.toLowerCase();
+    return role == 'owner' || role == 'creator';
+  }
+
+  bool get isSuperuser => myMembership.role.toLowerCase() == 'superuser';
+
+  bool get canDelete => canDeleteRoom ?? (isCreator || isSuperuser);
 
   /// Returns a copy with the current user's membership role replaced. Used to
   /// apply a `room_role_changed` SSE event (promote/demote) without re-fetching
@@ -852,6 +951,13 @@ class RoomDetail {
       name: name,
       rid: rid,
       visibility: visibility,
+      description: description,
+      joinPolicy: joinPolicy,
+      remarkName: remarkName,
+      notificationPolicy: notificationPolicy,
+      personalProfile: personalProfile,
+      aiVoiceAnnouncementsEnabled: aiVoiceAnnouncementsEnabled,
+      canDeleteRoom: canDeleteRoom,
       avatarUrl: avatarUrl,
       defaultAvatarKey: defaultAvatarKey,
       memberCount: memberCount,
@@ -869,6 +975,9 @@ class RoomDetail {
       name: name,
       rid: rid,
       visibility: visibility,
+      remarkName: remarkName,
+      description: description,
+      notificationPolicy: notificationPolicy,
       avatarUrl: avatarUrl,
       defaultAvatarKey: defaultAvatarKey,
       memberCount: memberCount,
@@ -1143,6 +1252,12 @@ String? _stringFromJson(Map<String, Object?>? json, List<String> keys) {
     if (text != null && text.trim().isNotEmpty) return text;
   }
   return null;
+}
+
+String? _nonEmptyString(String? value) {
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty) return null;
+  return trimmed;
 }
 
 bool? _boolFromJson(Map<String, Object?>? json, List<String> keys) {
