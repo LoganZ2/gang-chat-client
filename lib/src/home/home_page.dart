@@ -7540,12 +7540,23 @@ class _RoomAvatarPicker extends StatelessWidget {
   static const _keys = [
     'room-1',
     'blue-3',
+    'sky-2',
+    'cyan-2',
     'mint-2',
+    'green-2',
+    'lime-2',
     'amber-2',
+    'orange-2',
     'coral-2',
+    'pink-2',
     'violet-2',
+    'indigo-2',
+    'rose-2',
     'teal-2',
+    'olive-2',
     'slate-2',
+    'steel-2',
+    'graphite-2',
   ];
 
   final String label;
@@ -7559,6 +7570,8 @@ class _RoomAvatarPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final uploadedSelected = avatarUrl != null;
+    final presetSelected = !uploadedSelected;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -7567,52 +7580,65 @@ class _RoomAvatarPicker extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _Avatar(
-              label: displayName,
-              imageUrl: avatarUrl,
-              defaultAvatarKey: defaultAvatarKey,
-              size: 64,
-              borderColor: _cyan,
-              borderWidth: 1.2,
+            SizedBox(
+              width: 100,
+              child: Center(
+                child: _Avatar(
+                  label: displayName,
+                  imageUrl: avatarUrl,
+                  defaultAvatarKey: defaultAvatarKey,
+                  size: 88,
+                  borderColor: _cyan,
+                  borderWidth: 1.2,
+                ),
+              ),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 16),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              child: Wrap(
+                spacing: 10,
+                runSpacing: 10,
                 children: [
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final key in _keys)
-                        _AvatarSwatch(
-                          keyName: key,
-                          selected: key == defaultAvatarKey,
-                          onPressed: () => onPresetChanged(key),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Button(
-                          onPressed: uploading ? null : onUpload,
-                          loading: uploading,
-                          icon: const Icon(Icons.upload_file),
-                          child: const Text('上传图片'),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      ButtonIcon(
-                        tooltip: '使用预设',
-                        onPressed: onUsePreset,
-                        icon: const Icon(Icons.auto_awesome_mosaic_outlined),
-                        size: 40,
-                      ),
-                    ],
-                  ),
+                  for (final key in _keys)
+                    _AvatarSwatch(
+                      keyName: key,
+                      selected: presetSelected && key == defaultAvatarKey,
+                      onPressed: () => onPresetChanged(key),
+                    ),
                 ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: Button(
+                onPressed: uploading ? null : onUpload,
+                loading: uploading,
+                icon: const Icon(Icons.upload_file),
+                tone: uploadedSelected
+                    ? ButtonTone.primary
+                    : ButtonTone.neutral,
+                selected: uploadedSelected,
+                height: 38,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                width: double.infinity,
+                child: const Text('上传图片'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Button(
+                onPressed: uploading ? null : onUsePreset,
+                icon: const Icon(Icons.restart_alt),
+                tone: presetSelected ? ButtonTone.primary : ButtonTone.neutral,
+                selected: presetSelected,
+                height: 38,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                width: double.infinity,
+                child: const Text('预设图标'),
               ),
             ),
           ],
@@ -7644,11 +7670,12 @@ class _AvatarSwatch extends StatelessWidget {
           height: 30,
           decoration: BoxDecoration(
             color: _avatarColor(keyName),
-            border: Border.all(color: selected ? _cyan : _borderColor),
+            border: Border.all(
+              color: selected ? _cyan : _borderColor,
+              width: selected ? 2 : 1,
+            ),
           ),
-          child: selected
-              ? const Icon(Icons.check, color: _textPrimary, size: 16)
-              : null,
+          child: const SizedBox.square(dimension: 30),
         ),
       ),
     );
