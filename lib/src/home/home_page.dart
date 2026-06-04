@@ -686,8 +686,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ? const []
             : _commonRoomsForProfile(profile, room),
         onOpenRoom: _openUserInfoRoom,
+        onCopyUid: (uid) => unawaited(_copyUserInfoUid(uid)),
       ),
     );
+  }
+
+  Future<void> _copyUserInfoUid(String uid) async {
+    try {
+      await Clipboard.setData(ClipboardData(text: uid));
+      if (!mounted) return;
+      _showToast('UID 已复制', kind: _ToastKind.success);
+    } catch (e) {
+      if (!mounted) return;
+      _showToast('无法复制 UID：$e');
+    }
   }
 
   UserSummary _profileForDialog(UserSummary user, RoomDetail room) {
@@ -5379,18 +5391,21 @@ class _UserInfoDialog extends StatelessWidget {
     required this.room,
     required this.commonRooms,
     required this.onOpenRoom,
+    required this.onCopyUid,
   });
 
   final UserSummary user;
   final RoomDetail room;
   final List<UserCommonRoom> commonRooms;
   final ValueChanged<String> onOpenRoom;
+  final ValueChanged<String> onCopyUid;
 
   @override
   Widget build(BuildContext context) {
     final appConfig = AppConfigScope.of(context);
     final roleLabel = _roomRoleLabel(user, room);
     final primaryName = _userInfoPrimaryName(user);
+    final uidValue = user.uid ?? user.id;
     return Dialog(
       backgroundColor: _primaryDarkRaised,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
@@ -5468,7 +5483,16 @@ class _UserInfoDialog extends StatelessWidget {
                 child: SingleChildScrollView(
                   child: Column(
                     children: [
-                      _UserInfoField(label: 'UID', value: user.uid ?? user.id),
+                      _UserInfoField(
+                        label: 'UID',
+                        value: uidValue,
+                        trailing: KeyIconButton(
+                          onPressed: () => onCopyUid(uidValue),
+                          icon: const Icon(Icons.copy),
+                          tooltip: '复制 UID',
+                          size: 30,
+                        ),
+                      ),
                       if (commonRooms.isNotEmpty)
                         _CommonRoomsSection(
                           rooms: commonRooms,
@@ -5624,10 +5648,15 @@ class _UserRoleBadge extends StatelessWidget {
 }
 
 class _UserInfoField extends StatelessWidget {
-  const _UserInfoField({required this.label, required this.value});
+  const _UserInfoField({
+    required this.label,
+    required this.value,
+    this.trailing,
+  });
 
   final String label;
   final String value;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -5666,6 +5695,7 @@ class _UserInfoField extends StatelessWidget {
                 ),
               ),
             ),
+            if (trailing != null) ...[const SizedBox(width: 8), trailing!],
           ],
         ),
       ),
@@ -5879,6 +5909,24 @@ class _JoinRoomDialogState extends State<_JoinRoomDialog> {
     }
   }
 
+  Future<void> _openJoined(PublicRoom room) async {
+    if (_busyRoomId != null) return;
+    setState(() {
+      _busyRoomId = room.id;
+      _error = null;
+    });
+    try {
+      final detail = await widget.api.getRoom(room.id);
+      if (!mounted) return;
+      Navigator.of(context).pop(detail);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busyRoomId = null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -5997,6 +6045,7 @@ class _JoinRoomDialogState extends State<_JoinRoomDialog> {
           pending: pending,
           busy: _busyRoomId == room.id,
           onJoin: () => _join(room),
+          onOpen: () => _openJoined(room),
         );
       },
     );
@@ -6009,24 +6058,27 @@ class _JoinRoomResultTile extends StatelessWidget {
     required this.pending,
     required this.busy,
     required this.onJoin,
+    required this.onOpen,
   });
 
   final PublicRoom room;
   final bool pending;
   final bool busy;
   final VoidCallback onJoin;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
     final approval = room.joinPolicy == 'approval_required';
     final label = room.joined
-        ? '已加入'
+        ? '进入'
         : pending
         ? '待审批'
         : approval
         ? '申请'
         : '加入';
-    final actionable = !room.joined && !pending;
+    final action = room.joined ? onOpen : onJoin;
+    final actionable = room.joined || !pending;
     return KeySurface(
       height: 64,
       backgroundColor: _primaryDarkLow,
@@ -6073,7 +6125,7 @@ class _JoinRoomResultTile extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           KeyButton(
-            onPressed: actionable && !busy ? onJoin : null,
+            onPressed: actionable && !busy ? action : null,
             loading: busy,
             tone: actionable ? KeyButtonTone.primary : KeyButtonTone.neutral,
             height: 34,
