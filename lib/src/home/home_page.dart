@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:io' show File, IOSink, Platform;
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 
+import 'package:archive/archive.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -33,6 +36,9 @@ const _textPrimary = Color(0xFFECEFF1);
 const _textSecondary = Color(0xFFB0B8C0);
 const _textMuted = Color(0xFF6F7785);
 const _danger = Color(0xFFE58383);
+const _stickerImageExtensions = {'png', 'jpg', 'jpeg', 'webp', 'gif'};
+const _maxStickerUploadsPerBatch = 500;
+const _maxStickerImageBytes = 25 * 1024 * 1024;
 
 enum _ToastKind { error, success }
 
@@ -6028,6 +6034,13 @@ class _RoomInfoDialogState extends State<_RoomInfoDialog> {
 
   Future<void> _leaveRoom() async {
     if (_saving || _leaving) return;
+    if (widget.currentUser.isSuperuser || widget.room.isSuperuser) {
+      setState(() {
+        _notice = '超级用户不是房间成员，无需退出房间';
+        _error = null;
+      });
+      return;
+    }
     final needsStrongConfirm =
         widget.room.isCreator && widget.room.memberCount <= 1;
     final confirmed = needsStrongConfirm
@@ -6112,6 +6125,8 @@ class _RoomInfoDialogState extends State<_RoomInfoDialog> {
   @override
   Widget build(BuildContext context) {
     final appConfig = AppConfigScope.of(context);
+    final canLeaveRoom =
+        !widget.currentUser.isSuperuser && !widget.room.isSuperuser;
     final resolvedProfileAvatar = _profileAvatarPreviewUrl(appConfig);
     final profileName = _usingGlobalProfile
         ? widget.currentUser.displayName
@@ -6244,21 +6259,23 @@ class _RoomInfoDialogState extends State<_RoomInfoDialog> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  _RoomSettingsGroup(
-                    title: '退出房间',
-                    danger: true,
-                    children: [
-                      Button(
-                        onPressed: _leaving || _saving ? null : _leaveRoom,
-                        loading: _leaving,
-                        tone: ButtonTone.danger,
-                        icon: const Icon(Icons.logout),
-                        width: double.infinity,
-                        child: const Text('退出房间'),
-                      ),
-                    ],
-                  ),
+                  if (canLeaveRoom) ...[
+                    const SizedBox(height: 16),
+                    _RoomSettingsGroup(
+                      title: '退出房间',
+                      danger: true,
+                      children: [
+                        Button(
+                          onPressed: _leaving || _saving ? null : _leaveRoom,
+                          loading: _leaving,
+                          tone: ButtonTone.danger,
+                          icon: const Icon(Icons.logout),
+                          width: double.infinity,
+                          child: const Text('退出房间'),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -6515,11 +6532,14 @@ class _RoomManagementDialogState extends State<_RoomManagementDialog> {
 
   Future<void> _transferCreator(RoomMember member) async {
     if (_busyMemberIds.contains(member.user.id)) return;
+    final body = widget.currentUser.isSuperuser
+        ? '创建者身份会转让给 ${_memberTileName(member)}，原创建者会自动降级为管理员。'
+        : '创建者身份会转让给 ${_memberTileName(member)}，你将成为管理员。';
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => _ConfirmActionDialog(
         title: '转让创建者',
-        body: '创建者身份会转让给 ${_memberTileName(member)}，你将成为管理员。',
+        body: body,
         confirmLabel: '转让',
         confirmIcon: Icons.swap_horiz,
       ),
@@ -6692,7 +6712,7 @@ class _RoomManagementDialogState extends State<_RoomManagementDialog> {
               label: '加入策略',
               value: _joinPolicy,
               options: const [
-                _RoomOption('approval_required', '管理员审核'),
+                _RoomOption('approval_required', '管理员审批'),
                 _RoomOption('open', '任何人加入'),
                 _RoomOption('closed', '不允许加入'),
               ],
@@ -6786,6 +6806,11 @@ class _RoomStickerManagerState extends State<_RoomStickerManager> {
   bool _uploading = false;
   bool _deleting = false;
   bool _savingOrder = false;
+  bool _downloading = false;
+  bool _managing = false;
+  String _filterKeyword = '';
+  String _filterMimeType = '';
+  List<String> _selectedStickerIds = <String>[];
   String? _error;
   String? _notice;
 
@@ -6795,12 +6820,43 @@ class _RoomStickerManagerState extends State<_RoomStickerManager> {
     _load();
   }
 
-  List<Sticker> get _stickers {
+  List<_RoomManagedSticker> get _allItems {
     return [
       for (final pack in _packs)
-        ...pack.stickers.toList()
-          ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder)),
+        for (final sticker in _orderedStickers(pack))
+          _RoomManagedSticker(pack: pack, sticker: sticker),
     ];
+  }
+
+  List<_RoomManagedSticker> get _filteredItems {
+    final keyword = _filterKeyword.trim().toLowerCase();
+    return _allItems.where((item) {
+      final sticker = item.sticker;
+      if (keyword.isNotEmpty && !sticker.name.toLowerCase().contains(keyword)) {
+        return false;
+      }
+      if (_filterMimeType.isNotEmpty &&
+          sticker.asset.mimeType != _filterMimeType) {
+        return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  bool get _filterActive =>
+      _filterKeyword.trim().isNotEmpty || _filterMimeType.isNotEmpty;
+
+  List<Sticker> _orderedStickers(StickerPack pack) {
+    final ordered = pack.stickers.toList()
+      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    return ordered;
+  }
+
+  Map<String, int> _selectionNumbers() {
+    return {
+      for (final entry in _selectedStickerIds.asMap().entries)
+        entry.value: entry.key + 1,
+    };
   }
 
   Future<void> _load() async {
@@ -6814,8 +6870,15 @@ class _RoomStickerManagerState extends State<_RoomStickerManager> {
         roomId: widget.roomId,
       );
       if (!mounted) return;
+      final stickerIds = {
+        for (final pack in packs)
+          for (final sticker in pack.stickers) sticker.id,
+      };
       setState(() {
         _packs = packs;
+        _selectedStickerIds = _selectedStickerIds
+            .where(stickerIds.contains)
+            .toList();
         _loading = false;
       });
     } catch (e) {
@@ -6846,8 +6909,8 @@ class _RoomStickerManagerState extends State<_RoomStickerManager> {
       files = await openFiles(
         acceptedTypeGroups: const [
           XTypeGroup(
-            label: 'Images',
-            extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'],
+            label: 'Images and ZIP',
+            extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'zip'],
           ),
         ],
       );
@@ -6862,27 +6925,40 @@ class _RoomStickerManagerState extends State<_RoomStickerManager> {
       _error = null;
       _notice = null;
     });
+    var uploadedCount = 0;
     try {
+      final uploadItems = await _stickerUploadItemsFromFiles(files);
+      if (uploadItems.isEmpty) {
+        throw StateError('没有找到可上传的图片');
+      }
       final pack = await _ensurePack();
+      final uploadedAssetIds = <String>[];
       var sortIndex = pack.stickers.length;
-      for (final file in files) {
+      for (final entry in uploadItems.asMap().entries) {
+        final item = entry.value;
         final asset = await widget.api.uploadImageAsset(
-          bytes: await file.readAsBytes(),
-          filename: _basename(file.name),
+          bytes: item.bytes,
+          filename: _stickerUploadFilename(item.filename, entry.key),
           purpose: 'sticker',
         );
+        uploadedAssetIds.add(asset.id);
         await widget.api.addSticker(
           packId: pack.id,
           assetId: asset.id,
-          name: _stickerNameFromFilename(file.name),
+          name: _stickerNameFromFilename(item.filename),
           sortOrder: (++sortIndex) * 10,
           scope: 'room',
           roomId: widget.roomId,
         );
+        uploadedCount += 1;
       }
       await _load();
+      await _pinUploadedStickerAssetsToFront(
+        packId: pack.id,
+        assetIds: uploadedAssetIds,
+      );
       if (!mounted) return;
-      setState(() => _notice = '已添加 ${files.length} 个房间表情');
+      setState(() => _notice = '已添加 $uploadedCount 个房间表情');
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e.toString());
@@ -6891,21 +6967,73 @@ class _RoomStickerManagerState extends State<_RoomStickerManager> {
     }
   }
 
-  Future<void> _delete(Sticker sticker) async {
-    if (_deleting) return;
-    final pack = _packForSticker(sticker.id);
+  Future<void> _pinUploadedStickerAssetsToFront({
+    required String packId,
+    required List<String> assetIds,
+  }) async {
+    if (assetIds.isEmpty) return;
+    final pack = _packById(packId);
     if (pack == null) return;
+
+    final stickersByAssetId = {
+      for (final sticker in pack.stickers) sticker.asset.id: sticker,
+    };
+    final uploadedStickerIds = <String>[];
+    for (final assetId in assetIds) {
+      final sticker = stickersByAssetId[assetId];
+      if (sticker != null) uploadedStickerIds.add(sticker.id);
+    }
+    if (uploadedStickerIds.isEmpty) return;
+
+    final uploadedStickerIdSet = uploadedStickerIds.toSet();
+    final currentOrder = _orderedStickers(
+      pack,
+    ).map((sticker) => sticker.id).toList();
+    final nextOrder = [
+      ...uploadedStickerIds,
+      for (final stickerId in currentOrder)
+        if (!uploadedStickerIdSet.contains(stickerId)) stickerId,
+    ];
+    if (_sameStringList(currentOrder, nextOrder)) return;
+
+    await widget.api.reorderStickers(packId: pack.id, stickerIds: nextOrder);
+    await _load();
+  }
+
+  StickerPack? _packById(String packId) {
+    for (final pack in _packs) {
+      if (pack.id == packId) return pack;
+    }
+    return null;
+  }
+
+  bool _sameStringList(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i += 1) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  Future<void> _delete(Sticker sticker) async {
+    final item = _itemForSticker(sticker.id);
+    if (item == null) return;
+    await _deleteItem(item);
+  }
+
+  Future<bool> _deleteItem(_RoomManagedSticker item) async {
+    if (_deleting) return false;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => _ConfirmActionDialog(
         title: '删除房间表情',
-        body: '将从这个房间的表情包中删除「${sticker.name}」。',
+        body: '将从这个房间的表情包中删除「${item.sticker.name}」。',
         confirmLabel: '删除',
         confirmIcon: Icons.delete_outline,
         danger: true,
       ),
     );
-    if (confirmed != true || !mounted) return;
+    if (confirmed != true || !mounted) return false;
     setState(() {
       _deleting = true;
       _error = null;
@@ -6913,17 +7041,19 @@ class _RoomStickerManagerState extends State<_RoomStickerManager> {
     });
     try {
       await widget.api.deleteSticker(
-        packId: pack.id,
-        stickerId: sticker.id,
+        packId: item.pack.id,
+        stickerId: item.sticker.id,
         scope: 'room',
         roomId: widget.roomId,
       );
       await _load();
-      if (!mounted) return;
+      if (!mounted) return false;
       setState(() => _notice = '房间表情已删除');
+      return true;
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) return false;
       setState(() => _error = e.toString());
+      return false;
     } finally {
       if (mounted) setState(() => _deleting = false);
     }
@@ -6946,17 +7076,27 @@ class _RoomStickerManagerState extends State<_RoomStickerManager> {
   }
 
   Future<void> _move(Sticker sticker, int delta) async {
-    if (_savingOrder) return;
-    final pack = _packForSticker(sticker.id);
-    if (pack == null) return;
-    final ordered = pack.stickers.toList()
-      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-    final from = ordered.indexWhere((item) => item.id == sticker.id);
-    if (from < 0) return;
-    final to = (from + delta).clamp(0, ordered.length - 1).toInt();
-    if (from == to) return;
-    final moving = ordered.removeAt(from);
-    ordered.insert(to, moving);
+    final item = _itemForSticker(sticker.id);
+    if (item == null) return;
+    await _moveItem(item, delta);
+  }
+
+  Future<_RoomStickerPlacement?> _moveItem(
+    _RoomManagedSticker item,
+    int delta,
+  ) async {
+    final placement = _placementForSticker(item.sticker.id);
+    if (_filterActive) return placement;
+    if (placement == null || _savingOrder) return placement;
+    final from = placement.index;
+    final to = (from + delta).clamp(0, placement.total - 1).toInt();
+    if (from == to) return placement;
+
+    final ids = _orderedStickers(
+      placement.item.pack,
+    ).map((sticker) => sticker.id).toList();
+    final moving = ids.removeAt(from);
+    ids.insert(to, moving);
     setState(() {
       _savingOrder = true;
       _error = null;
@@ -6964,26 +7104,74 @@ class _RoomStickerManagerState extends State<_RoomStickerManager> {
     });
     try {
       await widget.api.reorderStickers(
-        packId: pack.id,
-        stickerIds: ordered.map((item) => item.id).toList(),
+        packId: placement.item.pack.id,
+        stickerIds: ids,
       );
       await _load();
+      if (!mounted) return placement;
+      setState(() => _notice = delta < 0 ? '房间表情已上移一位' : '房间表情已下移一位');
+      return _placementForSticker(item.sticker.id);
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) return placement;
       setState(() => _error = e.toString());
+      return placement;
+    } finally {
+      if (mounted) setState(() => _savingOrder = false);
+    }
+  }
+
+  Future<_RoomStickerPlacement?> _pinItem(_RoomManagedSticker item) async {
+    final placement = _placementForSticker(item.sticker.id);
+    if (placement == null || placement.index == 0 || _savingOrder) {
+      return placement;
+    }
+
+    final ids = _orderedStickers(
+      placement.item.pack,
+    ).map((sticker) => sticker.id).toList();
+    final moving = ids.removeAt(placement.index);
+    ids.insert(0, moving);
+    setState(() {
+      _savingOrder = true;
+      _error = null;
+      _notice = null;
+    });
+    try {
+      await widget.api.reorderStickers(
+        packId: placement.item.pack.id,
+        stickerIds: ids,
+      );
+      await _load();
+      if (!mounted) return placement;
+      setState(() => _notice = '房间表情已置顶');
+      return _placementForSticker(item.sticker.id);
+    } catch (e) {
+      if (!mounted) return placement;
+      setState(() => _error = e.toString());
+      return placement;
     } finally {
       if (mounted) setState(() => _savingOrder = false);
     }
   }
 
   Future<void> _download(Sticker sticker) async {
+    await _downloadStickerIds([sticker.id]);
+  }
+
+  Future<void> _downloadStickerIds(List<String> stickerIds) async {
+    if (stickerIds.isEmpty || _downloading) return;
+    setState(() {
+      _downloading = true;
+      _error = null;
+      _notice = null;
+    });
     try {
-      final file = await widget.api.downloadStickers(stickerIds: [sticker.id]);
+      final file = await widget.api.downloadStickers(stickerIds: stickerIds);
       final location = await getSaveLocation(
         suggestedName: file.filename,
         acceptedTypeGroups: const [
           XTypeGroup(
-            label: 'Images',
+            label: 'Images and ZIP',
             extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'zip'],
           ),
         ],
@@ -6996,10 +7184,14 @@ class _RoomStickerManagerState extends State<_RoomStickerManager> {
         name: file.filename,
       ).saveTo(location.path);
       if (!mounted) return;
-      setState(() => _notice = '房间表情已下载');
+      setState(
+        () => _notice = stickerIds.length == 1 ? '房间表情已下载' : '房间表情压缩包已下载',
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _downloading = false);
     }
   }
 
@@ -7010,20 +7202,196 @@ class _RoomStickerManagerState extends State<_RoomStickerManager> {
     return null;
   }
 
+  _RoomManagedSticker? _itemForSticker(String stickerId) {
+    for (final item in _allItems) {
+      if (item.sticker.id == stickerId) return item;
+    }
+    return null;
+  }
+
+  _RoomStickerPlacement? _placementForSticker(String stickerId) {
+    for (final pack in _packs) {
+      final ordered = _orderedStickers(pack);
+      final index = ordered.indexWhere((sticker) => sticker.id == stickerId);
+      if (index < 0) continue;
+      return _RoomStickerPlacement(
+        item: _RoomManagedSticker(pack: pack, sticker: ordered[index]),
+        index: index,
+        total: ordered.length,
+      );
+    }
+    return null;
+  }
+
+  void _toggleManageMode() {
+    setState(() {
+      _managing = !_managing;
+      _selectedStickerIds = <String>[];
+    });
+  }
+
+  void _toggleSelection(String stickerId) {
+    if (!_managing) return;
+    setState(() {
+      final next = [..._selectedStickerIds];
+      if (next.contains(stickerId)) {
+        next.remove(stickerId);
+      } else {
+        next.add(stickerId);
+      }
+      _selectedStickerIds = next;
+    });
+  }
+
+  void _selectAllVisible(List<_RoomManagedSticker> items) {
+    if (items.isEmpty) return;
+    final visibleIds = items.map((item) => item.sticker.id).toList();
+    final visibleSet = visibleIds.toSet();
+    final selectedSet = _selectedStickerIds.toSet();
+    final allVisibleSelected =
+        selectedSet.length == visibleSet.length &&
+        selectedSet.containsAll(visibleSet);
+    setState(() {
+      _selectedStickerIds = allVisibleSelected
+          ? <String>[]
+          : visibleIds.reversed.toList();
+    });
+  }
+
+  Future<void> _deleteSelected() async {
+    final selectedIds = List<String>.from(_selectedStickerIds);
+    if (selectedIds.isEmpty || _deleting) return;
+    final byStickerId = {for (final item in _allItems) item.sticker.id: item};
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => _ConfirmActionDialog(
+        title: '删除房间表情',
+        body: '将从这个房间的表情包中删除选中的 ${selectedIds.length} 个表情。',
+        confirmLabel: '删除',
+        confirmIcon: Icons.delete_outline,
+        danger: true,
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _deleting = true;
+      _error = null;
+      _notice = null;
+    });
+    try {
+      var deletedCount = 0;
+      for (final stickerId in selectedIds) {
+        final item = byStickerId[stickerId];
+        if (item == null) continue;
+        await widget.api.deleteSticker(
+          packId: item.pack.id,
+          stickerId: stickerId,
+          scope: 'room',
+          roomId: widget.roomId,
+        );
+        deletedCount += 1;
+      }
+      await _load();
+      if (!mounted) return;
+      setState(() {
+        _selectedStickerIds = <String>[];
+        _notice = '已删除 $deletedCount 个房间表情';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
+  }
+
+  Future<void> _downloadSelected() async {
+    await _downloadStickerIds(List<String>.from(_selectedStickerIds));
+  }
+
+  Future<void> _pinSelected() async {
+    final selectedIds = List<String>.from(_selectedStickerIds);
+    if (selectedIds.isEmpty || _savingOrder) return;
+    final selectedSet = selectedIds.toSet();
+    final selectedByPack = <String, List<String>>{};
+    for (final stickerId in selectedIds) {
+      final item = _itemForSticker(stickerId);
+      if (item == null) continue;
+      selectedByPack.putIfAbsent(item.pack.id, () => <String>[]).add(stickerId);
+    }
+    if (selectedByPack.isEmpty) {
+      setState(() => _notice = '房间表情排序没有变化');
+      return;
+    }
+
+    setState(() {
+      _savingOrder = true;
+      _error = null;
+      _notice = null;
+    });
+    try {
+      for (final pack in _packs) {
+        final selectedInPack = selectedByPack[pack.id];
+        if (selectedInPack == null || selectedInPack.isEmpty) continue;
+        final remaining = _orderedStickers(
+          pack,
+        ).map((sticker) => sticker.id).where((id) => !selectedSet.contains(id));
+        await widget.api.reorderStickers(
+          packId: pack.id,
+          stickerIds: [...selectedInPack, ...remaining],
+        );
+      }
+      await _load();
+      if (!mounted) return;
+      setState(() => _notice = '已置顶 ${selectedIds.length} 个房间表情');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _savingOrder = false);
+    }
+  }
+
+  Future<void> _openFilter() async {
+    final value = await showDialog<_RoomStickerFilterValue>(
+      context: context,
+      builder: (context) => _RoomStickerFilterDialog(
+        keyword: _filterKeyword,
+        mimeType: _filterMimeType,
+      ),
+    );
+    if (value == null || !mounted) return;
+    setState(() {
+      _filterKeyword = value.keyword;
+      _filterMimeType = value.mimeType;
+      _selectedStickerIds = <String>[];
+    });
+  }
+
   void _preview(Sticker sticker) {
+    final item = _itemForSticker(sticker.id);
+    if (item == null) return;
     final imageUrl = AppConfigScope.of(
       context,
     ).resolveAssetUrl(sticker.asset.url);
     if (imageUrl == null) return;
+    final placement = _placementForSticker(sticker.id);
     showDialog<void>(
       context: context,
       builder: (context) => _RoomStickerPreviewDialog(
         sticker: sticker,
         imageUrl: imageUrl,
+        canMoveUp: !_filterActive && (placement?.canMoveUp ?? false),
+        canMoveDown: !_filterActive && (placement?.canMoveDown ?? false),
+        canPin: placement?.canPin ?? false,
         onRename: _rename,
         onDelete: _delete,
         onMoveUp: () => _move(sticker, -1),
         onMoveDown: () => _move(sticker, 1),
+        onPin: () async {
+          await _pinItem(item);
+        },
         onDownload: () => _download(sticker),
       ),
     );
@@ -7031,8 +7399,10 @@ class _RoomStickerManagerState extends State<_RoomStickerManager> {
 
   @override
   Widget build(BuildContext context) {
-    final stickers = _stickers;
-    final busy = _uploading || _deleting || _savingOrder;
+    final items = _filteredItems;
+    final totalCount = _allItems.length;
+    final selectionNumbers = _selectionNumbers();
+    final busy = _uploading || _deleting || _savingOrder || _downloading;
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 22),
       children: [
@@ -7047,7 +7417,7 @@ class _RoomStickerManagerState extends State<_RoomStickerManager> {
         _RoomSettingsGroup(
           title: '房间表情包',
           trailing: Text(
-            '${stickers.length} 个',
+            _filterActive ? '${items.length} / $totalCount 个' : '$totalCount 个',
             style: const TextStyle(
               color: _textMuted,
               fontSize: 12,
@@ -7055,55 +7425,95 @@ class _RoomStickerManagerState extends State<_RoomStickerManager> {
             ),
           ),
           children: [
-            Row(
+            _RoomStickerActionRow(
               children: [
-                Expanded(
-                  child: Button(
-                    onPressed: busy ? null : _upload,
-                    loading: _uploading,
-                    tone: ButtonTone.primary,
-                    icon: const Icon(Icons.upload_file),
-                    child: const Text('本地上传'),
+                Button(
+                  onPressed: busy
+                      ? null
+                      : _managing
+                      ? _deleteSelected
+                      : _upload,
+                  loading: _managing ? _deleting : _uploading,
+                  tone: _managing ? ButtonTone.danger : ButtonTone.primary,
+                  icon: Icon(
+                    _managing ? Icons.delete_outline : Icons.upload_file,
                   ),
+                  width: double.infinity,
+                  child: Text(_managing ? '删除' : '本地上传'),
                 ),
-                const SizedBox(width: 10),
-                ButtonIcon(
-                  tooltip: '刷新',
-                  onPressed: _loading ? null : _load,
-                  icon: const Icon(Icons.refresh),
-                  size: 40,
+                Button(
+                  onPressed: busy ? null : _toggleManageMode,
+                  selected: _managing,
+                  tone: _managing ? ButtonTone.primary : ButtonTone.neutral,
+                  icon: Icon(_managing ? Icons.close : Icons.checklist_rtl),
+                  width: double.infinity,
+                  child: Text(_managing ? '取消管理' : '批量管理'),
+                ),
+                Button(
+                  onPressed: busy ? null : _openFilter,
+                  selected: _filterActive,
+                  tone: _filterActive ? ButtonTone.primary : ButtonTone.neutral,
+                  icon: const Icon(Icons.filter_alt_outlined),
+                  width: double.infinity,
+                  child: const Text('筛选'),
                 ),
               ],
             ),
+            if (_managing) ...[
+              const SizedBox(height: 10),
+              _RoomStickerActionRow(
+                children: [
+                  Button(
+                    onPressed: busy || _selectedStickerIds.isEmpty
+                        ? null
+                        : _downloadSelected,
+                    loading: _downloading,
+                    icon: const Icon(Icons.download_outlined),
+                    width: double.infinity,
+                    child: const Text('下载'),
+                  ),
+                  Button(
+                    onPressed: busy || _selectedStickerIds.isEmpty
+                        ? null
+                        : _pinSelected,
+                    loading: _savingOrder,
+                    icon: const Icon(Icons.vertical_align_top),
+                    width: double.infinity,
+                    child: const Text('置顶'),
+                  ),
+                  Button(
+                    onPressed: busy || items.isEmpty
+                        ? null
+                        : () => _selectAllVisible(items),
+                    icon: const Icon(Icons.select_all),
+                    width: double.infinity,
+                    child: const Text('全选'),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 14),
-            if (_loading && stickers.isEmpty)
+            if (_loading && totalCount == 0)
               const SizedBox(
                 height: 160,
                 child: Center(child: CircularProgressIndicator(color: _cyan)),
               )
-            else if (stickers.isEmpty)
-              const _RoomEmptyState(text: '房间表情包为空，上传后只在本房间可用')
+            else if (totalCount == 0)
+              const _RoomEmptyState(text: '暂无表情，点击本地上传会自动创建')
+            else if (items.isEmpty)
+              const _RoomEmptyState(text: '没有匹配的房间表情')
             else
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: stickers.length,
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 120,
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: 10,
-                  childAspectRatio: 0.92,
-                ),
-                itemBuilder: (context, index) {
-                  final sticker = stickers[index];
-                  final imageUrl = AppConfigScope.of(
-                    context,
-                  ).resolveAssetUrl(sticker.asset.url);
-                  return _RoomStickerTile(
-                    sticker: sticker,
-                    imageUrl: imageUrl,
-                    onTap: () => _preview(sticker),
-                  );
+              _RoomStickerGrid(
+                items: items,
+                managing: _managing,
+                selectionNumbers: selectionNumbers,
+                busy: busy,
+                onTap: (item) {
+                  if (_managing) {
+                    _toggleSelection(item.sticker.id);
+                  } else {
+                    _preview(item.sticker);
+                  }
                 },
               ),
           ],
@@ -7515,20 +7925,27 @@ class _RoomSegmentedSetting extends StatelessWidget {
       children: [
         _RoomFieldLabel(label),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
+        Row(
           children: [
-            for (final option in options)
-              Button(
-                onPressed: () => onChanged(option.value),
-                selected: option.value == value,
-                tone: option.value == value
-                    ? ButtonTone.primary
-                    : ButtonTone.neutral,
-                height: 34,
-                child: Text(option.label),
+            for (final entry in options.asMap().entries) ...[
+              if (entry.key > 0) const SizedBox(width: 8),
+              Expanded(
+                child: Button(
+                  onPressed: () => onChanged(entry.value.value),
+                  selected: entry.value.value == value,
+                  tone: entry.value.value == value
+                      ? ButtonTone.primary
+                      : ButtonTone.neutral,
+                  height: 38,
+                  width: double.infinity,
+                  child: Text(
+                    entry.value.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ),
+            ],
           ],
         ),
       ],
@@ -7922,71 +8339,431 @@ class _RoomMemberPermissionTile extends StatelessWidget {
   }
 }
 
-class _RoomStickerTile extends StatelessWidget {
-  const _RoomStickerTile({
-    required this.sticker,
-    required this.imageUrl,
+class _RoomStickerActionRow extends StatelessWidget {
+  const _RoomStickerActionRow({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (final entry in children.asMap().entries) ...[
+          if (entry.key > 0) const SizedBox(width: 10),
+          Expanded(child: entry.value),
+        ],
+      ],
+    );
+  }
+}
+
+class _RoomManagedSticker {
+  const _RoomManagedSticker({required this.pack, required this.sticker});
+
+  final StickerPack pack;
+  final Sticker sticker;
+}
+
+class _RoomStickerPlacement {
+  const _RoomStickerPlacement({
+    required this.item,
+    required this.index,
+    required this.total,
+  });
+
+  final _RoomManagedSticker item;
+  final int index;
+  final int total;
+
+  bool get canMoveUp => index > 0;
+  bool get canMoveDown => index < total - 1;
+  bool get canPin => index > 0;
+}
+
+class _RoomStickerGrid extends StatelessWidget {
+  const _RoomStickerGrid({
+    required this.items,
+    required this.managing,
+    required this.selectionNumbers,
+    required this.busy,
     required this.onTap,
   });
 
-  final Sticker sticker;
-  final String? imageUrl;
+  final List<_RoomManagedSticker> items;
+  final bool managing;
+  final Map<String, int> selectionNumbers;
+  final bool busy;
+  final ValueChanged<_RoomManagedSticker> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : 360.0;
+        final columns = (width / 92).floor().clamp(3, 9);
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: items.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 1,
+          ),
+          itemBuilder: (context, index) {
+            final item = items[index];
+            return _RoomStickerTile(
+              item: item,
+              managing: managing,
+              selectionNumber: selectionNumbers[item.sticker.id],
+              busy: busy,
+              onTap: () => onTap(item),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _RoomStickerTile extends StatelessWidget {
+  const _RoomStickerTile({
+    required this.item,
+    required this.managing,
+    required this.selectionNumber,
+    required this.busy,
+    required this.onTap,
+  });
+
+  final _RoomManagedSticker item;
+  final bool managing;
+  final int? selectionNumber;
+  final bool busy;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return PressableSurface(
-      onPressed: onTap,
-      height: 110,
-      backgroundColor: _primaryDark,
-      borderColor: _borderColor,
-      padding: const EdgeInsets.all(8),
-      child: Column(
-        children: [
-          Expanded(
-            child: imageUrl == null
-                ? const Icon(Icons.broken_image_outlined, color: _textMuted)
-                : Image.network(
-                    imageUrl!,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) =>
-                        const Icon(Icons.broken_image_outlined),
+    final selected = selectionNumber != null;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tileHeight = constraints.maxHeight.isFinite
+            ? math.max(54.0, constraints.maxHeight - 6)
+            : 86.0;
+        return Tooltip(
+          message: item.sticker.name,
+          child: PressableSurface(
+            onPressed: busy ? null : onTap,
+            selected: selected,
+            height: tileHeight,
+            padding: const EdgeInsets.all(7),
+            backgroundColor: _primaryDark,
+            selectedBackgroundColor: _selectedSurface,
+            pressedBackgroundColor: _primaryDarkLow,
+            borderColor: selected ? _cyan : _borderColor,
+            selectedBorderColor: _cyan,
+            hoverLift: 2,
+            baseDepth: 4,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Center(
+                  child: _RoomStickerThumbnail(
+                    sticker: item.sticker,
+                    size: math.min(62, tileHeight - 18),
                   ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            sticker.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: _textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
+                ),
+                if (managing && selected)
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.24),
+                      ),
+                      child: Align(
+                        alignment: Alignment.topRight,
+                        child: Container(
+                          margin: const EdgeInsets.all(5),
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: _cyan,
+                            border: Border.all(color: _primaryDark, width: 2),
+                          ),
+                          child: Center(
+                            child: Text(
+                              '$selectionNumber',
+                              maxLines: 1,
+                              overflow: TextOverflow.clip,
+                              style: const TextStyle(
+                                color: _primaryDark,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
-        ],
+        );
+      },
+    );
+  }
+}
+
+class _RoomStickerThumbnail extends StatelessWidget {
+  const _RoomStickerThumbnail({required this.sticker, required this.size});
+
+  final Sticker sticker;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final asset = sticker.asset;
+    final imageUrl = AppConfigScope.of(
+      context,
+    ).resolveAssetUrl(asset.thumbnailUrl ?? asset.url);
+    final fallback = ColoredBox(
+      color: _primaryDarkLow,
+      child: Center(
+        child: Icon(
+          Icons.image_not_supported_outlined,
+          color: _textMuted,
+          size: size * 0.38,
+        ),
+      ),
+    );
+    return SizedBox.square(
+      dimension: size,
+      child: DecoratedBox(
+        decoration: BoxDecoration(border: Border.all(color: _borderColor)),
+        child: ClipRect(
+          child: imageUrl == null
+              ? fallback
+              : Image.network(
+                  imageUrl,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => fallback,
+                ),
+        ),
       ),
     );
   }
+}
+
+class _RoomStickerFilterValue {
+  const _RoomStickerFilterValue({
+    required this.keyword,
+    required this.mimeType,
+  });
+
+  final String keyword;
+  final String mimeType;
+}
+
+class _RoomStickerFilterDialog extends StatefulWidget {
+  const _RoomStickerFilterDialog({
+    required this.keyword,
+    required this.mimeType,
+  });
+
+  final String keyword;
+  final String mimeType;
+
+  @override
+  State<_RoomStickerFilterDialog> createState() =>
+      _RoomStickerFilterDialogState();
+}
+
+class _RoomStickerFilterDialogState extends State<_RoomStickerFilterDialog> {
+  late final TextEditingController _keywordController;
+  late String _mimeType;
+
+  static const _filters = [
+    _RoomStickerMimeFilter('', '全部'),
+    _RoomStickerMimeFilter('image/png', 'PNG'),
+    _RoomStickerMimeFilter('image/jpeg', 'JPG'),
+    _RoomStickerMimeFilter('image/webp', 'WebP'),
+    _RoomStickerMimeFilter('image/gif', 'GIF'),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _keywordController = TextEditingController(text: widget.keyword);
+    _mimeType = widget.mimeType;
+  }
+
+  @override
+  void dispose() {
+    _keywordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: _primaryDarkLow,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.zero,
+        side: BorderSide(color: _borderColor),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                '筛选',
+                style: TextStyle(
+                  color: _textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _keywordController,
+                autofocus: true,
+                cursorColor: _textSecondary,
+                style: const TextStyle(
+                  color: _textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  labelText: '名称关键字',
+                ),
+              ),
+              const SizedBox(height: 16),
+              const _RoomFieldLabel('图片类型'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final filter in _filters)
+                    SizedBox(
+                      width: 72,
+                      child: PressableSurface(
+                        onPressed: () =>
+                            setState(() => _mimeType = filter.mimeType),
+                        selected: _mimeType == filter.mimeType,
+                        height: 36,
+                        padding: EdgeInsets.zero,
+                        backgroundColor: _primaryDark,
+                        selectedBackgroundColor: _selectedSurface,
+                        pressedBackgroundColor: _primaryDarkLow,
+                        borderColor: _mimeType == filter.mimeType
+                            ? _cyan
+                            : _borderColor,
+                        selectedBorderColor: _cyan,
+                        child: Center(
+                          child: Text(
+                            filter.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: _mimeType == filter.mimeType
+                                  ? _cyan
+                                  : _textSecondary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: Button(
+                      onPressed: () {
+                        _keywordController.clear();
+                        setState(() => _mimeType = '');
+                      },
+                      width: double.infinity,
+                      icon: const Icon(Icons.restart_alt),
+                      child: const Text('重置'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Button(
+                      onPressed: () => Navigator.of(context).pop(),
+                      width: double.infinity,
+                      child: const Text('取消'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Button(
+                      onPressed: () => Navigator.of(context).pop(
+                        _RoomStickerFilterValue(
+                          keyword: _keywordController.text.trim(),
+                          mimeType: _mimeType,
+                        ),
+                      ),
+                      width: double.infinity,
+                      tone: ButtonTone.primary,
+                      icon: const Icon(Icons.check),
+                      child: const Text('确认'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RoomStickerMimeFilter {
+  const _RoomStickerMimeFilter(this.mimeType, this.label);
+
+  final String mimeType;
+  final String label;
 }
 
 class _RoomStickerPreviewDialog extends StatefulWidget {
   const _RoomStickerPreviewDialog({
     required this.sticker,
     required this.imageUrl,
+    required this.canMoveUp,
+    required this.canMoveDown,
+    required this.canPin,
     required this.onRename,
     required this.onDelete,
     required this.onMoveUp,
     required this.onMoveDown,
+    required this.onPin,
     required this.onDownload,
   });
 
   final Sticker sticker;
   final String imageUrl;
+  final bool canMoveUp;
+  final bool canMoveDown;
+  final bool canPin;
   final Future<void> Function(Sticker sticker, String name) onRename;
   final Future<void> Function(Sticker sticker) onDelete;
   final Future<void> Function() onMoveUp;
   final Future<void> Function() onMoveDown;
+  final Future<void> Function() onPin;
   final Future<void> Function() onDownload;
 
   @override
@@ -8096,14 +8873,25 @@ class _RoomStickerPreviewDialogState extends State<_RoomStickerPreviewDialog> {
                     child: const Text('重命名'),
                   ),
                   Button(
-                    onPressed: _busy ? null : () => _run(widget.onMoveUp),
+                    onPressed: _busy || !widget.canMoveUp
+                        ? null
+                        : () => _run(widget.onMoveUp),
                     icon: const Icon(Icons.keyboard_arrow_up),
                     child: const Text('上移'),
                   ),
                   Button(
-                    onPressed: _busy ? null : () => _run(widget.onMoveDown),
+                    onPressed: _busy || !widget.canMoveDown
+                        ? null
+                        : () => _run(widget.onMoveDown),
                     icon: const Icon(Icons.keyboard_arrow_down),
                     child: const Text('下移'),
+                  ),
+                  Button(
+                    onPressed: _busy || !widget.canPin
+                        ? null
+                        : () => _run(widget.onPin),
+                    icon: const Icon(Icons.vertical_align_top),
+                    child: const Text('置顶'),
                   ),
                   Button(
                     onPressed: _busy ? null : () => _run(widget.onDownload),
@@ -10708,7 +11496,7 @@ String _commonRoomTitle(UserCommonRoom room) {
 String _visibilityLabel(String value) {
   return switch (value.toLowerCase()) {
     'public' => '公开',
-    _ => '私有',
+    _ => '私密',
   };
 }
 
@@ -10766,12 +11554,133 @@ String _normalizedJoinPolicy(String value) {
   };
 }
 
+class _StickerUploadItem {
+  const _StickerUploadItem({required this.filename, required this.bytes});
+
+  final String filename;
+  final Uint8List bytes;
+}
+
+class _ImageDimensions {
+  const _ImageDimensions({required this.width, required this.height});
+
+  final int width;
+  final int height;
+
+  @override
+  String toString() => '${width}x$height';
+}
+
+Future<List<_StickerUploadItem>> _stickerUploadItemsFromFiles(
+  List<XFile> files,
+) async {
+  final items = <_StickerUploadItem>[];
+  for (final file in files) {
+    final filename = _basename(file.name);
+    if (_isZipFilename(filename)) {
+      items.addAll(await _stickerUploadItemsFromZip(file));
+    } else if (_isStickerImageFilename(filename)) {
+      items.add(
+        await _stickerUploadItemFromBytes(filename, await file.readAsBytes()),
+      );
+    }
+    if (items.length > _maxStickerUploadsPerBatch) {
+      throw StateError('一次最多上传 $_maxStickerUploadsPerBatch 个表情');
+    }
+  }
+  return items;
+}
+
+Future<List<_StickerUploadItem>> _stickerUploadItemsFromZip(XFile file) async {
+  final bytes = await file.readAsBytes();
+  if (bytes.isEmpty) throw StateError('${file.name} 文件为空');
+
+  final archive = ZipDecoder().decodeBytes(bytes);
+  final items = <_StickerUploadItem>[];
+  for (final entry in archive.files) {
+    final entryName = entry.name;
+    if (!entry.isFile ||
+        _isIgnoredZipEntry(entryName) ||
+        !_isStickerImageFilename(entryName)) {
+      continue;
+    }
+    if (entry.size > _maxStickerImageBytes) {
+      throw StateError('${_basename(entryName)} 超过 25MB');
+    }
+    final content = entry.readBytes();
+    if (content == null) continue;
+    items.add(await _stickerUploadItemFromBytes(_basename(entryName), content));
+    if (items.length > _maxStickerUploadsPerBatch) {
+      throw StateError('一次最多上传 $_maxStickerUploadsPerBatch 个表情');
+    }
+  }
+  return items;
+}
+
+Future<_StickerUploadItem> _stickerUploadItemFromBytes(
+  String filename,
+  Uint8List bytes,
+) async {
+  if (bytes.isEmpty) throw StateError('$filename 文件为空');
+  if (bytes.length > _maxStickerImageBytes) {
+    throw StateError('$filename 超过 25MB');
+  }
+  try {
+    await _decodeImageDimensions(bytes);
+  } catch (_) {
+    throw StateError('$filename 不是可识别的图片');
+  }
+  return _StickerUploadItem(filename: filename, bytes: bytes);
+}
+
+Future<_ImageDimensions> _decodeImageDimensions(Uint8List bytes) async {
+  ui.Codec? codec;
+  ui.FrameInfo? frame;
+  try {
+    codec = await ui.instantiateImageCodec(bytes);
+    frame = await codec.getNextFrame();
+    return _ImageDimensions(
+      width: frame.image.width,
+      height: frame.image.height,
+    );
+  } finally {
+    frame?.image.dispose();
+    codec?.dispose();
+  }
+}
+
+bool _isStickerImageFilename(String filename) {
+  return _stickerImageExtensions.contains(_extensionOf(filename));
+}
+
+bool _isZipFilename(String filename) => _extensionOf(filename) == 'zip';
+
+bool _isIgnoredZipEntry(String name) {
+  final normalized = name.replaceAll('\\', '/');
+  final parts = normalized.split('/').where((part) => part.isNotEmpty);
+  if (parts.any((part) => part == '__MACOSX')) return true;
+  return _basename(normalized).startsWith('.');
+}
+
+String _stickerUploadFilename(String originalName, int index) {
+  final cleaned = originalName
+      .trim()
+      .replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '-')
+      .replaceAll(RegExp(r'-+'), '-');
+  final extensionMatch = RegExp(r'\.([A-Za-z0-9]+)$').firstMatch(cleaned);
+  final extension = extensionMatch == null
+      ? 'png'
+      : extensionMatch.group(1)!.toLowerCase();
+  final stem = cleaned.replaceFirst(RegExp(r'\.[A-Za-z0-9]+$'), '');
+  final safeStem = stem.isEmpty ? 'sticker' : stem;
+  return '$safeStem-${DateTime.now().millisecondsSinceEpoch}-$index.$extension';
+}
+
 String _stickerNameFromFilename(String filename) {
-  final base = _basename(filename);
-  final dot = base.lastIndexOf('.');
-  final withoutExtension = dot <= 0 ? base : base.substring(0, dot);
-  final trimmed = withoutExtension.trim();
-  return trimmed.isEmpty ? 'sticker' : trimmed;
+  final stem = filename.trim().replaceFirst(RegExp(r'\.[^.]+$'), '').trim();
+  if (stem.isEmpty) return 'sticker';
+  final chars = stem.characters.take(32).toList().join();
+  return chars.isEmpty ? 'sticker' : chars;
 }
 
 String _formatMessageTime(DateTime value) {
