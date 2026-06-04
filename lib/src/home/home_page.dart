@@ -20,13 +20,11 @@ import '../protocol/models.dart';
 import '../protocol/sticker_pack_store.dart';
 import '../settings/audio_device_store.dart';
 import '../settings/settings_page.dart';
-import '../ui/key_button.dart';
-import '../ui/title_bar.dart';
+import '../ui/ui.dart';
 
 const _primaryDark = Color(0xFF14171D);
 const _primaryDarkRaised = Color(0xFF1F232C);
 const _primaryDarkLow = Color(0xFF181C24);
-const _bubbleBackground = Color(0xFF12161D);
 const _selectedSurface = Color(0xFF1F2D27);
 const _borderColor = Color(0xFF2A2F38);
 const _cyan = Color(0xFF6FCFA6);
@@ -2034,11 +2032,11 @@ class _RoomListPane extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(
-                    child: KeyButton(
+                    child: Button(
                       width: double.infinity,
                       onPressed: onCreateRoom,
                       icon: const Icon(Icons.add),
-                      tone: KeyButtonTone.primary,
+                      tone: ButtonTone.primary,
                       child: const Text('创建房间'),
                     ),
                   ),
@@ -2046,7 +2044,7 @@ class _RoomListPane extends StatelessWidget {
                   Expanded(
                     child: _BadgeAnchor(
                       show: hasPendingRoomInvites,
-                      child: KeyButton(
+                      child: Button(
                         width: double.infinity,
                         onPressed: onJoinRoom,
                         icon: const Icon(Icons.group_add),
@@ -2156,7 +2154,7 @@ class _SidebarIconButton extends StatelessWidget {
     const size = 36.0;
     return SizedBox(
       width: size,
-      child: KeySurface(
+      child: PressableSurface(
         tooltip: tooltip,
         onPressed: onPressed,
         selected: selected,
@@ -2258,7 +2256,7 @@ class _ExpandedRoomTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final liveActive = room.liveParticipantCount > 0;
-    return KeySurface(
+    return PressableSurface(
       height: 112,
       margin: const EdgeInsets.only(bottom: 2),
       interactive: true,
@@ -2507,7 +2505,7 @@ class _LiveHeader extends StatelessWidget {
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 430;
         final tight = constraints.maxWidth < 300;
-        return KeySurface(
+        return PressableSurface(
           height: 72,
           onPressed: onExpand,
           backgroundColor: _primaryDarkRaised,
@@ -2519,7 +2517,7 @@ class _LiveHeader extends StatelessWidget {
             windowControlsWidth,
             titleBarHeight - windowDragHeight,
           ),
-          cutCorner: KeyCorner.topRight,
+          cutCorner: SurfaceCorner.topRight,
           // Drop the whole header surface down so the top band stays free to
           // grab-and-drag the window, and inset its right edge so its right
           // shadow shows and the notch lines up with the inset buttons.
@@ -2571,7 +2569,7 @@ class _LiveHeader extends StatelessWidget {
                 offset: const Offset(0, 2),
                 child: _BadgeAnchor(
                   show: showMemberRequestBadge,
-                  child: KeyIconButton(
+                  child: ButtonIcon(
                     tooltip: '成员列表',
                     onPressed: onOpenMembers,
                     icon: const Icon(Icons.groups_2_outlined),
@@ -2620,7 +2618,7 @@ class _LiveHeaderActions extends StatelessWidget {
   Widget build(BuildContext context) {
     final Widget joinControl = !joined
         ? (compactButton
-              ? KeyIconButton(
+              ? ButtonIcon(
                   tooltip: 'Join live',
                   onPressed: onJoin,
                   loading: joining,
@@ -2633,10 +2631,10 @@ class _LiveHeaderActions extends StatelessWidget {
                           ),
                         )
                       : const Icon(Icons.call),
-                  tone: KeyButtonTone.primary,
+                  tone: ButtonTone.primary,
                   size: 36,
                 )
-              : KeyButton(
+              : Button(
                   onPressed: onJoin,
                   loading: joining,
                   width: double.infinity,
@@ -2649,7 +2647,7 @@ class _LiveHeaderActions extends StatelessWidget {
                           ),
                         )
                       : const Icon(Icons.call),
-                  tone: KeyButtonTone.primary,
+                  tone: ButtonTone.primary,
                   height: 38,
                   child: const Text('Join'),
                 ))
@@ -3043,53 +3041,61 @@ class _ChatPaneState extends State<_ChatPane> {
     final panel = _openPanel;
     if (panel == null) return const SizedBox.shrink();
 
-    return _ComposerPanelSurface(
-      panel: panel,
-      tipColor: panel == _ComposerPanel.stickers
-          ? (_stickerSource == _StickerSource.personal
-                ? _selectedSurface
-                : _bubbleBackground)
-          : null,
-      child: switch (panel) {
-        _ComposerPanel.stickers => _StickerPanel(
-          source: _stickerSource,
-          personalPacks: _personalStickerPacks,
-          roomPacks: _roomStickerPacks,
-          loading: _loadingStickerPacks,
-          error: _stickerPackError,
-          onRefresh: () => _loadStickerPacks(forceReload: true),
-          onSourceChanged: (source) => setState(() => _stickerSource = source),
-          onStickerSelected: (sticker) {
-            _closePanel();
-            unawaited(widget.onStickerSend(sticker));
-          },
-        ),
-        _ComposerPanel.voice => const _PlaceholderPanel(text: '语音输入开发中'),
-        _ComposerPanel.file => const _PlaceholderPanel(text: '文件上传开发中'),
-        _ComposerPanel.tools => const _ToolboxPanel(),
-      },
-    );
+    return switch (panel) {
+      _ComposerPanel.stickers => _StickerPanel(
+        source: _stickerSource,
+        personalPacks: _personalStickerPacks,
+        roomPacks: _roomStickerPacks,
+        loading: _loadingStickerPacks,
+        error: _stickerPackError,
+        onRefresh: () => _loadStickerPacks(forceReload: true),
+        onSourceChanged: (source) => setState(() => _stickerSource = source),
+        onStickerSelected: (sticker) {
+          _closePanel();
+          unawaited(widget.onStickerSend(sticker));
+        },
+      ),
+      _ComposerPanel.voice => const _PlaceholderPanel(text: '语音输入开发中'),
+      _ComposerPanel.file => const _PlaceholderPanel(text: '文件上传开发中'),
+      _ComposerPanel.tools => const _ToolboxPanel(),
+    };
   }
 
   Widget _buildPanelOverlay() {
     return Positioned(
-      left: 0,
-      right: 0,
-      bottom: _composerInputHeight,
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: TapRegion(
-          groupId: _composerTapRegionGroup,
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 140),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            child: KeyedSubtree(
-              key: ValueKey(_openPanel),
-              child: _buildPanel(),
+      left: 18,
+      right: 18,
+      bottom: _composerInputHeight + 6,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth < 360.0
+              ? constraints.maxWidth
+              : 360.0;
+          return Align(
+            alignment: Alignment.bottomRight,
+            child: SizedBox(
+              width: width,
+              child: TapRegion(
+                groupId: _composerTapRegionGroup,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 140),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  layoutBuilder: (currentChild, previousChildren) {
+                    return Stack(
+                      alignment: Alignment.bottomRight,
+                      children: [...previousChildren, ?currentChild],
+                    );
+                  },
+                  child: KeyedSubtree(
+                    key: ValueKey(_openPanel),
+                    child: _buildPanel(),
+                  ),
+                ),
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -3210,40 +3216,37 @@ class _ComposerActionBar extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _ComposerIconButton(
+        ButtonIcon(
           tooltip: '表情包',
           onPressed: onStickers,
           selected: openPanel == _ComposerPanel.stickers,
           icon: const Icon(Icons.emoji_emotions_outlined),
         ),
         const SizedBox(width: 8),
-        _ComposerIconButton(
+        ButtonIcon(
           tooltip: '语音',
           onPressed: onVoice,
-          interactive: true,
-          selected: false,
           icon: const Icon(Icons.mic_none),
         ),
         const SizedBox(width: 8),
-        _ComposerIconButton(
+        ButtonIcon(
           tooltip: '文件上传',
           onPressed: onFile,
-          selected: false,
           icon: const Icon(Icons.attach_file),
         ),
         const SizedBox(width: 8),
-        _ComposerIconButton(
+        ButtonIcon(
           tooltip: '工具箱',
           onPressed: onTools,
           selected: openPanel == _ComposerPanel.tools,
           icon: const Icon(Icons.extension_outlined),
         ),
         const SizedBox(width: 8),
-        KeyIconButton(
+        ButtonIcon(
           tooltip: '发送',
           onPressed: sending ? null : onSend,
           loading: sending,
-          tone: KeyButtonTone.primary,
+          tone: ButtonTone.primary,
           icon: sending
               ? const SizedBox.square(
                   dimension: 18,
@@ -3256,142 +3259,6 @@ class _ComposerActionBar extends StatelessWidget {
           size: 44,
         ),
       ],
-    );
-  }
-}
-
-class _ComposerIconButton extends StatelessWidget {
-  const _ComposerIconButton({
-    required this.tooltip,
-    required this.onPressed,
-    required this.icon,
-    required this.selected,
-    this.interactive = false,
-  });
-
-  final String tooltip;
-  final VoidCallback? onPressed;
-  final Widget icon;
-  final bool selected;
-  final bool interactive;
-
-  @override
-  Widget build(BuildContext context) {
-    const size = 40.0;
-
-    return SizedBox(
-      width: size,
-      child: KeySurface(
-        tooltip: tooltip,
-        onPressed: onPressed,
-        interactive: interactive,
-        selected: selected,
-        height: size,
-        padding: EdgeInsets.zero,
-        backgroundColor: _primaryDarkRaised,
-        selectedBackgroundColor: _selectedSurface,
-        pressedBackgroundColor: _selectedSurface,
-        borderColor: _primaryDarkRaised,
-        selectedBorderColor: _cyan,
-        child: IconTheme.merge(
-          data: IconThemeData(color: selected ? _cyan : _textPrimary, size: 20),
-          child: Center(child: icon),
-        ),
-      ),
-    );
-  }
-}
-
-class _ComposerPanelSurface extends StatelessWidget {
-  const _ComposerPanelSurface({
-    required this.panel,
-    required this.child,
-    this.tipColor,
-  });
-
-  final _ComposerPanel panel;
-  final Widget child;
-  final Color? tipColor;
-
-  static const double _tipWidth = 18;
-  static const double _tipHeight = 10;
-  static const double _tipOverlap = 1;
-  static const double _tipBottomClearance = 4;
-  static const double _surfaceYOffset = 2;
-  static const double _tipSideInset = 12;
-  static const double _horizontalInset = 18;
-  static const double _bubbleWidth = 360;
-
-  // Distance from the right edge of the action bar (== bubble's right edge)
-  // to the center of each composer button. Keep in sync with
-  // _ComposerActionBar's layout: send(44) | gap(8) | tools(40) | gap(8) |
-  // file(40) | gap(8) | voice(40) | gap(8) | stickers(40).
-  static const Map<_ComposerPanel, double> _buttonCenterFromRight = {
-    _ComposerPanel.tools: 72,
-    _ComposerPanel.file: 120,
-    _ComposerPanel.voice: 168,
-    _ComposerPanel.stickers: 216,
-  };
-
-  double _tipRightPadding(double bubbleWidth) {
-    final targetCenterFromRight = _buttonCenterFromRight[panel]!;
-    final raw = targetCenterFromRight - (_tipWidth / 2);
-    final availableMax = bubbleWidth - _tipWidth - _tipSideInset;
-    final maxPadding = availableMax < _tipSideInset
-        ? _tipSideInset
-        : availableMax;
-    return raw.clamp(_tipSideInset, maxPadding).toDouble();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Transform.translate(
-      offset: const Offset(0, _surfaceYOffset),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          _horizontalInset,
-          0,
-          _horizontalInset,
-          _tipHeight + _surfaceYOffset + _tipBottomClearance,
-        ),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final maxBubbleWidth = constraints.maxWidth.isFinite
-                ? constraints.maxWidth
-                : _bubbleWidth;
-            final bubbleWidth = maxBubbleWidth < _bubbleWidth
-                ? maxBubbleWidth
-                : _bubbleWidth;
-            return SizedBox(
-              width: bubbleWidth,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: _bubbleBackground,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                  child,
-                  Positioned(
-                    right: _tipRightPadding(bubbleWidth),
-                    bottom: -(_tipHeight - _tipOverlap),
-                    child: CustomPaint(
-                      size: const Size(_tipWidth, _tipHeight),
-                      painter: _BubbleTipPainter(
-                        color: tipColor ?? _bubbleBackground,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-      ),
     );
   }
 }
@@ -3430,12 +3297,17 @@ class _StickerPanel extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
           child: _buildBody(stickers),
         ),
-        _SourceSwitch(
-          firstLabel: '个人表情包',
-          secondLabel: '房间表情包',
-          firstSelected: source == _StickerSource.personal,
-          onFirst: () => onSourceChanged(_StickerSource.personal),
-          onSecond: () => onSourceChanged(_StickerSource.room),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
+          child: SegmentedControl<_StickerSource>(
+            value: source,
+            expanded: true,
+            onChanged: onSourceChanged,
+            segments: const [
+              Segment(value: _StickerSource.personal, label: '个人表情包'),
+              Segment(value: _StickerSource.room, label: '房间表情包'),
+            ],
+          ),
         ),
       ],
     );
@@ -3473,27 +3345,6 @@ class _StickerPanel extends StatelessWidget {
           ),
       ],
     );
-  }
-}
-
-class _BubbleTipPainter extends CustomPainter {
-  const _BubbleTipPainter({required this.color});
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final fillPath = Path()
-      ..moveTo(0, 0)
-      ..lineTo(size.width, 0)
-      ..lineTo(size.width / 2, size.height)
-      ..close();
-    canvas.drawPath(fillPath, Paint()..color = color);
-  }
-
-  @override
-  bool shouldRepaint(_BubbleTipPainter oldDelegate) {
-    return oldDelegate.color != color;
   }
 }
 
@@ -3591,92 +3442,6 @@ class _ToolboxItem {
   final Color foregroundColor;
 }
 
-class _SourceSwitch extends StatelessWidget {
-  const _SourceSwitch({
-    required this.firstLabel,
-    required this.secondLabel,
-    required this.firstSelected,
-    required this.onFirst,
-    required this.onSecond,
-  });
-
-  final String firstLabel;
-  final String secondLabel;
-  final bool firstSelected;
-  final VoidCallback onFirst;
-  final VoidCallback onSecond;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: const BorderRadius.only(
-        bottomLeft: Radius.circular(8),
-        bottomRight: Radius.circular(8),
-      ),
-      child: SizedBox(
-        height: _SourceSwitchButton.height,
-        child: Row(
-          children: [
-            Expanded(
-              child: _SourceSwitchButton(
-                onPressed: onFirst,
-                selected: firstSelected,
-                label: firstLabel,
-              ),
-            ),
-            Expanded(
-              child: _SourceSwitchButton(
-                onPressed: onSecond,
-                selected: !firstSelected,
-                label: secondLabel,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SourceSwitchButton extends StatelessWidget {
-  const _SourceSwitchButton({
-    required this.label,
-    required this.selected,
-    required this.onPressed,
-  });
-
-  static const height = 34.0;
-
-  final String label;
-  final bool selected;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected ? _selectedSurface : Colors.transparent,
-      child: InkWell(
-        onTap: onPressed,
-        child: SizedBox(
-          height: height,
-          child: Center(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: selected ? _cyan : _textSecondary,
-                fontSize: 13,
-                fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _StickerButton extends StatelessWidget {
   const _StickerButton({required this.sticker, required this.onPressed});
 
@@ -3750,13 +3515,13 @@ class _StickerPanelMessage extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          KeyIconButton(
+          ButtonIcon(
             tooltip: '刷新表情包',
             onPressed: () => unawaited(onRefresh()),
             icon: const Icon(Icons.refresh),
             size: 32,
-            backgroundColor: _bubbleBackground,
-            borderColor: _bubbleBackground,
+            backgroundColor: _primaryDarkRaised,
+            borderColor: _primaryDarkRaised,
           ),
         ],
       ),
@@ -3787,7 +3552,7 @@ class _BubbleIconAction extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: size,
-      child: KeySurface(
+      child: PressableSurface(
         tooltip: tooltip,
         onPressed: onPressed,
         height: size,
@@ -4657,7 +4422,7 @@ class _LiveParticipantCard extends StatelessWidget {
     // When a live camera track is available, fill the tile with the video and
     // overlay the name + status; otherwise fall back to the avatar layout.
     if (cameraTrack != null) {
-      return KeySurface(
+      return PressableSurface(
         height: 148,
         interactive: true,
         pressRequiresHover: true,
@@ -4692,7 +4457,7 @@ class _LiveParticipantCard extends StatelessWidget {
         ),
       );
     }
-    return KeySurface(
+    return PressableSurface(
       height: 148,
       interactive: true,
       pressRequiresHover: true,
@@ -5190,15 +4955,15 @@ class _ScreenShareDialogState extends State<_ScreenShareDialog> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  KeyButton(
+                  Button(
                     onPressed: () => Navigator.of(context).pop(),
                     height: 38,
                     child: const Text('取消'),
                   ),
                   const SizedBox(width: 10),
-                  KeyButton(
+                  Button(
                     onPressed: _selectedId == null ? null : _confirm,
-                    tone: KeyButtonTone.primary,
+                    tone: ButtonTone.primary,
                     height: 38,
                     child: const Text('共享'),
                   ),
@@ -5354,7 +5119,7 @@ class _ScreenSourceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return KeySurface(
+    return PressableSurface(
       height: 158,
       interactive: true,
       pressRequiresHover: true,
@@ -5526,13 +5291,13 @@ class _LiveControlKey extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tone = danger
-        ? KeyButtonTone.danger
+        ? ButtonTone.danger
         : active
-        ? KeyButtonTone.primary
-        : KeyButtonTone.neutral;
+        ? ButtonTone.primary
+        : ButtonTone.neutral;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6),
-      child: KeyIconButton(
+      child: ButtonIcon(
         tooltip: tooltip,
         onPressed: onPressed,
         loading: busy,
@@ -5635,7 +5400,7 @@ class _UserInfoDialog extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  KeyIconButton(
+                  ButtonIcon(
                     onPressed: () => Navigator.of(context).pop(),
                     icon: const Icon(Icons.close),
                     tooltip: '关闭',
@@ -5653,7 +5418,7 @@ class _UserInfoDialog extends StatelessWidget {
                       _UserInfoField(
                         label: 'UID',
                         value: uidValue,
-                        trailing: KeyIconButton(
+                        trailing: ButtonIcon(
                           onPressed: () => onCopyUid(uidValue),
                           icon: const Icon(Icons.copy),
                           tooltip: '复制 UID',
@@ -5748,7 +5513,7 @@ class _BasicUserInfoDialog extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  KeyIconButton(
+                  ButtonIcon(
                     onPressed: () => Navigator.of(context).pop(),
                     icon: const Icon(Icons.close),
                     tooltip: '关闭',
@@ -5761,7 +5526,7 @@ class _BasicUserInfoDialog extends StatelessWidget {
               _UserInfoField(
                 label: 'UID',
                 value: uidValue,
-                trailing: KeyIconButton(
+                trailing: ButtonIcon(
                   onPressed: () => onCopyUid(uidValue),
                   icon: const Icon(Icons.copy),
                   tooltip: '复制 UID',
@@ -6053,16 +5818,16 @@ class _CreateRoomDialogState extends State<_CreateRoomDialog> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  KeyButton(
+                  Button(
                     onPressed: _busy ? null : () => Navigator.of(context).pop(),
                     height: 38,
                     child: const Text('取消'),
                   ),
                   const SizedBox(width: 10),
-                  KeyButton(
+                  Button(
                     onPressed: _submit,
                     loading: _busy,
-                    tone: KeyButtonTone.primary,
+                    tone: ButtonTone.primary,
                     height: 38,
                     child: _busy
                         ? const SizedBox.square(
@@ -6291,7 +6056,7 @@ class _JoinRoomDialogState extends State<_JoinRoomDialog> {
                       ),
                     ),
                     const Spacer(),
-                    KeyIconButton(
+                    ButtonIcon(
                       onPressed: () => Navigator.of(context).pop(),
                       icon: const Icon(Icons.close),
                       tooltip: '关闭',
@@ -6469,7 +6234,7 @@ class _JoinRoomResultTile extends StatelessWidget {
         : '加入';
     final action = room.joined ? onOpen : onJoin;
     final actionable = room.joined || !pending;
-    return KeySurface(
+    return PressableSurface(
       height: 64,
       backgroundColor: _primaryDarkLow,
       selectedBackgroundColor: _primaryDarkLow,
@@ -6514,10 +6279,10 @@ class _JoinRoomResultTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          KeyButton(
+          Button(
             onPressed: actionable && !busy ? action : null,
             loading: busy,
-            tone: actionable ? KeyButtonTone.primary : KeyButtonTone.neutral,
+            tone: actionable ? ButtonTone.primary : ButtonTone.neutral,
             height: 34,
             child: busy
                 ? const SizedBox.square(
@@ -6554,7 +6319,7 @@ class _PendingRoomInviteTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final room = invite.room;
     final inviter = invite.inviter;
-    return KeySurface(
+    return PressableSurface(
       height: 92,
       backgroundColor: _primaryDarkLow,
       selectedBackgroundColor: _primaryDarkLow,
@@ -6644,19 +6409,19 @@ class _PendingRoomInviteTile extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 2, color: _cyan),
             )
           else ...[
-            KeyIconButton(
+            ButtonIcon(
               tooltip: '拒绝',
               onPressed: onReject,
               icon: const Icon(Icons.close),
-              tone: KeyButtonTone.danger,
+              tone: ButtonTone.danger,
               size: 34,
             ),
             const SizedBox(width: 8),
-            KeyIconButton(
+            ButtonIcon(
               tooltip: '接受',
               onPressed: onAccept,
               icon: const Icon(Icons.check),
-              tone: KeyButtonTone.primary,
+              tone: ButtonTone.primary,
               size: 34,
             ),
           ],
@@ -7033,7 +6798,7 @@ class _RoomMembersDialogState extends State<_RoomMembersDialog> {
             ],
           ),
         ),
-        KeyIconButton(
+        ButtonIcon(
           onPressed: () => Navigator.of(context).pop(_changed),
           icon: const Icon(Icons.close),
           tooltip: '关闭',
@@ -7086,11 +6851,11 @@ class _RoomMembersDialogState extends State<_RoomMembersDialog> {
   }
 
   Widget _buildInviteSection() {
-    return KeyButton(
+    return Button(
       onPressed: _openInviteDialog,
       height: 40,
       icon: const Icon(Icons.person_add_alt_1),
-      tone: KeyButtonTone.primary,
+      tone: ButtonTone.primary,
       child: const Text('邀请成员'),
     );
   }
@@ -7129,7 +6894,7 @@ class _RoomMembersDialogState extends State<_RoomMembersDialog> {
                     ),
                   ),
                 ),
-                KeyIconButton(
+                ButtonIcon(
                   onPressed: _reloadRequests,
                   icon: const Icon(Icons.refresh),
                   tooltip: '刷新',
@@ -7203,12 +6968,12 @@ class _SegmentedFilterRow<T> extends StatelessWidget {
       child: Row(
         children: [
           for (final option in options) ...[
-            KeyButton(
+            Button(
               onPressed: () => onChanged(option.value),
               selected: option.value == value,
               tone: option.value == value
-                  ? KeyButtonTone.primary
-                  : KeyButtonTone.neutral,
+                  ? ButtonTone.primary
+                  : ButtonTone.neutral,
               height: 30,
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Text(option.label),
@@ -7307,7 +7072,7 @@ class _RoomMemberTile extends StatelessWidget {
     final user = member.user;
     final name = _memberTileName(member);
     final meta = _memberTileMeta(member);
-    return KeySurface(
+    return PressableSurface(
       onPressed: onOpenUserInfo,
       height: 72,
       backgroundColor: _primaryDarkLow,
@@ -7561,7 +7326,7 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
                       ],
                     ),
                   ),
-                  KeyIconButton(
+                  ButtonIcon(
                     onPressed: () => Navigator.of(context).pop(),
                     icon: const Icon(Icons.close),
                     tooltip: '关闭',
@@ -7656,7 +7421,7 @@ class _InviteCandidateTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return KeySurface(
+    return PressableSurface(
       height: 60,
       backgroundColor: _primaryDarkLow,
       selectedBackgroundColor: _primaryDarkLow,
@@ -7707,11 +7472,11 @@ class _InviteCandidateTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          KeyButton(
+          Button(
             onPressed: onInvite,
             loading: busy,
             height: 34,
-            tone: existing ? KeyButtonTone.neutral : KeyButtonTone.primary,
+            tone: existing ? ButtonTone.neutral : ButtonTone.primary,
             child: busy
                 ? const SizedBox.square(
                     dimension: 15,
@@ -7752,7 +7517,7 @@ class _JoinRequestTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = request.user;
-    return KeySurface(
+    return PressableSurface(
       height: 64,
       backgroundColor: _primaryDarkLow,
       selectedBackgroundColor: _primaryDarkLow,
@@ -7809,19 +7574,19 @@ class _JoinRequestTile extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 2, color: _cyan),
             )
           else ...[
-            KeyIconButton(
+            ButtonIcon(
               tooltip: '拒绝',
               onPressed: onReject,
               icon: const Icon(Icons.close),
-              tone: KeyButtonTone.danger,
+              tone: ButtonTone.danger,
               size: 34,
             ),
             const SizedBox(width: 8),
-            KeyIconButton(
+            ButtonIcon(
               tooltip: '通过',
               onPressed: onApprove,
               icon: const Icon(Icons.check),
-              tone: KeyButtonTone.primary,
+              tone: ButtonTone.primary,
               size: 34,
             ),
           ],
@@ -8074,7 +7839,7 @@ class _ErrorPane extends StatelessWidget {
               style: const TextStyle(color: _textSecondary),
             ),
             const SizedBox(height: 12),
-            KeyButton(
+            Button(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh),
               child: const Text('Retry'),

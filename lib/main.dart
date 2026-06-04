@@ -10,8 +10,7 @@ import 'src/auth/token_store.dart';
 import 'src/config/app_config.dart';
 import 'src/home/home_page.dart';
 import 'src/lifecycle/shutdown_hooks.dart';
-import 'src/ui/key_button.dart';
-import 'src/ui/title_bar.dart';
+import 'src/ui/ui.dart';
 
 const _appWindowMinSize = Size(720, 480);
 const _appWindowSize = Size(1180, 760);
@@ -980,11 +979,11 @@ class _LoginPageState extends State<_LoginPage> {
                                 alignment: Alignment.topRight,
                                 minHeight: 46,
                                 maxHeight: 46,
-                                child: KeyButton(
+                                child: Button(
                                   onPressed: _submit,
                                   loading: _busy,
                                   height: 38,
-                                  tone: KeyButtonTone.primary,
+                                  tone: ButtonTone.primary,
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 20,
                                   ),

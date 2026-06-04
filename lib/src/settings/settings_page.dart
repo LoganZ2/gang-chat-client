@@ -15,8 +15,7 @@ import '../config/app_config.dart';
 import '../protocol/api_client.dart';
 import '../protocol/models.dart';
 import '../protocol/sticker_pack_store.dart';
-import '../ui/key_button.dart';
-import '../ui/title_bar.dart';
+import '../ui/ui.dart';
 
 const _primaryDark = Color(0xFF14171D);
 const _primaryDarkLow = Color(0xFF181C24);
@@ -1659,7 +1658,7 @@ class _SettingsPageState extends State<SettingsPage> {
             children: [
               _StickerActionRow(
                 children: [
-                  KeyButton(
+                  Button(
                     onPressed: busy
                         ? null
                         : _managingStickers
@@ -1669,8 +1668,8 @@ class _SettingsPageState extends State<SettingsPage> {
                         ? _deletingStickers
                         : _uploadingStickers,
                     tone: _managingStickers
-                        ? KeyButtonTone.danger
-                        : KeyButtonTone.primary,
+                        ? ButtonTone.danger
+                        : ButtonTone.primary,
                     icon: Icon(
                       _managingStickers
                           ? Icons.delete_outline
@@ -1679,24 +1678,24 @@ class _SettingsPageState extends State<SettingsPage> {
                     width: double.infinity,
                     child: Text(_managingStickers ? '删除' : '本地上传'),
                   ),
-                  KeyButton(
+                  Button(
                     onPressed: busy ? null : _toggleStickerManageMode,
                     selected: _managingStickers,
                     tone: _managingStickers
-                        ? KeyButtonTone.primary
-                        : KeyButtonTone.neutral,
+                        ? ButtonTone.primary
+                        : ButtonTone.neutral,
                     icon: Icon(
                       _managingStickers ? Icons.close : Icons.checklist_rtl,
                     ),
                     width: double.infinity,
                     child: Text(_managingStickers ? '取消管理' : '批量管理'),
                   ),
-                  KeyButton(
+                  Button(
                     onPressed: busy ? null : _openStickerFilter,
                     selected: _stickerFilterActive,
                     tone: _stickerFilterActive
-                        ? KeyButtonTone.primary
-                        : KeyButtonTone.neutral,
+                        ? ButtonTone.primary
+                        : ButtonTone.neutral,
                     icon: const Icon(Icons.filter_alt_outlined),
                     width: double.infinity,
                     child: const Text('筛选'),
@@ -1707,7 +1706,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 const SizedBox(height: 10),
                 _StickerActionRow(
                   children: [
-                    KeyButton(
+                    Button(
                       onPressed: busy || _selectedStickerIds.isEmpty
                           ? null
                           : _downloadSelectedStickers,
@@ -1716,7 +1715,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       width: double.infinity,
                       child: const Text('下载'),
                     ),
-                    KeyButton(
+                    Button(
                       onPressed: busy || _selectedStickerIds.isEmpty
                           ? null
                           : _pinSelectedStickers,
@@ -1725,7 +1724,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       width: double.infinity,
                       child: const Text('置顶'),
                     ),
-                    KeyButton(
+                    Button(
                       onPressed: busy || items.isEmpty
                           ? null
                           : () => _selectAllVisibleStickers(items),
@@ -1864,11 +1863,11 @@ class _SettingsPageState extends State<SettingsPage> {
           const SizedBox(height: 18),
           Align(
             alignment: Alignment.centerRight,
-            child: KeyButton(
+            child: Button(
               onPressed: _savingProfile ? null : _saveProfile,
               loading: _savingProfile,
               icon: const Icon(Icons.save_outlined),
-              tone: KeyButtonTone.primary,
+              tone: ButtonTone.primary,
               child: const Text('保存用户资料'),
             ),
           ),
@@ -1937,11 +1936,11 @@ class _SettingsPageState extends State<SettingsPage> {
               const SizedBox(height: 14),
               Align(
                 alignment: Alignment.centerRight,
-                child: KeyButton(
+                child: Button(
                   onPressed: _savingAccount ? null : _saveAccount,
                   loading: _savingAccount,
                   icon: const Icon(Icons.save_outlined),
-                  tone: KeyButtonTone.primary,
+                  tone: ButtonTone.primary,
                   child: const Text('保存绑定信息'),
                 ),
               ),
@@ -1987,7 +1986,7 @@ class _SettingsPageState extends State<SettingsPage> {
               Row(
                 children: [
                   Expanded(
-                    child: KeyButton(
+                    child: Button(
                       onPressed: null,
                       icon: const Icon(Icons.help_outline),
                       child: const Text('忘记密码'),
@@ -1995,11 +1994,11 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: KeyButton(
+                    child: Button(
                       onPressed: _changingPassword ? null : _changePassword,
                       loading: _changingPassword,
                       icon: const Icon(Icons.lock_reset),
-                      tone: KeyButtonTone.primary,
+                      tone: ButtonTone.primary,
                       child: const Text('更新密码'),
                     ),
                   ),
@@ -2010,7 +2009,7 @@ class _SettingsPageState extends State<SettingsPage> {
           const SizedBox(height: 18),
           _SettingsGroup(
             title: '账号活动',
-            trailing: KeyIconButton(
+            trailing: ButtonIcon(
               tooltip: '刷新账号活动',
               onPressed: _loadingSessions ? null : _loadSessions,
               icon: const Icon(Icons.refresh),
@@ -2043,13 +2042,13 @@ class _SettingsPageState extends State<SettingsPage> {
               const SizedBox(height: 14),
               Align(
                 alignment: Alignment.centerRight,
-                child: KeyButton(
+                child: Button(
                   onPressed: user.isSuperuser || _deletingAccount
                       ? null
                       : _confirmDeleteAccount,
                   loading: _deletingAccount,
                   icon: const Icon(Icons.delete_outline),
-                  tone: KeyButtonTone.danger,
+                  tone: ButtonTone.danger,
                   child: const Text('注销账号'),
                 ),
               ),
@@ -2160,7 +2159,7 @@ class _SettingsPageState extends State<SettingsPage> {
     String tooltip,
     String notice,
   ) {
-    return KeyIconButton(
+    return ButtonIcon(
       tooltip: tooltip,
       onPressed: () => _copyText(controller.text.trim(), notice),
       icon: const Icon(Icons.copy),
@@ -2183,7 +2182,7 @@ class _SettingsPageState extends State<SettingsPage> {
             child: Row(
               children: [
                 if (!widget.isSubWindow) ...[
-                  KeyIconButton(
+                  ButtonIcon(
                     tooltip: 'Back',
                     onPressed: () => Navigator.of(context).pop(),
                     icon: const Icon(Icons.arrow_back),
@@ -2207,7 +2206,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 SizedBox(
                   width: 34,
-                  child: KeySurface(
+                  child: PressableSurface(
                     onPressed: _isRefreshing ? null : _refreshActiveSection,
                     tooltip: 'Refresh settings',
                     enabled: !_isRefreshing,
@@ -2234,7 +2233,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   const SizedBox(width: 8),
                   SizedBox(
                     width: 34,
-                    child: KeySurface(
+                    child: PressableSurface(
                       onPressed: widget.onClose,
                       tooltip: 'Close settings',
                       height: 34,
@@ -2367,7 +2366,7 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return KeySurface(
+    return PressableSurface(
       onPressed: onPressed,
       selected: selected,
       height: 42,
@@ -2611,7 +2610,7 @@ class _CopyableField extends StatelessWidget {
                     ),
                   ),
                 ),
-                KeyIconButton(
+                ButtonIcon(
                   tooltip: tooltip,
                   onPressed: onCopy,
                   icon: const Icon(Icons.copy),
@@ -2714,7 +2713,7 @@ class _SegmentedSetting extends StatelessWidget {
           children: [
             for (final option in options) ...[
               Expanded(
-                child: KeySurface(
+                child: PressableSurface(
                   onPressed: () => onChanged(option.value),
                   selected: value == option.value,
                   height: 36,
@@ -2845,13 +2844,13 @@ class _AvatarKeyPicker extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: KeyButton(
+              child: Button(
                 onPressed: uploading ? null : onUpload,
                 loading: uploading,
                 icon: const Icon(Icons.upload_file),
                 tone: uploadedSelected
-                    ? KeyButtonTone.primary
-                    : KeyButtonTone.neutral,
+                    ? ButtonTone.primary
+                    : ButtonTone.neutral,
                 selected: uploadedSelected,
                 height: 38,
                 padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -2861,12 +2860,10 @@ class _AvatarKeyPicker extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: KeyButton(
+              child: Button(
                 onPressed: uploading ? null : onUsePreset,
                 icon: const Icon(Icons.restart_alt),
-                tone: presetSelected
-                    ? KeyButtonTone.primary
-                    : KeyButtonTone.neutral,
+                tone: presetSelected ? ButtonTone.primary : ButtonTone.neutral,
                 selected: presetSelected,
                 height: 38,
                 padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -3131,7 +3128,7 @@ class _StickerGridTile extends StatelessWidget {
             : 86.0;
         return Tooltip(
           message: item.sticker.name,
-          child: KeySurface(
+          child: PressableSurface(
             onPressed: busy ? null : onTap,
             selected: selected,
             height: tileHeight,
@@ -3324,7 +3321,7 @@ class _StickerFilterDialogState extends State<_StickerFilterDialog> {
                   for (final filter in _filters)
                     SizedBox(
                       width: 72,
-                      child: KeySurface(
+                      child: PressableSurface(
                         onPressed: () =>
                             setState(() => _mimeType = filter.mimeType),
                         selected: _mimeType == filter.mimeType,
@@ -3359,7 +3356,7 @@ class _StickerFilterDialogState extends State<_StickerFilterDialog> {
               Row(
                 children: [
                   Expanded(
-                    child: KeyButton(
+                    child: Button(
                       onPressed: () {
                         _keywordController.clear();
                         setState(() => _mimeType = '');
@@ -3371,7 +3368,7 @@ class _StickerFilterDialogState extends State<_StickerFilterDialog> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: KeyButton(
+                    child: Button(
                       onPressed: () => Navigator.of(context).pop(),
                       width: double.infinity,
                       child: const Text('取消'),
@@ -3379,7 +3376,7 @@ class _StickerFilterDialogState extends State<_StickerFilterDialog> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: KeyButton(
+                    child: Button(
                       onPressed: () => Navigator.of(context).pop(
                         _StickerFilterValue(
                           keyword: _keywordController.text.trim(),
@@ -3387,7 +3384,7 @@ class _StickerFilterDialogState extends State<_StickerFilterDialog> {
                         ),
                       ),
                       width: double.infinity,
-                      tone: KeyButtonTone.primary,
+                      tone: ButtonTone.primary,
                       icon: const Icon(Icons.check),
                       child: const Text('确认'),
                     ),
@@ -3463,14 +3460,14 @@ class _ConfirmActionDialog extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  KeyButton(
+                  Button(
                     onPressed: () => Navigator.of(context).pop(false),
                     child: const Text('取消'),
                   ),
                   const SizedBox(width: 12),
-                  KeyButton(
+                  Button(
                     onPressed: () => Navigator.of(context).pop(true),
-                    tone: danger ? KeyButtonTone.danger : KeyButtonTone.primary,
+                    tone: danger ? ButtonTone.danger : ButtonTone.primary,
                     icon: Icon(confirmIcon),
                     child: Text(confirmLabel),
                   ),
@@ -3684,7 +3681,7 @@ class _StickerPreviewDialogState extends State<_StickerPreviewDialog> {
                       ),
                     ),
                   ),
-                  KeyIconButton(
+                  ButtonIcon(
                     onPressed: () => Navigator.of(context).pop(),
                     tooltip: '关闭预览',
                     icon: const Icon(Icons.close),
@@ -3731,7 +3728,7 @@ class _StickerPreviewDialogState extends State<_StickerPreviewDialog> {
                 decoration: InputDecoration(
                   isDense: true,
                   labelText: '名称',
-                  suffixIcon: KeyIconButton(
+                  suffixIcon: ButtonIcon(
                     onPressed: _copyName,
                     tooltip: '复制名称',
                     icon: const Icon(Icons.copy),
@@ -3753,24 +3750,24 @@ class _StickerPreviewDialogState extends State<_StickerPreviewDialog> {
               const SizedBox(height: 16),
               _StickerPreviewActionRow(
                 children: [
-                  KeyButton(
+                  Button(
                     onPressed: _busy ? null : _download,
                     loading: _downloading,
                     icon: const Icon(Icons.download_outlined),
                     width: double.infinity,
                     child: const Text('下载'),
                   ),
-                  KeyButton(
+                  Button(
                     onPressed: _busy ? null : _setAvatar,
                     loading: _settingAvatar,
                     icon: const Icon(Icons.account_circle_outlined),
                     width: double.infinity,
                     child: const Text('设为头像'),
                   ),
-                  KeyButton(
+                  Button(
                     onPressed: _busy ? null : _saveName,
                     loading: _savingName,
-                    tone: KeyButtonTone.primary,
+                    tone: ButtonTone.primary,
                     icon: const Icon(Icons.save_outlined),
                     width: double.infinity,
                     child: const Text('保存名称'),
@@ -3780,7 +3777,7 @@ class _StickerPreviewDialogState extends State<_StickerPreviewDialog> {
               const SizedBox(height: 10),
               _StickerPreviewActionRow(
                 children: [
-                  KeyButton(
+                  Button(
                     onPressed: _busy || !_canPin
                         ? null
                         : () => _move(
@@ -3792,7 +3789,7 @@ class _StickerPreviewDialogState extends State<_StickerPreviewDialog> {
                     width: double.infinity,
                     child: const Text('置顶'),
                   ),
-                  KeyButton(
+                  Button(
                     onPressed: _busy || !_canMoveUp
                         ? null
                         : () => _move(
@@ -3804,7 +3801,7 @@ class _StickerPreviewDialogState extends State<_StickerPreviewDialog> {
                     width: double.infinity,
                     child: const Text('上移一位'),
                   ),
-                  KeyButton(
+                  Button(
                     onPressed: _busy || !_canMoveDown
                         ? null
                         : () => _move(
@@ -3819,10 +3816,10 @@ class _StickerPreviewDialogState extends State<_StickerPreviewDialog> {
                 ],
               ),
               const SizedBox(height: 10),
-              KeyButton(
+              Button(
                 onPressed: _busy ? null : _delete,
                 loading: _deleting,
-                tone: KeyButtonTone.danger,
+                tone: ButtonTone.danger,
                 icon: const Icon(Icons.delete_outline),
                 width: double.infinity,
                 child: const Text('删除'),
@@ -4051,16 +4048,16 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  KeyButton(
+                  Button(
                     onPressed: () => Navigator.of(context).pop(false),
                     child: const Text('取消'),
                   ),
                   const SizedBox(width: 12),
-                  KeyButton(
+                  Button(
                     onPressed: matches
                         ? () => Navigator.of(context).pop(true)
                         : null,
-                    tone: KeyButtonTone.danger,
+                    tone: ButtonTone.danger,
                     icon: const Icon(Icons.delete_outline),
                     child: const Text('确认注销'),
                   ),
@@ -4273,7 +4270,7 @@ class _AvatarCropDialogState extends State<_AvatarCropDialog> {
                           ),
                         ),
                       ),
-                      KeyIconButton(
+                      ButtonIcon(
                         onPressed: _rendering
                             ? null
                             : () => Navigator.of(context).pop(),
@@ -4348,7 +4345,7 @@ class _AvatarCropDialogState extends State<_AvatarCropDialog> {
                     const SizedBox(height: 14),
                     Row(
                       children: [
-                        KeyIconButton(
+                        ButtonIcon(
                           onPressed: _rendering
                               ? null
                               : () => _adjustZoom(-0.15, image),
@@ -4377,7 +4374,7 @@ class _AvatarCropDialogState extends State<_AvatarCropDialog> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        KeyIconButton(
+                        ButtonIcon(
                           onPressed: _rendering
                               ? null
                               : () => _adjustZoom(0.6, image),
@@ -4403,19 +4400,19 @@ class _AvatarCropDialogState extends State<_AvatarCropDialog> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      KeyButton(
+                      Button(
                         onPressed: _rendering
                             ? null
                             : () => Navigator.of(context).pop(),
                         child: const Text('取消'),
                       ),
                       const SizedBox(width: 12),
-                      KeyButton(
+                      Button(
                         onPressed: image == null || _rendering
                             ? null
                             : _confirm,
                         loading: _rendering,
-                        tone: KeyButtonTone.primary,
+                        tone: ButtonTone.primary,
                         icon: const Icon(Icons.crop),
                         child: const Text('确定'),
                       ),
@@ -5015,12 +5012,12 @@ class _AudioControlPanel extends StatelessWidget {
           children: [
             SizedBox(
               width: 96,
-              child: KeyButton(
+              child: Button(
                 onPressed: disabled ? null : onToggleTest,
                 tooltip: testTooltip,
                 height: 42,
                 width: double.infinity,
-                tone: testing ? KeyButtonTone.primary : KeyButtonTone.neutral,
+                tone: testing ? ButtonTone.primary : ButtonTone.neutral,
                 selected: testing,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Text(
@@ -5107,7 +5104,7 @@ class _DeviceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return KeySurface(
+    return PressableSurface(
       onPressed: busy ? null : onTap,
       height: 50,
       width: double.infinity,
