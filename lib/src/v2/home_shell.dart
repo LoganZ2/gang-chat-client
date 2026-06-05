@@ -6,6 +6,7 @@ import '../app/authenticated_app_context.dart';
 import '../app/rooms_controller.dart';
 import '../protocol/api_client.dart';
 import '../protocol/models.dart';
+import '../settings/settings_page.dart';
 import '../ui/ui.dart';
 import 'home_content.dart';
 import 'home_sidebar.dart';
@@ -25,16 +26,19 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   late GangApi _api;
   late RoomsController _roomsController;
+  late CurrentUser _currentUser;
 
   List<RoomCard> _servers = const [];
   bool _loadingServers = false;
   String? _serverLoadError;
   String? _selectedServerId;
+  bool _settingsOpen = false;
   bool _narrowContentOpen = false;
 
   @override
   void initState() {
     super.initState();
+    _currentUser = widget.app.currentUser;
     _installApi();
     unawaited(_loadServers());
   }
@@ -50,9 +54,11 @@ class _HomeShellState extends State<HomeShell> {
     _api.close();
     _installApi();
     setState(() {
+      _currentUser = widget.app.currentUser;
       _servers = const [];
       _serverLoadError = null;
       _selectedServerId = null;
+      _settingsOpen = false;
       _narrowContentOpen = false;
     });
     unawaited(_loadServers());
@@ -98,8 +104,34 @@ class _HomeShellState extends State<HomeShell> {
   void _selectServer(RoomCard server, {required bool openContent}) {
     setState(() {
       _selectedServerId = server.id;
+      _settingsOpen = false;
       if (openContent) _narrowContentOpen = true;
     });
+  }
+
+  void _toggleSettings({required bool openContent}) {
+    setState(() {
+      final opening = !_settingsOpen;
+      _settingsOpen = opening;
+      if (openContent) {
+        _narrowContentOpen = opening;
+      }
+    });
+  }
+
+  void _closeSettings() {
+    setState(() => _settingsOpen = false);
+  }
+
+  void _showNarrowSidebar() {
+    setState(() {
+      _settingsOpen = false;
+      _narrowContentOpen = false;
+    });
+  }
+
+  void _handleUserUpdated(CurrentUser user) {
+    setState(() => _currentUser = user);
   }
 
   @override
@@ -122,7 +154,7 @@ class _HomeShellState extends State<HomeShell> {
                     width: sidebarWidth,
                     openContentOnSelect: false,
                   ),
-                  const Expanded(child: HomeContent()),
+                  Expanded(child: _buildContentPane()),
                 ],
               );
             },
@@ -151,12 +183,14 @@ class _HomeShellState extends State<HomeShell> {
                 ButtonIcon(
                   tooltip: 'Show servers',
                   icon: const Icon(Icons.arrow_back),
-                  onPressed: () => setState(() => _narrowContentOpen = false),
+                  onPressed: _showNarrowSidebar,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    _selectedServer?.displayName ?? '',
+                    _settingsOpen
+                        ? 'Settings'
+                        : _selectedServer?.displayName ?? '',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: UiTypography.title,
@@ -166,8 +200,22 @@ class _HomeShellState extends State<HomeShell> {
             ),
           ),
         ),
-        const Expanded(child: HomeContent()),
+        Expanded(child: _buildContentPane()),
       ],
+    );
+  }
+
+  Widget _buildContentPane() {
+    if (!_settingsOpen) return const HomeContent();
+    return SettingsPage(
+      isSubWindow: true,
+      api: _api,
+      apiBaseUrl: widget.app.apiBaseUrl,
+      stickerPackStore: widget.app.stickerPackStore,
+      currentUser: _currentUser,
+      onUserUpdated: _handleUserUpdated,
+      onAccountDeleted: widget.app.logout,
+      onClose: _closeSettings,
     );
   }
 
@@ -177,13 +225,16 @@ class _HomeShellState extends State<HomeShell> {
   }) {
     return HomeSidebar(
       width: width,
-      currentUser: widget.app.currentUser,
+      currentUser: _currentUser,
       servers: _servers,
       selectedServerId: _selectedServerId,
       loading: _loadingServers,
       error: _serverLoadError,
+      settingsActive: _settingsOpen,
       onServerSelected: (server) =>
           _selectServer(server, openContent: openContentOnSelect),
+      onOpenSettings: () => _toggleSettings(openContent: openContentOnSelect),
+      onLogout: () => unawaited(widget.app.logout()),
     );
   }
 

@@ -8,13 +8,13 @@ const _selectedServerBorder = Color(0xFF4EAD76);
 const _sidebarHorizontalPadding = 14.0;
 const _sidebarTopPadding = 16.0;
 const _sidebarBottomPadding = 16.0;
-const _serverListScrollbarGutter = 15.0;
 const _serverCardHeight = 68.0;
 const _serverCardHoverLift = 2.0;
 const _serverCardBaseDepth = 4.0;
-const _serverCardOuterHeight =
-    _serverCardHeight + _serverCardHoverLift + _serverCardBaseDepth;
 const _serverCardGap = 10.0;
+const _footerButtonSize = 38.0;
+const _footerButtonGap = 8.0;
+const _footerButtonOuterHeight = _footerButtonSize + 3.0 + 5.0;
 
 class HomeSidebar extends StatelessWidget {
   const HomeSidebar({
@@ -25,7 +25,10 @@ class HomeSidebar extends StatelessWidget {
     required this.selectedServerId,
     required this.loading,
     required this.error,
+    required this.settingsActive,
     required this.onServerSelected,
+    required this.onOpenSettings,
+    required this.onLogout,
   });
 
   final double width;
@@ -34,7 +37,10 @@ class HomeSidebar extends StatelessWidget {
   final String? selectedServerId;
   final bool loading;
   final String? error;
+  final bool settingsActive;
   final ValueChanged<RoomCard> onServerSelected;
+  final VoidCallback onOpenSettings;
+  final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
@@ -58,6 +64,12 @@ class HomeSidebar extends StatelessWidget {
               _UserSummaryBar(user: currentUser),
               const SizedBox(height: 14),
               Expanded(child: _buildServerList()),
+              const SizedBox(height: 12),
+              _SidebarFooter(
+                settingsActive: settingsActive,
+                onOpenSettings: onOpenSettings,
+                onLogout: onLogout,
+              ),
             ],
           ),
         ),
@@ -84,71 +96,57 @@ class HomeSidebar extends StatelessWidget {
       );
     }
 
-    return _ServerList(
-      servers: servers,
-      selectedServerId: selectedServerId,
-      onServerSelected: onServerSelected,
+    return ListView.separated(
+      padding: EdgeInsets.zero,
+      itemCount: servers.length,
+      separatorBuilder: (context, index) =>
+          const SizedBox(height: _serverCardGap),
+      itemBuilder: (context, index) {
+        final server = servers[index];
+        return _ServerCard(
+          server: server,
+          selected: server.id == selectedServerId,
+          onPressed: () => onServerSelected(server),
+        );
+      },
     );
   }
 }
 
-class _ServerList extends StatefulWidget {
-  const _ServerList({
-    required this.servers,
-    required this.selectedServerId,
-    required this.onServerSelected,
+class _SidebarFooter extends StatelessWidget {
+  const _SidebarFooter({
+    required this.settingsActive,
+    required this.onOpenSettings,
+    required this.onLogout,
   });
 
-  final List<RoomCard> servers;
-  final String? selectedServerId;
-  final ValueChanged<RoomCard> onServerSelected;
-
-  @override
-  State<_ServerList> createState() => _ServerListState();
-}
-
-class _ServerListState extends State<_ServerList> {
-  final ScrollController _scrollController = ScrollController();
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
+  final bool settingsActive;
+  final VoidCallback onOpenSettings;
+  final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final needsScroll =
-            _serverListContentHeight(widget.servers.length) >
-            constraints.maxHeight;
-
-        final list = ListView.separated(
-          controller: _scrollController,
-          padding: EdgeInsets.only(
-            right: needsScroll ? _serverListScrollbarGutter : 0,
+    return SizedBox(
+      height: _footerButtonOuterHeight,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          ButtonIcon(
+            tooltip: 'Settings',
+            icon: const Icon(Icons.settings_outlined),
+            selected: settingsActive,
+            onPressed: onOpenSettings,
+            size: _footerButtonSize,
           ),
-          itemCount: widget.servers.length,
-          separatorBuilder: (context, index) =>
-              const SizedBox(height: _serverCardGap),
-          itemBuilder: (context, index) {
-            final server = widget.servers[index];
-            return _ServerCard(
-              server: server,
-              selected: server.id == widget.selectedServerId,
-              onPressed: () => widget.onServerSelected(server),
-            );
-          },
-        );
-
-        if (!needsScroll) return list;
-        return Scrollbar(
-          controller: _scrollController,
-          thumbVisibility: true,
-          child: list,
-        );
-      },
+          const SizedBox(width: _footerButtonGap),
+          ButtonIcon(
+            tooltip: 'Logout',
+            icon: const Icon(Icons.logout),
+            onPressed: onLogout,
+            size: _footerButtonSize,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -323,12 +321,6 @@ String _userStatus(CurrentUser user) {
   final status = user.status?.trim();
   if (status != null && status.isNotEmpty) return status;
   return 'Online';
-}
-
-double _serverListContentHeight(int itemCount) {
-  if (itemCount <= 0) return 0;
-  return (itemCount * _serverCardOuterHeight) +
-      ((itemCount - 1) * _serverCardGap);
 }
 
 String _serverMeta(RoomCard server) {

@@ -159,6 +159,8 @@ void main() {
     expect(find.text('People'), findsNothing);
     expect(find.text('Files'), findsNothing);
     expect(find.text('Settings'), findsNothing);
+    expect(find.byTooltip('Settings'), findsOneWidget);
+    expect(find.byTooltip('Logout'), findsOneWidget);
     expect(find.text('Kai'), findsOneWidget);
     expect(find.text('Online'), findsOneWidget);
     expect(find.text('@kai'), findsNothing);
@@ -196,38 +198,84 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-    'authenticated home shell reserves gutter only when list scrolls',
-    (WidgetTester tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ui.uiTheme(),
-          home: Center(
-            child: SizedBox(
-              width: 420,
-              height: 190,
-              child: current_home.HomePage(app: _homeTestAppContext()),
+  testWidgets('authenticated home shell footer opens settings and logs out', (
+    WidgetTester tester,
+  ) async {
+    var logoutCount = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: current_home.HomePage(
+          app: _homeTestAppContext(onLogout: () async => logoutCount++),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final userSummaryRect = tester.getRect(
+      find.byKey(const ValueKey('home-sidebar-user-summary')),
+    );
+    final settingsRect = tester.getRect(find.byTooltip('Settings'));
+    final logoutRect = tester.getRect(find.byTooltip('Logout'));
+    expect(logoutRect.right, closeTo(userSummaryRect.right, 0.01));
+    expect(logoutRect.left - settingsRect.right, closeTo(8, 0.01));
+
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Settings ·'), findsOneWidget);
+    expect(find.byTooltip('Close settings'), findsOneWidget);
+    expect(
+      tester
+          .widget<ui.PressableSurface>(
+            find.ancestor(
+              of: find.byTooltip('Settings'),
+              matching: find.byType(ui.PressableSurface),
             ),
+          )
+          .selected,
+      isTrue,
+    );
+
+    await tester.tap(find.byTooltip('Logout'));
+    await tester.pump();
+
+    expect(logoutCount, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('authenticated home shell lets sidebar scrollbar auto-hide', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: Center(
+          child: SizedBox(
+            width: 420,
+            height: 190,
+            child: current_home.HomePage(app: _homeTestAppContext()),
           ),
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      final userSummaryRect = tester.getRect(
-        find.byKey(const ValueKey('home-sidebar-user-summary')),
-      );
-      final alphaCardRect = tester.getRect(
-        find.ancestor(
-          of: find.text('Alpha Room'),
-          matching: find.byType(ui.PressableSurface),
-        ),
-      );
+    final userSummaryRect = tester.getRect(
+      find.byKey(const ValueKey('home-sidebar-user-summary')),
+    );
+    final alphaCardRect = tester.getRect(
+      find.ancestor(
+        of: find.text('Alpha Room'),
+        matching: find.byType(ui.PressableSurface),
+      ),
+    );
 
-      expect(userSummaryRect.right - alphaCardRect.right, closeTo(15, 0.01));
-      expect(find.byType(Scrollbar), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
+    expect(userSummaryRect.right - alphaCardRect.right, closeTo(0, 0.01));
+    expect(find.byType(Scrollbar), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('authenticated home shell offsets macOS sidebar content', (
     WidgetTester tester,
@@ -1747,6 +1795,9 @@ GangApi _roomsApi({List<String>? requestedPaths}) {
       if (request.url.path == '/api/v1/rooms') {
         return _jsonResponse({'rooms': _serverListJson});
       }
+      if (request.url.path == '/api/v1/me') {
+        return _jsonResponse(_currentUserJson);
+      }
       return http.Response('unexpected request: ${request.url}', 404);
     }),
   );
@@ -1770,6 +1821,24 @@ final _serverListJson = [
   ),
   _roomCardJson(id: 'server-beta', name: 'Beta Room', memberCount: 5),
 ];
+
+final _currentUserJson = {
+  'id': 'user-1',
+  'uid': 'uid-1',
+  'username': 'kai',
+  'display_name': 'Kai',
+  'bio': '',
+  'gender': 'secret',
+  'email': 'kai@example.com',
+  'email_public': false,
+  'phone_number': null,
+  'phone_number_public': false,
+  'avatar_url': null,
+  'default_avatar_key': 'blue-3',
+  'is_superuser': false,
+  'created_at': '2026-01-01T00:00:00Z',
+  'status': 'Online',
+};
 
 Map<String, Object?> _roomCardJson({
   required String id,
