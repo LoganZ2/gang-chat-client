@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 
 import '../app/auth_form.dart';
 import '../app/auth_session_controller.dart';
-import '../auth/auth_client.dart';
 import '../ui/ui.dart';
 
 typedef AuthWindowLock =
@@ -12,19 +11,40 @@ typedef AuthWindowLock =
       bool registering,
       bool moveWindow,
       bool centerWindow,
+      Size? size,
     });
+typedef AuthSizeForMode = Size Function(bool registering, {bool showingError});
+
+enum _AuthMode { login, register }
+
+const double _authWindowButtonInset = 36;
+const double _authTitleBarTopInset = 6;
+const double _authTitleBarHeight = 16;
+const double _authTitleBarGap =
+    _authWindowButtonInset - _authTitleBarTopInset - _authTitleBarHeight;
+const double _authFieldGap = 3;
+const double _authModeGap = 10;
+const double _authActionGap = 8;
+const double _authErrorHeight = 16;
+const double _authErrorGap = 4;
+const _authTitleBarStyle = TextStyle(
+  color: UiColors.textSecondary,
+  fontSize: 12,
+  fontWeight: FontWeight.w800,
+  letterSpacing: 0,
+);
 
 class LoginPage extends StatefulWidget {
   const LoginPage({
     super.key,
-    required this.onSubmit,
     required this.sizeForMode,
+    required this.onSubmit,
     required this.consumeInitialWindowLock,
     required this.lockAuthWindow,
   });
 
+  final AuthSizeForMode sizeForMode;
   final Future<void> Function(AuthRequest request) onSubmit;
-  final Size Function(bool registering) sizeForMode;
   final bool Function() consumeInitialWindowLock;
   final AuthWindowLock lockAuthWindow;
 
@@ -34,195 +54,243 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final _username = TextEditingController();
-  final _email = TextEditingController();
+  final _login = TextEditingController();
   final _password = TextEditingController();
   final _confirmPassword = TextEditingController();
 
   bool _registering = false;
-  bool _busy = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
-  String? _error;
+  AuthSubmitState _submitState = const AuthSubmitState();
+
+  bool get _showingError =>
+      _submitState.error != null && _submitState.error!.isNotEmpty;
 
   @override
   void initState() {
     super.initState();
     if (widget.consumeInitialWindowLock()) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) unawaited(widget.lockAuthWindow(moveWindow: false));
+      if (mounted) {
+        unawaited(_lockAuthSize(registering: false, moveWindow: false));
+      }
     });
-  }
-
-  Future<void> _submit() async {
-    if (_busy) return;
-
-    final result = authRequestFromForm(
-      registering: _registering,
-      username: _username.text,
-      login: _email.text,
-      password: _password.text,
-      confirmPassword: _confirmPassword.text,
-    );
-    final request = result.request;
-    if (request == null) {
-      setState(() => _error = result.error);
-      return;
-    }
-
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-
-    try {
-      await widget.onSubmit(request);
-      if (!mounted) return;
-    } on AuthException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _busy = false;
-        _error = e.message;
-      });
-      return;
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _busy = false;
-        _error = 'Cannot reach the server: $e';
-      });
-      return;
-    }
   }
 
   @override
   void dispose() {
     _username.dispose();
-    _email.dispose();
+    _login.dispose();
     _password.dispose();
     _confirmPassword.dispose();
     super.dispose();
   }
 
+  Future<void> _submit() async {
+    if (_submitState.busy) return;
+
+    final result = authRequestFromForm(
+      registering: _registering,
+      username: _username.text,
+      login: _login.text,
+      password: _password.text,
+      confirmPassword: _confirmPassword.text,
+    );
+    final request = result.request;
+    if (request == null) {
+      await _showSubmitState(authSubmitInvalid(result.error));
+      return;
+    }
+
+    if (_showingError) {
+      await _lockAuthSize(showingError: false);
+      if (!mounted) return;
+    }
+    setState(() => _submitState = authSubmitStarted());
+
+    try {
+      await widget.onSubmit(request);
+      if (!mounted) return;
+    } catch (e) {
+      if (!mounted) return;
+      await _showSubmitState(authSubmitFailed(e));
+    }
+  }
+
   void _setMode(bool registering) {
-    if (_busy || _registering == registering) return;
+    if (_submitState.busy || _registering == registering) return;
     if (registering) {
       unawaited(_expandAndShowRegister());
       return;
     }
     setState(() {
       _registering = false;
-      _error = null;
+      _submitState = const AuthSubmitState();
     });
-    unawaited(widget.lockAuthWindow());
+    unawaited(_lockAuthSize(registering: false));
   }
 
   Future<void> _expandAndShowRegister() async {
-    await widget.lockAuthWindow(registering: true);
-    if (!mounted || _busy) return;
+    await _lockAuthSize(registering: true);
+    if (!mounted || _submitState.busy) return;
     setState(() {
       _registering = true;
-      _error = null;
+      _submitState = const AuthSubmitState();
     });
+  }
+
+  Future<void> _showSubmitState(AuthSubmitState state) async {
+    final showingError = state.error != null && state.error!.isNotEmpty;
+    if (showingError) {
+      await _lockAuthSize(showingError: true);
+      if (!mounted) return;
+    }
+    setState(() => _submitState = state);
+  }
+
+  Future<void> _lockAuthSize({
+    bool? registering,
+    bool showingError = false,
+    bool moveWindow = true,
+    bool centerWindow = false,
+  }) {
+    final resolvedRegistering = registering ?? _registering;
+    return widget.lockAuthWindow(
+      registering: resolvedRegistering,
+      moveWindow: moveWindow,
+      centerWindow: centerWindow,
+      size: widget.sizeForMode(resolvedRegistering, showingError: showingError),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final size = widget.sizeForMode(_registering);
+    final size = widget.sizeForMode(_registering, showingError: _showingError);
     return Scaffold(
-      backgroundColor: const Color(0xFF14171D),
+      backgroundColor: UiColors.background,
       body: Align(
         alignment: Alignment.topCenter,
         child: SizedBox(
+          key: const ValueKey('auth-surface'),
           width: size.width,
           height: size.height,
           child: DecoratedBox(
-            decoration: const BoxDecoration(color: Color(0xFF181C24)),
+            decoration: const BoxDecoration(color: UiColors.surfaceLow),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 4, 24, 18),
+              padding: const EdgeInsets.fromLTRB(
+                24,
+                _authTitleBarTopInset,
+                24,
+                7,
+              ),
               child: AutofillGroup(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Padding(
-                      padding: EdgeInsets.only(top: 6, bottom: 4),
-                      child: Text(
-                        'Gang Chat',
-                        style: TextStyle(
-                          color: Color(0xFFECEFF1),
-                          fontSize: 21,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0,
+                    MouseRegion(
+                      cursor: SystemMouseCursors.basic,
+                      child: SelectionContainer.disabled(
+                        child: const SizedBox(
+                          height: _authTitleBarHeight,
+                          child: Center(
+                            child: Text(
+                              'Gang Chat',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _authTitleBarStyle,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 17),
-                    _AuthModeSwitch(
-                      registering: _registering,
-                      enabled: !_busy,
-                      onLogin: () => _setMode(false),
-                      onRegister: () => _setMode(true),
+                    const SizedBox(height: _authTitleBarGap),
+                    SegmentedControl<_AuthMode>(
+                      expanded: true,
+                      value: _registering
+                          ? _AuthMode.register
+                          : _AuthMode.login,
+                      segments: const [
+                        Segment(
+                          value: _AuthMode.login,
+                          label: 'Login',
+                          icon: Icons.login_outlined,
+                        ),
+                        Segment(
+                          value: _AuthMode.register,
+                          label: 'Register',
+                          icon: Icons.person_add_alt_1_outlined,
+                        ),
+                      ],
+                      onChanged: (mode) {
+                        if (_submitState.busy) return;
+                        _setMode(mode == _AuthMode.register);
+                      },
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: _authModeGap),
                     if (_registering) ...[
-                      _LoginLineField(
-                        icon: Icons.person_outline,
+                      Input(
                         controller: _username,
-                        enabled: !_busy,
+                        enabled: !_submitState.busy,
                         hintText: 'Username',
+                        prefixIcon: Icons.person_outline,
                         autofillHints: const [AutofillHints.username],
+                        maxLines: 1,
                         onSubmitted: (_) => _submit(),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: _authFieldGap),
                     ],
-                    _LoginLineField(
-                      icon: _registering
-                          ? Icons.alternate_email
-                          : Icons.person_outline,
-                      controller: _email,
-                      enabled: !_busy,
+                    Input(
+                      controller: _login,
+                      enabled: !_submitState.busy,
                       hintText: _registering
                           ? 'Email address'
                           : 'Username or email address',
+                      prefixIcon: _registering
+                          ? Icons.alternate_email
+                          : Icons.person_outline,
                       autofillHints: _registering
                           ? const [AutofillHints.email]
                           : const [AutofillHints.username, AutofillHints.email],
                       keyboardType: _registering
                           ? TextInputType.emailAddress
                           : TextInputType.text,
+                      maxLines: 1,
+                      onSubmitted: _registering ? null : (_) => _submit(),
                     ),
-                    const SizedBox(height: 8),
-                    _LoginLineField(
-                      icon: Icons.lock_outline,
+                    const SizedBox(height: _authFieldGap),
+                    Input(
                       controller: _password,
-                      enabled: !_busy,
+                      enabled: !_submitState.busy,
                       hintText: 'Password',
+                      prefixIcon: Icons.lock_outline,
                       autofillHints: [
                         _registering
                             ? AutofillHints.newPassword
                             : AutofillHints.password,
                       ],
                       obscureText: _obscurePassword,
-                      trailing: _PasswordVisibilityToggle(
+                      suffix: _PasswordVisibilityToggle(
                         obscure: _obscurePassword,
-                        enabled: !_busy,
+                        enabled: !_submitState.busy,
                         onPressed: () {
                           setState(() => _obscurePassword = !_obscurePassword);
                         },
                       ),
+                      maxLines: 1,
                       onSubmitted: _registering ? null : (_) => _submit(),
                     ),
                     if (_registering) ...[
-                      const SizedBox(height: 8),
-                      _LoginLineField(
-                        icon: Icons.lock_outline,
+                      const SizedBox(height: _authFieldGap),
+                      Input(
                         controller: _confirmPassword,
-                        enabled: !_busy,
+                        enabled: !_submitState.busy,
                         hintText: 'Confirm password',
+                        prefixIcon: Icons.lock_outline,
                         autofillHints: const [AutofillHints.newPassword],
                         obscureText: _obscureConfirmPassword,
-                        trailing: _PasswordVisibilityToggle(
+                        suffix: _PasswordVisibilityToggle(
                           obscure: _obscureConfirmPassword,
-                          enabled: !_busy,
+                          enabled: !_submitState.busy,
                           onPressed: () {
                             setState(
                               () => _obscureConfirmPassword =
@@ -230,65 +298,37 @@ class _LoginPageState extends State<LoginPage> {
                             );
                           },
                         ),
+                        maxLines: 1,
                         onSubmitted: (_) => _submit(),
                       ),
                     ],
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      height: 38,
-                      child: Stack(
-                        children: [
-                          if (_error != null)
-                            Positioned.fill(
-                              right: 130,
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  _error!,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Color(0xFFE58383),
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: SizedBox(
-                              height: 38,
-                              child: OverflowBox(
-                                alignment: Alignment.topRight,
-                                minHeight: 46,
-                                maxHeight: 46,
-                                child: Button(
-                                  onPressed: _submit,
-                                  loading: _busy,
-                                  height: 38,
-                                  tone: ButtonTone.primary,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 20,
-                                  ),
-                                  child: _busy
-                                      ? const SizedBox.square(
-                                          dimension: 18,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: Color(0xFF6FCFA6),
-                                          ),
-                                        )
-                                      : Text(
-                                          _registering
-                                              ? 'Create account'
-                                              : 'Login',
-                                        ),
-                                ),
-                              ),
+                    const SizedBox(height: _authActionGap),
+                    if (_showingError) ...[
+                      SizedBox(
+                        height: _authErrorHeight,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            _submitState.error!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: UiColors.danger,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
-                        ],
+                        ),
                       ),
+                      const SizedBox(height: _authErrorGap),
+                    ],
+                    Button(
+                      width: double.infinity,
+                      tone: ButtonTone.primary,
+                      height: 32,
+                      loading: _submitState.busy,
+                      onPressed: _submit,
+                      child: Text(_registering ? 'Create account' : 'Login'),
                     ),
                   ],
                 ),
@@ -296,173 +336,6 @@ class _LoginPageState extends State<LoginPage> {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _AuthModeSwitch extends StatelessWidget {
-  const _AuthModeSwitch({
-    required this.registering,
-    required this.enabled,
-    required this.onLogin,
-    required this.onRegister,
-  });
-
-  final bool registering;
-  final bool enabled;
-  final VoidCallback onLogin;
-  final VoidCallback onRegister;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 22,
-      child: Row(
-        children: [
-          _AuthModeTab(
-            label: 'Login',
-            active: !registering,
-            enabled: enabled,
-            onTap: onLogin,
-          ),
-          const SizedBox(width: 18),
-          _AuthModeTab(
-            label: 'Register',
-            active: registering,
-            enabled: enabled,
-            onTap: onRegister,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AuthModeTab extends StatelessWidget {
-  const _AuthModeTab({
-    required this.label,
-    required this.active,
-    required this.enabled,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool active;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = active ? const Color(0xFFECEFF1) : const Color(0xFF6F7785);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: enabled ? onTap : null,
-      child: SizedBox(
-        height: 22,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: active ? const Color(0xFF6FCFA6) : Colors.transparent,
-                width: 2,
-              ),
-            ),
-          ),
-          child: Align(
-            alignment: Alignment.topLeft,
-            child: Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 12,
-                height: 1,
-                fontWeight: active ? FontWeight.w800 : FontWeight.w600,
-                letterSpacing: 0,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _LoginLineField extends StatelessWidget {
-  const _LoginLineField({
-    required this.icon,
-    required this.controller,
-    required this.enabled,
-    required this.hintText,
-    this.autofillHints,
-    this.keyboardType,
-    this.obscureText = false,
-    this.trailing,
-    this.onSubmitted,
-  });
-
-  final IconData icon;
-  final TextEditingController controller;
-  final bool enabled;
-  final String hintText;
-  final Iterable<String>? autofillHints;
-  final TextInputType? keyboardType;
-  final bool obscureText;
-  final Widget? trailing;
-  final ValueChanged<String>? onSubmitted;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 36,
-      child: Row(
-        children: [
-          SizedBox(
-            width: 26,
-            height: 36,
-            child: Center(
-              child: Transform.translate(
-                offset: const Offset(0, 1.5),
-                child: Icon(icon, color: Color(0xFF6F7785), size: 16),
-              ),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              enabled: enabled,
-              autofillHints: autofillHints,
-              keyboardType: keyboardType,
-              obscureText: obscureText,
-              onSubmitted: onSubmitted,
-              cursorColor: const Color(0xFFB0B8C0),
-              contextMenuBuilder: buildTextFieldContextMenu,
-              style: const TextStyle(
-                color: Color(0xFFECEFF1),
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0,
-              ),
-              decoration: InputDecoration(
-                isDense: true,
-                filled: false,
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                disabledBorder: InputBorder.none,
-                hintText: hintText,
-                hintStyle: const TextStyle(
-                  color: Color(0xFF6F7785),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 8),
-              ),
-            ),
-          ),
-          ?trailing,
-        ],
       ),
     );
   }
@@ -481,7 +354,7 @@ class _PasswordVisibilityToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = enabled ? const Color(0xFFB0B8C0) : const Color(0xFF6F7785);
+    final color = enabled ? UiColors.textSecondary : UiColors.textMuted;
     return Tooltip(
       message: obscure ? 'Show password' : 'Hide password',
       child: Semantics(
@@ -492,8 +365,8 @@ class _PasswordVisibilityToggle extends StatelessWidget {
           behavior: HitTestBehavior.opaque,
           onTap: enabled ? onPressed : null,
           child: SizedBox(
-            width: 30,
-            height: 36,
+            width: 24,
+            height: 24,
             child: Icon(
               obscure
                   ? Icons.visibility_off_outlined

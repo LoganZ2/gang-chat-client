@@ -39,16 +39,11 @@ class _LiveHeader extends StatelessWidget {
           backgroundColor: _primaryDarkRaised,
           borderColor: _borderColor,
           elevateOnHover: true,
-          // Notch is shortened by the drop so its bottom still lines up with
-          // the bottom of the window-control buttons.
           cornerCut: const Size(
             windowControlsWidth,
             titleBarHeight - windowDragHeight,
           ),
           cutCorner: SurfaceCorner.topRight,
-          // Drop the whole header surface down so the top band stays free to
-          // grab-and-drag the window, and inset its right edge so its right
-          // shadow shows and the notch lines up with the inset buttons.
           margin: const EdgeInsets.only(
             top: windowDragHeight,
             right: windowControlsInset,

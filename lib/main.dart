@@ -28,7 +28,10 @@ Future<void> main(List<String> args) async {
       (await tokenStore.readRefreshToken())?.isNotEmpty ?? false;
   final windowController = DesktopWindowController();
 
-  await windowController.prepareForLaunch(authenticated: hasStoredSession);
+  await windowController.prepareForLaunch(
+    authenticated: hasStoredSession,
+    useV2: useV2,
+  );
   runApp(
     GangApp(
       config: config,

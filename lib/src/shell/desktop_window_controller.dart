@@ -9,38 +9,44 @@ import '../lifecycle/shutdown_hooks.dart';
 
 const appWindowBackground = Color(0xFF14171D);
 
-const _appWindowMinSize = Size(720, 480);
+const _legacyAppWindowMinSize = Size(720, 480);
+const _responsiveAppWindowMinSize = Size(390, 480);
 const _appWindowSize = Size(1180, 760);
 const _unboundedWindowSize = Size(100000, 100000);
 const _minimumWindowSize = Size(1, 1);
 const _authWidgetWidth = 430.0;
-const _loginWidgetHeight = 256.0;
-const _registerWidgetHeight = 344.0;
+const _loginWidgetHeight = 257.0;
+const _registerWidgetHeight = 359.0;
+const _authErrorExtraHeight = 20.0;
 const _loginWidgetSize = Size(_authWidgetWidth, _loginWidgetHeight);
 const _registerWidgetSize = Size(_authWidgetWidth, _registerWidgetHeight);
-// Window controls float as an overlay rather than occupying a dedicated strip,
-// so auth windows are sized exactly to their content.
 const _loginWindowSize = _loginWidgetSize;
 const _registerWindowSize = _registerWidgetSize;
 
 class DesktopWindowController {
   bool _skipNextAuthWindowLock = false;
+  bool _useResponsiveAppWindow = false;
 
   bool get supportsWindowManagement =>
       !kIsWeb &&
       !Platform.environment.containsKey('FLUTTER_TEST') &&
       (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
 
-  Size get loginWidgetSize => _loginWidgetSize;
+  Size authWidgetSize(bool registering, {bool showingError = false}) {
+    final baseSize = registering ? _registerWidgetSize : _loginWidgetSize;
+    if (!showingError) return baseSize;
+    return Size(baseSize.width, baseSize.height + _authErrorExtraHeight);
+  }
 
-  Size authWidgetSize(bool registering) =>
-      registering ? _registerWidgetSize : _loginWidgetSize;
-
-  Future<void> prepareForLaunch({required bool authenticated}) async {
+  Future<void> prepareForLaunch({
+    required bool authenticated,
+    bool useV2 = false,
+  }) async {
     if (!supportsWindowManagement) return;
 
+    _useResponsiveAppWindow = useV2;
     await windowManager.ensureInitialized();
-    _skipNextAuthWindowLock = Platform.isMacOS;
+    _skipNextAuthWindowLock = false;
     await windowManager.waitUntilReadyToShow(
       _initialWindowOptions(authenticated: authenticated),
       () async {},
@@ -74,9 +80,10 @@ class DesktopWindowController {
     bool registering = false,
     bool moveWindow = true,
     bool centerWindow = false,
+    Size? size,
   }) {
     return _configure(() async {
-      final targetSize = _authWindowSize(registering);
+      final targetSize = size ?? _authWindowSize(registering);
       final alreadySized = await _isAuthWindowSized(targetSize);
       if (await windowManager.isFullScreen()) {
         await windowManager.setFullScreen(false);
@@ -85,7 +92,7 @@ class DesktopWindowController {
         await windowManager.unmaximize();
       }
       await _setWindowMaximizable(false);
-      await _setWindowShadow(false);
+      await _setWindowShadow(true);
       await windowManager.setMaximumSize(_unboundedWindowSize);
       await windowManager.setMinimumSize(_minimumWindowSize);
       if (moveWindow || !alreadySized) {
@@ -104,7 +111,7 @@ class DesktopWindowController {
     return _configure(() async {
       await windowManager.setResizable(true);
       await _setWindowMaximizable(true);
-      await _setWindowShadow(false);
+      await _setWindowShadow(true);
       if (await windowManager.isFullScreen()) {
         await windowManager.setFullScreen(false);
       }
@@ -141,19 +148,34 @@ class DesktopWindowController {
 
   WindowOptions _initialWindowOptions({bool authenticated = false}) {
     if (Platform.isMacOS) {
+      if (authenticated) {
+        return const WindowOptions(
+          backgroundColor: appWindowBackground,
+          title: 'Gang Chat',
+          titleBarStyle: TitleBarStyle.hidden,
+          windowButtonVisibility: true,
+          center: true,
+        );
+      }
       return const WindowOptions(
+        size: _loginWindowSize,
+        minimumSize: _loginWindowSize,
+        maximumSize: _loginWindowSize,
         backgroundColor: appWindowBackground,
+        title: 'Gang Chat',
         titleBarStyle: TitleBarStyle.hidden,
-        windowButtonVisibility: false,
+        windowButtonVisibility: true,
         center: true,
       );
     }
     if (authenticated) {
-      return const WindowOptions(
+      return WindowOptions(
         size: _appWindowSize,
         minimumSize: _appWindowMinSize,
         backgroundColor: appWindowBackground,
+        title: 'Gang Chat',
         titleBarStyle: TitleBarStyle.hidden,
+        windowButtonVisibility: true,
         center: true,
       );
     }
@@ -162,7 +184,9 @@ class DesktopWindowController {
       minimumSize: _loginWindowSize,
       maximumSize: _loginWindowSize,
       backgroundColor: appWindowBackground,
+      title: 'Gang Chat',
       titleBarStyle: TitleBarStyle.hidden,
+      windowButtonVisibility: true,
       center: true,
     );
   }
@@ -170,7 +194,7 @@ class DesktopWindowController {
   Future<void> _prepareInitialWindow() {
     return _configure(() async {
       await _setWindowMaximizable(false);
-      await _setWindowShadow(false);
+      await _setWindowShadow(true);
       await windowManager.setResizable(false);
       await windowManager.setAlignment(Alignment.center);
       if (Platform.isMacOS) {
@@ -189,7 +213,7 @@ class DesktopWindowController {
     return _configure(() async {
       await windowManager.setResizable(true);
       await _setWindowMaximizable(true);
-      await _setWindowShadow(false);
+      await _setWindowShadow(true);
       await windowManager.setMaximumSize(_unboundedWindowSize);
       await windowManager.setMinimumSize(_appWindowMinSize);
       await windowManager.setSize(_appWindowSize);
@@ -202,6 +226,10 @@ class DesktopWindowController {
 
   Size _authWindowSize(bool registering) =>
       registering ? _registerWindowSize : _loginWindowSize;
+
+  Size get _appWindowMinSize => _useResponsiveAppWindow
+      ? _responsiveAppWindowMinSize
+      : _legacyAppWindowMinSize;
 
   Future<void> _configure(Future<void> Function() configure) async {
     if (!supportsWindowManagement) return;

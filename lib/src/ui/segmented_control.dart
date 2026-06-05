@@ -35,6 +35,7 @@ class _SegmentedControlState<T> extends State<SegmentedControl<T>> {
   static const double _iconGap = 6;
   static const double _hoverLift = 0;
   static const double _baseDepth = 5;
+  static const double _contentLift = 2;
   static const double _trackHeight = _segmentHeight;
   static const Duration _duration = Duration(milliseconds: 180);
 
@@ -124,7 +125,9 @@ class _SegmentedControlState<T> extends State<SegmentedControl<T>> {
                           segment: widget.segments[index],
                           selected: index == selectedIndex,
                           hovered: index == _hoveredIndex,
-                          capTop: index == selectedIndex ? capTop : _hoverLift,
+                          capTop: index == selectedIndex
+                              ? capTop - _contentLift
+                              : _baseDepth - _contentLift,
                           onHoverChanged: (hovered) {
                             setState(() {
                               _hoveredIndex = hovered ? index : null;

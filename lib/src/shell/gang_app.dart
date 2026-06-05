@@ -5,9 +5,9 @@ import 'package:flutter/material.dart';
 import '../auth/auth_client.dart';
 import '../auth/token_store.dart';
 import '../config/app_config.dart';
-import '../home/home_page.dart';
+import '../home/home_page.dart' as legacy_home;
 import '../ui/ui.dart';
-import '../v2/v2_pages.dart';
+import '../v2/home_page.dart' as current_home;
 import '../app/auth_session_controller.dart';
 import '../app/authenticated_app_context.dart';
 import 'desktop_window_controller.dart';
@@ -36,19 +36,6 @@ class GangApp extends StatelessWidget {
       child: MaterialApp(
         title: 'Gang Chat',
         theme: useV2 ? uiTheme() : _buildTheme(),
-        builder: (context, child) {
-          return Stack(
-            children: [
-              Positioned.fill(child: child ?? const SizedBox.shrink()),
-              const Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: WindowControls(),
-              ),
-            ],
-          );
-        },
         home: SelectionArea(
           child: _AuthGate(
             tokenStore: tokenStore,
@@ -192,7 +179,7 @@ class _AuthGateState extends State<_AuthGate> {
     if (result.status == AuthRestoreStatus.missingRefreshToken) {
       setState(() => _initialRestoreDone = true);
       if (widget.startsAuthenticated) {
-        await _window.lockAuthWindow(centerWindow: true);
+        await _lockLoginAuthWindow(centerWindow: true);
       }
       await _ensureWindowVisible();
       return;
@@ -218,7 +205,7 @@ class _AuthGateState extends State<_AuthGate> {
     setState(() => _initialRestoreDone = true);
     if (widget.startsAuthenticated) {
       await _window.runWithHiddenWindow(() async {
-        await _window.lockAuthWindow(centerWindow: true);
+        await _lockLoginAuthWindow(centerWindow: true);
       });
     }
     await _ensureWindowVisible();
@@ -238,9 +225,16 @@ class _AuthGateState extends State<_AuthGate> {
     await _window.runWithHiddenWindow(() async {
       if (!mounted) return;
       session = _auth.beginLogout();
-      await _window.lockAuthWindow(centerWindow: true);
+      await _lockLoginAuthWindow(centerWindow: true);
     });
     await _auth.finishLogout(session);
+  }
+
+  Future<void> _lockLoginAuthWindow({bool centerWindow = false}) {
+    return _window.lockAuthWindow(
+      centerWindow: centerWindow,
+      size: _window.authWidgetSize(false),
+    );
   }
 
   Future<void> _submitAuthRequest(AuthRequest request) async {
@@ -268,19 +262,14 @@ class _AuthGateState extends State<_AuthGate> {
       if (widget.startsAuthenticated && !_initialRestoreDone) {
         return const _LoadingPage();
       }
-      if (widget.useV2) {
-        return V2LoginPage(
-          size: _window.loginWidgetSize,
+      return Theme(
+        data: uiTheme(),
+        child: LoginPage(
           onSubmit: _submitAuthRequest,
+          sizeForMode: _window.authWidgetSize,
           consumeInitialWindowLock: _window.consumeSkipNextAuthWindowLock,
           lockAuthWindow: _window.lockAuthWindow,
-        );
-      }
-      return LoginPage(
-        onSubmit: _submitAuthRequest,
-        sizeForMode: _window.authWidgetSize,
-        consumeInitialWindowLock: _window.consumeSkipNextAuthWindowLock,
-        lockAuthWindow: _window.lockAuthWindow,
+        ),
       );
     }
 
@@ -291,9 +280,9 @@ class _AuthGateState extends State<_AuthGate> {
       logout: _logout,
     );
 
-    if (widget.useV2) return V2HomePage(app: app);
+    if (widget.useV2) return current_home.HomePage(app: app);
 
-    return HomePage(app: app);
+    return legacy_home.HomePage(app: app);
   }
 }
 

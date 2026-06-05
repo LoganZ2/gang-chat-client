@@ -1,11 +1,21 @@
-import 'package:flutter/gestures.dart' show PointerEnterEvent;
+import 'dart:convert';
+
+import 'package:flutter/gestures.dart'
+    show PointerDeviceKind, PointerEnterEvent;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 
 import 'package:client/main.dart';
+import 'package:client/src/app/authenticated_app_context.dart';
+import 'package:client/src/auth/auth_client.dart';
 import 'package:client/src/auth/token_store.dart';
+import 'package:client/src/protocol/api_client.dart';
+import 'package:client/src/protocol/models.dart';
 import 'package:client/src/settings/settings_page.dart';
 import 'package:client/src/ui/ui.dart' as ui;
+import 'package:client/src/v2/home_page.dart' as current_home;
 import 'package:client/ui_showcase.dart' as showcase;
 
 void main() {
@@ -24,18 +34,240 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Gang Chat V2'), findsOneWidget);
+    expect(find.text('Gang Chat'), findsOneWidget);
     expect(find.text('Username or email address'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, 'Login'), findsOneWidget);
-    expect(find.byType(ui.WindowControls), findsOneWidget);
-    expect(find.text('Register'), findsNothing);
-    expect(find.byTooltip('Show password'), findsNothing);
+    expect(find.text('Register'), findsOneWidget);
+    expect(find.byTooltip('Show password'), findsOneWidget);
+
+    final authSurfaceRect = tester.getRect(
+      find.byKey(const ValueKey('auth-surface')),
+    );
+    final modeSwitchRect = tester.getRect(
+      find.byWidgetPredicate((widget) => widget is ui.SegmentedControl),
+    );
+    final titleRect = tester.getRect(find.text('Gang Chat'));
+    expect(titleRect.height, lessThanOrEqualTo(16));
+    expect(
+      tester
+          .widgetList<MouseRegion>(
+            find.ancestor(
+              of: find.text('Gang Chat'),
+              matching: find.byType(MouseRegion),
+            ),
+          )
+          .map((region) => region.cursor),
+      contains(SystemMouseCursors.basic),
+    );
+    expect(modeSwitchRect.top - authSurfaceRect.top, closeTo(36, 0.01));
+    _expectSubmitButtonFullWidth(tester, submitLabel: 'Login');
+    expect(find.text('Enter your credentials to continue.'), findsNothing);
+    final normalSurfaceHeight = tester
+        .getSize(find.byKey(const ValueKey('auth-surface')))
+        .height;
+    final normalBottomGap = _submitBottomGap(tester, submitLabel: 'Login');
 
     await tester.tap(find.widgetWithText(ui.Button, 'Login'));
     await tester.pump();
 
     expect(find.text('Enter your credentials to continue.'), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(const ValueKey('auth-surface'))).height,
+      closeTo(normalSurfaceHeight + 20, 0.01),
+    );
+    expect(
+      _submitBottomGap(tester, submitLabel: 'Login'),
+      closeTo(normalBottomGap, 0.01),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('v2 register mode exposes full auth form', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      GangApp(tokenStore: _MemoryTokenStore(), useV2: true),
+    );
+    await tester.pump();
+
+    final loginGap = _authActionGap(tester, submitLabel: 'Login');
+    final loginBottomGap = _submitBottomGap(tester, submitLabel: 'Login');
+
+    await tester.tap(find.text('Register'));
+    await tester.pump();
+
+    expect(find.text('Username'), findsOneWidget);
+    expect(find.text('Email address'), findsOneWidget);
+    expect(find.text('Password'), findsOneWidget);
+    expect(find.text('Confirm password'), findsOneWidget);
+    expect(find.byTooltip('Show password'), findsNWidgets(2));
+    expect(find.widgetWithText(ui.Button, 'Create account'), findsOneWidget);
+    expect(
+      _authActionGap(tester, submitLabel: 'Create account'),
+      closeTo(loginGap, 0.01),
+    );
+    expect(
+      _submitBottomGap(tester, submitLabel: 'Create account'),
+      closeTo(loginBottomGap, 0.01),
+    );
+    _expectSubmitButtonFullWidth(tester, submitLabel: 'Create account');
+    expect(find.text('Enter your credentials to continue.'), findsNothing);
+    final normalSurfaceHeight = tester
+        .getSize(find.byKey(const ValueKey('auth-surface')))
+        .height;
+
+    await tester.tap(find.byTooltip('Show password').first);
+    await tester.pump();
+
+    expect(find.byTooltip('Hide password'), findsOneWidget);
+    expect(find.byTooltip('Show password'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ui.Button, 'Create account'));
+    await tester.pump();
+
+    expect(find.text('Enter your credentials to continue.'), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(const ValueKey('auth-surface'))).height,
+      closeTo(normalSurfaceHeight + 20, 0.01),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('authenticated home shell renders server-only sidebar', (
+    WidgetTester tester,
+  ) async {
+    final requestedPaths = <String>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: current_home.HomePage(
+          app: _homeTestAppContext(requestedPaths: requestedPaths),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(requestedPaths, contains('/api/v1/rooms'));
+    expect(find.byType(ui.Sidebar), findsNothing);
+    expect(find.text('Gang Chat'), findsNothing);
+    expect(find.text('Workspace'), findsNothing);
+    expect(find.text('Tools'), findsNothing);
+    expect(find.text('Rooms'), findsNothing);
+    expect(find.text('Activity'), findsNothing);
+    expect(find.text('People'), findsNothing);
+    expect(find.text('Files'), findsNothing);
+    expect(find.text('Settings'), findsNothing);
+    expect(find.text('Kai'), findsNothing);
+    expect(find.text('@kai'), findsNothing);
+    expect(find.text('Alpha Room'), findsOneWidget);
+    expect(find.text('Beta Room'), findsOneWidget);
+    expect(find.text('2 members · 1 live'), findsOneWidget);
+    expect(find.text('5 members'), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<ui.PressableSurface>(
+            find.ancestor(
+              of: find.text('Alpha Room'),
+              matching: find.byType(ui.PressableSurface),
+            ),
+          )
+          .selected,
+      isTrue,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'authenticated home shell opens blank content from narrow server list',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: Center(
+            child: SizedBox(
+              width: 420,
+              height: 620,
+              child: current_home.HomePage(app: _homeTestAppContext()),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Alpha Room'), findsOneWidget);
+      expect(find.byTooltip('Show servers'), findsNothing);
+
+      await tester.tap(find.text('Alpha Room'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Beta Room'), findsNothing);
+      expect(find.byTooltip('Show servers'), findsOneWidget);
+      expect(find.text('Alpha Room'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Show servers'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Beta Room'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('auth login layout is identical with and without v2 flag', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(GangApp(tokenStore: _MemoryTokenStore()));
+    await tester.pump();
+
+    final regularSurfaceRect = tester.getRect(
+      find.byKey(const ValueKey('auth-surface')),
+    );
+    final regularModeSwitchRect = tester.getRect(
+      find.byWidgetPredicate((widget) => widget is ui.SegmentedControl),
+    );
+    final regularInputRect = tester.getRect(find.byType(ui.Input).first);
+    final regularSubmitRect = tester.getRect(
+      find.widgetWithText(ui.Button, 'Login'),
+    );
+    final regularCursorColor = Theme.of(
+      tester.element(find.byKey(const ValueKey('auth-surface'))),
+    ).textSelectionTheme.cursorColor;
+
+    await tester.pumpWidget(
+      GangApp(tokenStore: _MemoryTokenStore(), useV2: true),
+    );
+    await tester.pump();
+
+    _expectRectCloseTo(
+      tester.getRect(find.byKey(const ValueKey('auth-surface'))),
+      regularSurfaceRect,
+    );
+    _expectRectCloseTo(
+      tester.getRect(
+        find.byWidgetPredicate((widget) => widget is ui.SegmentedControl),
+      ),
+      regularModeSwitchRect,
+    );
+    _expectRectCloseTo(
+      tester.getRect(find.byType(ui.Input).first),
+      regularInputRect,
+    );
+    _expectRectCloseTo(
+      tester.getRect(find.widgetWithText(ui.Button, 'Login')),
+      regularSubmitRect,
+    );
+    expect(
+      Theme.of(
+        tester.element(find.byKey(const ValueKey('auth-surface'))),
+      ).textSelectionTheme.cursorColor,
+      regularCursorColor,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -267,6 +499,16 @@ void main() {
       tester.getSize(find.byType(ui.SegmentedControl<String>)).height,
       closeTo(41, 0.01),
     );
+    final segmentOffsets = tester
+        .widgetList<AnimatedContainer>(
+          find.descendant(
+            of: find.byType(ui.SegmentedControl<String>),
+            matching: find.byType(AnimatedContainer),
+          ),
+        )
+        .map((container) => container.transform?.storage[13])
+        .toList();
+    expect(segmentOffsets, [closeTo(-2, 0.01), closeTo(3, 0.01)]);
     expect(tester.takeException(), isNull);
   });
 
@@ -468,6 +710,7 @@ void main() {
                     controller: controller,
                     focusNode: focusNode,
                     hintText: 'Type here',
+                    prefixIcon: Icons.person_outline,
                   ),
                 ),
               ),
@@ -477,42 +720,212 @@ void main() {
       ),
     );
 
-    final inputSurfaceFinder = find.ancestor(
-      of: find.byType(TextField),
-      matching: find.byType(ui.PressableSurface),
-    );
+    final inputFinder = find.byType(ui.Input);
+    final textFieldFinder = find.byType(TextField);
     expect(find.byType(ui.Input), findsOneWidget);
-    expect(inputSurfaceFinder, findsOneWidget);
+    expect(textFieldFinder, findsOneWidget);
     expect(
-      tester.widget<ui.PressableSurface>(inputSurfaceFinder).mouseCursor,
+      find.descendant(
+        of: inputFinder,
+        matching: find.byType(ui.PressableSurface),
+      ),
+      findsNothing,
+    );
+    expect(
+      tester.widget<TextField>(textFieldFinder).mouseCursor,
       SystemMouseCursors.text,
     );
+    final textFieldPadding =
+        tester.widget<TextField>(textFieldFinder).decoration?.contentPadding
+            as EdgeInsets;
+    expect(textFieldPadding.top, greaterThan(textFieldPadding.bottom));
+    expect(textFieldPadding.top - textFieldPadding.bottom, closeTo(8, 0.01));
     expect(
-      tester.widget<ui.PressableSurface>(inputSurfaceFinder).hoverEffect,
-      isTrue,
-    );
-    expect(
-      tester.widget<ui.PressableSurface>(inputSurfaceFinder).pressEffect,
-      isFalse,
+      tester
+          .widgetList<Transform>(
+            find.ancestor(
+              of: find.byIcon(Icons.person_outline),
+              matching: find.byType(Transform),
+            ),
+          )
+          .map((transform) => transform.transform.storage[13]),
+      contains(closeTo(5, 0.01)),
     );
 
-    final initialRect = tester.getRect(inputSurfaceFinder);
-    await tester.tapAt(initialRect.topLeft + const Offset(4, 4));
+    final initialRect = tester.getRect(inputFinder);
+    await tester.tapAt(initialRect.topLeft + const Offset(4, 6));
     await tester.pump();
 
     expect(focusNode.hasFocus, isTrue);
-    expect(
-      tester.widget<ui.PressableSurface>(inputSurfaceFinder).borderColor,
-      ui.UiColors.accentBorder,
+
+    focusNode.unfocus();
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.person_outline));
+    await tester.pump();
+
+    expect(focusNode.hasFocus, isTrue);
+
+    final paddingPoints = [
+      Offset(initialRect.center.dx, initialRect.top + 6),
+      Offset(initialRect.center.dx, initialRect.bottom - 14),
+      Offset(initialRect.center.dx, initialRect.top + 6),
+      Offset(initialRect.right - 4, initialRect.top + 6),
+      Offset(initialRect.right - 4, initialRect.center.dy),
+      Offset(initialRect.right - 4, initialRect.bottom - 14),
+    ];
+    final mouse = await tester.createGesture(
+      kind: PointerDeviceKind.mouse,
+      pointer: 99,
     );
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: Offset.zero);
+    await tester.pump();
+    for (final point in paddingPoints) {
+      await mouse.moveTo(point);
+      await tester.pump();
+      await mouse.down(point);
+      await tester.pump();
+
+      expect(focusNode.hasFocus, isTrue);
+
+      await mouse.up();
+      await tester.pump();
+      await mouse.down(point);
+      await tester.pump();
+
+      expect(focusNode.hasFocus, isTrue);
+
+      await mouse.up();
+      await tester.pump();
+    }
 
     await tester.enterText(find.byType(TextField), 'First line\nSecond line');
     await tester.pumpAndSettle();
 
-    final multilineRect = tester.getRect(inputSurfaceFinder);
+    final multilineRect = tester.getRect(inputFinder);
     expect(multilineRect.height, greaterThan(initialRect.height));
     expect(multilineRect.bottom, closeTo(initialRect.bottom, 0.01));
     expect(multilineRect.top, lessThan(initialRect.top));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ui input hover animates without changing colors', (
+    WidgetTester tester,
+  ) async {
+    final focusNode = FocusNode();
+    addTearDown(focusNode.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 240,
+              child: ui.Input(focusNode: focusNode, hintText: 'Type here'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final inputFinder = find.byType(ui.Input);
+    final animatedCapFinder = find.descendant(
+      of: inputFinder,
+      matching: find.byType(AnimatedPositioned),
+    );
+    expect(animatedCapFinder, findsOneWidget);
+    final animatedCap = tester.widget<AnimatedPositioned>(animatedCapFinder);
+    expect(animatedCap.duration, const Duration(milliseconds: 95));
+    expect(animatedCap.curve, Curves.easeOutCubic);
+    expect(animatedCap.top, closeTo(3, 0.01));
+
+    var inputDecorations = _inputLayerDecorations(tester, inputFinder);
+    expect(inputDecorations, hasLength(2));
+    expect(_topBorderColor(inputDecorations.first), ui.UiColors.border);
+    expect(_topBorderColor(inputDecorations.last), ui.UiColors.border);
+    expect(inputDecorations.last.color, ui.UiColors.surface);
+
+    var inputRect = tester.getRect(inputFinder);
+    await tester.tapAt(inputRect.center);
+    await tester.pumpAndSettle();
+
+    expect(focusNode.hasFocus, isTrue);
+    expect(
+      tester.widget<AnimatedPositioned>(animatedCapFinder).top,
+      closeTo(3, 0.01),
+    );
+    inputDecorations = _inputLayerDecorations(tester, inputFinder);
+    expect(_topBorderColor(inputDecorations.first), ui.UiColors.accentBorder);
+    expect(_topBorderColor(inputDecorations.last), ui.UiColors.accentBorder);
+    expect(inputDecorations.last.color, ui.UiColors.selected);
+
+    focusNode.unfocus();
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<AnimatedPositioned>(animatedCapFinder).top,
+      closeTo(3, 0.01),
+    );
+    inputDecorations = _inputLayerDecorations(tester, inputFinder);
+    expect(_topBorderColor(inputDecorations.first), ui.UiColors.border);
+    expect(_topBorderColor(inputDecorations.last), ui.UiColors.border);
+    expect(inputDecorations.last.color, ui.UiColors.surface);
+
+    final hoverRegions = tester
+        .widgetList<MouseRegion>(
+          find.descendant(of: inputFinder, matching: find.byType(MouseRegion)),
+        )
+        .where((region) => region.onEnter != null);
+    for (final region in hoverRegions) {
+      region.onEnter?.call(const PointerEnterEvent(position: Offset.zero));
+    }
+
+    await tester.pump();
+
+    var positionedLayers = tester
+        .widgetList<Positioned>(
+          find.descendant(of: inputFinder, matching: find.byType(Positioned)),
+        )
+        .toList();
+    expect(positionedLayers, hasLength(2));
+    expect(positionedLayers.last.top, closeTo(3, 0.01));
+    expect(
+      tester.widget<AnimatedPositioned>(animatedCapFinder).top,
+      closeTo(0, 0.01),
+    );
+
+    inputDecorations = _inputLayerDecorations(tester, inputFinder);
+    expect(_topBorderColor(inputDecorations.first), ui.UiColors.border);
+    expect(_topBorderColor(inputDecorations.last), ui.UiColors.border);
+    expect(inputDecorations.last.color, ui.UiColors.surface);
+
+    await tester.pump(const Duration(milliseconds: 20));
+    positionedLayers = tester
+        .widgetList<Positioned>(
+          find.descendant(of: inputFinder, matching: find.byType(Positioned)),
+        )
+        .toList();
+    expect(positionedLayers.last.top, lessThan(3));
+    expect(positionedLayers.last.top, greaterThan(0));
+
+    await tester.pumpAndSettle();
+    positionedLayers = tester
+        .widgetList<Positioned>(
+          find.descendant(of: inputFinder, matching: find.byType(Positioned)),
+        )
+        .toList();
+    expect(positionedLayers.last.top, closeTo(0, 0.01));
+
+    inputRect = tester.getRect(inputFinder);
+    await tester.tapAt(inputRect.center);
+    await tester.pumpAndSettle();
+
+    expect(focusNode.hasFocus, isTrue);
+    inputDecorations = _inputLayerDecorations(tester, inputFinder);
+    expect(_topBorderColor(inputDecorations.first), ui.UiColors.accentBorder);
+    expect(_topBorderColor(inputDecorations.last), ui.UiColors.accentBorder);
+    expect(inputDecorations.last.color, ui.UiColors.selected);
     expect(tester.takeException(), isNull);
   });
 
@@ -621,14 +1034,18 @@ void main() {
       ),
     );
 
-    final inputSurfaceFinder = find.ancestor(
-      of: find.byType(TextField),
-      matching: find.byType(ui.PressableSurface),
-    );
+    final inputFinder = find.byType(ui.Input);
 
     expect(find.text('Sticker 0'), findsNothing);
     expect(find.text('Voice panel'), findsNothing);
-    expect(inputSurfaceFinder, findsOneWidget);
+    expect(inputFinder, findsOneWidget);
+    expect(
+      find.descendant(
+        of: inputFinder,
+        matching: find.byType(ui.PressableSurface),
+      ),
+      findsNothing,
+    );
 
     final sendSurfaceFinder = find.ancestor(
       of: find.byIcon(Icons.send_rounded),
@@ -642,18 +1059,18 @@ void main() {
     expect(stickerSurfaceFinder, findsOneWidget);
 
     final composerRect = tester.getRect(find.byType(ui.ChatComposer));
-    final initialInputRect = tester.getRect(inputSurfaceFinder);
+    final initialInputRect = tester.getRect(inputFinder);
     final stickerRect = tester.getRect(stickerSurfaceFinder);
     final sendRect = tester.getRect(sendSurfaceFinder);
     expect(composerRect.width, closeTo(560, 0.01));
     expect(sendRect.right, closeTo(composerRect.right - 12, 0.01));
     expect(stickerRect.left, closeTo(initialInputRect.right + 10, 0.01));
     expect(
-      tester.widget<ui.PressableSurface>(inputSurfaceFinder).height,
+      ui.Input.defaultHeight,
       tester.widget<ui.PressableSurface>(sendSurfaceFinder).height,
     );
     expect(
-      tester.getSize(inputSurfaceFinder).height,
+      tester.getSize(inputFinder).height,
       tester.getSize(sendSurfaceFinder).height,
     );
     expect(
@@ -664,30 +1081,10 @@ void main() {
       tester.widget<TextField>(find.byType(TextField)).mouseCursor,
       SystemMouseCursors.text,
     );
-    expect(tester.widget<ui.PressableSurface>(inputSurfaceFinder).hoverLift, 3);
-    expect(
-      tester.widget<ui.PressableSurface>(inputSurfaceFinder).interactive,
-      isTrue,
-    );
-    expect(
-      tester.widget<ui.PressableSurface>(inputSurfaceFinder).mouseCursor,
-      SystemMouseCursors.text,
-    );
-    expect(
-      tester.widget<ui.PressableSurface>(inputSurfaceFinder).hoverEffect,
-      isTrue,
-    );
-    expect(
-      tester.widget<ui.PressableSurface>(inputSurfaceFinder).pressEffect,
-      isFalse,
-    );
 
     final inputMouseRegions = tester
         .widgetList<MouseRegion>(
-          find.descendant(
-            of: inputSurfaceFinder,
-            matching: find.byType(MouseRegion),
-          ),
+          find.descendant(of: inputFinder, matching: find.byType(MouseRegion)),
         )
         .where(
           (region) =>
@@ -702,16 +1099,13 @@ void main() {
 
     final hoveredInputLayers = tester
         .widgetList<Positioned>(
-          find.descendant(
-            of: inputSurfaceFinder,
-            matching: find.byType(Positioned),
-          ),
+          find.descendant(of: inputFinder, matching: find.byType(Positioned)),
         )
         .toList();
     expect(hoveredInputLayers, hasLength(2));
     expect(hoveredInputLayers.last.top, closeTo(0, 0.01));
 
-    final inputRect = tester.getRect(inputSurfaceFinder);
+    final inputRect = tester.getRect(inputFinder);
     await tester.tapAt(inputRect.topLeft + const Offset(4, 4));
     await tester.pump();
 
@@ -719,16 +1113,11 @@ void main() {
       tester.widget<TextField>(find.byType(TextField)).focusNode?.hasFocus,
       isTrue,
     );
-    expect(tester.widget<ui.PressableSurface>(inputSurfaceFinder).hoverLift, 3);
-    expect(
-      tester.widget<ui.PressableSurface>(inputSurfaceFinder).hoverEffect,
-      isTrue,
-    );
 
     await tester.enterText(find.byType(TextField), 'First line\nSecond line');
     await tester.pumpAndSettle();
 
-    final multilineInputRect = tester.getRect(inputSurfaceFinder);
+    final multilineInputRect = tester.getRect(inputFinder);
     final multilineSendRect = tester.getRect(sendSurfaceFinder);
     expect(multilineInputRect.height, greaterThan(multilineSendRect.height));
     expect(multilineInputRect.bottom, closeTo(multilineSendRect.bottom, 0.01));
@@ -1148,6 +1537,156 @@ void main() {
 
 Color _expectedShadowForBackground(Color background) {
   return Color.lerp(background, Colors.black, 0.46)!;
+}
+
+List<BoxDecoration> _inputLayerDecorations(
+  WidgetTester tester,
+  Finder inputFinder,
+) {
+  return tester
+      .widgetList<DecoratedBox>(
+        find.descendant(of: inputFinder, matching: find.byType(DecoratedBox)),
+      )
+      .where((box) {
+        final decoration = box.decoration;
+        return decoration is BoxDecoration && decoration.border is Border;
+      })
+      .map((box) => box.decoration as BoxDecoration)
+      .toList();
+}
+
+Color _topBorderColor(BoxDecoration decoration) {
+  return (decoration.border as Border).top.color;
+}
+
+void _expectRectCloseTo(Rect actual, Rect expected) {
+  expect(actual.left, closeTo(expected.left, 0.01));
+  expect(actual.top, closeTo(expected.top, 0.01));
+  expect(actual.right, closeTo(expected.right, 0.01));
+  expect(actual.bottom, closeTo(expected.bottom, 0.01));
+}
+
+double _authActionGap(WidgetTester tester, {required String submitLabel}) {
+  final lastInputRect = tester.getRect(find.byType(ui.Input).last);
+  final submitRect = tester.getRect(
+    find.widgetWithText(ui.Button, submitLabel),
+  );
+  return submitRect.top - lastInputRect.bottom;
+}
+
+double _submitBottomGap(WidgetTester tester, {required String submitLabel}) {
+  final surfaceRect = tester.getRect(
+    find.byKey(const ValueKey('auth-surface')),
+  );
+  final submitRect = tester.getRect(
+    find.widgetWithText(ui.Button, submitLabel),
+  );
+  return surfaceRect.bottom - submitRect.bottom;
+}
+
+void _expectSubmitButtonFullWidth(
+  WidgetTester tester, {
+  required String submitLabel,
+}) {
+  final inputRect = tester.getRect(find.byType(ui.Input).first);
+  final submitRect = tester.getRect(
+    find.widgetWithText(ui.Button, submitLabel),
+  );
+  expect(submitRect.left, closeTo(inputRect.left, 0.01));
+  expect(submitRect.right, closeTo(inputRect.right, 0.01));
+}
+
+AuthenticatedAppContext _homeTestAppContext({
+  Future<void> Function()? onLogout,
+  List<String>? requestedPaths,
+}) {
+  final user = CurrentUser(
+    id: 'user-1',
+    uid: 'uid-1',
+    username: 'kai',
+    displayName: 'Kai',
+    bio: '',
+    gender: 'secret',
+    email: 'kai@example.com',
+    emailPublic: false,
+    phoneNumber: null,
+    phoneNumberPublic: false,
+    avatarUrl: null,
+    defaultAvatarKey: 'blue-3',
+    isSuperuser: false,
+    createdAt: DateTime.utc(2026),
+  );
+
+  return AuthenticatedAppContext(
+    session: AuthSession(
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      accessTokenExpiresAt: DateTime.utc(2026, 1, 1, 1),
+      user: user,
+    ),
+    apiBaseUrl: 'http://localhost:3000',
+    accessTokenProvider: ({bool forceRefresh = false}) async => 'access-token',
+    logout: onLogout ?? () async {},
+    api: _roomsApi(requestedPaths: requestedPaths),
+  );
+}
+
+GangApi _roomsApi({List<String>? requestedPaths}) {
+  return GangApiClient(
+    baseUrl: 'http://example.test/api/v1',
+    accessTokenProvider: ({bool forceRefresh = false}) async => 'access-token',
+    httpClient: MockClient((request) async {
+      requestedPaths?.add(request.url.path);
+      if (request.url.path == '/api/v1/rooms') {
+        return _jsonResponse({'rooms': _serverListJson});
+      }
+      return http.Response('unexpected request: ${request.url}', 404);
+    }),
+  );
+}
+
+http.Response _jsonResponse(Object body) {
+  return http.Response(
+    jsonEncode(body),
+    200,
+    headers: const {'content-type': 'application/json; charset=utf-8'},
+  );
+}
+
+final _serverListJson = [
+  _roomCardJson(
+    id: 'server-alpha',
+    name: 'Alpha Room',
+    memberCount: 2,
+    liveParticipantCount: 1,
+    unreadCount: 3,
+  ),
+  _roomCardJson(id: 'server-beta', name: 'Beta Room', memberCount: 5),
+];
+
+Map<String, Object?> _roomCardJson({
+  required String id,
+  required String name,
+  int memberCount = 1,
+  int liveParticipantCount = 0,
+  int unreadCount = 0,
+}) {
+  return {
+    'id': id,
+    'name': name,
+    'rid': id,
+    'visibility': 'private',
+    'description': '',
+    'notification_policy': 'all',
+    'avatar_url': null,
+    'default_avatar_key': 'room-1',
+    'member_count': memberCount,
+    'live_participant_count': liveParticipantCount,
+    'live_avatar_preview': <Object?>[],
+    'last_message': null,
+    'unread_count': unreadCount,
+    'updated_at': '2026-06-05T00:00:00Z',
+  };
 }
 
 class _MemoryTokenStore extends TokenStore {

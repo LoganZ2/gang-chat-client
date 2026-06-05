@@ -1963,8 +1963,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void dispose() {
     _toastTimer?.cancel();
-    // Make sure we never leave the window-controls hidden if we're torn down
-    // (e.g. logout) while the immersive full-screen share was open.
+    // Keep the legacy title-bar visibility flag reset if we're torn down
+    // (e.g. logout) while immersive full-screen share was open.
     windowControlsHidden.value = false;
     final realtimeEvents = _realtimeEvents;
     if (realtimeEvents != null) unawaited(realtimeEvents.cancel());
@@ -1992,8 +1992,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   /// Shows a transient, horizontally-centered message near the top (antd
-  /// Message style) that auto-dismisses. Used for action errors so they no
-  /// longer sit in a top bar that overlaps the custom window controls.
+  /// Message style) that auto-dismisses.
   void _showToast(String message, {HomeToastKind kind = HomeToastKind.error}) {
     _applyHomeToastPatch(homeToastShown(message: message, kind: kind));
     _toastTimer?.cancel();
@@ -2024,8 +2023,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   /// Enters immersive full-screen for [track]: real OS full-screen, with the
-  /// sidebar, header and custom window-controls hidden so only the video and a
-  /// floating control bar show. Esc or the exit button leaves.
+  /// sidebar and header hidden so only the video and a floating control bar
+  /// show. Esc or the exit button leaves.
   Future<void> _enterShareFullScreen(LiveVideoTrack track) async {
     _applyHomeFullScreenSharePatch(
       homeFullScreenShareEntered(identity: track.identity),

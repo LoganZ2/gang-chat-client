@@ -2,12 +2,14 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import 'button.dart';
 import 'text_context_menu.dart';
 import 'tokens.dart';
 
 const double _inputHorizontalPadding = 12;
 const double _inputVisualLift = 3;
+const double _inputBaseDepth = 5;
+const double _inputTextVerticalOffset = 4;
+const double _inputIconVerticalOffset = 5;
 
 class Input extends StatefulWidget {
   const Input({
@@ -15,6 +17,12 @@ class Input extends StatefulWidget {
     this.controller,
     this.focusNode,
     this.hintText = 'Message',
+    this.enabled = true,
+    this.obscureText = false,
+    this.autofillHints,
+    this.keyboardType,
+    this.prefixIcon,
+    this.suffix,
     this.minLines = 1,
     this.maxLines = 5,
     this.onSubmitted,
@@ -28,6 +36,12 @@ class Input extends StatefulWidget {
   final TextEditingController? controller;
   final FocusNode? focusNode;
   final String hintText;
+  final bool enabled;
+  final bool obscureText;
+  final Iterable<String>? autofillHints;
+  final TextInputType? keyboardType;
+  final IconData? prefixIcon;
+  final Widget? suffix;
   final int minLines;
   final int maxLines;
   final ValueChanged<String>? onSubmitted;
@@ -42,11 +56,16 @@ class Input extends StatefulWidget {
 class _InputState extends State<Input> {
   TextEditingController? _localController;
   FocusNode? _localFocusNode;
+  bool _hovered = false;
 
   TextEditingController get _effectiveController =>
       widget.controller ?? _localController!;
 
   FocusNode get _effectiveFocusNode => widget.focusNode ?? _localFocusNode!;
+
+  int get _effectiveMinLines => widget.obscureText ? 1 : widget.minLines;
+
+  int get _effectiveMaxLines => widget.obscureText ? 1 : widget.maxLines;
 
   @override
   void initState() {
@@ -110,6 +129,11 @@ class _InputState extends State<Input> {
 
   void _handleFocusChanged() => setState(() {});
 
+  void _handleHoverChanged(bool hovered) {
+    if (_hovered == hovered) return;
+    setState(() => _hovered = hovered);
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -120,46 +144,124 @@ class _InputState extends State<Input> {
         );
         final focused = _effectiveFocusNode.hasFocus;
 
-        return Listener(
-          behavior: HitTestBehavior.opaque,
-          onPointerDown: (_) => _effectiveFocusNode.requestFocus(),
-          child: MouseRegion(
-            cursor: SystemMouseCursors.text,
-            child: PressableSurface(
-              height: textMetrics.height,
-              interactive: true,
-              mouseCursor: SystemMouseCursors.text,
-              hoverEffect: true,
-              pressEffect: false,
-              borderRadius: UiRadii.md,
-              backgroundColor: UiColors.surface,
-              borderColor: focused ? UiColors.accentBorder : UiColors.border,
-              padding: EdgeInsets.zero,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  _inputHorizontalPadding,
-                  textMetrics.topPadding,
-                  _inputHorizontalPadding,
-                  textMetrics.bottomPadding,
-                ),
-                child: TextField(
-                  controller: _effectiveController,
-                  focusNode: _effectiveFocusNode,
-                  minLines: widget.minLines,
-                  maxLines: widget.maxLines,
-                  onSubmitted: widget.onSubmitted,
-                  onChanged: widget.onChanged,
-                  cursorColor: UiColors.accent,
-                  mouseCursor: SystemMouseCursors.text,
-                  style: widget.style,
-                  textAlignVertical: TextAlignVertical.center,
-                  contextMenuBuilder: buildTextFieldContextMenu,
-                  decoration: InputDecoration.collapsed(
-                    hintText: widget.hintText,
-                    hintStyle: widget.hintStyle,
+        final content = TextField(
+          controller: _effectiveController,
+          focusNode: _effectiveFocusNode,
+          enabled: widget.enabled,
+          obscureText: widget.obscureText,
+          autofillHints: widget.autofillHints,
+          keyboardType: widget.keyboardType,
+          minLines: _effectiveMinLines,
+          maxLines: _effectiveMaxLines,
+          onSubmitted: widget.onSubmitted,
+          onChanged: widget.onChanged,
+          cursorColor: UiColors.accent,
+          mouseCursor: widget.enabled
+              ? SystemMouseCursors.text
+              : SystemMouseCursors.basic,
+          style: widget.style,
+          textAlignVertical: TextAlignVertical.center,
+          contextMenuBuilder: buildTextFieldContextMenu,
+          decoration: InputDecoration(
+            isDense: true,
+            hintText: widget.hintText,
+            hintStyle: widget.hintStyle,
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            disabledBorder: InputBorder.none,
+            contentPadding: EdgeInsets.fromLTRB(
+              _inputHorizontalPadding,
+              textMetrics.topPadding,
+              _inputHorizontalPadding,
+              textMetrics.bottomPadding,
+            ),
+            prefixIcon: widget.prefixIcon == null
+                ? null
+                : Padding(
+                    padding: const EdgeInsets.only(
+                      left: _inputHorizontalPadding,
+                      right: UiSpacing.sm,
+                    ),
+                    child: Transform.translate(
+                      offset: const Offset(0, _inputIconVerticalOffset),
+                      child: Icon(
+                        widget.prefixIcon,
+                        size: 17,
+                        color: UiColors.textMuted,
+                      ),
+                    ),
+                  ),
+            prefixIconConstraints: const BoxConstraints(
+              minWidth: 0,
+              minHeight: 0,
+            ),
+            suffixIcon: widget.suffix == null
+                ? null
+                : Padding(
+                    padding: const EdgeInsets.only(
+                      left: UiSpacing.sm,
+                      right: _inputHorizontalPadding,
+                    ),
+                    child: Transform.translate(
+                      offset: const Offset(0, _inputIconVerticalOffset),
+                      child: widget.suffix,
+                    ),
+                  ),
+            suffixIconConstraints: const BoxConstraints(
+              minWidth: 0,
+              minHeight: 0,
+            ),
+          ),
+        );
+
+        final enabled = widget.enabled;
+        final capTop = enabled && _hovered ? 0.0 : _inputVisualLift;
+        final background = enabled
+            ? focused
+                  ? UiColors.selected
+                  : UiColors.surface
+            : UiColors.disabledSurface;
+        final borderColor = enabled
+            ? focused
+                  ? UiColors.accentBorder
+                  : UiColors.border
+            : UiColors.disabledBorder;
+        final shadowColor = Color.lerp(background, Colors.black, 0.46)!;
+
+        return MouseRegion(
+          cursor: enabled ? SystemMouseCursors.text : SystemMouseCursors.basic,
+          onEnter: (_) => _handleHoverChanged(true),
+          onExit: (_) => _handleHoverChanged(false),
+          child: SizedBox(
+            height: textMetrics.outerHeight,
+            child: Stack(
+              clipBehavior: Clip.hardEdge,
+              children: [
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: _inputVisualLift + _inputBaseDepth,
+                  height: textMetrics.height,
+                  child: _InputLayer(
+                    background: shadowColor,
+                    borderColor: borderColor,
                   ),
                 ),
-              ),
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 95),
+                  curve: Curves.easeOutCubic,
+                  left: 0,
+                  right: 0,
+                  top: capTop,
+                  height: textMetrics.height,
+                  child: _InputLayer(
+                    background: background,
+                    borderColor: borderColor,
+                    child: content,
+                  ),
+                ),
+              ],
             ),
           ),
         );
@@ -182,19 +284,20 @@ class _InputState extends State<Input> {
       text: TextSpan(text: measureText, style: widget.style),
       textDirection: Directionality.of(context),
       textScaler: MediaQuery.textScalerOf(context),
-      maxLines: widget.maxLines,
+      maxLines: _effectiveMaxLines,
     )..layout(maxWidth: textWidth);
     final lineCount = painter.computeLineMetrics().length.clamp(
-      widget.minLines,
-      widget.maxLines,
+      _effectiveMinLines,
+      _effectiveMaxLines,
     );
     final lineHeight = painter.preferredLineHeight;
     final verticalPadding = math.max(
       0.0,
       (Input.defaultHeight - lineHeight) / 2,
     );
-    final topPadding = math.max(0.0, verticalPadding - _inputVisualLift);
-    final bottomPadding = (verticalPadding * 2) - topPadding;
+    final textOffset = math.min(_inputTextVerticalOffset, verticalPadding);
+    final topPadding = verticalPadding + textOffset;
+    final bottomPadding = verticalPadding - textOffset;
     final height = math.max(
       Input.defaultHeight,
       (lineHeight * lineCount) + topPadding + bottomPadding,
@@ -202,8 +305,36 @@ class _InputState extends State<Input> {
 
     return _InputMetrics(
       height: height,
+      outerHeight: height + _inputVisualLift + _inputBaseDepth,
       topPadding: topPadding,
       bottomPadding: bottomPadding,
+    );
+  }
+}
+
+class _InputLayer extends StatelessWidget {
+  const _InputLayer({
+    required this.background,
+    required this.borderColor,
+    this.child,
+  });
+
+  final Color background;
+  final Color borderColor;
+  final Widget? child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(UiRadii.md),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(UiRadii.md),
+          border: Border.all(color: borderColor),
+        ),
+        child: child ?? const SizedBox.expand(),
+      ),
     );
   }
 }
@@ -211,11 +342,13 @@ class _InputState extends State<Input> {
 class _InputMetrics {
   const _InputMetrics({
     required this.height,
+    required this.outerHeight,
     required this.topPadding,
     required this.bottomPadding,
   });
 
   final double height;
+  final double outerHeight;
   final double topPadding;
   final double bottomPadding;
 }

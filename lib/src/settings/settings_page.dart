@@ -2900,8 +2900,6 @@ class _SettingsPageState extends State<SettingsPage> {
       body: Column(
         children: [
           Container(
-            // Drop the header below the window-controls strip so the title and
-            // refresh button clear the drag band and window buttons.
             height: 48 + titleBarHeight,
             padding: const EdgeInsets.fromLTRB(22, titleBarHeight, 22, 0),
             color: _primaryDarkLow,

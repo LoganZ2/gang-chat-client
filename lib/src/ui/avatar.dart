@@ -33,12 +33,14 @@ class Avatar extends StatelessWidget {
     this.imageUrl,
     this.size = 40,
     this.active = false,
+    this.activeBorderWidth = 2,
   });
 
   final String label;
   final String? imageUrl;
   final double size;
   final bool active;
+  final double activeBorderWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +55,7 @@ class Avatar extends StatelessWidget {
           shape: BoxShape.circle,
           border: Border.all(
             color: active ? UiColors.accent : UiColors.border,
-            width: active ? 2 : 1,
+            width: active ? activeBorderWidth : 1,
           ),
         ),
         child: ClipOval(
