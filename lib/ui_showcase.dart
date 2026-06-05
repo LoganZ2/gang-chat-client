@@ -7,8 +7,9 @@ import 'package:window_manager/window_manager.dart';
 import 'src/ui/ui.dart';
 
 const _showcaseWindowSize = Size(1120, 760);
-const _showcaseMinWindowSize = Size(860, 560);
+const _showcaseMinWindowSize = Size(390, 560);
 const _unboundedWindowSize = Size(100000, 100000);
+const _showcaseNarrowBreakpoint = 720.0;
 
 bool get _supportsDesktopWindowManagement =>
     !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
@@ -67,6 +68,8 @@ class _UiShowcasePageState extends State<UiShowcasePage> {
   bool _share = false;
   String _largeAction = 'focus';
   String _section = 'chat';
+  String _navigationPreview = 'chat';
+  bool _narrowContentOpen = false;
   bool _toastVisible = false;
   final TextEditingController _nameController = TextEditingController(
     text: 'Gang Chat',
@@ -91,95 +94,168 @@ class _UiShowcasePageState extends State<UiShowcasePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: UiColors.background,
-      body: Stack(
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final narrow = constraints.maxWidth < _showcaseNarrowBreakpoint;
+          final body = narrow
+              ? (_narrowContentOpen
+                    ? _buildNarrowContentPage(context)
+                    : _buildSidebarPane(
+                        width: constraints.maxWidth,
+                        openContentOnSelect: true,
+                      ))
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildSidebarPane(width: 248, openContentOnSelect: false),
+                    Expanded(
+                      child: _buildContentScroll(
+                        context,
+                        padding: const EdgeInsets.fromLTRB(28, 28, 28, 40),
+                      ),
+                    ),
+                  ],
+                );
+
+          return Stack(
             children: [
-              SizedBox(
-                width: 248,
-                child: DecoratedBox(
-                  decoration: const BoxDecoration(
-                    color: UiColors.surfaceLow,
-                    border: Border(right: BorderSide(color: UiColors.border)),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Gang UI Kit', style: UiTypography.title),
-                        const SizedBox(height: 18),
-                        SegmentedControl<String>(
-                          value: _section,
-                          onChanged: (value) =>
-                              setState(() => _section = value),
-                          segments: const [
-                            Segment(
-                              value: 'chat',
-                              label: 'Chat',
-                              icon: Icons.chat_bubble_outline,
-                            ),
-                            Segment(
-                              value: 'forms',
-                              label: 'Forms',
-                              icon: Icons.tune,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 22),
-                        const _PaletteStrip(),
-                        const Spacer(),
-                        Row(
-                          children: const [
-                            Avatar(label: 'Kai', active: true),
-                            SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'Showcase entry',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: UiTypography.label,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+              body,
+              if (_toastVisible)
+                Positioned(
+                  top: 24,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Toast(
+                      icon: Icons.check_circle_outline,
+                      message:
+                          'UI kit toast is rendering from the showcase entry.',
                     ),
                   ),
                 ),
-              ),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(28, 28, 28, 40),
-                  child: _section == 'chat'
-                      ? _buildChatSection(context)
-                      : _buildFormsSection(context),
-                ),
-              ),
             ],
-          ),
-          if (_toastVisible)
-            Positioned(
-              top: 24,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Toast(
-                  icon: Icons.check_circle_outline,
-                  message: 'UI kit toast is rendering from the showcase entry.',
-                ),
-              ),
-            ),
-        ],
+          );
+        },
       ),
     );
   }
+
+  Widget _buildSidebarPane({
+    required double width,
+    required bool openContentOnSelect,
+  }) {
+    return SizedBox(
+      width: width,
+      child: Sidebar(
+        width: width,
+        padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
+        selectedId: _section,
+        onItemSelected: (value) {
+          setState(() {
+            _section = value;
+            if (openContentOnSelect) _narrowContentOpen = true;
+          });
+        },
+        header: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Gang UI Kit', style: UiTypography.title),
+            SizedBox(height: 18),
+            _PaletteStrip(),
+          ],
+        ),
+        groups: const [
+          SidebarGroup(
+            label: 'Sections',
+            items: [
+              SidebarItem(
+                id: 'chat',
+                label: 'Chat',
+                icon: Icons.chat_bubble_outline,
+              ),
+              SidebarItem(id: 'forms', label: 'Forms', icon: Icons.tune),
+            ],
+          ),
+        ],
+        footer: const Row(
+          children: [
+            Avatar(label: 'Kai', active: true),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Showcase entry',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: UiTypography.label,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNarrowContentPage(BuildContext context) {
+    return Column(
+      children: [
+        DecoratedBox(
+          decoration: const BoxDecoration(
+            color: UiColors.surfaceLow,
+            border: Border(bottom: BorderSide(color: UiColors.border)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 16, 10),
+            child: Row(
+              children: [
+                ButtonIcon(
+                  tooltip: 'Show sections',
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => setState(() => _narrowContentOpen = false),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _sectionTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: UiTypography.title,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Expanded(
+          child: _buildContentScroll(
+            context,
+            padding: const EdgeInsets.fromLTRB(20, 22, 20, 40),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildContentScroll(
+    BuildContext context, {
+    required EdgeInsetsGeometry padding,
+  }) {
+    return SingleChildScrollView(
+      padding: padding,
+      child: _section == 'chat'
+          ? _buildChatSection(context)
+          : _buildFormsSection(context),
+    );
+  }
+
+  String get _sectionTitle => _section == 'forms' ? 'Forms' : 'Chat';
 
   Widget _buildChatSection(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const _SectionTitle('Navigation'),
+        _buildNavigationShowcase(context),
+        const SizedBox(height: 30),
         const _SectionTitle('Buttons'),
         Wrap(
           spacing: 12,
@@ -290,6 +366,24 @@ class _UiShowcasePageState extends State<UiShowcasePage> {
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildNavigationShowcase(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 320),
+      child: NavigationTabs<String>(
+        value: _navigationPreview,
+        onChanged: (value) => setState(() => _navigationPreview = value),
+        items: const [
+          NavigationItem(
+            value: 'chat',
+            label: 'Chat',
+            icon: Icons.chat_bubble_outline,
+          ),
+          NavigationItem(value: 'forms', label: 'Forms', icon: Icons.tune),
+        ],
+      ),
     );
   }
 

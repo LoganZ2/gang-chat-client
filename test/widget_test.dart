@@ -6,8 +6,39 @@ import 'package:client/main.dart';
 import 'package:client/src/auth/token_store.dart';
 import 'package:client/src/settings/settings_page.dart';
 import 'package:client/src/ui/ui.dart' as ui;
+import 'package:client/ui_showcase.dart' as showcase;
 
 void main() {
+  test('v2 startup argument is recognized', () {
+    expect(shouldUseV2(['v2']), isTrue);
+    expect(shouldUseV2(['--v2']), isTrue);
+    expect(shouldUseV2(['V2']), isTrue);
+    expect(shouldUseV2(['--other']), isFalse);
+  });
+
+  testWidgets('v2 app renders login entrypoint on real auth gate', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      GangApp(tokenStore: _MemoryTokenStore(), useV2: true),
+    );
+    await tester.pump();
+
+    expect(find.text('Gang Chat V2'), findsOneWidget);
+    expect(find.text('Username or email address'), findsOneWidget);
+    expect(find.text('Password'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, 'Login'), findsOneWidget);
+    expect(find.byType(ui.WindowControls), findsOneWidget);
+    expect(find.text('Register'), findsNothing);
+    expect(find.byTooltip('Show password'), findsNothing);
+
+    await tester.tap(find.widgetWithText(ui.Button, 'Login'));
+    await tester.pump();
+
+    expect(find.text('Enter your credentials to continue.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('app renders auth entrypoint', (WidgetTester tester) async {
     await tester.pumpWidget(GangApp(tokenStore: _MemoryTokenStore()));
     await tester.pump();
@@ -236,6 +267,252 @@ void main() {
       tester.getSize(find.byType(ui.SegmentedControl<String>)).height,
       closeTo(41, 0.01),
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ui navigation tabs expose reusable segmented navigation', (
+    WidgetTester tester,
+  ) async {
+    var selected = 'chat';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              return ui.NavigationTabs<String>(
+                value: selected,
+                onChanged: (value) => setState(() => selected = value),
+                items: const [
+                  ui.NavigationItem(
+                    value: 'chat',
+                    label: 'Chat',
+                    icon: Icons.chat_bubble_outline,
+                  ),
+                  ui.NavigationItem(
+                    value: 'forms',
+                    label: 'Forms',
+                    icon: Icons.tune,
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(ui.SegmentedControl<String>), findsOneWidget);
+    expect(find.text('Chat'), findsOneWidget);
+    expect(find.text('Forms'), findsOneWidget);
+
+    await tester.tap(find.text('Forms'));
+    await tester.pumpAndSettle();
+
+    expect(selected, 'forms');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ui sidebar renders groups and changes selection', (
+    WidgetTester tester,
+  ) async {
+    var selected = 'overview';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              return SizedBox(
+                height: 320,
+                child: ui.Sidebar(
+                  width: 220,
+                  selectedId: selected,
+                  onItemSelected: (value) => setState(() => selected = value),
+                  header: const Text(
+                    'Navigation',
+                    style: ui.UiTypography.title,
+                  ),
+                  footer: const Text('Footer', style: ui.UiTypography.label),
+                  groups: const [
+                    ui.SidebarGroup(
+                      label: 'Workspace',
+                      items: [
+                        ui.SidebarItem(
+                          id: 'overview',
+                          label: 'Overview',
+                          icon: Icons.space_dashboard_outlined,
+                          badge: '4',
+                        ),
+                        ui.SidebarItem(
+                          id: 'threads',
+                          label: 'Threads',
+                          icon: Icons.forum_outlined,
+                        ),
+                        ui.SidebarItem(
+                          id: 'archive',
+                          label: 'Archive',
+                          icon: Icons.inventory_2_outlined,
+                          enabled: false,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    expect(tester.getSize(find.byType(ui.Sidebar)).width, 220);
+    expect(find.text('Workspace'), findsOneWidget);
+    expect(find.text('4'), findsOneWidget);
+    expect(find.text('Footer'), findsOneWidget);
+    expect(
+      tester
+          .widget<ui.PressableSurface>(
+            find.ancestor(
+              of: find.text('Overview'),
+              matching: find.byType(ui.PressableSurface),
+            ),
+          )
+          .selected,
+      isTrue,
+    );
+
+    await tester.tap(find.text('Threads'));
+    await tester.pump();
+
+    expect(selected, 'threads');
+    expect(
+      tester
+          .widget<ui.PressableSurface>(
+            find.ancestor(
+              of: find.text('Threads'),
+              matching: find.byType(ui.PressableSurface),
+            ),
+          )
+          .selected,
+      isTrue,
+    );
+
+    await tester.tap(find.text('Archive'));
+    await tester.pump();
+
+    expect(selected, 'threads');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ui showcase narrow layout enters content from sidebar', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: Center(
+          child: SizedBox(
+            width: 420,
+            height: 760,
+            child: showcase.UiShowcasePage(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(ui.Sidebar), findsOneWidget);
+    expect(find.text('Sections'), findsOneWidget);
+    expect(find.text('Buttons'), findsNothing);
+    expect(find.byTooltip('Show sections'), findsNothing);
+
+    await tester.tap(find.text('Forms'));
+    await tester.pump();
+
+    expect(find.byType(ui.Sidebar), findsNothing);
+    expect(find.byTooltip('Show sections'), findsOneWidget);
+    expect(find.text('Fields'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Show sections'));
+    await tester.pump();
+
+    expect(find.byType(ui.Sidebar), findsOneWidget);
+    expect(find.text('Fields'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ui input focuses from padding and grows upward', (
+    WidgetTester tester,
+  ) async {
+    final controller = TextEditingController();
+    final focusNode = FocusNode();
+    addTearDown(controller.dispose);
+    addTearDown(focusNode.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 280,
+              height: 120,
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: SizedBox(
+                  width: 280,
+                  child: ui.Input(
+                    controller: controller,
+                    focusNode: focusNode,
+                    hintText: 'Type here',
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final inputSurfaceFinder = find.ancestor(
+      of: find.byType(TextField),
+      matching: find.byType(ui.PressableSurface),
+    );
+    expect(find.byType(ui.Input), findsOneWidget);
+    expect(inputSurfaceFinder, findsOneWidget);
+    expect(
+      tester.widget<ui.PressableSurface>(inputSurfaceFinder).mouseCursor,
+      SystemMouseCursors.text,
+    );
+    expect(
+      tester.widget<ui.PressableSurface>(inputSurfaceFinder).hoverEffect,
+      isTrue,
+    );
+    expect(
+      tester.widget<ui.PressableSurface>(inputSurfaceFinder).pressEffect,
+      isFalse,
+    );
+
+    final initialRect = tester.getRect(inputSurfaceFinder);
+    await tester.tapAt(initialRect.topLeft + const Offset(4, 4));
+    await tester.pump();
+
+    expect(focusNode.hasFocus, isTrue);
+    expect(
+      tester.widget<ui.PressableSurface>(inputSurfaceFinder).borderColor,
+      ui.UiColors.accentBorder,
+    );
+
+    await tester.enterText(find.byType(TextField), 'First line\nSecond line');
+    await tester.pumpAndSettle();
+
+    final multilineRect = tester.getRect(inputSurfaceFinder);
+    expect(multilineRect.height, greaterThan(initialRect.height));
+    expect(multilineRect.bottom, closeTo(initialRect.bottom, 0.01));
+    expect(multilineRect.top, lessThan(initialRect.top));
     expect(tester.takeException(), isNull);
   });
 
@@ -653,43 +930,6 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('ui kit popover opens above and right-aligned to its anchor', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ui.uiTheme(),
-        home: Scaffold(
-          body: Center(
-            child: ui.PopoverAnchor(
-              width: 240,
-              anchor: (context, open, toggle) => ui.ButtonIcon(
-                tooltip: 'Open popover',
-                selected: open,
-                onPressed: toggle,
-                icon: const Icon(Icons.widgets_outlined),
-              ),
-              popover: const Padding(
-                padding: EdgeInsets.all(12),
-                child: Text('Mock popover content'),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    await tester.tap(find.byTooltip('Open popover'));
-    await tester.pump();
-
-    final anchorRect = tester.getRect(find.byType(ui.ButtonIcon));
-    final popoverRect = tester.getRect(find.byType(ui.PopoverSurface));
-
-    expect(popoverRect.right, closeTo(anchorRect.right, 0.01));
-    expect(anchorRect.top - popoverRect.bottom, closeTo(8, 0.01));
-    expect(tester.takeException(), isNull);
-  });
-
   testWidgets('loading buttons keep tone colors without tapping', (
     WidgetTester tester,
   ) async {
@@ -882,23 +1122,6 @@ void main() {
       ]),
     );
     expect(tester.takeException(), isNull);
-  });
-
-  test('visualizer band levels use overall audio energy', () {
-    expect(levelFromVisualizerBandsForTest([0.0, 0.03, null, double.nan]), 0);
-
-    final singleSpike = levelFromVisualizerBandsForTest(<Object?>[
-      1.0,
-      ...List<double>.filled(13, 0.0),
-    ]);
-    final broadVoice = levelFromVisualizerBandsForTest(
-      List<double>.filled(14, 0.5),
-    );
-
-    expect(singleSpike, greaterThan(0));
-    expect(singleSpike, lessThan(0.7));
-    expect(broadVoice, greaterThan(singleSpike));
-    expect(levelFromVisualizerBandsForTest(List<double>.filled(14, 1.0)), 1);
   });
 
   testWidgets('embedded settings page exposes a close button', (

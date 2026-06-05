@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:flutter/widgets.dart';
 
 /// Static, build-time URL configuration for the Gang Chat client.
 ///
@@ -12,10 +11,7 @@ import 'package:flutter/widgets.dart';
 ///
 /// The asset is loaded once at app startup via [AppConfig.load].
 class AppConfig {
-  const AppConfig({
-    required this.apiBaseUrl,
-    required this.assetBaseUrl,
-  });
+  const AppConfig({required this.apiBaseUrl, required this.assetBaseUrl});
 
   /// Compile-time fallback config. Useful for tests and as a last-resort
   /// default when [load] cannot be awaited (e.g. synchronous widget creation).
@@ -79,11 +75,7 @@ class AppConfig {
     }
 
     return AppConfig(
-      apiBaseUrl: pick(
-        'api_base_url',
-        _fallbackApiBaseUrl,
-        _defineApiBaseUrl,
-      ),
+      apiBaseUrl: pick('api_base_url', _fallbackApiBaseUrl, _defineApiBaseUrl),
       assetBaseUrl: pick(
         'asset_base_url',
         _fallbackAssetBaseUrl,
@@ -91,26 +83,4 @@ class AppConfig {
       ),
     );
   }
-}
-
-/// Inherited widget that exposes the active [AppConfig] to descendants.
-class AppConfigScope extends InheritedWidget {
-  const AppConfigScope({
-    super.key,
-    required this.config,
-    required super.child,
-  });
-
-  final AppConfig config;
-
-  static AppConfig of(BuildContext context) {
-    final scope = context
-        .dependOnInheritedWidgetOfExactType<AppConfigScope>();
-    return scope?.config ?? const AppConfig.defaults();
-  }
-
-  @override
-  bool updateShouldNotify(AppConfigScope oldWidget) =>
-      oldWidget.config.apiBaseUrl != config.apiBaseUrl ||
-      oldWidget.config.assetBaseUrl != config.assetBaseUrl;
 }

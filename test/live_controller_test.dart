@@ -1,0 +1,515 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/testing.dart';
+
+import 'package:client/src/app/live_controller.dart';
+import 'package:client/src/protocol/api_client.dart';
+import 'package:client/src/protocol/models.dart';
+
+void main() {
+  test(
+    'live room guards keep room switching and stale async work explicit',
+    () {
+      expect(
+        joinedLiveRoomToDisconnectBeforeJoin(
+          joinedLiveRoomId: null,
+          targetRoomId: 'room_1',
+        ),
+        isNull,
+      );
+      expect(
+        joinedLiveRoomToDisconnectBeforeJoin(
+          joinedLiveRoomId: 'room_1',
+          targetRoomId: 'room_1',
+        ),
+        isNull,
+      );
+      expect(
+        joinedLiveRoomToDisconnectBeforeJoin(
+          joinedLiveRoomId: 'room_1',
+          targetRoomId: 'room_2',
+        ),
+        'room_1',
+      );
+
+      expect(
+        canPatchSelectedLiveState(
+          joinedLiveRoomId: 'room_1',
+          selectedRoomId: 'room_1',
+        ),
+        isTrue,
+      );
+      expect(
+        canPatchSelectedLiveState(
+          joinedLiveRoomId: null,
+          selectedRoomId: 'room_1',
+        ),
+        isFalse,
+      );
+      expect(
+        canPatchSelectedLiveState(
+          joinedLiveRoomId: 'room_2',
+          selectedRoomId: 'room_1',
+        ),
+        isFalse,
+      );
+
+      expect(
+        canApplyPickedScreenShareSource(
+          pickedForRoomId: 'room_1',
+          joinedLiveRoomId: 'room_1',
+          selectedRoomId: 'room_1',
+        ),
+        isTrue,
+      );
+      expect(
+        canApplyPickedScreenShareSource(
+          pickedForRoomId: 'room_1',
+          joinedLiveRoomId: 'room_2',
+          selectedRoomId: 'room_1',
+        ),
+        isFalse,
+      );
+      expect(
+        canApplyPickedScreenShareSource(
+          pickedForRoomId: 'room_1',
+          joinedLiveRoomId: 'room_1',
+          selectedRoomId: 'room_2',
+        ),
+        isFalse,
+      );
+    },
+  );
+
+  test('409 live state patch errors are treated as benign departure races', () {
+    expect(
+      isBenignGoneLiveStatePatch(
+        ApiException(
+          'gone',
+          statusCode: 409,
+          code: 'participant_not_found',
+          requestId: null,
+        ),
+      ),
+      isTrue,
+    );
+    expect(
+      isBenignGoneLiveStatePatch(
+        ApiException(
+          'server error',
+          statusCode: 500,
+          code: 'request_failed',
+          requestId: null,
+        ),
+      ),
+      isFalse,
+    );
+    expect(isBenignGoneLiveStatePatch(StateError('boom')), isFalse);
+  });
+
+  test('join state patches keep LiveKit side effects out of UI flags', () {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        fail('Reducer test should not call the API: ${request.url}');
+      }),
+    );
+    addTearDown(api.close);
+    final controller = LiveController(api: api);
+    final alice = _user('alice');
+    final bob = _user('bob');
+
+    final started = controller.patchJoinStarted(joinedLiveRoomId: 'room_0');
+    expect(started.joinedLiveRoomId, 'room_0');
+    expect(started.joiningLive, isTrue);
+    expect(started.livePanelOpen, isTrue);
+    expect(started.error, isNull);
+
+    final disconnected = controller.patchJoinPreviousRoomDisconnected(
+      live: _live('room_0', [_participant(alice), _participant(bob)]),
+      rooms: [
+        _roomCard('room_0', liveCount: 2, livePreview: [alice, bob]),
+      ],
+      previousRoomId: 'room_0',
+      userId: 'alice',
+      livePanelOpen: false,
+      error: 'keep existing pane error',
+    );
+    expect(disconnected.live?.participants.map((item) => item.user.id), [
+      'bob',
+    ]);
+    expect(disconnected.rooms.single.liveParticipantCount, 1);
+    expect(disconnected.rooms.single.liveAvatarPreview.map((user) => user.id), [
+      'bob',
+    ]);
+    expect(disconnected.joinedLiveRoomId, isNull);
+    expect(disconnected.joiningLive, isTrue);
+    expect(disconnected.livePanelOpen, isFalse);
+    expect(disconnected.error, 'keep existing pane error');
+
+    final connected = controller.patchJoinConnected(
+      roomId: 'room_1',
+      livePanelOpen: true,
+      error: 'preserved',
+    );
+    expect(connected.joinedLiveRoomId, 'room_1');
+    expect(connected.joiningLive, isTrue);
+    expect(connected.livePanelOpen, isTrue);
+    expect(connected.error, 'preserved');
+
+    final finished = controller.patchJoinFinished(
+      joinedLiveRoomId: 'room_1',
+      livePanelOpen: true,
+      error: null,
+    );
+    expect(finished.joinedLiveRoomId, 'room_1');
+    expect(finished.joiningLive, isFalse);
+    expect(finished.livePanelOpen, isTrue);
+    expect(finished.error, isNull);
+  });
+
+  test('removeUserFromLive updates selected live state and room preview', () {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        fail('Reducer test should not call the API: ${request.url}');
+      }),
+    );
+    addTearDown(api.close);
+    final controller = LiveController(api: api);
+
+    final alice = _user('alice');
+    final bob = _user('bob');
+    final patch = controller.removeUserFromLive(
+      live: _live('room_1', [_participant(alice), _participant(bob)]),
+      rooms: [
+        _roomCard('room_1', liveCount: 2, livePreview: [alice, bob]),
+        _roomCard('room_2', liveCount: 1, livePreview: [alice]),
+      ],
+      roomId: 'room_1',
+      userId: 'alice',
+    );
+
+    expect(patch.live?.participantCount, 1);
+    expect(patch.live?.participants.map((item) => item.user.id), ['bob']);
+    expect(patch.rooms[0].liveParticipantCount, 1);
+    expect(patch.rooms[0].liveAvatarPreview.map((user) => user.id), ['bob']);
+    expect(patch.rooms[1].liveParticipantCount, 1);
+    expect(patch.rooms[1].liveAvatarPreview.map((user) => user.id), ['alice']);
+  });
+
+  test('patchLocalDeparture clears joined local state and removes self', () {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        fail('Reducer test should not call the API: ${request.url}');
+      }),
+    );
+    addTearDown(api.close);
+    final controller = LiveController(api: api);
+    final alice = _user('alice');
+    final bob = _user('bob');
+
+    final patch = controller.patchLocalDeparture(
+      live: _live('room_1', [_participant(alice), _participant(bob)]),
+      rooms: [
+        _roomCard('room_1', liveCount: 2, livePreview: [alice, bob]),
+      ],
+      joinedLiveRoomId: 'room_1',
+      userId: 'alice',
+      joiningLive: true,
+    );
+
+    expect(patch.joinedLiveRoomId, isNull);
+    expect(patch.joiningLive, isTrue);
+    expect(patch.cameraOn, isFalse);
+    expect(patch.screenSharing, isFalse);
+    expect(patch.voiceBlocked, isFalse);
+    expect(patch.live?.participants.map((item) => item.user.id), ['bob']);
+    expect(patch.rooms.single.liveParticipantCount, 1);
+    expect(patch.rooms.single.liveAvatarPreview.map((user) => user.id), [
+      'bob',
+    ]);
+
+    final live = _live('room_2', [_participant(alice)]);
+    final rooms = [
+      _roomCard('room_2', liveCount: 1, livePreview: [alice]),
+    ];
+    final noJoinedRoomPatch = controller.patchLocalDeparture(
+      live: live,
+      rooms: rooms,
+      joinedLiveRoomId: null,
+      userId: 'alice',
+      joiningLive: false,
+    );
+    expect(noJoinedRoomPatch.live, same(live));
+    expect(noJoinedRoomPatch.rooms, same(rooms));
+    expect(noJoinedRoomPatch.joinedLiveRoomId, isNull);
+    expect(noJoinedRoomPatch.joiningLive, isFalse);
+  });
+
+  test('patchPublishPermission mirrors LiveKit publish permission', () {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        fail('Reducer test should not call the API: ${request.url}');
+      }),
+    );
+    addTearDown(api.close);
+    final controller = LiveController(api: api);
+
+    var patch = controller.patchPublishPermission(
+      canPublish: false,
+      micMuted: false,
+    );
+    expect(patch.voiceBlocked, isTrue);
+    expect(patch.micMuted, isTrue);
+
+    patch = controller.patchPublishPermission(canPublish: true, micMuted: true);
+    expect(patch.voiceBlocked, isFalse);
+    expect(patch.micMuted, isTrue);
+  });
+
+  test('live output mute toggle flips local headphones state', () {
+    expect(
+      liveOutputMuteToggled(headphonesMuted: false).headphonesMuted,
+      isTrue,
+    );
+    expect(
+      liveOutputMuteToggled(headphonesMuted: true).headphonesMuted,
+      isFalse,
+    );
+  });
+
+  test('patchJoinResult mirrors participant flags and room live preview', () {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        fail('Reducer test should not call the API: ${request.url}');
+      }),
+    );
+    addTearDown(api.close);
+    final controller = LiveController(api: api);
+    final alice = _user('alice');
+    final bob = _user('bob');
+    final participant = _participant(
+      alice,
+      micMuted: true,
+      cameraOn: true,
+      screenSharing: true,
+      voiceBlocked: true,
+    );
+    final live = _live('room_1', [participant, _participant(bob)]);
+
+    final patch = controller.patchJoinResult(
+      rooms: [
+        _roomCard('room_1', liveCount: 0),
+        _roomCard('room_2', liveCount: 3),
+      ],
+      result: _liveJoinResult(participant: participant, live: live),
+    );
+
+    expect(patch.micMuted, isTrue);
+    expect(patch.cameraOn, isTrue);
+    expect(patch.screenSharing, isTrue);
+    expect(patch.voiceBlocked, isTrue);
+    expect(patch.live, same(live));
+    expect(patch.rooms[0].liveParticipantCount, 2);
+    expect(patch.rooms[0].liveAvatarPreview.map((user) => user.id), [
+      'alice',
+      'bob',
+    ]);
+    expect(patch.rooms[1].liveParticipantCount, 3);
+  });
+
+  test('patchStateUpdate mirrors participant flags and merges live roster', () {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        fail('Reducer test should not call the API: ${request.url}');
+      }),
+    );
+    addTearDown(api.close);
+    final controller = LiveController(api: api);
+    final alice = _participant(_user('alice'));
+    final bob = _participant(
+      _user('bob'),
+      micMuted: true,
+      voiceBlocked: true,
+      cameraOn: true,
+      screenSharing: true,
+    );
+
+    final patch = controller.patchStateUpdate(
+      live: _live('room_1', [alice]),
+      participant: bob,
+    );
+
+    expect(patch.micMuted, isTrue);
+    expect(patch.voiceBlocked, isTrue);
+    expect(patch.cameraOn, isTrue);
+    expect(patch.screenSharing, isTrue);
+    expect(patch.live?.participantCount, 2);
+    expect(patch.live?.participants.map((item) => item.user.id), [
+      'alice',
+      'bob',
+    ]);
+  });
+
+  test('live kit mic sync is needed only when server changed mic state', () {
+    expect(
+      shouldSyncLiveKitMicAfterServerPatch(
+        requestedMicMuted: null,
+        serverMicMuted: true,
+      ),
+      isFalse,
+    );
+    expect(
+      shouldSyncLiveKitMicAfterServerPatch(
+        requestedMicMuted: false,
+        serverMicMuted: false,
+      ),
+      isFalse,
+    );
+    expect(
+      shouldSyncLiveKitMicAfterServerPatch(
+        requestedMicMuted: false,
+        serverMicMuted: true,
+      ),
+      isTrue,
+    );
+  });
+
+  test('removeUserFromLive leaves unrelated state untouched', () {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        fail('Reducer test should not call the API: ${request.url}');
+      }),
+    );
+    addTearDown(api.close);
+    final controller = LiveController(api: api);
+    final alice = _user('alice');
+    final live = _live('room_2', [_participant(alice)]);
+    final rooms = [_roomCard('room_1', liveCount: 0)];
+
+    final patch = controller.removeUserFromLive(
+      live: live,
+      rooms: rooms,
+      roomId: 'room_1',
+      userId: 'alice',
+    );
+
+    expect(patch.live, same(live));
+    expect(patch.rooms, same(rooms));
+  });
+
+  test('mergeParticipant replaces existing session or appends new one', () {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        fail('Reducer test should not call the API: ${request.url}');
+      }),
+    );
+    addTearDown(api.close);
+    final controller = LiveController(api: api);
+    final alice = _participant(_user('alice'));
+    final bob = _participant(_user('bob'));
+    final live = _live('room_1', [alice]);
+
+    final replaced = controller.mergeParticipant(
+      live,
+      _participant(_user('alice'), micMuted: true),
+    )!;
+    expect(replaced.participantCount, 1);
+    expect(replaced.participants.single.user.id, 'alice');
+    expect(replaced.participants.single.micMuted, isTrue);
+
+    final appended = controller.mergeParticipant(live, bob)!;
+    expect(appended.participantCount, 2);
+    expect(appended.participants.map((item) => item.user.id), ['alice', 'bob']);
+
+    expect(controller.mergeParticipant(null, bob), isNull);
+  });
+}
+
+UserSummary _user(String id) {
+  return UserSummary(
+    id: id,
+    username: id,
+    displayName: 'User $id',
+    avatarUrl: null,
+    defaultAvatarKey: 'blue-3',
+  );
+}
+
+LiveParticipant _participant(
+  UserSummary user, {
+  bool micMuted = false,
+  bool voiceBlocked = false,
+  bool cameraOn = false,
+  bool screenSharing = false,
+}) {
+  return LiveParticipant(
+    liveSessionId: 'live_${user.id}',
+    user: user,
+    joinedAt: DateTime.utc(2026, 6, 5),
+    micMuted: micMuted,
+    headphonesMuted: false,
+    voiceBlocked: voiceBlocked,
+    cameraOn: cameraOn,
+    screenSharing: screenSharing,
+    connectionState: 'connected',
+  );
+}
+
+LiveJoinResult _liveJoinResult({
+  required LiveParticipant participant,
+  required LiveState live,
+}) {
+  return LiveJoinResult(
+    liveKit: LiveKitConnectionInfo(
+      serverUrl: 'wss://live.example.test',
+      token: 'token',
+      tokenExpiresAt: DateTime.utc(2026, 6, 5, 1),
+      roomName: live.roomId,
+    ),
+    participant: participant,
+    live: live,
+  );
+}
+
+LiveState _live(String roomId, List<LiveParticipant> participants) {
+  return LiveState(
+    roomId: roomId,
+    participantCount: participants.length,
+    participants: participants,
+    updatedAt: DateTime.utc(2026, 6, 5),
+  );
+}
+
+RoomCard _roomCard(
+  String id, {
+  int liveCount = 0,
+  List<UserSummary> livePreview = const [],
+}) {
+  return RoomCard(
+    id: id,
+    name: 'Room $id',
+    avatarUrl: null,
+    defaultAvatarKey: 'room-1',
+    memberCount: 2,
+    liveParticipantCount: liveCount,
+    liveAvatarPreview: livePreview,
+    lastMessage: null,
+    unreadCount: 0,
+    updatedAt: DateTime.utc(2026, 6, 5),
+  );
+}

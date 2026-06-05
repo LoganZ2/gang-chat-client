@@ -1,0 +1,106 @@
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:client/src/app/audio_device_preferences.dart';
+
+void main() {
+  test('stored audio device ids trim empty storage values', () {
+    expect(storedAudioDeviceIdFromStorageValue(null), isNull);
+    expect(storedAudioDeviceIdFromStorageValue('  '), isNull);
+    expect(storedAudioDeviceIdFromStorageValue(' mic_1 '), 'mic_1');
+  });
+
+  test('stored audio volume parsing falls back and clamps', () {
+    expect(storedAudioVolumeFromStorageValue(null), 1);
+    expect(storedAudioVolumeFromStorageValue('bad'), 1);
+    expect(storedAudioVolumeFromStorageValue('-0.5'), 0);
+    expect(storedAudioVolumeFromStorageValue('1.5'), 1);
+    expect(storedAudioVolumeFromStorageValue('0.425'), 0.425);
+    expect(audioVolumeStorageString(1.2), '1.000');
+    expect(audioVolumeStorageString(0.425), '0.425');
+  });
+
+  test(
+    'preferredStoredAudioDeviceFrom uses stored id then default fallback',
+    () {
+      const devices = [
+        _Device('default', 'Default Mic', 'audioinput'),
+        _Device('mic_1', 'Desk Mic', 'audioinput'),
+        _Device('speaker_1', 'Speaker', 'audiooutput'),
+      ];
+
+      expect(
+        preferredStoredAudioDeviceFrom(
+          devices,
+          kind: 'audioinput',
+          storedDeviceId: 'mic_1',
+          kindOf: _kindOf,
+          deviceIdOf: _deviceIdOf,
+        ),
+        devices[1],
+      );
+      expect(
+        preferredStoredAudioDeviceFrom(
+          devices,
+          kind: 'audioinput',
+          storedDeviceId: 'missing',
+          kindOf: _kindOf,
+          deviceIdOf: _deviceIdOf,
+        ),
+        devices[0],
+      );
+      expect(
+        preferredStoredAudioDeviceFrom(
+          devices,
+          kind: 'audiooutput',
+          storedDeviceId: 'missing',
+          kindOf: _kindOf,
+          deviceIdOf: _deviceIdOf,
+        ),
+        isNull,
+      );
+    },
+  );
+
+  test('selectStoredAudioDeviceIfChanged skips selected devices', () async {
+    const device = _Device('mic_1', 'Desk Mic', 'audioinput');
+    var selects = 0;
+
+    final selected = await selectStoredAudioDeviceIfChanged(
+      selected: device,
+      device: device,
+      select: (_) async => selects += 1,
+      kindOf: _kindOf,
+      deviceIdOf: _deviceIdOf,
+    );
+
+    expect(selected, device);
+    expect(selects, 0);
+  });
+
+  test('selectStoredAudioDeviceIfChanged reports failed selection as null', () {
+    const selected = _Device('mic_1', 'Desk Mic', 'audioinput');
+    const next = _Device('mic_2', 'Room Mic', 'audioinput');
+
+    expect(
+      selectStoredAudioDeviceIfChanged(
+        selected: selected,
+        device: next,
+        select: (_) async => throw StateError('denied'),
+        kindOf: _kindOf,
+        deviceIdOf: _deviceIdOf,
+      ),
+      completion(isNull),
+    );
+  });
+}
+
+class _Device {
+  const _Device(this.deviceId, this.label, this.kind);
+
+  final String deviceId;
+  final String label;
+  final String kind;
+}
+
+String _kindOf(_Device device) => device.kind;
+String _deviceIdOf(_Device device) => device.deviceId;

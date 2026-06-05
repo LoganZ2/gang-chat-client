@@ -1,14 +1,11 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import 'button.dart';
+import 'input.dart';
 import 'tokens.dart';
 
-const double _composerControlHeight = 40;
+const double _composerControlHeight = Input.defaultHeight;
 const double _composerControlOuterHeight = _composerControlHeight + 8;
-const double _composerTextHorizontalPadding = 12;
-const double _composerTextVisualLift = 3;
 
 enum ComposerPanelType { list, static }
 
@@ -97,19 +94,10 @@ class _ChatComposerState extends State<ChatComposer> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    _inputFocusNode.addListener(_handleFocusChanged);
-  }
-
-  @override
   void dispose() {
-    _inputFocusNode.removeListener(_handleFocusChanged);
     _inputFocusNode.dispose();
     super.dispose();
   }
-
-  void _handleFocusChanged() => setState(() {});
 
   void _handleAction(ComposerAction action) {
     if (action.panel == null) {
@@ -160,7 +148,7 @@ class _ChatComposerState extends State<ChatComposer> {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Expanded(
-                          child: _ComposerTextBox(
+                          child: Input(
                             controller: widget.controller,
                             focusNode: _inputFocusNode,
                             hintText: widget.hintText,
@@ -226,186 +214,6 @@ class _ComposerActionRow extends StatelessWidget {
       ),
     );
   }
-}
-
-class _ComposerTextBox extends StatefulWidget {
-  const _ComposerTextBox({
-    required this.hintText,
-    required this.minLines,
-    required this.maxLines,
-    this.controller,
-    this.focusNode,
-    this.onSubmitted,
-    this.onChanged,
-  });
-
-  final TextEditingController? controller;
-  final FocusNode? focusNode;
-  final String hintText;
-  final int minLines;
-  final int maxLines;
-  final ValueChanged<String>? onSubmitted;
-  final ValueChanged<String>? onChanged;
-
-  @override
-  State<_ComposerTextBox> createState() => _ComposerTextBoxState();
-}
-
-class _ComposerTextBoxState extends State<_ComposerTextBox> {
-  TextEditingController? _localController;
-
-  TextEditingController get _effectiveController =>
-      widget.controller ?? _localController!;
-
-  @override
-  void initState() {
-    super.initState();
-    _localController = widget.controller == null
-        ? TextEditingController()
-        : null;
-    _effectiveController.addListener(_handleTextChanged);
-  }
-
-  @override
-  void didUpdateWidget(_ComposerTextBox oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final oldController = oldWidget.controller ?? _localController;
-    final needsLocalController =
-        oldWidget.controller != null && widget.controller == null;
-    final noLongerNeedsLocalController =
-        oldWidget.controller == null && widget.controller != null;
-
-    if (oldWidget.controller != widget.controller) {
-      oldController?.removeListener(_handleTextChanged);
-      if (needsLocalController) {
-        _localController = TextEditingController();
-      } else if (noLongerNeedsLocalController) {
-        _localController?.dispose();
-        _localController = null;
-      }
-      _effectiveController.addListener(_handleTextChanged);
-    }
-  }
-
-  @override
-  void dispose() {
-    _effectiveController.removeListener(_handleTextChanged);
-    _localController?.dispose();
-    super.dispose();
-  }
-
-  void _handleTextChanged() => setState(() {});
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final textMetrics = _textMetricsFor(
-          context,
-          maxWidth: constraints.maxWidth,
-        );
-        final focused = widget.focusNode?.hasFocus ?? false;
-
-        return Listener(
-          behavior: HitTestBehavior.opaque,
-          onPointerDown: (_) => widget.focusNode?.requestFocus(),
-          child: MouseRegion(
-            cursor: SystemMouseCursors.text,
-            child: PressableSurface(
-              height: textMetrics.height,
-              interactive: true,
-              mouseCursor: SystemMouseCursors.text,
-              hoverEffect: true,
-              pressEffect: false,
-              borderRadius: UiRadii.md,
-              backgroundColor: UiColors.surface,
-              borderColor: focused ? UiColors.accentBorder : UiColors.border,
-              padding: EdgeInsets.zero,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  _composerTextHorizontalPadding,
-                  textMetrics.topPadding,
-                  _composerTextHorizontalPadding,
-                  textMetrics.bottomPadding,
-                ),
-                child: TextField(
-                  controller: _effectiveController,
-                  focusNode: widget.focusNode,
-                  minLines: widget.minLines,
-                  maxLines: widget.maxLines,
-                  onSubmitted: widget.onSubmitted,
-                  onChanged: widget.onChanged,
-                  cursorColor: UiColors.accent,
-                  mouseCursor: SystemMouseCursors.text,
-                  style: UiTypography.body,
-                  textAlignVertical: TextAlignVertical.center,
-                  decoration: InputDecoration.collapsed(
-                    hintText: widget.hintText,
-                    hintStyle: const TextStyle(color: UiColors.textMuted),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  _ComposerTextMetrics _textMetricsFor(
-    BuildContext context, {
-    required double maxWidth,
-  }) {
-    final text = _effectiveController.text;
-    final measureText = text.isEmpty
-        ? ' '
-        : text.endsWith('\n')
-        ? '$text '
-        : text;
-    final textWidth = math.max(
-      0.0,
-      maxWidth - (_composerTextHorizontalPadding * 2),
-    );
-    final painter = TextPainter(
-      text: TextSpan(text: measureText, style: UiTypography.body),
-      textDirection: Directionality.of(context),
-      textScaler: MediaQuery.textScalerOf(context),
-      maxLines: widget.maxLines,
-    )..layout(maxWidth: textWidth);
-    final lineCount = painter.computeLineMetrics().length.clamp(
-      widget.minLines,
-      widget.maxLines,
-    );
-    final lineHeight = painter.preferredLineHeight;
-    final verticalPadding = math.max(
-      0.0,
-      (_composerControlHeight - lineHeight) / 2,
-    );
-    final topPadding = math.max(0.0, verticalPadding - _composerTextVisualLift);
-    final bottomPadding = (verticalPadding * 2) - topPadding;
-    final height = math.max(
-      _composerControlHeight,
-      (lineHeight * lineCount) + topPadding + bottomPadding,
-    );
-
-    return _ComposerTextMetrics(
-      height: height,
-      topPadding: topPadding,
-      bottomPadding: bottomPadding,
-    );
-  }
-}
-
-class _ComposerTextMetrics {
-  const _ComposerTextMetrics({
-    required this.height,
-    required this.topPadding,
-    required this.bottomPadding,
-  });
-
-  final double height;
-  final double topPadding;
-  final double bottomPadding;
 }
 
 class _ComposerPanelFrame extends StatelessWidget {

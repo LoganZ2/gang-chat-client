@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:livekit_client/livekit_client.dart' as lk;
 
+import '../app/audio_levels.dart';
+
 /// A capturable desktop source (a whole screen or a single window), used to
 /// populate the screen-share picker. Wraps flutter_webrtc's source so the UI
 /// doesn't depend on the WebRTC types directly.
@@ -42,7 +44,7 @@ final _screenSourceDirectThumbnailKeys = <String>{};
 final _screenSourceThumbnailUpdateController =
     StreamController<_ScreenSourceThumbnailUpdate>.broadcast();
 StreamSubscription<rtc.DesktopCapturerSource>?
-    _screenSourceThumbnailSubscription;
+_screenSourceThumbnailSubscription;
 
 const _ignoredShareWindowNameParts = <String>[
   'nvidia geforce overlay',
@@ -105,10 +107,7 @@ void _rememberAndEmitScreenSourceThumbnail({
   );
   if (remembered == null || remembered.isEmpty) return;
   _screenSourceThumbnailUpdateController.add(
-    _ScreenSourceThumbnailUpdate(
-      sourceId: sourceId,
-      thumbnail: remembered,
-    ),
+    _ScreenSourceThumbnailUpdate(sourceId: sourceId, thumbnail: remembered),
   );
 }
 
@@ -132,18 +131,21 @@ Stream<Uint8List> _screenSourceThumbnailUpdates(String sourceId) {
 }
 
 void _ensureScreenSourceThumbnailCacheSubscription() {
-  _screenSourceThumbnailSubscription ??=
-      rtc.desktopCapturer.onThumbnailChanged.stream.listen((source) {
-    final thumbnailKey = _thumbnailKeyForDesktopSource(source);
-    if (source.type == rtc.SourceType.Screen &&
-        _screenSourceDirectThumbnailKeys.contains(thumbnailKey)) {
-      return;
-    }
-    _rememberAndEmitScreenSourceThumbnail(
-      sourceId: thumbnailKey,
-      thumbnail: source.thumbnail,
-    );
-  });
+  _screenSourceThumbnailSubscription ??= rtc
+      .desktopCapturer
+      .onThumbnailChanged
+      .stream
+      .listen((source) {
+        final thumbnailKey = _thumbnailKeyForDesktopSource(source);
+        if (source.type == rtc.SourceType.Screen &&
+            _screenSourceDirectThumbnailKeys.contains(thumbnailKey)) {
+          return;
+        }
+        _rememberAndEmitScreenSourceThumbnail(
+          sourceId: thumbnailKey,
+          thumbnail: source.thumbnail,
+        );
+      });
 }
 
 Future<Uint8List?> _loadInitialScreenSourceThumbnail(
@@ -450,12 +452,12 @@ class LiveSession extends ChangeNotifier {
   }
 
   Future<void> setInputVolume(double volume) async {
-    _inputVolume = _normalizedVolume(volume);
+    _inputVolume = normalizedAudioVolume(volume);
     await _applyInputVolume();
   }
 
   Future<void> setOutputVolume(double volume) async {
-    _outputVolume = _normalizedVolume(volume);
+    _outputVolume = normalizedAudioVolume(volume);
     await _applyOutputVolume();
   }
 
@@ -486,13 +488,13 @@ class LiveSession extends ChangeNotifier {
         maxFrameRate: 60.0,
         params: const lk.VideoParameters(
           dimensions: lk.VideoDimensionsPresets.h720_169,
-          encoding: lk.VideoEncoding(
-            maxFramerate: 60,
-            maxBitrate: 4000 * 1000,
-          ),
+          encoding: lk.VideoEncoding(maxFramerate: 60, maxBitrate: 4000 * 1000),
         ),
       );
-      await local.setScreenShareEnabled(true, screenShareCaptureOptions: options);
+      await local.setScreenShareEnabled(
+        true,
+        screenShareCaptureOptions: options,
+      );
       _screenSharing = true;
     } else {
       await local.setScreenShareEnabled(false);
@@ -541,9 +543,7 @@ class LiveSession extends ChangeNotifier {
           ),
         );
       }
-      return filterScreenSourcesForPicker(
-        screenSources,
-      );
+      return filterScreenSourcesForPicker(screenSources);
     } catch (_) {
       return const [];
     }
@@ -621,8 +621,9 @@ class LiveSession extends ChangeNotifier {
       return;
     }
     if (event is lk.ParticipantConnectedEvent) {
-      _micMutedByIdentity[event.participant.identity] =
-          _isMicMuted(event.participant);
+      _micMutedByIdentity[event.participant.identity] = _isMicMuted(
+        event.participant,
+      );
       unawaited(_applyOutputVolume());
       notifyListeners();
       return;
@@ -740,15 +741,8 @@ class LiveSession extends ChangeNotifier {
   }
 }
 
-double _normalizedVolume(double volume) {
-  return volume.clamp(0.0, 1.0).toDouble();
-}
-
 class LiveSessionConnectException implements Exception {
-  const LiveSessionConnectException({
-    required this.url,
-    required this.cause,
-  });
+  const LiveSessionConnectException({required this.url, required this.cause});
 
   final String url;
   final Object cause;

@@ -1,0 +1,205 @@
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:client/src/app/message_display.dart';
+import 'package:client/src/protocol/models.dart';
+
+void main() {
+  test('message draft helpers save restore and remove per room text', () {
+    const original = {'room_1': 'hello'};
+
+    expect(
+      saveMessageDraft(drafts: original, roomId: 'room_2', text: 'draft'),
+      {'room_1': 'hello', 'room_2': 'draft'},
+    );
+    expect(
+      saveMessageDraft(drafts: original, roomId: null, text: 'ignored'),
+      same(original),
+    );
+    expect(messageDraftForRoom(drafts: original, roomId: 'room_1'), 'hello');
+    expect(messageDraftForRoom(drafts: original, roomId: 'missing'), '');
+
+    expect(removeMessageDraft(drafts: original, roomId: 'room_1'), isEmpty);
+    expect(
+      removeMessageDraft(drafts: original, roomId: 'missing'),
+      same(original),
+    );
+    expect(removeMessageDraft(drafts: original, roomId: null), same(original));
+  });
+
+  test('formatMessageTime formats local wall clock time', () {
+    expect(formatMessageTime(DateTime(2026, 6, 4, 7, 5)), '07:05');
+    expect(formatMessageTime(DateTime(2026, 6, 4, 23, 59)), '23:59');
+  });
+
+  test('messageContentKind prioritizes stickers then files then text', () {
+    expect(messageContentKind(_message()), MessageContentKind.text);
+    expect(
+      messageContentKind(
+        _message(
+          type: 'file',
+          attachments: const [MessageAttachment(type: 'file', name: 'a.pdf')],
+        ),
+      ),
+      MessageContentKind.files,
+    );
+    expect(
+      messageContentKind(
+        _message(type: 'sticker', attachments: [_stickerAttachment()]),
+      ),
+      MessageContentKind.sticker,
+    );
+  });
+
+  test('shouldShowFileAttachmentBody hides duplicate single-file body', () {
+    const attachment = MessageAttachment(type: 'file', name: 'report.pdf');
+
+    expect(
+      shouldShowFileAttachmentBody(
+        body: ' report.pdf ',
+        attachments: [attachment],
+      ),
+      isFalse,
+    );
+    expect(
+      shouldShowFileAttachmentBody(
+        body: 'see attached',
+        attachments: [attachment],
+      ),
+      isTrue,
+    );
+    expect(
+      shouldShowFileAttachmentBody(
+        body: 'report.pdf',
+        attachments: [
+          attachment,
+          const MessageAttachment(type: 'file', name: 'other.pdf'),
+        ],
+      ),
+      isTrue,
+    );
+    expect(
+      shouldShowFileAttachmentBody(body: ' ', attachments: [attachment]),
+      isFalse,
+    );
+  });
+
+  test('messageDeliveryStatusText reflects pending and failed states', () {
+    expect(messageDeliveryStatusText(_message()), isNull);
+    expect(messageDeliveryStatusText(_message(pending: true)), 'Sending');
+    expect(
+      messageDeliveryStatusText(_message(pending: true, failed: true)),
+      'Failed',
+    );
+  });
+
+  test(
+    'outgoingTextMessageBody trims trailing whitespace and skips blanks',
+    () {
+      expect(outgoingTextMessageBody(' hello  \n '), ' hello');
+      expect(outgoingTextMessageBody('   \n'), isNull);
+    },
+  );
+
+  test('stickerMessageDraft builds reusable sticker payload data', () {
+    final sticker = _sticker();
+    final draft = stickerMessageDraft(sticker);
+
+    expect(draft.body, '[wave]');
+    expect(draft.type, 'sticker');
+    expect(draft.attachments, hasLength(1));
+    expect(draft.attachments.single.type, 'sticker');
+    expect(draft.attachments.single.stickerId, 'sticker_1');
+    expect(draft.attachments.single.name, 'wave');
+    expect(draft.attachments.single.asset, same(sticker.asset));
+  });
+
+  test('insertMessageText replaces selection and returns cursor offset', () {
+    var edit = insertMessageText(
+      currentText: 'hello',
+      insertedText: '!',
+      selectionStart: null,
+      selectionEnd: null,
+    );
+    expect(edit.text, 'hello!');
+    expect(edit.cursorOffset, 6);
+
+    edit = insertMessageText(
+      currentText: 'hello world',
+      insertedText: 'there',
+      selectionStart: 6,
+      selectionEnd: 11,
+    );
+    expect(edit.text, 'hello there');
+    expect(edit.cursorOffset, 11);
+
+    edit = insertMessageText(
+      currentText: 'hello world',
+      insertedText: 'there',
+      selectionStart: 11,
+      selectionEnd: 6,
+    );
+    expect(edit.text, 'hello there');
+    expect(edit.cursorOffset, 11);
+
+    edit = insertMessageText(
+      currentText: 'hello',
+      insertedText: 'x',
+      selectionStart: -20,
+      selectionEnd: 20,
+    );
+    expect(edit.text, 'x');
+    expect(edit.cursorOffset, 1);
+  });
+}
+
+Message _message({
+  String type = 'text',
+  List<MessageAttachment> attachments = const [],
+  bool pending = false,
+  bool failed = false,
+}) {
+  return Message(
+    id: 'message_1',
+    roomId: 'room_1',
+    sender: const UserSummary(
+      id: 'user_1',
+      username: 'logan',
+      displayName: 'Logan',
+      avatarUrl: null,
+      defaultAvatarKey: 'blue-3',
+    ),
+    clientMessageId: 'client_1',
+    type: type,
+    body: 'hello',
+    createdAt: DateTime.utc(2026, 6, 4),
+    attachments: attachments,
+    pending: pending,
+    failed: failed,
+  );
+}
+
+MessageAttachment _stickerAttachment() {
+  return MessageAttachment(
+    type: 'sticker',
+    asset: UploadedAsset(
+      id: 'asset_1',
+      url: '/sticker.webp',
+      thumbnailUrl: null,
+      mimeType: 'image/webp',
+    ),
+  );
+}
+
+Sticker _sticker() {
+  return Sticker(
+    id: 'sticker_1',
+    name: 'wave',
+    sortOrder: 10,
+    asset: UploadedAsset(
+      id: 'asset_1',
+      url: '/sticker.webp',
+      thumbnailUrl: null,
+      mimeType: 'image/webp',
+    ),
+  );
+}

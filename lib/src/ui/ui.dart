@@ -1,10 +1,16 @@
 export 'avatar.dart';
+export 'app_config_scope.dart';
 export 'anchored_panel.dart';
 export 'button.dart';
 export 'feedback.dart';
 export 'chat_composer.dart';
-export 'popover.dart';
+export 'file_icons.dart';
+export 'gender_mark.dart';
+export 'input.dart';
+export 'member_presence_icons.dart';
+export 'navigation.dart';
 export 'segmented_control.dart';
+export 'sidebar.dart';
 export 'text_input.dart';
 export 'title_bar.dart';
 export 'tokens.dart';

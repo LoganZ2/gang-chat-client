@@ -2,6 +2,30 @@ import 'package:flutter/material.dart';
 
 import 'tokens.dart';
 
+Color avatarFallbackColor(String key) {
+  return switch (key) {
+    'blue-3' => const Color(0xFF526C9F),
+    'sky-2' => const Color(0xFF4F7F92),
+    'cyan-2' => const Color(0xFF47777A),
+    'mint-2' => const Color(0xFF4F7A67),
+    'green-2' => const Color(0xFF46695B),
+    'lime-2' => const Color(0xFF687A47),
+    'amber-2' => const Color(0xFF71614E),
+    'orange-2' => const Color(0xFF7A6046),
+    'coral-2' => const Color(0xFF7A5952),
+    'pink-2' => const Color(0xFF75566F),
+    'violet-2' => const Color(0xFF665B7D),
+    'indigo-2' => const Color(0xFF5B638A),
+    'rose-2' => const Color(0xFF7A5961),
+    'teal-2' => const Color(0xFF536E73),
+    'olive-2' => const Color(0xFF6A704B),
+    'slate-2' => const Color(0xFF5E6472),
+    'steel-2' => const Color(0xFF4F6672),
+    'graphite-2' => const Color(0xFF5B5D63),
+    _ => const Color(0xFF526C9F),
+  };
+}
+
 class Avatar extends StatelessWidget {
   const Avatar({
     super.key,

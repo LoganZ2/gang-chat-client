@@ -1,0 +1,571 @@
+import 'dart:typed_data';
+
+import '../protocol/api_client.dart';
+import '../protocol/models.dart';
+import 'file_transfer_state.dart';
+
+typedef PendingMessageHandler = void Function(PendingMessage pending);
+typedef PendingFileMessageHandler = void Function(PendingFileMessage pending);
+typedef FileMessageProgressHandler =
+    void Function(
+      PendingFileMessage pending, {
+      required int sentBytes,
+      required int totalBytes,
+    });
+typedef FileMessageUploadedHandler =
+    void Function(PendingFileMessage pending, MessageAttachment attachment);
+
+bool canSendComposedMessage({
+  required String body,
+  required String type,
+  required List<MessageAttachment> attachments,
+}) {
+  if (type == 'text') return body.trim().isNotEmpty;
+  return attachments.isNotEmpty;
+}
+
+class PendingMessage {
+  const PendingMessage({required this.clientMessageId, required this.local});
+
+  final String clientMessageId;
+  final Message local;
+}
+
+class PendingFileMessage {
+  const PendingFileMessage({
+    required this.clientMessageId,
+    required this.transfer,
+    required this.localAttachment,
+    required this.local,
+  });
+
+  final String clientMessageId;
+  final FileTransferState transfer;
+  final MessageAttachment localAttachment;
+  final Message local;
+}
+
+class FileMessageStatePatch {
+  const FileMessageStatePatch({
+    required this.messages,
+    required this.fileTransfers,
+  });
+
+  final List<Message> messages;
+  final Map<String, FileTransferState> fileTransfers;
+}
+
+class MessageSendStatePatch {
+  const MessageSendStatePatch({
+    required this.messages,
+    required this.sending,
+    required this.error,
+  });
+
+  final List<Message> messages;
+  final bool sending;
+  final String? error;
+}
+
+class MessagesController {
+  const MessagesController({this.api});
+
+  final GangApi? api;
+
+  GangApi get _client {
+    final client = api;
+    if (client == null) {
+      throw StateError('MessagesController requires an authenticated API');
+    }
+    return client;
+  }
+
+  PendingMessage createPendingMessage({
+    required String roomId,
+    required UserSummary sender,
+    required String body,
+    String type = 'text',
+    List<MessageAttachment> attachments = const [],
+  }) {
+    final clientMessageId = newClientId('cmsg');
+    return PendingMessage(
+      clientMessageId: clientMessageId,
+      local: Message.local(
+        roomId: roomId,
+        sender: sender,
+        clientMessageId: clientMessageId,
+        type: type,
+        body: body,
+        attachments: attachments,
+      ),
+    );
+  }
+
+  PendingFileMessage createPendingFileMessage({
+    required String roomId,
+    required UserSummary sender,
+    required String filename,
+    required int sizeBytes,
+    required String mimeType,
+  }) {
+    final clientMessageId = newClientId('cmsg');
+    final transfer = FileTransferState.upload(
+      controller: UploadTransferController(),
+      totalBytes: sizeBytes,
+    );
+    final localAttachment = fileAttachment(
+      name: filename,
+      asset: UploadedAsset(
+        id: 'local_$clientMessageId',
+        url: '',
+        thumbnailUrl: null,
+        mimeType: mimeType,
+        filename: filename,
+        sizeBytes: sizeBytes,
+      ),
+    );
+    return PendingFileMessage(
+      clientMessageId: clientMessageId,
+      transfer: transfer,
+      localAttachment: localAttachment,
+      local: Message.local(
+        roomId: roomId,
+        sender: sender,
+        clientMessageId: clientMessageId,
+        body: filename,
+        type: 'file',
+        attachments: [localAttachment],
+      ),
+    );
+  }
+
+  MessageAttachment fileAttachment({
+    required String name,
+    required UploadedAsset asset,
+  }) {
+    return MessageAttachment(type: 'file', name: name, asset: asset);
+  }
+
+  Future<UploadedAsset> uploadFileAsset({
+    required Uint8List bytes,
+    required String filename,
+    UploadTransferController? controller,
+    UploadProgressCallback? onProgress,
+  }) {
+    return _client.uploadFileAsset(
+      bytes: bytes,
+      filename: filename,
+      controller: controller,
+      onProgress: onProgress,
+    );
+  }
+
+  Future<Message> sendMessage({
+    required String roomId,
+    required String clientMessageId,
+    required String body,
+    String type = 'text',
+    List<MessageAttachment> attachments = const [],
+  }) {
+    return _client.sendMessage(
+      roomId: roomId,
+      clientMessageId: clientMessageId,
+      body: body,
+      type: type,
+      attachments: attachments,
+      idempotencyKey: newUuid(),
+    );
+  }
+
+  Future<Message> sendComposedMessage({
+    required String roomId,
+    required UserSummary sender,
+    required String body,
+    String type = 'text',
+    List<MessageAttachment> attachments = const [],
+    PendingMessageHandler? onPending,
+  }) {
+    final pending = createPendingMessage(
+      roomId: roomId,
+      sender: sender,
+      body: body,
+      type: type,
+      attachments: attachments,
+    );
+    onPending?.call(pending);
+    return sendMessage(
+      roomId: roomId,
+      clientMessageId: pending.clientMessageId,
+      body: body,
+      type: type,
+      attachments: attachments,
+    );
+  }
+
+  Future<Message> sendFileMessage({
+    required String roomId,
+    required UserSummary sender,
+    required String filename,
+    required int sizeBytes,
+    required String mimeType,
+    required Future<Uint8List> Function() readBytes,
+    PendingFileMessageHandler? onPending,
+    FileMessageProgressHandler? onProgress,
+    FileMessageUploadedHandler? onUploaded,
+  }) async {
+    final pending = createPendingFileMessage(
+      roomId: roomId,
+      sender: sender,
+      filename: filename,
+      sizeBytes: sizeBytes,
+      mimeType: mimeType,
+    );
+    onPending?.call(pending);
+
+    final transfer = pending.transfer;
+    final bytes = await readBytes();
+    if (bytes.isEmpty) throw StateError('File is empty');
+    if (transfer.cancelled) throw const UploadCancelledException();
+
+    final asset = await uploadFileAsset(
+      bytes: bytes,
+      filename: filename,
+      controller: transfer.controller,
+      onProgress: onProgress == null
+          ? null
+          : ({required sentBytes, required totalBytes}) {
+              onProgress(pending, sentBytes: sentBytes, totalBytes: totalBytes);
+            },
+    );
+    if (transfer.cancelled) throw const UploadCancelledException();
+
+    final attachment = fileAttachment(name: filename, asset: asset);
+    onUploaded?.call(pending, attachment);
+
+    return sendMessage(
+      roomId: roomId,
+      clientMessageId: pending.clientMessageId,
+      body: filename,
+      type: 'file',
+      attachments: [attachment],
+    );
+  }
+
+  List<Message> patchPendingMessage({
+    required List<Message> messages,
+    required PendingMessage pending,
+  }) {
+    return appendLocalMessage(messages, pending.local);
+  }
+
+  List<Message> patchSentMessage({
+    required List<Message> messages,
+    required Message sent,
+  }) {
+    return replaceByClientId(messages, sent);
+  }
+
+  List<Message> patchFailedMessage({
+    required List<Message> messages,
+    required String clientMessageId,
+  }) {
+    return markFailedByClientId(messages, clientMessageId);
+  }
+
+  MessageSendStatePatch patchMessageSendStarted({
+    required List<Message> messages,
+  }) {
+    return MessageSendStatePatch(
+      messages: messages,
+      sending: true,
+      error: null,
+    );
+  }
+
+  MessageSendStatePatch patchMessageSendPending({
+    required List<Message> messages,
+    required PendingMessage pending,
+    required String? error,
+  }) {
+    return MessageSendStatePatch(
+      messages: patchPendingMessage(messages: messages, pending: pending),
+      sending: true,
+      error: error,
+    );
+  }
+
+  MessageSendStatePatch patchMessageSendSucceeded({
+    required List<Message> messages,
+    required Message sent,
+    required String? error,
+  }) {
+    return MessageSendStatePatch(
+      messages: patchSentMessage(messages: messages, sent: sent),
+      sending: true,
+      error: error,
+    );
+  }
+
+  MessageSendStatePatch patchMessageSendFailed({
+    required List<Message> messages,
+    required String? clientMessageId,
+    required String? error,
+  }) {
+    return MessageSendStatePatch(
+      messages: clientMessageId == null
+          ? messages
+          : patchFailedMessage(
+              messages: messages,
+              clientMessageId: clientMessageId,
+            ),
+      sending: true,
+      error: error,
+    );
+  }
+
+  MessageSendStatePatch patchMessageSendFinished({
+    required List<Message> messages,
+    required String? error,
+  }) {
+    return MessageSendStatePatch(
+      messages: messages,
+      sending: false,
+      error: error,
+    );
+  }
+
+  FileMessageStatePatch patchPendingFileMessage({
+    required List<Message> messages,
+    required Map<String, FileTransferState> fileTransfers,
+    required PendingFileMessage pending,
+  }) {
+    return FileMessageStatePatch(
+      messages: appendLocalMessage(messages, pending.local),
+      fileTransfers: {
+        ...fileTransfers,
+        pending.clientMessageId: pending.transfer,
+      },
+    );
+  }
+
+  bool updateFileTransferProgress({
+    required Map<String, FileTransferState> fileTransfers,
+    required PendingFileMessage pending,
+    required int sentBytes,
+    required int totalBytes,
+  }) {
+    final current = fileTransfers[pending.clientMessageId];
+    if (current == null || current.cancelled) return false;
+    current.updateProgress(sentBytes: sentBytes, totalBytes: totalBytes);
+    return true;
+  }
+
+  FileMessageStatePatch? patchFileTransferProgress({
+    required List<Message> messages,
+    required Map<String, FileTransferState> fileTransfers,
+    required PendingFileMessage pending,
+    required int sentBytes,
+    required int totalBytes,
+  }) {
+    final changed = updateFileTransferProgress(
+      fileTransfers: fileTransfers,
+      pending: pending,
+      sentBytes: sentBytes,
+      totalBytes: totalBytes,
+    );
+    if (!changed) return null;
+    return FileMessageStatePatch(
+      messages: messages,
+      fileTransfers: fileTransfers,
+    );
+  }
+
+  bool pauseFileUpload({
+    required Map<String, FileTransferState> fileTransfers,
+    required String clientMessageId,
+  }) {
+    final transfer = fileTransfers[clientMessageId];
+    if (transfer == null || transfer.isDownload) return false;
+    return transfer.pauseTransfer();
+  }
+
+  FileMessageStatePatch? patchPausedFileUpload({
+    required List<Message> messages,
+    required Map<String, FileTransferState> fileTransfers,
+    required String clientMessageId,
+  }) {
+    final changed = pauseFileUpload(
+      fileTransfers: fileTransfers,
+      clientMessageId: clientMessageId,
+    );
+    if (!changed) return null;
+    return FileMessageStatePatch(
+      messages: messages,
+      fileTransfers: fileTransfers,
+    );
+  }
+
+  bool resumeFileUpload({
+    required Map<String, FileTransferState> fileTransfers,
+    required String clientMessageId,
+  }) {
+    final transfer = fileTransfers[clientMessageId];
+    if (transfer == null || transfer.isDownload) return false;
+    return transfer.resumeTransfer();
+  }
+
+  FileMessageStatePatch? patchResumedFileUpload({
+    required List<Message> messages,
+    required Map<String, FileTransferState> fileTransfers,
+    required String clientMessageId,
+  }) {
+    final changed = resumeFileUpload(
+      fileTransfers: fileTransfers,
+      clientMessageId: clientMessageId,
+    );
+    if (!changed) return null;
+    return FileMessageStatePatch(
+      messages: messages,
+      fileTransfers: fileTransfers,
+    );
+  }
+
+  bool cancelFileUpload({
+    required Map<String, FileTransferState> fileTransfers,
+    required String clientMessageId,
+  }) {
+    final transfer = fileTransfers[clientMessageId];
+    if (transfer == null || transfer.isDownload) return false;
+    return transfer.cancelTransfer();
+  }
+
+  FileMessageStatePatch patchUploadedFileMessage({
+    required List<Message> messages,
+    required Map<String, FileTransferState> fileTransfers,
+    required PendingFileMessage pending,
+    required MessageAttachment attachment,
+  }) {
+    if (pending.transfer.cancelled) {
+      return FileMessageStatePatch(
+        messages: messages,
+        fileTransfers: fileTransfers,
+      );
+    }
+    pending.transfer.markSendingMessage();
+    return FileMessageStatePatch(
+      messages: updateByClientId(
+        messages,
+        pending.clientMessageId,
+        (message) => copyMessage(message, attachments: [attachment]),
+      ),
+      fileTransfers: fileTransfers,
+    );
+  }
+
+  FileMessageStatePatch patchSentFileMessage({
+    required List<Message> messages,
+    required Map<String, FileTransferState> fileTransfers,
+    required String clientMessageId,
+    required Message sent,
+  }) {
+    final nextTransfers = Map<String, FileTransferState>.of(fileTransfers)
+      ..remove(clientMessageId);
+    return FileMessageStatePatch(
+      messages: replaceByClientId(messages, sent),
+      fileTransfers: nextTransfers,
+    );
+  }
+
+  FileMessageStatePatch patchFailedFileMessage({
+    required List<Message> messages,
+    required Map<String, FileTransferState> fileTransfers,
+    required String clientMessageId,
+    required Object failure,
+  }) {
+    final transfer = fileTransfers[clientMessageId];
+    transfer?.markFailed(failure);
+    return FileMessageStatePatch(
+      messages: markFailedByClientId(messages, clientMessageId),
+      fileTransfers: fileTransfers,
+    );
+  }
+
+  FileMessageStatePatch patchRemovedFileMessage({
+    required List<Message> messages,
+    required Map<String, FileTransferState> fileTransfers,
+    required String clientMessageId,
+  }) {
+    final nextTransfers = Map<String, FileTransferState>.of(fileTransfers)
+      ..remove(clientMessageId);
+    return FileMessageStatePatch(
+      messages: removeByClientId(messages, clientMessageId),
+      fileTransfers: nextTransfers,
+    );
+  }
+
+  List<Message> replaceByClientId(List<Message> messages, Message sent) {
+    var replaced = false;
+    final next = messages.map((message) {
+      if (message.clientMessageId != sent.clientMessageId) return message;
+      replaced = true;
+      return sent;
+    }).toList();
+    if (replaced) return next;
+    return [...next, sent];
+  }
+
+  List<Message> appendLocalMessage(List<Message> messages, Message message) {
+    return [...messages, message];
+  }
+
+  List<Message> removeByClientId(
+    List<Message> messages,
+    String clientMessageId,
+  ) {
+    return messages
+        .where((message) => message.clientMessageId != clientMessageId)
+        .toList();
+  }
+
+  List<Message> markFailedByClientId(
+    List<Message> messages,
+    String clientMessageId,
+  ) {
+    return updateByClientId(
+      messages,
+      clientMessageId,
+      (message) => message.markFailed(),
+    );
+  }
+
+  List<Message> updateByClientId(
+    List<Message> messages,
+    String clientMessageId,
+    Message Function(Message message) update,
+  ) {
+    return messages.map((message) {
+      if (message.clientMessageId != clientMessageId) return message;
+      return update(message);
+    }).toList();
+  }
+
+  Message copyMessage(
+    Message message, {
+    List<MessageAttachment>? attachments,
+    bool? pending,
+    bool? failed,
+  }) {
+    return Message(
+      id: message.id,
+      roomId: message.roomId,
+      sender: message.sender,
+      clientMessageId: message.clientMessageId,
+      type: message.type,
+      body: message.body,
+      createdAt: message.createdAt,
+      attachments: attachments ?? message.attachments,
+      pending: pending ?? message.pending,
+      failed: failed ?? message.failed,
+    );
+  }
+}
