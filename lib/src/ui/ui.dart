@@ -11,6 +11,7 @@ export 'member_presence_icons.dart';
 export 'navigation.dart';
 export 'segmented_control.dart';
 export 'sidebar.dart';
+export 'text_context_menu.dart';
 export 'text_input.dart';
 export 'title_bar.dart';
 export 'tokens.dart';

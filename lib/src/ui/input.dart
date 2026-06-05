@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import 'button.dart';
+import 'text_context_menu.dart';
 import 'tokens.dart';
 
 const double _inputHorizontalPadding = 12;
@@ -152,6 +153,7 @@ class _InputState extends State<Input> {
                   mouseCursor: SystemMouseCursors.text,
                   style: widget.style,
                   textAlignVertical: TextAlignVertical.center,
+                  contextMenuBuilder: buildTextFieldContextMenu,
                   decoration: InputDecoration.collapsed(
                     hintText: widget.hintText,
                     hintStyle: widget.hintStyle,

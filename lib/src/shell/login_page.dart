@@ -437,6 +437,7 @@ class _LoginLineField extends StatelessWidget {
               obscureText: obscureText,
               onSubmitted: onSubmitted,
               cursorColor: const Color(0xFFB0B8C0),
+              contextMenuBuilder: buildTextFieldContextMenu,
               style: const TextStyle(
                 color: Color(0xFFECEFF1),
                 fontSize: 15,

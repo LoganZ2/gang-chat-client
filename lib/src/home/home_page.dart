@@ -960,6 +960,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         fileSelectionService: widget.fileSelectionService,
         isInLive: _joinedLiveRoomId == room.id,
         onLeaveLive: _leaveLive,
+        onOpenUserInfo: (user) => _showUserInfo(user, roomContext: room),
       ),
     );
     _handleRoomDialogResult(room.id, result);
@@ -1009,9 +1010,27 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     UserSummary user, {
     bool includeSelectedRoom = true,
     bool basic = false,
+    RoomDetail? roomContext,
   }) {
-    final room = _selectedRoom;
+    unawaited(
+      _showUserInfoDialog(
+        user,
+        includeSelectedRoom: includeSelectedRoom,
+        basic: basic,
+        roomContext: roomContext,
+      ),
+    );
+  }
+
+  Future<void> _showUserInfoDialog(
+    UserSummary user, {
+    required bool includeSelectedRoom,
+    required bool basic,
+    RoomDetail? roomContext,
+  }) async {
+    final room = roomContext ?? _selectedRoom;
     if (basic || room == null) {
+      if (!mounted) return;
       showDialog<void>(
         context: context,
         builder: (context) => _BasicUserInfoDialog(
@@ -1021,9 +1040,25 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       );
       return;
     }
+    var userForCard = user;
+    try {
+      final memberProfile = await _roomsController.getRoomMemberProfile(
+        roomId: room.id,
+        userId: user.id,
+      );
+      userForCard = memberProfile.user.mergeMissing(user);
+    } catch (_) {
+      // Some legacy responses only contain the lightweight sender summary.
+      // Keep opening the card with what we already have.
+    }
+    if (!mounted) return;
     final profile = room_display.roomUserInfoProfile(
-      user: user,
+      user: userForCard,
       room: room,
+      currentUser: _currentUser,
+    );
+    final roomsSectionTitle = room_display.userRoomsSectionTitle(
+      user: profile,
       currentUser: _currentUser,
     );
     showDialog<void>(
@@ -1031,13 +1066,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       builder: (context) => _UserInfoDialog(
         user: profile,
         room: room,
+        roomsSectionTitle: roomsSectionTitle,
         commonRooms: room_display.roomUserInfoCommonRooms(
           user: profile,
           selectedRoom: room,
           currentUser: _currentUser,
           includeSelectedRoom: includeSelectedRoom,
         ),
-        onOpenRoom: _openUserInfoRoom,
+        onOpenRoom: _showUserInfoRoomInfo,
         onCopyUid: (uid) => unawaited(_copyUserInfoUid(uid)),
       ),
     );
@@ -1057,28 +1093,26 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  void _openUserInfoRoom(String roomId) {
-    if (roomId == _selectedRoomId) return;
-    for (final room in _rooms) {
-      if (room.id == roomId) {
-        unawaited(_openRoom(room));
-        return;
-      }
-    }
-    unawaited(_fetchAndOpenRoom(roomId));
-  }
-
-  Future<void> _fetchAndOpenRoom(String roomId) async {
+  Future<void> _showUserInfoRoomInfo(String roomId) async {
     try {
-      final detail = await _roomsController.getRoom(roomId);
+      final detail = roomId == _selectedRoom?.id
+          ? _selectedRoom!
+          : await _roomsController.getRoom(roomId);
       if (!mounted) return;
-      final card = detail.toCard();
-      setState(
-        () => _applyRoomCardsPatch(
-          _roomsController.patchRoomCardUpserted(rooms: _rooms, room: card),
+      final result = await showDialog<Object?>(
+        context: context,
+        builder: (context) => _RoomInfoDialog(
+          controller: _roomsController,
+          room: detail,
+          currentUser: _currentUser,
+          clipboardService: widget.clipboardService,
+          fileSelectionService: widget.fileSelectionService,
+          isInLive: _joinedLiveRoomId == detail.id,
+          onLeaveLive: _leaveLive,
+          onOpenUserInfo: (user) => _showUserInfo(user, roomContext: detail),
         ),
       );
-      await _openRoom(card);
+      _handleRoomDialogResult(detail.id, result);
     } catch (e) {
       if (!mounted) return;
       _showToast(room_display.roomOpenFailureMessage(e));
@@ -1100,6 +1134,69 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       type: draft.type,
       attachments: draft.attachments,
     );
+  }
+
+  Future<void> _saveStickerToPersonal(Sticker sticker) async {
+    final roomId = _selectedRoomId;
+    if (roomId == null) return;
+    try {
+      await _services.stickers.saveSticker(
+        roomId: roomId,
+        stickerId: sticker.id,
+        targetScope: 'personal',
+        userId: _currentUser.id,
+        name: sticker.name,
+      );
+      if (!mounted) return;
+      _showToast('已添加到我的表情包', kind: HomeToastKind.success);
+    } catch (e) {
+      if (!mounted) return;
+      _showToast(e.toString());
+    }
+  }
+
+  Future<void> _saveStickerToRoom(Sticker sticker) async {
+    final roomId = _selectedRoomId;
+    if (roomId == null) return;
+    try {
+      await _services.stickers.saveSticker(
+        roomId: roomId,
+        stickerId: sticker.id,
+        targetScope: 'room',
+        userId: _currentUser.id,
+        name: sticker.name,
+      );
+      if (!mounted) return;
+      _showToast('已添加到房间表情包', kind: HomeToastKind.success);
+    } catch (e) {
+      if (!mounted) return;
+      _showToast(e.toString());
+    }
+  }
+
+  Future<void> _saveStickerAs(Sticker sticker) async {
+    try {
+      final file = await _roomsController.downloadStickers(
+        stickerIds: [sticker.id],
+      );
+      if (!mounted) return;
+      final location = await widget.fileSelectionService.getSaveLocation(
+        suggestedName: file.filename,
+        confirmButtonText: '保存',
+      );
+      if (location == null || !mounted) return;
+      await widget.fileSelectionService.saveBytesToPath(
+        bytes: file.bytes,
+        path: location.path,
+        filename: file.filename,
+        mimeType: file.mimeType,
+      );
+      if (!mounted) return;
+      _showToast('表情已保存', kind: HomeToastKind.success);
+    } catch (e) {
+      if (!mounted) return;
+      _showToast(e.toString());
+    }
   }
 
   Future<void> _pickAndSendFile() async {
@@ -2038,6 +2135,46 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     });
   }
 
+  Future<void> _showPageContextMenu(TapUpDetails details) async {
+    final action = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        details.globalPosition.dx,
+        details.globalPosition.dy,
+        details.globalPosition.dx,
+        details.globalPosition.dy,
+      ),
+      items: const [PopupMenuItem(value: 'refresh', child: Text('刷新'))],
+    );
+    if (action == 'refresh') {
+      await _refreshCurrentPageContents();
+    }
+  }
+
+  Future<void> _refreshCurrentPageContents() async {
+    final selectedId = _selectedRoomId;
+    final selectedBeforeRefresh = _selectedRoom;
+    await _loadRooms();
+    await _refreshRoomInviteBadge();
+    unawaited(_warmPersonalStickerCache());
+    if (!mounted) return;
+    if (selectedId != null) {
+      RoomCard? target;
+      for (final room in _rooms) {
+        if (room.id == selectedId) {
+          target = room;
+          break;
+        }
+      }
+      target ??= selectedBeforeRefresh?.toCard();
+      if (target != null) {
+        await _openRoom(target, optimisticDetail: selectedBeforeRefresh);
+      }
+    }
+    if (!mounted) return;
+    _showToast('已刷新', kind: HomeToastKind.success);
+  }
+
   @override
   Widget build(BuildContext context) {
     // Resolve the full-screen share track; if it vanished (sharer stopped),
@@ -2051,117 +2188,121 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         if (mounted) _exitShareFullScreen();
       });
     }
-    return Scaffold(
-      backgroundColor: _primaryDark,
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final maxAllowed = homeSidebarMaxAllowedWidth(
-            availableWidth: constraints.maxWidth,
-            contentMinWidth: 240,
-            minWidth: _sidebarMinWidth,
-            maxWidth: _sidebarMaxWidth,
-          );
-          final width = homeSidebarVisibleWidth(
-            sidebarWidth: _sidebarWidth,
-            sidebarCollapsed: _sidebarCollapsed,
-            collapsedWidth: _sidebarCollapsedWidth,
-            minWidth: _sidebarMinWidth,
-            maxWidth: maxAllowed,
-          );
-          return Stack(
-            children: [
-              Row(
-                children: [
-                  SizedBox(
-                    width: width,
-                    child: _RoomListPane(
-                      rooms: _rooms,
-                      selectedRoomId: _selectedRoomId,
-                      loading: _loadingRooms,
-                      currentUser: _currentUser,
-                      collapsed: _sidebarCollapsed,
-                      settingsActive: _settingsOpen,
-                      hasPendingRoomInvites: _hasPendingRoomInvites,
-                      onCreateRoom: _createRoom,
-                      onJoinRoom: _joinRoom,
-                      onOpenSettings: _toggleSettings,
-                      onLogout: _handleLogout,
-                      onOpenRoom: (room) => _openRoom(room),
-                      onJoinLive: (room) => _openRoom(room, joinLive: true),
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onSecondaryTapUp: (details) => unawaited(_showPageContextMenu(details)),
+      child: Scaffold(
+        backgroundColor: _primaryDark,
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            final maxAllowed = homeSidebarMaxAllowedWidth(
+              availableWidth: constraints.maxWidth,
+              contentMinWidth: 240,
+              minWidth: _sidebarMinWidth,
+              maxWidth: _sidebarMaxWidth,
+            );
+            final width = homeSidebarVisibleWidth(
+              sidebarWidth: _sidebarWidth,
+              sidebarCollapsed: _sidebarCollapsed,
+              collapsedWidth: _sidebarCollapsedWidth,
+              minWidth: _sidebarMinWidth,
+              maxWidth: maxAllowed,
+            );
+            return Stack(
+              children: [
+                Row(
+                  children: [
+                    SizedBox(
+                      width: width,
+                      child: _RoomListPane(
+                        rooms: _rooms,
+                        selectedRoomId: _selectedRoomId,
+                        loading: _loadingRooms,
+                        currentUser: _currentUser,
+                        collapsed: _sidebarCollapsed,
+                        settingsActive: _settingsOpen,
+                        hasPendingRoomInvites: _hasPendingRoomInvites,
+                        onCreateRoom: _createRoom,
+                        onJoinRoom: _joinRoom,
+                        onOpenSettings: _toggleSettings,
+                        onLogout: _handleLogout,
+                        onOpenRoom: (room) => _openRoom(room),
+                        onJoinLive: (room) => _openRoom(room, joinLive: true),
+                      ),
+                    ),
+                    Expanded(child: _buildRoomPane()),
+                  ],
+                ),
+                if (!_sidebarCollapsed)
+                  Positioned(
+                    left: width - 3,
+                    top: 0,
+                    bottom: 0,
+                    width: 6,
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.resizeLeftRight,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onHorizontalDragUpdate: (details) {
+                          _resizeSidebar(details.delta.dx, maxAllowed);
+                        },
+                      ),
                     ),
                   ),
-                  Expanded(child: _buildRoomPane()),
-                ],
-              ),
-              if (!_sidebarCollapsed)
                 Positioned(
-                  left: width - 3,
+                  left: width,
                   top: 0,
                   bottom: 0,
-                  width: 6,
-                  child: MouseRegion(
-                    cursor: SystemMouseCursors.resizeLeftRight,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onHorizontalDragUpdate: (details) {
-                        _resizeSidebar(details.delta.dx, maxAllowed);
-                      },
-                    ),
-                  ),
-                ),
-              Positioned(
-                left: width,
-                top: 0,
-                bottom: 0,
-                width: 18,
-                child: Center(
-                  child: Material(
-                    color: _primaryDarkLow,
-                    shape: Border(
-                      top: const BorderSide(color: _borderColor),
-                      right: const BorderSide(color: _borderColor),
-                      bottom: const BorderSide(color: _borderColor),
-                    ),
-                    child: InkWell(
-                      onTap: _toggleSidebarCollapsed,
-                      child: SizedBox(
-                        width: 18,
-                        height: 36,
-                        child: Icon(
-                          _sidebarCollapsed
-                              ? Icons.chevron_right
-                              : Icons.chevron_left,
-                          size: 16,
-                          color: _textSecondary,
+                  width: 18,
+                  child: Center(
+                    child: Material(
+                      color: _primaryDarkLow,
+                      shape: Border(
+                        top: const BorderSide(color: _borderColor),
+                        right: const BorderSide(color: _borderColor),
+                        bottom: const BorderSide(color: _borderColor),
+                      ),
+                      child: InkWell(
+                        onTap: _toggleSidebarCollapsed,
+                        child: SizedBox(
+                          width: 18,
+                          height: 36,
+                          child: Icon(
+                            _sidebarCollapsed
+                                ? Icons.chevron_right
+                                : Icons.chevron_left,
+                            size: 16,
+                            color: _textSecondary,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              if (_toast != null)
-                Positioned(
-                  top: titleBarHeight + 10,
-                  left: 0,
-                  right: 0,
-                  child: _MessageToast(message: _toast!, kind: _toastKind),
-                ),
-              if (fullScreenShare != null)
-                Positioned.fill(
-                  child: _FullScreenShare(
-                    track: fullScreenShare,
-                    label: live_display.liveScreenShareStageLabel(
-                      live_display.liveParticipantDisplayName(
-                        _live,
-                        fullScreenShare.identity,
-                      ),
-                    ),
-                    onExit: _exitShareFullScreen,
+                if (_toast != null)
+                  Positioned(
+                    top: titleBarHeight + 10,
+                    left: 0,
+                    right: 0,
+                    child: _MessageToast(message: _toast!, kind: _toastKind),
                   ),
-                ),
-            ],
-          );
-        },
+                if (fullScreenShare != null)
+                  Positioned.fill(
+                    child: _FullScreenShare(
+                      track: fullScreenShare,
+                      label: live_display.liveScreenShareStageLabel(
+                        live_display.liveParticipantDisplayName(
+                          _live,
+                          fullScreenShare.identity,
+                        ),
+                      ),
+                      onExit: _exitShareFullScreen,
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -2275,6 +2416,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     onFileDownloadResume: _resumeFileDownload,
                     onFileDownloadCancel: _cancelFileDownload,
                     onOpenUserInfo: _showUserInfo,
+                    canManageRoomStickers: access.canManageRoom,
+                    onStickerSaveToPersonal: _saveStickerToPersonal,
+                    onStickerSaveToRoom: _saveStickerToRoom,
+                    onStickerSaveAs: _saveStickerAs,
                   ),
           ),
         ],
@@ -2753,6 +2898,7 @@ class _JoinRoomDialogState extends State<_JoinRoomDialog> {
                             autofocus: true,
                             onChanged: _onQueryChanged,
                             cursorColor: _textSecondary,
+                            contextMenuBuilder: buildTextFieldContextMenu,
                             style: const TextStyle(
                               color: _textPrimary,
                               fontSize: 15,
@@ -3713,6 +3859,7 @@ class _MemberSearchField extends StatelessWidget {
           onChanged: onChanged,
           style: const TextStyle(color: _textPrimary, fontSize: 14),
           cursorColor: _cyan,
+          contextMenuBuilder: buildTextFieldContextMenu,
           decoration: InputDecoration(
             border: InputBorder.none,
             prefixIcon: Icon(icon, color: _textMuted, size: 18),
@@ -4394,6 +4541,7 @@ class _RoomNameInput extends StatelessWidget {
               maxLength: 50,
               onSubmitted: onSubmitted,
               cursorColor: _textSecondary,
+              contextMenuBuilder: buildTextFieldContextMenu,
               style: const TextStyle(
                 color: _textPrimary,
                 fontSize: 15,

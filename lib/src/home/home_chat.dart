@@ -1,5 +1,19 @@
 part of 'home_page.dart';
 
+enum _StickerContextAction { saveToPersonal, saveToRoom, saveAs }
+
+Sticker? _stickerFromAttachment(MessageAttachment attachment, String fallback) {
+  final stickerId = attachment.stickerId;
+  final asset = attachment.asset;
+  if (stickerId == null || asset == null) return null;
+  return Sticker(
+    id: stickerId,
+    name: attachment.name ?? fallback,
+    sortOrder: 10,
+    asset: asset,
+  );
+}
+
 class _ChatPane extends StatefulWidget {
   const _ChatPane({
     required this.roomId,
@@ -22,6 +36,10 @@ class _ChatPane extends StatefulWidget {
     required this.onFileDownloadResume,
     required this.onFileDownloadCancel,
     required this.onOpenUserInfo,
+    required this.canManageRoomStickers,
+    required this.onStickerSaveToPersonal,
+    required this.onStickerSaveToRoom,
+    required this.onStickerSaveAs,
   });
 
   final String roomId;
@@ -49,6 +67,10 @@ class _ChatPane extends StatefulWidget {
   final ValueChanged<String> onFileDownloadResume;
   final ValueChanged<String> onFileDownloadCancel;
   final ValueChanged<UserSummary> onOpenUserInfo;
+  final bool canManageRoomStickers;
+  final Future<void> Function(Sticker sticker) onStickerSaveToPersonal;
+  final Future<void> Function(Sticker sticker) onStickerSaveToRoom;
+  final Future<void> Function(Sticker sticker) onStickerSaveAs;
 
   @override
   State<_ChatPane> createState() => _ChatPaneState();
@@ -214,6 +236,50 @@ class _ChatPaneState extends State<_ChatPane> {
     _composerInputHeight = patch.inputHeight;
   }
 
+  Future<void> _showStickerContextMenu(
+    TapDownDetails details,
+    Sticker sticker,
+  ) async {
+    final action = await showMenu<_StickerContextAction>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        details.globalPosition.dx,
+        details.globalPosition.dy,
+        details.globalPosition.dx,
+        details.globalPosition.dy,
+      ),
+      items: [
+        const PopupMenuItem(
+          value: _StickerContextAction.saveToPersonal,
+          child: Text('添加到我的表情包'),
+        ),
+        if (widget.canManageRoomStickers)
+          const PopupMenuItem(
+            value: _StickerContextAction.saveToRoom,
+            child: Text('添加到房间表情包'),
+          ),
+        const PopupMenuItem(
+          value: _StickerContextAction.saveAs,
+          child: Text('另存为'),
+        ),
+      ],
+    );
+    if (action == null || !mounted) return;
+    switch (action) {
+      case _StickerContextAction.saveToPersonal:
+        await widget.onStickerSaveToPersonal(sticker);
+        if (mounted) await _loadStickerPacks(forceReload: true);
+        break;
+      case _StickerContextAction.saveToRoom:
+        await widget.onStickerSaveToRoom(sticker);
+        if (mounted) await _loadStickerPacks(forceReload: true);
+        break;
+      case _StickerContextAction.saveAs:
+        await widget.onStickerSaveAs(sticker);
+        break;
+    }
+  }
+
   Widget _buildComposerInput() {
     final input = Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -239,6 +305,7 @@ class _ChatPaneState extends State<_ChatPane> {
             textInputAction: TextInputAction.send,
             onSubmitted: (_) => widget.onSend(),
             cursorColor: _textSecondary,
+            contextMenuBuilder: buildTextFieldContextMenu,
             decoration: const InputDecoration(
               isDense: true,
               filled: false,
@@ -318,6 +385,7 @@ class _ChatPaneState extends State<_ChatPane> {
           _closePanel();
           unawaited(widget.onStickerSend(sticker));
         },
+        onStickerContextMenu: _showStickerContextMenu,
       ),
       ChatComposerPanel.voice => const _PlaceholderPanel(text: '语音输入开发中'),
       ChatComposerPanel.file => const _PlaceholderPanel(text: '文件上传开发中'),
@@ -403,6 +471,7 @@ class _ChatPaneState extends State<_ChatPane> {
                             onFileDownloadCancel: widget.onFileDownloadCancel,
                             onOpenUserInfo: () =>
                                 widget.onOpenUserInfo(message.sender),
+                            onStickerContextMenu: _showStickerContextMenu,
                           );
                         },
                       ),
@@ -537,6 +606,7 @@ class _StickerPanel extends StatelessWidget {
     required this.onRefresh,
     required this.onSourceChanged,
     required this.onStickerSelected,
+    required this.onStickerContextMenu,
   });
 
   final sticker_display.StickerPanelSource source;
@@ -547,6 +617,8 @@ class _StickerPanel extends StatelessWidget {
   final Future<void> Function() onRefresh;
   final ValueChanged<sticker_display.StickerPanelSource> onSourceChanged;
   final ValueChanged<Sticker> onStickerSelected;
+  final Future<void> Function(TapDownDetails details, Sticker sticker)
+  onStickerContextMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -615,6 +687,8 @@ class _StickerPanel extends StatelessWidget {
             _StickerButton(
               sticker: sticker,
               onPressed: () => onStickerSelected(sticker),
+              onSecondaryTapDown: (details) =>
+                  onStickerContextMenu(details, sticker),
             ),
         ],
       ),
@@ -717,10 +791,15 @@ class _ToolboxItem {
 }
 
 class _StickerButton extends StatelessWidget {
-  const _StickerButton({required this.sticker, required this.onPressed});
+  const _StickerButton({
+    required this.sticker,
+    required this.onPressed,
+    required this.onSecondaryTapDown,
+  });
 
   final Sticker sticker;
   final VoidCallback onPressed;
+  final GestureTapDownCallback onSecondaryTapDown;
 
   @override
   Widget build(BuildContext context) {
@@ -734,24 +813,27 @@ class _StickerButton extends StatelessWidget {
     );
     return Tooltip(
       message: sticker.name,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(6),
-          child: SizedBox(
-            height: 46,
-            width: 52,
-            child: Center(
-              child: SizedBox.square(
-                dimension: 32,
-                child: imageUrl == null
-                    ? fallback
-                    : Image.network(
-                        imageUrl,
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, _, _) => fallback,
-                      ),
+      child: GestureDetector(
+        onSecondaryTapDown: onSecondaryTapDown,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onPressed,
+            borderRadius: BorderRadius.circular(6),
+            child: SizedBox(
+              height: 46,
+              width: 52,
+              child: Center(
+                child: SizedBox.square(
+                  dimension: 32,
+                  child: imageUrl == null
+                      ? fallback
+                      : Image.network(
+                          imageUrl,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, _, _) => fallback,
+                        ),
+                ),
               ),
             ),
           ),
@@ -887,6 +969,7 @@ class _MessageBubble extends StatelessWidget {
     required this.onFileDownloadResume,
     required this.onFileDownloadCancel,
     required this.onOpenUserInfo,
+    required this.onStickerContextMenu,
   });
 
   final Message message;
@@ -906,6 +989,8 @@ class _MessageBubble extends StatelessWidget {
   final ValueChanged<String> onFileDownloadResume;
   final ValueChanged<String> onFileDownloadCancel;
   final VoidCallback onOpenUserInfo;
+  final Future<void> Function(TapDownDetails details, Sticker sticker)
+  onStickerContextMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -977,7 +1062,11 @@ class _MessageBubble extends StatelessWidget {
                     const SizedBox(height: 4),
                     if (contentKind ==
                         message_display.MessageContentKind.sticker)
-                      _StickerMessageImage(message: message, sticker: sticker!),
+                      _StickerMessageImage(
+                        message: message,
+                        sticker: sticker!,
+                        onContextMenu: onStickerContextMenu,
+                      ),
                     if (contentKind == message_display.MessageContentKind.files)
                       _FileAttachmentList(
                         message: message,
@@ -1463,10 +1552,16 @@ class _FileAttachmentIcon extends StatelessWidget {
 }
 
 class _StickerMessageImage extends StatelessWidget {
-  const _StickerMessageImage({required this.message, required this.sticker});
+  const _StickerMessageImage({
+    required this.message,
+    required this.sticker,
+    required this.onContextMenu,
+  });
 
   final Message message;
   final MessageAttachment sticker;
+  final Future<void> Function(TapDownDetails details, Sticker sticker)
+  onContextMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -1479,33 +1574,40 @@ class _StickerMessageImage extends StatelessWidget {
     final label = sticker.name ?? message.body;
     return Tooltip(
       message: label,
-      child: Semantics(
-        image: true,
-        label: label,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 168, maxHeight: 168),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: Image.network(
-              imageUrl,
-              fit: BoxFit.contain,
-              filterQuality: FilterQuality.medium,
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return const SizedBox.square(
-                  dimension: 72,
-                  child: Center(
-                    child: SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(
-                        color: _cyan,
-                        strokeWidth: 2,
+      child: GestureDetector(
+        onSecondaryTapDown: (details) {
+          final stickerModel = _stickerFromAttachment(sticker, label);
+          if (stickerModel == null) return;
+          unawaited(onContextMenu(details, stickerModel));
+        },
+        child: Semantics(
+          image: true,
+          label: label,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 168, maxHeight: 168),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Image.network(
+                imageUrl,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.medium,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return const SizedBox.square(
+                    dimension: 72,
+                    child: Center(
+                      child: SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(
+                          color: _cyan,
+                          strokeWidth: 2,
+                        ),
                       ),
                     ),
-                  ),
-                );
-              },
-              errorBuilder: (_, _, _) => _MessageText(text: message.body),
+                  );
+                },
+                errorBuilder: (_, _, _) => _MessageText(text: message.body),
+              ),
             ),
           ),
         ),

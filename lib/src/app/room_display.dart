@@ -58,11 +58,12 @@ class RoomDeletionConfirmationSpec {
 
 String roomSubtitle(RoomCard room) {
   final live = room.liveParticipantCount;
+  final online = room.onlineMemberCount;
   final last = room.lastMessage;
   if (last != null) {
-    return '${room.memberCount} members · $live live · ${last.senderDisplayName}: ${last.bodyPreview}';
+    return '${room.memberCount} members · $online online · $live live · ${last.senderDisplayName}: ${last.bodyPreview}';
   }
-  return '${room.memberCount} members · $live live';
+  return '${room.memberCount} members · $online online · $live live';
 }
 
 String roomCopySuccessNotice(String label) {
@@ -138,6 +139,16 @@ String roomDescriptionText(RoomDetail room) {
   return _nonEmpty(room.description) ?? '暂无介绍';
 }
 
+String roomDisplayName(RoomDetail room) {
+  final remark = _nonEmpty(room.remarkName);
+  if (remark == null) return room.name;
+  return '$remark (${room.name})';
+}
+
+String roomMemberSummary(RoomDetail room) {
+  return '${room.memberCount} 名成员 · ${room.onlineMemberCount} 人在线';
+}
+
 String userPrimaryName(UserSummary user) {
   return _nonEmpty(user.roomDisplayName) ??
       _nonEmpty(user.displayName) ??
@@ -156,6 +167,21 @@ String userIdentityMeta(UserSummary user) {
   return '${userUidLabel(user)} · ${userUsernameLabel(user)}';
 }
 
+String userSignatureText(UserSummary user) {
+  return _nonEmpty(user.bio) ?? '暂无签名';
+}
+
+String? userRoomsSectionTitle({
+  required UserSummary user,
+  required CurrentUser currentUser,
+}) {
+  if (user.isSuperuser) return null;
+  if (currentUser.isSuperuser || user.id == currentUser.id) {
+    return '所有房间';
+  }
+  return '共同房间';
+}
+
 String roomRoleLabel(UserSummary user, {String? ownerUserId}) {
   final role = _nonEmpty(user.roomRole)?.toLowerCase();
   if (role == 'pending') return '待审批';
@@ -169,8 +195,15 @@ String roomRoleLabel(UserSummary user, {String? ownerUserId}) {
 
 String commonRoomTitle(UserCommonRoom room) {
   final rid = _nonEmpty(room.rid);
-  if (rid == null) return room.name;
-  return '$rid · ${room.name}';
+  final name = commonRoomDisplayName(room);
+  if (rid == null) return name;
+  return '$name · $rid';
+}
+
+String commonRoomDisplayName(UserCommonRoom room) {
+  final remark = _nonEmpty(room.remarkName);
+  if (remark == null) return room.name;
+  return '$remark (${room.name})';
 }
 
 String visibilityLabel(String value) {
@@ -217,10 +250,15 @@ List<UserCommonRoom> roomUserInfoCommonRooms({
   required CurrentUser currentUser,
   required bool includeSelectedRoom,
 }) {
-  if (user.id == currentUser.id || user.isSuperuser) {
+  if (user.isSuperuser) {
     return const [];
   }
-  if (currentUser.isSuperuser || includeSelectedRoom) {
+  if (currentUser.isSuperuser || user.id == currentUser.id) {
+    return includeSelectedRoom
+        ? commonRoomsWithSelectedRoom(user: user, room: selectedRoom)
+        : user.commonRooms;
+  }
+  if (includeSelectedRoom) {
     return commonRoomsWithSelectedRoom(user: user, room: selectedRoom);
   }
   return user.commonRooms;
@@ -236,6 +274,9 @@ List<UserCommonRoom> commonRoomsWithSelectedRoom({
       rid: room.rid,
       name: room.name,
       visibility: room.visibility,
+      remarkName: room.remarkName,
+      avatarUrl: room.avatarUrl,
+      defaultAvatarKey: room.defaultAvatarKey,
       roomDisplayName: user.roomDisplayName,
       roomRole: user.roomRole,
     ),

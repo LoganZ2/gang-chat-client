@@ -244,6 +244,7 @@ class _LabeledTextField extends StatelessWidget {
           obscureText: obscureText,
           keyboardType: keyboardType,
           cursorColor: _textSecondary,
+          contextMenuBuilder: buildTextFieldContextMenu,
           style: TextStyle(
             color: enabled ? _textPrimary : _textMuted,
             fontSize: 14,

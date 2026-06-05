@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'text_context_menu.dart';
 import 'tokens.dart';
 
 class TextInput extends StatelessWidget {
@@ -53,6 +54,7 @@ class TextInput extends StatelessWidget {
               onSubmitted: onSubmitted,
               cursorColor: UiColors.accent,
               style: UiTypography.body,
+              contextMenuBuilder: buildTextFieldContextMenu,
               decoration: InputDecoration(
                 isDense: true,
                 hintText: hint,

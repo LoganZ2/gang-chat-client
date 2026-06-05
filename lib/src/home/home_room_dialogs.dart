@@ -4,6 +4,7 @@ class _UserInfoDialog extends StatelessWidget {
   const _UserInfoDialog({
     required this.user,
     required this.room,
+    required this.roomsSectionTitle,
     required this.commonRooms,
     required this.onOpenRoom,
     required this.onCopyUid,
@@ -11,6 +12,7 @@ class _UserInfoDialog extends StatelessWidget {
 
   final UserSummary user;
   final RoomDetail room;
+  final String? roomsSectionTitle;
   final List<UserCommonRoom> commonRooms;
   final ValueChanged<String> onOpenRoom;
   final ValueChanged<String> onCopyUid;
@@ -111,8 +113,13 @@ class _UserInfoDialog extends StatelessWidget {
                           size: 30,
                         ),
                       ),
-                      if (commonRooms.isNotEmpty)
+                      _UserInfoField(
+                        label: '签名',
+                        value: room_display.userSignatureText(user),
+                      ),
+                      if (roomsSectionTitle != null && commonRooms.isNotEmpty)
                         _CommonRoomsSection(
+                          title: roomsSectionTitle!,
                           rooms: commonRooms,
                           onOpenRoom: (roomId) {
                             Navigator.of(context).pop();
@@ -219,6 +226,10 @@ class _BasicUserInfoDialog extends StatelessWidget {
                   size: 30,
                 ),
               ),
+              _UserInfoField(
+                label: '签名',
+                value: room_display.userSignatureText(user),
+              ),
             ],
           ),
         ),
@@ -262,8 +273,13 @@ class _NameWithGender extends StatelessWidget {
 }
 
 class _CommonRoomsSection extends StatelessWidget {
-  const _CommonRoomsSection({required this.rooms, required this.onOpenRoom});
+  const _CommonRoomsSection({
+    required this.title,
+    required this.rooms,
+    required this.onOpenRoom,
+  });
 
+  final String title;
   final List<UserCommonRoom> rooms;
   final ValueChanged<String> onOpenRoom;
 
@@ -278,10 +294,10 @@ class _CommonRoomsSection extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(
+            SizedBox(
               width: 102,
               child: Text(
-                '共同房间',
+                title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -321,44 +337,58 @@ class _CommonRoomLink extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = room_display.commonRoomTitle(room);
-    final meta = room_display.commonRoomMeta(room);
+    final appConfig = AppConfigScope.of(context);
+    final title = room_display.commonRoomDisplayName(room);
+    final rid = room.rid.trim().isEmpty ? room.id : room.rid;
     return Tooltip(
-      message: '打开房间',
+      message: '查看房间信息',
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: onOpen,
-          child: RichText(
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            text: TextSpan(
-              style: const TextStyle(
-                color: _textPrimary,
-                fontSize: 14,
-                height: 1.36,
-                fontWeight: FontWeight.w600,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _Avatar(
+                label: title,
+                imageUrl: appConfig.resolveAssetUrl(room.avatarUrl),
+                defaultAvatarKey: room.defaultAvatarKey,
+                size: 30,
+                borderColor: _borderColor,
+                borderWidth: 1,
               ),
-              children: [
-                TextSpan(
-                  text:
-                      '$title · ${room_display.visibilityLabel(room.visibility)}',
-                  style: const TextStyle(
-                    color: _cyan,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                if (meta != null)
-                  TextSpan(
-                    text: ' ($meta)',
-                    style: const TextStyle(
-                      color: _textSecondary,
-                      fontWeight: FontWeight.w600,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _cyan,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-                  ),
-              ],
-            ),
+                    const SizedBox(height: 2),
+                    Text(
+                      rid,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -461,6 +491,7 @@ class _RoomInfoDialog extends StatefulWidget {
     required this.fileSelectionService,
     required this.isInLive,
     required this.onLeaveLive,
+    required this.onOpenUserInfo,
   });
 
   final RoomsController controller;
@@ -470,6 +501,7 @@ class _RoomInfoDialog extends StatefulWidget {
   final FileSelectionService fileSelectionService;
   final bool isInLive;
   final Future<void> Function() onLeaveLive;
+  final ValueChanged<UserSummary> onOpenUserInfo;
 
   @override
   State<_RoomInfoDialog> createState() => _RoomInfoDialogState();
@@ -849,7 +881,8 @@ class _RoomInfoDialogState extends State<_RoomInfoDialog> {
               onClose: () => Navigator.of(context).pop(),
             ),
             _RoomDialogRoomSummary(
-              roomName: widget.room.name,
+              roomName: room_display.roomDisplayName(widget.room),
+              subtitle: room_display.roomMemberSummary(widget.room),
               avatarLabel: widget.room.name,
               avatarUrl: appConfig.resolveAssetUrl(widget.room.avatarUrl),
               defaultAvatarKey: widget.room.defaultAvatarKey,
@@ -869,6 +902,21 @@ class _RoomInfoDialogState extends State<_RoomInfoDialog> {
                   _RoomSettingsGroup(
                     title: '基础信息',
                     children: [
+                      _RoomInfoPlainField(
+                        label: '房间成员',
+                        value: room_display.roomMemberSummary(widget.room),
+                      ),
+                      if (widget.room.createdBy != null) ...[
+                        const SizedBox(height: 14),
+                        _RoomCreatorField(
+                          user: widget.room.createdBy!,
+                          onOpen: () {
+                            Navigator.of(context).pop();
+                            widget.onOpenUserInfo(widget.room.createdBy!);
+                          },
+                        ),
+                      ],
+                      const SizedBox(height: 14),
                       _CopyableRoomField(
                         label: '房间永久 RID',
                         value: room_display.roomIdentifier(widget.room),
@@ -882,8 +930,10 @@ class _RoomInfoDialogState extends State<_RoomInfoDialog> {
                         label: '房间介绍',
                         value: room_display.roomDescriptionText(widget.room),
                         maxLines: 3,
-                        onCopy: () =>
-                            _copyText(widget.room.description, '房间介绍'),
+                        onCopy: () => _copyText(
+                          room_display.roomDescriptionText(widget.room),
+                          '房间介绍',
+                        ),
                       ),
                     ],
                   ),
@@ -2877,12 +2927,14 @@ class _RoomDialogRoomSummary extends StatelessWidget {
     required this.avatarLabel,
     required this.avatarUrl,
     required this.defaultAvatarKey,
+    this.subtitle,
   });
 
   final String roomName;
   final String avatarLabel;
   final String? avatarUrl;
   final String defaultAvatarKey;
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -2904,15 +2956,34 @@ class _RoomDialogRoomSummary extends StatelessWidget {
             ),
             const SizedBox(width: 14),
             Expanded(
-              child: Text(
-                roomName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: _textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w900,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    roomName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _textPrimary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _textMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           ],
@@ -3167,6 +3238,128 @@ class _CopyableRoomField extends StatelessWidget {
   }
 }
 
+class _RoomInfoPlainField extends StatelessWidget {
+  const _RoomInfoPlainField({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _RoomFieldLabel(label),
+        const SizedBox(height: 8),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: _primaryDark,
+            border: Border.all(color: _borderColor),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Text(
+              value,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _textSecondary,
+                fontSize: 14,
+                height: 1.35,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RoomCreatorField extends StatelessWidget {
+  const _RoomCreatorField({required this.user, required this.onOpen});
+
+  final UserSummary user;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final appConfig = AppConfigScope.of(context);
+    final name = room_display.userPrimaryName(user);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _RoomFieldLabel('创建者'),
+        const SizedBox(height: 8),
+        Tooltip(
+          message: '查看用户信息',
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onOpen,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: _primaryDark,
+                  border: Border.all(color: _borderColor),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 9,
+                  ),
+                  child: Row(
+                    children: [
+                      _Avatar(
+                        label: name,
+                        imageUrl: appConfig.resolveAssetUrl(user.avatarUrl),
+                        defaultAvatarKey: user.defaultAvatarKey,
+                        size: 34,
+                        borderColor: _borderColor,
+                        borderWidth: 1,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: _textPrimary,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              room_display.userUsernameLabel(user),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: _textMuted,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _RoomTextField extends StatelessWidget {
   const _RoomTextField({
     required this.label,
@@ -3191,6 +3384,7 @@ class _RoomTextField extends StatelessWidget {
           controller: controller,
           maxLines: maxLines,
           cursorColor: _textSecondary,
+          contextMenuBuilder: buildTextFieldContextMenu,
           style: const TextStyle(
             color: _textPrimary,
             fontSize: 14,
@@ -3964,6 +4158,7 @@ class _RoomStickerFilterDialogState extends State<_RoomStickerFilterDialog> {
                 controller: _keywordController,
                 autofocus: true,
                 cursorColor: _textSecondary,
+                contextMenuBuilder: buildTextFieldContextMenu,
                 style: const TextStyle(
                   color: _textPrimary,
                   fontSize: 14,

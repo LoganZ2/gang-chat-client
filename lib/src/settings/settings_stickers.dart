@@ -262,6 +262,7 @@ class _StickerFilterDialogState extends State<_StickerFilterDialog> {
                 controller: _keywordController,
                 autofocus: true,
                 cursorColor: _textSecondary,
+                contextMenuBuilder: buildTextFieldContextMenu,
                 style: const TextStyle(
                   color: _textPrimary,
                   fontSize: 14,
@@ -712,6 +713,7 @@ class _StickerPreviewDialogState extends State<_StickerPreviewDialog> {
               TextField(
                 controller: _nameController,
                 cursorColor: _textSecondary,
+                contextMenuBuilder: buildTextFieldContextMenu,
                 style: const TextStyle(
                   color: _textPrimary,
                   fontSize: 14,

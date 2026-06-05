@@ -148,6 +148,15 @@ abstract interface class GangApi {
 
   Future<DownloadedFile> downloadStickers({required List<String> stickerIds});
 
+  Future<StickerPack> saveSticker({
+    required String roomId,
+    required String stickerId,
+    String targetScope = 'personal',
+    String? targetPackId,
+    String? name,
+    int? sortOrder,
+  });
+
   Future<void> changePassword({
     required String currentPassword,
     required String newPassword,
@@ -218,6 +227,11 @@ abstract interface class GangApi {
     String roomId, {
     int limit = 100,
     String? cursor,
+  });
+
+  Future<RoomMemberProfile> getRoomMemberProfile({
+    required String roomId,
+    required String userId,
   });
 
   Future<RoomInvite> inviteMember({
@@ -303,7 +317,7 @@ class GangApiClient implements GangApi {
   Future<CurrentUser> me() async {
     final decoded = await _sendJson((token) {
       return _httpClient.get(_uri('/me'), headers: _headers(token));
-    }, retryTransientFailures: true);
+    });
     return CurrentUser.fromJson(decoded);
   }
 
@@ -686,6 +700,32 @@ class GangApiClient implements GangApi {
   }
 
   @override
+  Future<StickerPack> saveSticker({
+    required String roomId,
+    required String stickerId,
+    String targetScope = 'personal',
+    String? targetPackId,
+    String? name,
+    int? sortOrder,
+  }) async {
+    final body = <String, Object?>{
+      'sticker_id': stickerId,
+      'target_scope': targetScope,
+    };
+    if (targetPackId != null) body['target_pack_id'] = targetPackId;
+    if (name != null) body['name'] = name;
+    if (sortOrder != null) body['sort_order'] = sortOrder;
+    final decoded = await _sendJson((token) {
+      return _httpClient.post(
+        _uri('/rooms/$roomId/stickers/save'),
+        headers: _headers(token),
+        body: encodeJsonBody(body),
+      );
+    });
+    return StickerPack.fromJson(decoded['pack']! as Map<String, Object?>);
+  }
+
+  @override
   Future<void> changePassword({
     required String currentPassword,
     required String newPassword,
@@ -940,6 +980,22 @@ class GangApiClient implements GangApi {
       );
     }, retryTransientFailures: true);
     return RoomMemberPage.fromJson(decoded);
+  }
+
+  @override
+  Future<RoomMemberProfile> getRoomMemberProfile({
+    required String roomId,
+    required String userId,
+  }) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.get(
+        _uri('/rooms/$roomId/members/$userId/profile'),
+        headers: _headers(token),
+      );
+    }, retryTransientFailures: true);
+    return RoomMemberProfile.fromJson(
+      decoded['profile']! as Map<String, Object?>,
+    );
   }
 
   @override

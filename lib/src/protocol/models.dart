@@ -4,6 +4,9 @@ class UserCommonRoom {
     required this.rid,
     required this.name,
     this.visibility = 'private',
+    this.remarkName,
+    this.avatarUrl,
+    this.defaultAvatarKey = 'room-1',
     this.roomDisplayName,
     this.roomRole,
   });
@@ -12,6 +15,9 @@ class UserCommonRoom {
   final String rid;
   final String name;
   final String visibility;
+  final String? remarkName;
+  final String? avatarUrl;
+  final String defaultAvatarKey;
   final String? roomDisplayName;
   final String? roomRole;
 
@@ -23,6 +29,18 @@ class UserCommonRoom {
       visibility:
           _stringFromJson(json, const ['visibility', 'room_visibility']) ??
           'private',
+      remarkName: _stringFromJson(json, const [
+        'remark_name',
+        'room_remark',
+        'room_remark_name',
+      ]),
+      avatarUrl: _stringFromJson(json, const ['avatar_url', 'room_avatar_url']),
+      defaultAvatarKey:
+          _stringFromJson(json, const [
+            'default_avatar_key',
+            'room_default_avatar_key',
+          ]) ??
+          'room-1',
       roomDisplayName: _stringFromJson(json, const [
         'room_display_name',
         'room_username',
@@ -504,6 +522,7 @@ class RoomCard {
     this.remarkName,
     this.description = '',
     this.notificationPolicy = 'all',
+    this.onlineMemberCount = 0,
   });
 
   final String id;
@@ -516,6 +535,7 @@ class RoomCard {
   final String? avatarUrl;
   final String defaultAvatarKey;
   final int memberCount;
+  final int onlineMemberCount;
   final int liveParticipantCount;
   final List<UserSummary> liveAvatarPreview;
   final LastMessagePreview? lastMessage;
@@ -536,6 +556,9 @@ class RoomCard {
       avatarUrl: json['avatar_url'] as String?,
       defaultAvatarKey: json['default_avatar_key'] as String? ?? 'room-1',
       memberCount: json['member_count']! as int,
+      onlineMemberCount:
+          _intFromJson(json, const ['online_member_count', 'online_count']) ??
+          0,
       liveParticipantCount: json['live_participant_count'] as int? ?? 0,
       liveAvatarPreview: _listOfMaps(
         json['live_avatar_preview'],
@@ -570,6 +593,7 @@ class RoomCard {
       avatarUrl: avatarUrl,
       defaultAvatarKey: defaultAvatarKey,
       memberCount: memberCount,
+      onlineMemberCount: onlineMemberCount,
       liveParticipantCount: liveParticipantCount,
       liveAvatarPreview: liveAvatarPreview,
       lastMessage: lastMessage,
@@ -595,6 +619,7 @@ class PublicRoom {
     required this.liveParticipantCount,
     required this.joined,
     required this.joinState,
+    this.onlineMemberCount = 0,
   });
 
   final String id;
@@ -605,6 +630,7 @@ class PublicRoom {
   final String visibility;
   final String joinPolicy;
   final int memberCount;
+  final int onlineMemberCount;
   final int liveParticipantCount;
   final bool joined;
   final String joinState;
@@ -619,6 +645,9 @@ class PublicRoom {
       visibility: json['visibility'] as String? ?? 'public',
       joinPolicy: json['join_policy'] as String? ?? 'approval_required',
       memberCount: json['member_count'] as int? ?? 0,
+      onlineMemberCount:
+          _intFromJson(json, const ['online_member_count', 'online_count']) ??
+          0,
       liveParticipantCount: json['live_participant_count'] as int? ?? 0,
       joined: json['joined'] as bool? ?? false,
       joinState: json['join_state'] as String? ?? 'none',
@@ -806,6 +835,64 @@ class RoomMember {
   }
 }
 
+class RoomMemberProfile {
+  const RoomMemberProfile({
+    required this.user,
+    required this.role,
+    required this.joinedAt,
+    this.roomDisplayName,
+    this.roomAvatarUrl,
+    this.roomDefaultAvatarKey,
+    this.textMutedUntil,
+  });
+
+  final UserSummary user;
+  final String role;
+  final DateTime joinedAt;
+  final String? roomDisplayName;
+  final String? roomAvatarUrl;
+  final String? roomDefaultAvatarKey;
+  final String? textMutedUntil;
+
+  factory RoomMemberProfile.fromJson(Map<String, Object?> json) {
+    final baseUser = UserSummary.fromJson(
+      json['user']! as Map<String, Object?>,
+    );
+    final role =
+        _stringFromJson(json, const ['role', 'room_role', 'membership_role']) ??
+        baseUser.roomRole ??
+        'member';
+    final roomDisplayName = _stringFromJson(json, const [
+      'room_display_name',
+      'room_username',
+      'room_nickname',
+      'member_display_name',
+    ]);
+    final roomAvatarUrl = _stringFromJson(json, const ['room_avatar_url']);
+    final roomDefaultAvatarKey = _stringFromJson(json, const [
+      'room_default_avatar_key',
+      'default_avatar_key',
+    ]);
+    final user = baseUser.copyWith(
+      roomDisplayName: roomDisplayName,
+      roomRole: role,
+      avatarUrl: roomAvatarUrl ?? baseUser.avatarUrl,
+      defaultAvatarKey: roomDefaultAvatarKey ?? baseUser.defaultAvatarKey,
+    );
+    return RoomMemberProfile(
+      user: user,
+      role: role,
+      joinedAt:
+          _parseDateTime(json['joined_at']) ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      roomDisplayName: roomDisplayName,
+      roomAvatarUrl: roomAvatarUrl,
+      roomDefaultAvatarKey: roomDefaultAvatarKey,
+      textMutedUntil: _stringFromJson(json, const ['text_muted_until']),
+    );
+  }
+}
+
 class RoomInvite {
   const RoomInvite({
     required this.id,
@@ -858,6 +945,7 @@ class RoomDetail {
     this.personalProfile = const RoomPersonalProfile(),
     this.aiVoiceAnnouncementsEnabled = true,
     this.canDeleteRoom,
+    this.onlineMemberCount = 0,
   });
 
   final String id;
@@ -874,6 +962,7 @@ class RoomDetail {
   final String? avatarUrl;
   final String defaultAvatarKey;
   final int memberCount;
+  final int onlineMemberCount;
   final UserSummary? createdBy;
   final RoomMembership myMembership;
   final LiveState live;
@@ -910,6 +999,9 @@ class RoomDetail {
       avatarUrl: json['avatar_url'] as String?,
       defaultAvatarKey: json['default_avatar_key'] as String? ?? 'room-1',
       memberCount: json['member_count']! as int,
+      onlineMemberCount:
+          _intFromJson(json, const ['online_member_count', 'online_count']) ??
+          0,
       createdBy: _nullableMap(json['created_by']) == null
           ? null
           : UserSummary.fromJson(_nullableMap(json['created_by'])!),
@@ -961,6 +1053,7 @@ class RoomDetail {
       avatarUrl: avatarUrl,
       defaultAvatarKey: defaultAvatarKey,
       memberCount: memberCount,
+      onlineMemberCount: onlineMemberCount,
       createdBy: createdBy,
       myMembership: RoomMembership(joinedAt: myMembership.joinedAt, role: role),
       live: live,
@@ -981,6 +1074,7 @@ class RoomDetail {
       avatarUrl: avatarUrl,
       defaultAvatarKey: defaultAvatarKey,
       memberCount: memberCount,
+      onlineMemberCount: onlineMemberCount,
       liveParticipantCount: live.participantCount,
       liveAvatarPreview: live.participants.map((p) => p.user).take(5).toList(),
       lastMessage: null,
@@ -1265,6 +1359,15 @@ bool? _boolFromJson(Map<String, Object?>? json, List<String> keys) {
   for (final key in keys) {
     final value = json[key];
     if (value is bool) return value;
+  }
+  return null;
+}
+
+int? _intFromJson(Map<String, Object?>? json, List<String> keys) {
+  if (json == null) return null;
+  for (final key in keys) {
+    final value = _nullableInt(json[key]);
+    if (value != null) return value;
   }
   return null;
 }

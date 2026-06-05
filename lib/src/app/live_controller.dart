@@ -396,6 +396,7 @@ class LiveController {
       avatarUrl: existing.avatarUrl,
       defaultAvatarKey: existing.defaultAvatarKey,
       memberCount: existing.memberCount,
+      onlineMemberCount: existing.onlineMemberCount,
       liveParticipantCount: nextCount,
       liveAvatarPreview: remainingPreview,
       lastMessage: existing.lastMessage,

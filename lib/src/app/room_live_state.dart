@@ -23,6 +23,7 @@ RoomCard roomCardWithLive(RoomCard room, LiveState live) {
     avatarUrl: room.avatarUrl,
     defaultAvatarKey: room.defaultAvatarKey,
     memberCount: room.memberCount,
+    onlineMemberCount: room.onlineMemberCount,
     liveParticipantCount: live.participantCount,
     liveAvatarPreview: preview,
     lastMessage: room.lastMessage,

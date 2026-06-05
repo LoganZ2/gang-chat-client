@@ -41,4 +41,28 @@ class StickerPacksController {
   Future<List<StickerPack>> loadRoomPacks(String roomId) {
     return api.listStickerPacks(scope: 'room', roomId: roomId);
   }
+
+  Future<StickerPack> saveSticker({
+    required String roomId,
+    required String stickerId,
+    required String targetScope,
+    required String userId,
+    String? name,
+  }) async {
+    final pack = await api.saveSticker(
+      roomId: roomId,
+      stickerId: stickerId,
+      targetScope: targetScope,
+      name: name,
+    );
+    if (targetScope == 'personal') {
+      final packs = await api.listStickerPacks(scope: 'personal');
+      await stickerPackStore.writePersonalPacks(
+        userId: userId,
+        apiBaseUrl: apiBaseUrl,
+        packs: packs,
+      );
+    }
+    return pack;
+  }
 }

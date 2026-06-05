@@ -62,6 +62,7 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
                 autofocus: true,
                 onChanged: (_) => setState(() {}),
                 cursorColor: _textSecondary,
+                contextMenuBuilder: buildTextFieldContextMenu,
                 style: const TextStyle(
                   color: _textPrimary,
                   fontWeight: FontWeight.w700,

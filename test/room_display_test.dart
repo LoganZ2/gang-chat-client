@@ -5,7 +5,7 @@ import 'package:client/src/protocol/models.dart';
 
 void main() {
   test('roomSubtitle includes last message preview when present', () {
-    expect(roomSubtitle(_roomCard()), '8 members · 2 live');
+    expect(roomSubtitle(_roomCard()), '8 members · 3 online · 2 live');
 
     expect(
       roomSubtitle(
@@ -18,7 +18,7 @@ void main() {
           ),
         ),
       ),
-      '8 members · 2 live · Logan: hello',
+      '8 members · 3 online · 2 live · Logan: hello',
     );
   });
 
@@ -128,12 +128,13 @@ void main() {
       id: 'room_1',
       rid: '1001',
       name: 'General',
+      remarkName: 'Ops',
       visibility: 'public',
       roomDisplayName: 'Room Logan',
       roomRole: 'admin',
     );
 
-    expect(commonRoomTitle(room), '1001 · General');
+    expect(commonRoomTitle(room), 'Ops (General) · 1001');
     expect(visibilityLabel(room.visibility), '公开');
     expect(commonRoomMeta(room), 'Room Logan · 管理员');
     expect(
@@ -216,8 +217,8 @@ void main() {
         selectedRoom: selectedRoom,
         currentUser: _currentUser(),
         includeSelectedRoom: true,
-      ),
-      isEmpty,
+      ).map((room) => room.id),
+      ['room_1'],
     );
     expect(
       roomUserInfoCommonRooms(
@@ -235,7 +236,34 @@ void main() {
         currentUser: _currentUser(isSuperuser: true),
         includeSelectedRoom: false,
       ).map((room) => room.id),
-      ['room_1'],
+      isEmpty,
+    );
+    expect(
+      roomUserInfoCommonRooms(
+        user: _user(id: 'other', commonRooms: const [existing]),
+        selectedRoom: selectedRoom,
+        currentUser: _currentUser(isSuperuser: true),
+        includeSelectedRoom: false,
+      ).map((room) => room.id),
+      ['room_2'],
+    );
+    expect(
+      userRoomsSectionTitle(
+        user: _user(id: 'super', isSuperuser: true),
+        currentUser: _currentUser(),
+      ),
+      isNull,
+    );
+    expect(
+      userRoomsSectionTitle(
+        user: _user(id: 'user_1'),
+        currentUser: _currentUser(),
+      ),
+      '所有房间',
+    );
+    expect(
+      userRoomsSectionTitle(user: user, currentUser: _currentUser()),
+      '共同房间',
     );
   });
 
@@ -419,6 +447,7 @@ RoomCard _roomCard({LastMessagePreview? lastMessage}) {
     avatarUrl: null,
     defaultAvatarKey: 'room-1',
     memberCount: 8,
+    onlineMemberCount: 3,
     liveParticipantCount: 2,
     liveAvatarPreview: const [],
     lastMessage: lastMessage,

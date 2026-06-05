@@ -387,6 +387,66 @@ void main() {
     api.close();
   });
 
+  test('getRoomMemberProfile parses signature and profile rooms', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/api/v1/rooms/room_1/members/user_2/profile');
+        expect(request.headers['authorization'], 'Bearer token');
+
+        return http.Response(
+          jsonEncode({
+            'profile': {
+              'user': {
+                'id': 'user_2',
+                'uid': '1000002',
+                'username': 'bob',
+                'display_name': 'Bob',
+                'avatar_url': '/global.png',
+                'default_avatar_key': 'blue-2',
+                'bio': 'Ship quietly',
+                'common_rooms': [
+                  {
+                    'id': 'room_2',
+                    'rid': '900002',
+                    'name': 'Ops',
+                    'remark_name': 'Night Ops',
+                    'avatar_url': '/room.png',
+                    'default_avatar_key': 'room-2',
+                    'visibility': 'private',
+                    'room_role': 'admin',
+                  },
+                ],
+              },
+              'room_display_name': 'Room Bob',
+              'room_avatar_url': '/room-bob.png',
+              'room_default_avatar_key': 'green-2',
+              'role': 'admin',
+              'joined_at': '2026-05-31T14:00:00Z',
+            },
+          }),
+          200,
+        );
+      }),
+    );
+
+    final profile = await api.getRoomMemberProfile(
+      roomId: 'room_1',
+      userId: 'user_2',
+    );
+
+    expect(profile.user.bio, 'Ship quietly');
+    expect(profile.user.roomDisplayName, 'Room Bob');
+    expect(profile.user.roomRole, 'admin');
+    expect(profile.user.avatarUrl, '/room-bob.png');
+    expect(profile.user.commonRooms.single.remarkName, 'Night Ops');
+    expect(profile.user.commonRooms.single.avatarUrl, '/room.png');
+    expect(profile.user.commonRooms.single.defaultAvatarKey, 'room-2');
+    api.close();
+  });
+
   test(
     'searchUsers calls the user search endpoint and parses summaries',
     () async {
@@ -930,6 +990,39 @@ void main() {
     expect(packs.single.name, 'My Stickers');
     expect(packs.single.stickers.single.asset.mimeType, 'image/webp');
     expect(packs.single.stickers.single.asset.width, 128);
+    api.close();
+  });
+
+  test('saveSticker posts target scope and parses returned pack', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/v1/rooms/room_1/stickers/save');
+        expect(request.headers['authorization'], 'Bearer token');
+        expect(jsonDecode(request.body) as Map<String, Object?>, {
+          'sticker_id': 'stk_1',
+          'target_scope': 'room',
+          'name': 'ok',
+        });
+        return http.Response(
+          jsonEncode(
+            _stickerPackJson(stickers: [_stickerJson(id: 'stk_saved')]),
+          ),
+          201,
+        );
+      }),
+    );
+
+    final pack = await api.saveSticker(
+      roomId: 'room_1',
+      stickerId: 'stk_1',
+      targetScope: 'room',
+      name: 'ok',
+    );
+
+    expect(pack.stickers.single.id, 'stk_saved');
     api.close();
   });
 
@@ -1480,6 +1573,8 @@ void main() {
     expect(room.personalProfile.displayName, 'Alice Ops');
     expect(room.personalProfile.avatarUrl, '/assets/asset_2/room-avatar.png');
     expect(room.personalProfile.defaultAvatarKey, 'mint-2');
+    expect(room.onlineMemberCount, 1);
+    expect(room.toCard().onlineMemberCount, 1);
     expect(room.aiVoiceAnnouncementsEnabled, isFalse);
     expect(room.isAdmin, isTrue);
     expect(room.isSuperuser, isTrue);
@@ -1729,6 +1824,7 @@ Map<String, Object?> _roomDetailJson() {
     'avatar_url': null,
     'default_avatar_key': 'room-1',
     'member_count': 2,
+    'online_member_count': 1,
     'created_by': {
       'id': 'user_1',
       'uid': '1000001',

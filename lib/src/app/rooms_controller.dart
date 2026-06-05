@@ -595,6 +595,13 @@ class RoomsController {
     return api.getRoom(roomId);
   }
 
+  Future<RoomMemberProfile> getRoomMemberProfile({
+    required String roomId,
+    required String userId,
+  }) {
+    return api.getRoomMemberProfile(roomId: roomId, userId: userId);
+  }
+
   Future<RoomDetail> createRoom({required String name}) {
     return api.createRoom(name: name);
   }
@@ -1072,6 +1079,7 @@ class RoomsController {
         avatarUrl: existing.avatarUrl,
         defaultAvatarKey: existing.defaultAvatarKey,
         memberCount: existing.memberCount,
+        onlineMemberCount: existing.onlineMemberCount,
         liveParticipantCount: count,
         liveAvatarPreview: preview ?? existing.liveAvatarPreview,
         lastMessage: existing.lastMessage,
