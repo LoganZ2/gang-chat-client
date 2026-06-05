@@ -177,6 +177,7 @@ class _HomeShellState extends State<HomeShell> {
   }) {
     return HomeSidebar(
       width: width,
+      currentUser: widget.app.currentUser,
       servers: _servers,
       selectedServerId: _selectedServerId,
       loading: _loadingServers,

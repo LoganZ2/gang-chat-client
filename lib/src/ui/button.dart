@@ -77,15 +77,18 @@ class PressableSurface extends StatefulWidget {
 }
 
 class _PressableSurfaceState extends State<PressableSurface> {
+  final GlobalKey _hitTargetKey = GlobalKey();
+
   bool _hovered = false;
   bool _pressed = false;
+  int? _pressedPointer;
 
   bool get _isInteractive =>
       widget.enabled && (widget.interactive || widget.onPressed != null);
 
   void _setHover(bool hovered) {
     _hovered = hovered;
-    if (!hovered) _pressed = false;
+    if (!hovered && _pressedPointer == null) _pressed = false;
     if (mounted) setState(() {});
   }
 
@@ -99,6 +102,41 @@ class _PressableSurfaceState extends State<PressableSurface> {
   void _handleTap() {
     if (!widget.enabled || widget.loading) return;
     widget.onPressed?.call();
+  }
+
+  bool _isInsideHitTarget(Offset position) {
+    final renderObject = _hitTargetKey.currentContext?.findRenderObject();
+    if (renderObject is! RenderBox) return false;
+    final size = renderObject.size;
+    return position.dx >= 0 &&
+        position.dy >= 0 &&
+        position.dx <= size.width &&
+        position.dy <= size.height;
+  }
+
+  void _handlePointerDown(PointerDownEvent event) {
+    if (!_isInteractive || widget.loading || _pressedPointer != null) return;
+    _pressedPointer = event.pointer;
+    _setPressed(_isInsideHitTarget(event.localPosition));
+  }
+
+  void _handlePointerMove(PointerMoveEvent event) {
+    if (event.pointer != _pressedPointer) return;
+    _setPressed(_isInsideHitTarget(event.localPosition));
+  }
+
+  void _handlePointerUp(PointerUpEvent event) {
+    if (event.pointer != _pressedPointer) return;
+    final shouldPress = _isInsideHitTarget(event.localPosition);
+    _pressedPointer = null;
+    _setPressed(false);
+    if (shouldPress) _handleTap();
+  }
+
+  void _handlePointerCancel(PointerCancelEvent event) {
+    if (event.pointer != _pressedPointer) return;
+    _pressedPointer = null;
+    _setPressed(false);
   }
 
   @override
@@ -173,64 +211,61 @@ class _PressableSurfaceState extends State<PressableSurface> {
         onEnter: (_) => _setHover(true),
         onExit: (_) => _setHover(false),
         child: Listener(
-          onPointerDown: (_) => _setPressed(true),
-          onPointerUp: (_) => _setPressed(false),
-          onPointerCancel: (_) => _setPressed(false),
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: _handleTap,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final fillWidth =
-                    explicitWidth != null || constraints.hasTightWidth;
-                final stack = Stack(
-                  clipBehavior: widget.elevateOnHover
-                      ? Clip.none
-                      : Clip.hardEdge,
-                  children: [
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      top: baseTop,
-                      height: widget.height,
-                      child: Opacity(
-                        opacity: baseOpacity,
-                        child: _SurfaceLayer(
-                          background: shadowColor,
-                          borderColor: borderColor,
-                          borderRadius: radius,
-                          cornerCut: widget.cornerCut,
-                          cutCorner: widget.cutCorner,
-                        ),
+          key: _hitTargetKey,
+          behavior: HitTestBehavior.opaque,
+          onPointerDown: _handlePointerDown,
+          onPointerMove: _handlePointerMove,
+          onPointerUp: _handlePointerUp,
+          onPointerCancel: _handlePointerCancel,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final fillWidth =
+                  explicitWidth != null || constraints.hasTightWidth;
+              final stack = Stack(
+                clipBehavior: widget.elevateOnHover ? Clip.none : Clip.hardEdge,
+                children: [
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    top: baseTop,
+                    height: widget.height,
+                    child: Opacity(
+                      opacity: baseOpacity,
+                      child: _SurfaceLayer(
+                        background: shadowColor,
+                        borderColor: borderColor,
+                        borderRadius: radius,
+                        cornerCut: widget.cornerCut,
+                        cutCorner: widget.cutCorner,
                       ),
                     ),
-                    if (fillWidth)
-                      AnimatedPositioned(
-                        duration: const Duration(milliseconds: 95),
-                        curve: Curves.easeOutCubic,
-                        left: 0,
-                        right: 0,
-                        top: capTop,
-                        height: widget.height,
-                        child: cap,
-                      )
-                    else
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 95),
-                        curve: Curves.easeOutCubic,
-                        transform: Matrix4.translationValues(0, capTop, 0),
-                        child: SizedBox(height: widget.height, child: cap),
-                      ),
-                  ],
-                );
+                  ),
+                  if (fillWidth)
+                    AnimatedPositioned(
+                      duration: const Duration(milliseconds: 95),
+                      curve: Curves.easeOutCubic,
+                      left: 0,
+                      right: 0,
+                      top: capTop,
+                      height: widget.height,
+                      child: cap,
+                    )
+                  else
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 95),
+                      curve: Curves.easeOutCubic,
+                      transform: Matrix4.translationValues(0, capTop, 0),
+                      child: SizedBox(height: widget.height, child: cap),
+                    ),
+                ],
+              );
 
-                return SizedBox(
-                  width: explicitWidth,
-                  height: outerHeight,
-                  child: stack,
-                );
-              },
-            ),
+              return SizedBox(
+                width: explicitWidth,
+                height: outerHeight,
+                child: stack,
+              );
+            },
           ),
         ),
       ),

@@ -159,13 +159,25 @@ void main() {
     expect(find.text('People'), findsNothing);
     expect(find.text('Files'), findsNothing);
     expect(find.text('Settings'), findsNothing);
-    expect(find.text('Kai'), findsNothing);
+    expect(find.text('Kai'), findsOneWidget);
+    expect(find.text('Online'), findsOneWidget);
     expect(find.text('@kai'), findsNothing);
     expect(find.text('Alpha Room'), findsOneWidget);
     expect(find.text('Beta Room'), findsOneWidget);
     expect(find.text('2 members · 1 live'), findsOneWidget);
     expect(find.text('5 members'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
+
+    final userSummaryRect = tester.getRect(
+      find.byKey(const ValueKey('home-sidebar-user-summary')),
+    );
+    final alphaCardRect = tester.getRect(
+      find.ancestor(
+        of: find.text('Alpha Room'),
+        matching: find.byType(ui.PressableSurface),
+      ),
+    );
+    expect(userSummaryRect.right - alphaCardRect.right, closeTo(0, 0.01));
 
     await tester.tap(find.text('Alpha Room'));
     await tester.pumpAndSettle();
@@ -181,6 +193,58 @@ void main() {
           .selected,
       isTrue,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'authenticated home shell reserves gutter only when list scrolls',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: Center(
+            child: SizedBox(
+              width: 420,
+              height: 190,
+              child: current_home.HomePage(app: _homeTestAppContext()),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final userSummaryRect = tester.getRect(
+        find.byKey(const ValueKey('home-sidebar-user-summary')),
+      );
+      final alphaCardRect = tester.getRect(
+        find.ancestor(
+          of: find.text('Alpha Room'),
+          matching: find.byType(ui.PressableSurface),
+        ),
+      );
+
+      expect(userSummaryRect.right - alphaCardRect.right, closeTo(15, 0.01));
+      expect(find.byType(Scrollbar), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('authenticated home shell offsets macOS sidebar content', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme().copyWith(platform: TargetPlatform.macOS),
+        home: current_home.HomePage(app: _homeTestAppContext()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final userSummaryRect = tester.getRect(
+      find.byKey(const ValueKey('home-sidebar-user-summary')),
+    );
+
+    expect(userSummaryRect.top, closeTo(34, 0.01));
     expect(tester.takeException(), isNull);
   });
 
@@ -971,6 +1035,49 @@ void main() {
       ),
     );
     expect(toggledButton.selected, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ui button activates after pointer moves inside bounds', (
+    WidgetTester tester,
+  ) async {
+    var taps = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 160,
+              child: ui.Button(
+                width: double.infinity,
+                onPressed: () => taps++,
+                child: const Text('Select'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final surfaceFinder = find.descendant(
+      of: find.widgetWithText(ui.Button, 'Select'),
+      matching: find.byType(ui.PressableSurface),
+    );
+    final rect = tester.getRect(surfaceFinder);
+    final gesture = await tester.startGesture(
+      rect.center,
+      kind: PointerDeviceKind.mouse,
+    );
+
+    await tester.pump();
+    await gesture.moveTo(rect.center + const Offset(34, 7));
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(taps, 1);
     expect(tester.takeException(), isNull);
   });
 
