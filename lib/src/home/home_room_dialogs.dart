@@ -26,6 +26,7 @@ class _UserInfoDialog extends StatelessWidget {
     );
     final primaryName = room_display.userPrimaryName(user);
     final uidValue = room_display.userUidLabel(user);
+    final signature = room_display.userSignatureText(user);
     return Dialog(
       backgroundColor: _primaryDarkRaised,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
@@ -113,16 +114,13 @@ class _UserInfoDialog extends StatelessWidget {
                           size: 30,
                         ),
                       ),
-                      _UserInfoField(
-                        label: '签名',
-                        value: room_display.userSignatureText(user),
-                      ),
+                      if (signature != null)
+                        _UserInfoField(label: '签名', value: signature),
                       if (roomsSectionTitle != null && commonRooms.isNotEmpty)
                         _CommonRoomsSection(
                           title: roomsSectionTitle!,
                           rooms: commonRooms,
                           onOpenRoom: (roomId) {
-                            Navigator.of(context).pop();
                             onOpenRoom(roomId);
                           },
                         ),
@@ -149,6 +147,7 @@ class _BasicUserInfoDialog extends StatelessWidget {
     final appConfig = AppConfigScope.of(context);
     final uidValue = room_display.userUidLabel(user);
     final primaryName = room_display.userPrimaryName(user);
+    final signature = room_display.userSignatureText(user);
     return Dialog(
       backgroundColor: _primaryDarkRaised,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
@@ -226,10 +225,8 @@ class _BasicUserInfoDialog extends StatelessWidget {
                   size: 30,
                 ),
               ),
-              _UserInfoField(
-                label: '签名',
-                value: room_display.userSignatureText(user),
-              ),
+              if (signature != null)
+                _UserInfoField(label: '签名', value: signature),
             ],
           ),
         ),
@@ -864,6 +861,7 @@ class _RoomInfoDialogState extends State<_RoomInfoDialog> {
       currentUserDisplayName: widget.currentUser.displayName,
       roomDisplayNameText: _roomDisplayNameController.text,
     );
+    final roomDescription = room_display.roomDescriptionValue(widget.room);
 
     return Dialog(
       backgroundColor: _primaryDarkRaised,
@@ -902,21 +900,15 @@ class _RoomInfoDialogState extends State<_RoomInfoDialog> {
                   _RoomSettingsGroup(
                     title: '基础信息',
                     children: [
-                      _RoomInfoPlainField(
-                        label: '房间成员',
-                        value: room_display.roomMemberSummary(widget.room),
-                      ),
                       if (widget.room.createdBy != null) ...[
-                        const SizedBox(height: 14),
                         _RoomCreatorField(
                           user: widget.room.createdBy!,
                           onOpen: () {
-                            Navigator.of(context).pop();
                             widget.onOpenUserInfo(widget.room.createdBy!);
                           },
                         ),
+                        const SizedBox(height: 14),
                       ],
-                      const SizedBox(height: 14),
                       _CopyableRoomField(
                         label: '房间永久 RID',
                         value: room_display.roomIdentifier(widget.room),
@@ -925,16 +917,15 @@ class _RoomInfoDialogState extends State<_RoomInfoDialog> {
                           'RID',
                         ),
                       ),
-                      const SizedBox(height: 14),
-                      _CopyableRoomField(
-                        label: '房间介绍',
-                        value: room_display.roomDescriptionText(widget.room),
-                        maxLines: 3,
-                        onCopy: () => _copyText(
-                          room_display.roomDescriptionText(widget.room),
-                          '房间介绍',
+                      if (roomDescription != null) ...[
+                        const SizedBox(height: 14),
+                        _CopyableRoomField(
+                          label: '房间介绍',
+                          value: roomDescription,
+                          maxLines: 3,
+                          onCopy: () => _copyText(roomDescription, '房间介绍'),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -3230,44 +3221,6 @@ class _CopyableRoomField extends StatelessWidget {
                   size: 30,
                 ),
               ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _RoomInfoPlainField extends StatelessWidget {
-  const _RoomInfoPlainField({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _RoomFieldLabel(label),
-        const SizedBox(height: 8),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: _primaryDark,
-            border: Border.all(color: _borderColor),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Text(
-              value,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: _textSecondary,
-                fontSize: 14,
-                height: 1.35,
-                fontWeight: FontWeight.w700,
-              ),
             ),
           ),
         ),

@@ -94,6 +94,9 @@ class _ChatPaneState extends State<_ChatPane> {
     if (oldWidget.roomId != widget.roomId) {
       _applyComposerPanelPatch(chatComposerPanelResetForRoomChange());
       _resetStickerPacks();
+      if (_openPanel == ChatComposerPanel.stickers) {
+        unawaited(_ensureStickerPacksLoaded(forceReload: true));
+      }
     } else if (oldWidget.stickerPacksController !=
             widget.stickerPacksController ||
         oldWidget.currentUserId != widget.currentUserId) {
@@ -645,7 +648,7 @@ class _StickerPanel extends StatelessWidget {
             segments: const [
               Segment(
                 value: sticker_display.StickerPanelSource.personal,
-                label: '个人表情包',
+                label: '我的表情包',
               ),
               Segment(
                 value: sticker_display.StickerPanelSource.room,

@@ -26,6 +26,11 @@ void main() {
     expect(roomIdentifier(_roomDetail(rid: 'R001')), 'R001');
     expect(roomIdentifier(_roomDetail()), 'room_1');
     expect(
+      roomDescriptionValue(_roomDetail(description: '  Launch room  ')),
+      'Launch room',
+    );
+    expect(roomDescriptionValue(_roomDetail(description: ' ')), isNull);
+    expect(
       roomDescriptionText(_roomDetail(description: '  Launch room  ')),
       'Launch room',
     );
@@ -110,6 +115,8 @@ void main() {
       'user_fallback · @logan',
     );
     expect(userIdentityMeta(_user(uid: '1001')), '1001 · @logan');
+    expect(userSignatureText(_user(bio: '  Hello  ')), 'Hello');
+    expect(userSignatureText(_user(bio: '   ')), isNull);
   });
 
   test(
@@ -463,6 +470,7 @@ UserSummary _user({
   String? displayName = 'Logan',
   String? roomDisplayName,
   String? roomRole,
+  String? bio,
   bool isSuperuser = false,
   List<UserCommonRoom> commonRooms = const [],
 }) {
@@ -473,6 +481,7 @@ UserSummary _user({
     avatarUrl: null,
     defaultAvatarKey: 'blue-3',
     uid: uid,
+    bio: bio,
     roomDisplayName: roomDisplayName,
     roomRole: roomRole,
     isSuperuser: isSuperuser,

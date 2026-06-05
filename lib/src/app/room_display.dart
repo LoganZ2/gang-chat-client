@@ -135,8 +135,12 @@ String roomIdentifier(RoomDetail room) {
   return _nonEmpty(room.rid) ?? room.id;
 }
 
+String? roomDescriptionValue(RoomDetail room) {
+  return _nonEmpty(room.description);
+}
+
 String roomDescriptionText(RoomDetail room) {
-  return _nonEmpty(room.description) ?? '暂无介绍';
+  return roomDescriptionValue(room) ?? '暂无介绍';
 }
 
 String roomDisplayName(RoomDetail room) {
@@ -167,8 +171,8 @@ String userIdentityMeta(UserSummary user) {
   return '${userUidLabel(user)} · ${userUsernameLabel(user)}';
 }
 
-String userSignatureText(UserSummary user) {
-  return _nonEmpty(user.bio) ?? '暂无签名';
+String? userSignatureText(UserSummary user) {
+  return _nonEmpty(user.bio);
 }
 
 String? userRoomsSectionTitle({
