@@ -74,6 +74,7 @@ class UserSummary {
     this.roomDisplayName,
     this.roomRole,
     this.isSuperuser = false,
+    this.isOnline,
     this.commonRooms = const [],
   });
 
@@ -92,6 +93,7 @@ class UserSummary {
   final String? roomDisplayName;
   final String? roomRole;
   final bool isSuperuser;
+  final bool? isOnline;
   final List<UserCommonRoom> commonRooms;
 
   factory UserSummary.fromJson(Map<String, Object?> json) {
@@ -125,6 +127,16 @@ class UserSummary {
           _stringFromJson(_nullableMap(json['membership']), const ['role']) ??
           _stringFromJson(json, const ['role']),
       isSuperuser: json['is_superuser'] as bool? ?? false,
+      isOnline:
+          _boolFromJson(json, const ['is_online', 'online']) ??
+          _onlineFromStatus(
+            _stringFromJson(json, const [
+              'presence',
+              'presence_status',
+              'status',
+              'connection_state',
+            ]),
+          ),
       commonRooms: _listOfMaps(
         json['common_rooms'],
       ).map(UserCommonRoom.fromJson).where((room) => room.isUsable).toList(),
@@ -145,6 +157,7 @@ class UserSummary {
     String? roomDisplayName,
     String? roomRole,
     bool? isSuperuser,
+    bool? isOnline,
     List<UserCommonRoom>? commonRooms,
   }) {
     return UserSummary(
@@ -163,6 +176,7 @@ class UserSummary {
       roomDisplayName: roomDisplayName ?? this.roomDisplayName,
       roomRole: roomRole ?? this.roomRole,
       isSuperuser: isSuperuser ?? this.isSuperuser,
+      isOnline: isOnline ?? this.isOnline,
       commonRooms: commonRooms ?? this.commonRooms,
     );
   }
@@ -194,6 +208,7 @@ class UserSummary {
       ),
       roomRole: nonEmptyOrFallback(roomRole, fallback.roomRole),
       isSuperuser: isSuperuser || fallback.isSuperuser,
+      isOnline: isOnline ?? fallback.isOnline,
       commonRooms: commonRooms.isNotEmpty ? commonRooms : fallback.commonRooms,
     );
   }
@@ -277,6 +292,7 @@ class CurrentUser {
       avatarUrl: avatarUrl,
       defaultAvatarKey: defaultAvatarKey,
       isSuperuser: isSuperuser,
+      isOnline: _onlineFromStatus(status) ?? true,
     );
   }
 }
@@ -819,6 +835,7 @@ class RoomMember {
     final user = baseUser.copyWith(
       roomDisplayName: roomDisplayName,
       roomRole: role,
+      isOnline: isOnline,
     );
     return RoomMember(
       user: user,
@@ -873,11 +890,23 @@ class RoomMemberProfile {
       'room_default_avatar_key',
       'default_avatar_key',
     ]);
+    final isOnline =
+        baseUser.isOnline ??
+        _boolFromJson(json, const ['is_online', 'online']) ??
+        _onlineFromStatus(
+          _stringFromJson(json, const [
+            'presence',
+            'presence_status',
+            'status',
+            'connection_state',
+          ]),
+        );
     final user = baseUser.copyWith(
       roomDisplayName: roomDisplayName,
       roomRole: role,
       avatarUrl: roomAvatarUrl ?? baseUser.avatarUrl,
       defaultAvatarKey: roomDefaultAvatarKey ?? baseUser.defaultAvatarKey,
+      isOnline: isOnline,
     );
     return RoomMemberProfile(
       user: user,
@@ -1376,8 +1405,13 @@ bool? _onlineFromStatus(String? value) {
   final status = value?.trim().toLowerCase();
   if (status == null || status.isEmpty) return null;
   return switch (status) {
-    'online' || 'active' || 'connected' || 'joining' || 'joined' => true,
-    'offline' || 'inactive' || 'disconnected' || 'left' => false,
+    'online' ||
+    'active' ||
+    'connected' ||
+    'joining' ||
+    'joined' ||
+    '在线' => true,
+    'offline' || 'inactive' || 'disconnected' || 'left' || '离线' => false,
     _ => null,
   };
 }

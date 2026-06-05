@@ -41,6 +41,16 @@ void main() {
     expect(candidates[1].canStartInvite, isFalse);
   });
 
+  test('roomInviteCandidates filters out superusers', () {
+    final candidates = roomInviteCandidates(
+      searchResults: [_user('super', isSuperuser: true), _user('normal')],
+      members: [_member('member_super', isSuperuser: true), _member('member')],
+      query: 'user',
+    );
+
+    expect(candidates.map((item) => item.user.id), ['normal', 'member']);
+  });
+
   test(
     'roomInviteSearchBodyState describes loading prompt empty and results',
     () {
@@ -107,6 +117,10 @@ void main() {
       isFalse,
     );
     expect(canStartRoomInvite(userId: 'new', members: members), isTrue);
+    expect(
+      canStartRoomInvite(userId: 'super', members: members, isSuperuser: true),
+      isFalse,
+    );
   });
 
   test('room member invite action reducers update pending and busy ids', () {
@@ -288,16 +302,21 @@ void main() {
   });
 }
 
-RoomMember _member(String id, {String? uid, String? remarkName}) {
+RoomMember _member(
+  String id, {
+  String? uid,
+  String? remarkName,
+  bool isSuperuser = false,
+}) {
   return RoomMember(
-    user: _user(id, uid: uid),
+    user: _user(id, uid: uid, isSuperuser: isSuperuser),
     role: 'member',
     joinedAt: DateTime.utc(2026, 6, 5),
     remarkName: remarkName,
   );
 }
 
-UserSummary _user(String id, {String? uid}) {
+UserSummary _user(String id, {String? uid, bool isSuperuser = false}) {
   return UserSummary(
     id: id,
     username: 'user_$id',
@@ -305,6 +324,7 @@ UserSummary _user(String id, {String? uid}) {
     avatarUrl: null,
     defaultAvatarKey: 'blue-3',
     uid: uid,
+    isSuperuser: isSuperuser,
   );
 }
 

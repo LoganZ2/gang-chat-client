@@ -100,6 +100,7 @@ List<RoomInviteCandidate> roomInviteCandidates({
   final seenUserIds = <String>{};
 
   void add(UserSummary user) {
+    if (user.isSuperuser) return;
     if (seenUserIds.add(user.id)) users.add(user);
   }
 
@@ -130,7 +131,9 @@ bool canStartRoomInvite({
   required Iterable<RoomMember> members,
   Iterable<String> pendingInviteUserIds = const [],
   Iterable<String> busyUserIds = const [],
+  bool isSuperuser = false,
 }) {
+  if (isSuperuser) return false;
   for (final member in members) {
     if (member.user.id == userId) return false;
   }

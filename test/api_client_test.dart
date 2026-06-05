@@ -407,6 +407,7 @@ void main() {
                 'avatar_url': '/global.png',
                 'default_avatar_key': 'blue-2',
                 'bio': 'Ship quietly',
+                'is_online': true,
                 'common_rooms': [
                   {
                     'id': 'room_2',
@@ -440,6 +441,7 @@ void main() {
     expect(profile.user.bio, 'Ship quietly');
     expect(profile.user.roomDisplayName, 'Room Bob');
     expect(profile.user.roomRole, 'admin');
+    expect(profile.user.isOnline, isTrue);
     expect(profile.user.avatarUrl, '/room-bob.png');
     expect(profile.user.commonRooms.single.remarkName, 'Night Ops');
     expect(profile.user.commonRooms.single.avatarUrl, '/room.png');
@@ -469,6 +471,7 @@ void main() {
                   'display_name': 'Alice',
                   'avatar_url': '/assets/asset_1/avatar.png',
                   'default_avatar_key': 'rose-2',
+                  'is_superuser': true,
                 },
               ],
               'next_cursor': null,
@@ -483,6 +486,7 @@ void main() {
       expect(users.single.id, 'user_1');
       expect(users.single.uid, '1000001');
       expect(users.single.avatarUrl, '/assets/asset_1/avatar.png');
+      expect(users.single.isSuperuser, isTrue);
       api.close();
     },
   );

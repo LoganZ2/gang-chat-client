@@ -117,6 +117,9 @@ void main() {
     expect(userIdentityMeta(_user(uid: '1001')), '1001 · @logan');
     expect(userSignatureText(_user(bio: '  Hello  ')), 'Hello');
     expect(userSignatureText(_user(bio: '   ')), isNull);
+    expect(userPresenceLabel(_user(isOnline: true)), '在线');
+    expect(userPresenceLabel(_user(isOnline: false)), '离线');
+    expect(userPresenceLabel(_user()), isNull);
   });
 
   test(
@@ -142,6 +145,7 @@ void main() {
     );
 
     expect(commonRoomTitle(room), 'Ops (General) · 1001');
+    expect(commonRoomAvatarLabel(room), 'General');
     expect(visibilityLabel(room.visibility), '公开');
     expect(commonRoomMeta(room), 'Room Logan · 管理员');
     expect(
@@ -472,6 +476,7 @@ UserSummary _user({
   String? roomRole,
   String? bio,
   bool isSuperuser = false,
+  bool? isOnline,
   List<UserCommonRoom> commonRooms = const [],
 }) {
   return UserSummary(
@@ -485,6 +490,7 @@ UserSummary _user({
     roomDisplayName: roomDisplayName,
     roomRole: roomRole,
     isSuperuser: isSuperuser,
+    isOnline: isOnline,
     commonRooms: commonRooms,
   );
 }

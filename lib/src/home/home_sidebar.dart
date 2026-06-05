@@ -47,6 +47,7 @@ class _RoomListPane extends StatelessWidget {
     required this.onJoinRoom,
     required this.onOpenSettings,
     required this.onLogout,
+    required this.onOpenCurrentUser,
     required this.onOpenRoom,
     required this.onJoinLive,
   });
@@ -62,6 +63,7 @@ class _RoomListPane extends StatelessWidget {
   final VoidCallback onJoinRoom;
   final VoidCallback onOpenSettings;
   final Future<void> Function() onLogout;
+  final VoidCallback onOpenCurrentUser;
   final ValueChanged<RoomCard> onOpenRoom;
   final ValueChanged<RoomCard> onJoinLive;
 
@@ -74,37 +76,49 @@ class _RoomListPane extends StatelessWidget {
           if (!collapsed)
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
-              child: Row(
-                children: [
-                  _Avatar(
-                    label: currentUser.displayName,
-                    imageUrl: AppConfigScope.of(
-                      context,
-                    ).resolveAssetUrl(currentUser.avatarUrl),
-                    defaultAvatarKey: currentUser.defaultAvatarKey,
-                    size: 40,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
+              child: Tooltip(
+                message: '查看我的用户信息',
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onOpenCurrentUser,
+                    child: Row(
                       children: [
-                        Text(
-                          currentUser.displayName,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: _textPrimary,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
+                        _Avatar(
+                          label: currentUser.displayName,
+                          imageUrl: AppConfigScope.of(
+                            context,
+                          ).resolveAssetUrl(currentUser.avatarUrl),
+                          defaultAvatarKey: currentUser.defaultAvatarKey,
+                          size: 40,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                currentUser.displayName,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: _textPrimary,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              _UserStatusLabel(
+                                label: currentUser.status ?? '在线',
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 5),
-                        _UserStatusLabel(label: currentUser.status ?? '在线'),
                       ],
                     ),
                   ),
-                ],
+                ),
               ),
             ),
           if (!collapsed)

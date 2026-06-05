@@ -2225,6 +2225,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         onJoinRoom: _joinRoom,
                         onOpenSettings: _toggleSettings,
                         onLogout: _handleLogout,
+                        onOpenCurrentUser: () =>
+                            _showUserInfo(_currentUser.toSummary()),
                         onOpenRoom: (room) => _openRoom(room),
                         onJoinLive: (room) => _openRoom(room, joinLive: true),
                       ),
@@ -4106,6 +4108,7 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
       members: widget.members,
       pendingInviteUserIds: _pendingInviteUserIds,
       busyUserIds: _busyUserIds,
+      isSuperuser: user.isSuperuser,
     )) {
       return;
     }

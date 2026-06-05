@@ -27,6 +27,7 @@ class _UserInfoDialog extends StatelessWidget {
     final primaryName = room_display.userPrimaryName(user);
     final uidValue = room_display.userUidLabel(user);
     final signature = room_display.userSignatureText(user);
+    final presenceLabel = room_display.userPresenceLabel(user);
     return Dialog(
       backgroundColor: _primaryDarkRaised,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
@@ -83,7 +84,10 @@ class _UserInfoDialog extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 10),
-                          _UserRoleBadge(label: roleLabel),
+                          _UserBadgesRow(
+                            roleLabel: roleLabel,
+                            presenceLabel: presenceLabel,
+                          ),
                         ],
                       ),
                     ),
@@ -148,6 +152,7 @@ class _BasicUserInfoDialog extends StatelessWidget {
     final uidValue = room_display.userUidLabel(user);
     final primaryName = room_display.userPrimaryName(user);
     final signature = room_display.userSignatureText(user);
+    final presenceLabel = room_display.userPresenceLabel(user);
     return Dialog(
       backgroundColor: _primaryDarkRaised,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
@@ -201,6 +206,10 @@ class _BasicUserInfoDialog extends StatelessWidget {
                             fontWeight: FontWeight.w700,
                           ),
                         ),
+                        if (presenceLabel != null) ...[
+                          const SizedBox(height: 10),
+                          _UserPresenceBadge(label: presenceLabel),
+                        ],
                       ],
                     ),
                   ),
@@ -336,7 +345,9 @@ class _CommonRoomLink extends StatelessWidget {
   Widget build(BuildContext context) {
     final appConfig = AppConfigScope.of(context);
     final title = room_display.commonRoomDisplayName(room);
+    final avatarLabel = room_display.commonRoomAvatarLabel(room);
     final rid = room.rid.trim().isEmpty ? room.id : room.rid;
+    final meta = room_display.commonRoomMeta(room);
     return Tooltip(
       message: '查看房间信息',
       child: MouseRegion(
@@ -348,7 +359,7 @@ class _CommonRoomLink extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               _Avatar(
-                label: title,
+                label: avatarLabel,
                 imageUrl: appConfig.resolveAssetUrl(room.avatarUrl),
                 defaultAvatarKey: room.defaultAvatarKey,
                 size: 30,
@@ -382,6 +393,19 @@ class _CommonRoomLink extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
+                    if (meta != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        meta,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _textMuted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -389,6 +413,26 @@ class _CommonRoomLink extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _UserBadgesRow extends StatelessWidget {
+  const _UserBadgesRow({required this.roleLabel, required this.presenceLabel});
+
+  final String roleLabel;
+  final String? presenceLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 6,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        _UserRoleBadge(label: roleLabel),
+        if (presenceLabel != null) _UserPresenceBadge(label: presenceLabel!),
+      ],
     );
   }
 }
@@ -414,6 +458,39 @@ class _UserRoleBadge extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             color: _cyan,
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UserPresenceBadge extends StatelessWidget {
+  const _UserPresenceBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final online = label == '在线';
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: online ? const Color(0xFF153327) : const Color(0xFF2A2C34),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: online ? const Color(0xFF2C6F51) : const Color(0xFF3A3E4A),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: online ? _cyan : _textSecondary,
             fontSize: 12,
             fontWeight: FontWeight.w900,
           ),
@@ -1728,7 +1805,7 @@ class _RoomManagementDialogState extends State<_RoomManagementDialog> {
               label: '加入策略',
               value: _joinPolicy,
               options: const [
-                _RoomOption('approval_required', '管理员审核'),
+                _RoomOption('approval_required', '管理员审批'),
                 _RoomOption('open', '任何人加入'),
                 _RoomOption('closed', '不允许加入'),
               ],

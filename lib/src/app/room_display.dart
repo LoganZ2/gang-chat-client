@@ -210,6 +210,10 @@ String commonRoomDisplayName(UserCommonRoom room) {
   return '$remark (${room.name})';
 }
 
+String commonRoomAvatarLabel(UserCommonRoom room) {
+  return _nonEmpty(room.name) ?? commonRoomDisplayName(room);
+}
+
 String visibilityLabel(String value) {
   return switch (value.toLowerCase()) {
     'public' => '公开',
@@ -223,6 +227,12 @@ String? commonRoomMeta(UserCommonRoom room) {
   final parts = [?roomDisplayName, ?roleLabel];
   if (parts.isEmpty) return null;
   return parts.join(' · ');
+}
+
+String? userPresenceLabel(UserSummary user) {
+  final isOnline = user.isOnline;
+  if (isOnline == null) return null;
+  return isOnline ? '在线' : '离线';
 }
 
 UserSummary roomUserInfoProfile({
