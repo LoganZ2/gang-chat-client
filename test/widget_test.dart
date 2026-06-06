@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/gestures.dart'
@@ -6,16 +7,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:livekit_client/livekit_client.dart' as lk;
 
 import 'package:client/main.dart';
+import 'package:client/src/app/audio_device_store.dart';
 import 'package:client/src/app/authenticated_app_context.dart';
+import 'package:client/src/app/live_session_controller.dart';
+import 'package:client/src/app/realtime_controller.dart';
 import 'package:client/src/auth/auth_client.dart';
 import 'package:client/src/auth/token_store.dart';
+import 'package:client/src/live/live_session.dart';
 import 'package:client/src/protocol/api_client.dart';
 import 'package:client/src/protocol/models.dart';
 import 'package:client/src/settings/settings_page.dart';
 import 'package:client/src/ui/ui.dart' as ui;
 import 'package:client/src/v2/home_page.dart' as current_home;
+import 'package:client/src/v2/live_channel_pane.dart' as live_pane;
 import 'package:client/ui_showcase.dart' as showcase;
 
 void main() {
@@ -24,6 +31,53 @@ void main() {
     expect(shouldUseV2(['--v2']), isTrue);
     expect(shouldUseV2(['V2']), isTrue);
     expect(shouldUseV2(['--other']), isFalse);
+  });
+
+  test('live stage defaults collapsed except local screen share', () {
+    final remoteCamera = _liveVideoTrack(
+      identity: 'user-2',
+      isScreenShare: false,
+      isLocal: false,
+    );
+    final localCamera = _liveVideoTrack(
+      identity: 'user-1',
+      isScreenShare: false,
+      isLocal: true,
+    );
+    final localShare = _liveVideoTrack(
+      identity: 'user-1',
+      isScreenShare: true,
+      isLocal: true,
+    );
+
+    expect(
+      live_pane.resolveLiveStageTrackForTest(
+        tracks: [remoteCamera, localCamera],
+        selection: null,
+      ),
+      isNull,
+    );
+    expect(
+      live_pane.resolveLiveStageTrackForTest(
+        tracks: [remoteCamera, localCamera, localShare],
+        selection: null,
+      ),
+      same(localShare),
+    );
+    expect(
+      live_pane.resolveLiveStageTrackForTest(
+        tracks: [remoteCamera, localShare],
+        selection: live_pane.LiveStageSelection.fromTrack(remoteCamera),
+      ),
+      same(remoteCamera),
+    );
+    expect(
+      live_pane.resolveLiveStageTrackForTest(
+        tracks: [localShare],
+        selection: const live_pane.LiveStageSelection.none(),
+      ),
+      isNull,
+    );
   });
 
   testWidgets('v2 app renders login entrypoint on real auth gate', (
@@ -144,6 +198,7 @@ void main() {
         theme: ui.uiTheme(),
         home: current_home.HomePage(
           app: _homeTestAppContext(requestedPaths: requestedPaths),
+          realtime: _NoopRealtimeService(),
         ),
       ),
     );
@@ -184,6 +239,12 @@ void main() {
     await tester.tap(find.text('Alpha Room'));
     await tester.pumpAndSettle();
 
+    expect(requestedPaths, contains('/api/v1/rooms/server-alpha'));
+    expect(requestedPaths, contains('/api/v1/rooms/server-alpha/messages'));
+    expect(requestedPaths, contains('/api/v1/rooms/server-alpha/live'));
+    expect(find.text('Hello from Morgan'), findsOneWidget);
+    expect(find.text('Reply from Kai'), findsOneWidget);
+    expect(find.byType(ui.ChatComposer), findsOneWidget);
     expect(
       tester
           .widget<ui.PressableSurface>(
@@ -198,6 +259,297 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('authenticated home shell sends messages through real API path', (
+    WidgetTester tester,
+  ) async {
+    final requestedPaths = <String>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: current_home.HomePage(
+          app: _homeTestAppContext(requestedPaths: requestedPaths),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'Fresh message');
+    await tester.tap(find.byTooltip('Send'));
+    await tester.pumpAndSettle();
+
+    expect(requestedPaths, contains('/api/v1/rooms/server-alpha/messages'));
+    expect(find.text('Fresh message'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('authenticated home shell opens live channel pane', (
+    WidgetTester tester,
+  ) async {
+    final requestedPaths = <String>[];
+    final liveSession = _FakeLiveSession();
+    final liveSessionController = _FakeLiveSessionController(
+      session: liveSession,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: current_home.HomePage(
+          app: _homeTestAppContext(requestedPaths: requestedPaths),
+          audioDeviceStore: const _FakeAudioDeviceStore(),
+          liveSessionController: liveSessionController,
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Enter Live Channel'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Morgan'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, 'Join'), findsOneWidget);
+    expect(find.byTooltip('Collapse live channel'), findsOneWidget);
+    expect(find.byTooltip('Joined voice'), findsNothing);
+
+    await tester.tap(find.widgetWithText(ui.Button, 'Join'));
+    await tester.pumpAndSettle();
+
+    expect(requestedPaths, contains('/api/v1/rooms/server-alpha/live/join'));
+    expect(liveSession.connectAttempts, 1);
+    expect(find.text('Kai (you)'), findsOneWidget);
+    expect(find.text('Morgan'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, 'Join'), findsNothing);
+    expect(find.byTooltip('Mute'), findsOneWidget);
+    expect(find.byTooltip('Leave'), findsOneWidget);
+    expect(find.byTooltip('Joined voice'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Mute'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Mute headphones'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Camera on'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Share screen'));
+    await tester.pumpAndSettle();
+    expect(find.text('Primary Display'), findsOneWidget);
+    await tester.tap(find.text('Primary Display'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ui.Button, '共享'));
+    await tester.pumpAndSettle();
+
+    expect(liveSession.micMutes, contains(true));
+    expect(liveSession.outputMutes, [true]);
+    expect(liveSession.cameraEnables, [true]);
+    expect(liveSession.screenShareEnables, [true]);
+    expect(liveSession.screenShareSourceIds, ['screen-primary']);
+    expect(
+      requestedPaths
+          .where((path) => path == '/api/v1/rooms/server-alpha/live/me')
+          .length,
+      greaterThanOrEqualTo(3),
+    );
+
+    await tester.tap(find.byTooltip('Leave'));
+    await tester.pumpAndSettle();
+
+    expect(liveSession.disconnects, 1);
+    expect(find.widgetWithText(ui.Button, 'Join'), findsOneWidget);
+    expect(find.byTooltip('Joined voice'), findsNothing);
+
+    await tester.tap(find.byTooltip('Collapse live channel'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Kai (you)'), findsNothing);
+    expect(find.text('Hello from Morgan'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('authenticated home shell opens room management with real APIs', (
+    WidgetTester tester,
+  ) async {
+    final requestedPaths = <String>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: current_home.HomePage(
+          app: _homeTestAppContext(requestedPaths: requestedPaths),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Room details'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Members'), findsAtLeastNWidgets(1));
+    expect(find.text('Invite people'), findsOneWidget);
+    expect(find.text('Kai'), findsWidgets);
+    expect(find.text('Morgan'), findsWidgets);
+    expect(requestedPaths, contains('/api/v1/rooms/server-alpha/members'));
+    expect(
+      requestedPaths,
+      contains('/api/v1/rooms/server-alpha/join-requests'),
+    );
+
+    await tester.ensureVisible(
+      _textFieldWithHint('Search by username, name, or UID'),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      _textFieldWithHint('Search by username, name, or UID'),
+      'ri',
+    );
+    await tester.pump(const Duration(milliseconds: 320));
+    await tester.pumpAndSettle();
+
+    expect(requestedPaths, contains('/api/v1/users/search'));
+    expect(find.textContaining('Riley'), findsAtLeastNWidgets(1));
+
+    await tester.tap(find.widgetWithText(ui.Button, 'Invite'));
+    await tester.pumpAndSettle();
+
+    expect(requestedPaths, contains('/api/v1/rooms/server-alpha/invites'));
+
+    await tester.tap(find.byTooltip('Close').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Room actions'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Room settings'), findsOneWidget);
+    expect(find.text('Room info'), findsOneWidget);
+    expect(find.byType(ui.UiSwitch), findsOneWidget);
+    expect(find.byType(Switch), findsNothing);
+    expect(
+      tester.widget<TextField>(_textFieldWithHint('Description')).maxLines,
+      isNull,
+    );
+    final roomInfoSectionDecorations = tester
+        .widgetList<DecoratedBox>(
+          find.ancestor(
+            of: find.text('Room info'),
+            matching: find.byType(DecoratedBox),
+          ),
+        )
+        .where((box) => box.decoration is BoxDecoration)
+        .map((box) => box.decoration as BoxDecoration);
+    expect(
+      roomInfoSectionDecorations.any(
+        (decoration) => decoration.color == null && decoration.border is Border,
+      ),
+      isTrue,
+    );
+
+    await tester.enterText(_textFieldWithHint('Room name'), 'Alpha Renamed');
+    await tester.tap(find.widgetWithText(ui.Button, 'Save room settings'));
+    await tester.pumpAndSettle();
+
+    expect(requestedPaths, contains('/api/v1/rooms/server-alpha'));
+    expect(find.text('房间信息已保存'), findsOneWidget);
+    expect(find.textContaining('Alpha Renamed'), findsAtLeastNWidgets(1));
+
+    await tester.tap(find.byTooltip('Close').last);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Alpha Renamed'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('authenticated home shell applies realtime live snapshots', (
+    WidgetTester tester,
+  ) async {
+    final realtime = _FakeRealtimeService();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: current_home.HomePage(
+          app: _homeTestAppContext(),
+          realtime: realtime,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Enter Live Channel'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Riley'), findsNothing);
+    expect(find.text('2 members · 1 live'), findsOneWidget);
+
+    realtime.add(
+      const RealtimeEvent(
+        type: 'live_participant_joined',
+        data: {
+          'room_id': 'server-alpha',
+          'participant_count': 2,
+          'preview': <Object?>[],
+          'live': {
+            'room_id': 'server-alpha',
+            'participant_count': 2,
+            'participants': [
+              {
+                'live_session_id': 'live-session-morgan',
+                'user': {
+                  'id': 'user-2',
+                  'username': 'morgan',
+                  'display_name': 'Morgan',
+                  'avatar_url': null,
+                  'default_avatar_key': 'blue-3',
+                },
+                'joined_at': '2026-06-05T08:00:00Z',
+                'mic_muted': true,
+                'headphones_muted': false,
+                'voice_blocked': false,
+                'camera_on': false,
+                'screen_sharing': false,
+                'connection_state': 'connected',
+              },
+              {
+                'live_session_id': 'live-session-riley',
+                'user': {
+                  'id': 'user-3',
+                  'username': 'riley',
+                  'display_name': 'Riley',
+                  'avatar_url': null,
+                  'default_avatar_key': 'green-2',
+                },
+                'joined_at': '2026-06-05T08:00:00Z',
+                'mic_muted': false,
+                'headphones_muted': false,
+                'voice_blocked': false,
+                'camera_on': false,
+                'screen_sharing': false,
+                'connection_state': 'connected',
+              },
+            ],
+            'updated_at': '2026-06-05T08:00:00Z',
+          },
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Riley'), findsOneWidget);
+    expect(find.text('2 members · 2 live'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('authenticated home shell footer opens settings and logs out', (
     WidgetTester tester,
   ) async {
@@ -208,6 +560,7 @@ void main() {
         theme: ui.uiTheme(),
         home: current_home.HomePage(
           app: _homeTestAppContext(onLogout: () async => logoutCount++),
+          realtime: _NoopRealtimeService(),
         ),
       ),
     );
@@ -255,7 +608,10 @@ void main() {
           child: SizedBox(
             width: 420,
             height: 190,
-            child: current_home.HomePage(app: _homeTestAppContext()),
+            child: current_home.HomePage(
+              app: _homeTestAppContext(),
+              realtime: _NoopRealtimeService(),
+            ),
           ),
         ),
       ),
@@ -283,7 +639,10 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: ui.uiTheme().copyWith(platform: TargetPlatform.macOS),
-        home: current_home.HomePage(app: _homeTestAppContext()),
+        home: current_home.HomePage(
+          app: _homeTestAppContext(),
+          realtime: _NoopRealtimeService(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -297,7 +656,7 @@ void main() {
   });
 
   testWidgets(
-    'authenticated home shell opens blank content from narrow server list',
+    'authenticated home shell opens chat content from narrow server list',
     (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -306,7 +665,10 @@ void main() {
             child: SizedBox(
               width: 420,
               height: 620,
-              child: current_home.HomePage(app: _homeTestAppContext()),
+              child: current_home.HomePage(
+                app: _homeTestAppContext(),
+                realtime: _NoopRealtimeService(),
+              ),
             ),
           ),
         ),
@@ -320,13 +682,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Beta Room'), findsNothing);
-      expect(find.byTooltip('Show servers'), findsOneWidget);
-      expect(find.text('Alpha Room'), findsOneWidget);
-
-      await tester.tap(find.byTooltip('Show servers'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Beta Room'), findsOneWidget);
+      expect(find.byTooltip('Show servers'), findsNothing);
+      expect(find.text('Enter Live Channel'), findsOneWidget);
+      expect(find.text('Hello from Morgan'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -944,13 +1302,14 @@ void main() {
     final inputFinder = find.byType(ui.Input);
     final animatedCapFinder = find.descendant(
       of: inputFinder,
-      matching: find.byType(AnimatedPositioned),
+      matching: find.byType(AnimatedPadding),
     );
     expect(animatedCapFinder, findsOneWidget);
-    final animatedCap = tester.widget<AnimatedPositioned>(animatedCapFinder);
+    final animatedCap = tester.widget<AnimatedPadding>(animatedCapFinder);
     expect(animatedCap.duration, const Duration(milliseconds: 95));
     expect(animatedCap.curve, Curves.easeOutCubic);
-    expect(animatedCap.top, closeTo(3, 0.01));
+    expect((animatedCap.padding as EdgeInsets).top, closeTo(3, 0.01));
+    expect((animatedCap.padding as EdgeInsets).bottom, closeTo(5, 0.01));
 
     var inputDecorations = _inputLayerDecorations(tester, inputFinder);
     expect(inputDecorations, hasLength(2));
@@ -964,7 +1323,8 @@ void main() {
 
     expect(focusNode.hasFocus, isTrue);
     expect(
-      tester.widget<AnimatedPositioned>(animatedCapFinder).top,
+      (tester.widget<AnimatedPadding>(animatedCapFinder).padding as EdgeInsets)
+          .top,
       closeTo(3, 0.01),
     );
     inputDecorations = _inputLayerDecorations(tester, inputFinder);
@@ -976,7 +1336,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      tester.widget<AnimatedPositioned>(animatedCapFinder).top,
+      (tester.widget<AnimatedPadding>(animatedCapFinder).padding as EdgeInsets)
+          .top,
       closeTo(3, 0.01),
     );
     inputDecorations = _inputLayerDecorations(tester, inputFinder);
@@ -995,16 +1356,15 @@ void main() {
 
     await tester.pump();
 
-    var positionedLayers = tester
-        .widgetList<Positioned>(
-          find.descendant(of: inputFinder, matching: find.byType(Positioned)),
-        )
-        .toList();
-    expect(positionedLayers, hasLength(2));
-    expect(positionedLayers.last.top, closeTo(3, 0.01));
     expect(
-      tester.widget<AnimatedPositioned>(animatedCapFinder).top,
+      (tester.widget<AnimatedPadding>(animatedCapFinder).padding as EdgeInsets)
+          .top,
       closeTo(0, 0.01),
+    );
+    expect(
+      (tester.widget<AnimatedPadding>(animatedCapFinder).padding as EdgeInsets)
+          .bottom,
+      closeTo(8, 0.01),
     );
 
     inputDecorations = _inputLayerDecorations(tester, inputFinder);
@@ -1012,22 +1372,12 @@ void main() {
     expect(_topBorderColor(inputDecorations.last), ui.UiColors.border);
     expect(inputDecorations.last.color, ui.UiColors.surface);
 
-    await tester.pump(const Duration(milliseconds: 20));
-    positionedLayers = tester
-        .widgetList<Positioned>(
-          find.descendant(of: inputFinder, matching: find.byType(Positioned)),
-        )
-        .toList();
-    expect(positionedLayers.last.top, lessThan(3));
-    expect(positionedLayers.last.top, greaterThan(0));
-
     await tester.pumpAndSettle();
-    positionedLayers = tester
-        .widgetList<Positioned>(
-          find.descendant(of: inputFinder, matching: find.byType(Positioned)),
-        )
-        .toList();
-    expect(positionedLayers.last.top, closeTo(0, 0.01));
+    expect(
+      (tester.widget<AnimatedPadding>(animatedCapFinder).padding as EdgeInsets)
+          .top,
+      closeTo(0, 0.01),
+    );
 
     inputRect = tester.getRect(inputFinder);
     await tester.tapAt(inputRect.center);
@@ -1038,6 +1388,53 @@ void main() {
     expect(_topBorderColor(inputDecorations.first), ui.UiColors.accentBorder);
     expect(_topBorderColor(inputDecorations.last), ui.UiColors.accentBorder);
     expect(inputDecorations.last.color, ui.UiColors.selected);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ui input grows without an internal line cap', (
+    WidgetTester tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 320,
+              child: ui.Input(
+                controller: controller,
+                hintText: 'Description',
+                prefixIcon: Icons.notes_outlined,
+                maxLines: null,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    TextField textField() =>
+        tester.widget<TextField>(_textFieldWithHint('Description'));
+
+    expect(textField().minLines, 1);
+    expect(textField().maxLines, isNull);
+    final initialHeight = tester.getSize(find.byType(ui.Input)).height;
+
+    await tester.enterText(
+      _textFieldWithHint('Description'),
+      'One two three four five six seven eight nine ten eleven twelve '
+      'thirteen fourteen fifteen sixteen seventeen eighteen.',
+    );
+    await tester.pumpAndSettle();
+
+    expect(textField().maxLines, isNull);
+    expect(
+      tester.getSize(find.byType(ui.Input)).height,
+      greaterThan(initialHeight * 2),
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -1126,6 +1523,84 @@ void main() {
     await tester.pump();
 
     expect(taps, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ui switch toggles and keeps custom surface', (
+    WidgetTester tester,
+  ) async {
+    var enabled = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: Scaffold(
+          body: Center(
+            child: StatefulBuilder(
+              builder: (context, setState) {
+                return ui.UiSwitch(
+                  value: enabled,
+                  onChanged: (value) => setState(() => enabled = value),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final switchFinder = find.byType(ui.UiSwitch);
+    expect(switchFinder, findsOneWidget);
+    expect(find.byType(Switch), findsNothing);
+    expect(
+      find.descendant(of: switchFinder, matching: find.byType(InkWell)),
+      findsNothing,
+    );
+    expect(tester.getSize(switchFinder), const Size(56, 32));
+
+    await tester.tap(switchFinder);
+    await tester.pumpAndSettle();
+
+    expect(enabled, isTrue);
+    final decorations = tester
+        .widgetList<DecoratedBox>(
+          find.descendant(
+            of: switchFinder,
+            matching: find.byType(DecoratedBox),
+          ),
+        )
+        .where((box) => box.decoration is BoxDecoration)
+        .map((box) => box.decoration as BoxDecoration)
+        .toList();
+    expect(
+      decorations.any((decoration) => decoration.color == ui.UiColors.selected),
+      isTrue,
+    );
+
+    final switchRect = tester.getRect(switchFinder);
+    final gesture = await tester.startGesture(
+      switchRect.center,
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump();
+    await gesture.moveTo(switchRect.center + const Offset(12, 4));
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(enabled, isFalse);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: const Scaffold(
+          body: Center(child: ui.UiSwitch(value: true, onChanged: null)),
+        ),
+      ),
+    );
+    await tester.tap(switchFinder);
+    await tester.pump();
+
     expect(tester.takeException(), isNull);
   });
 
@@ -1252,13 +1727,10 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
-    final hoveredInputLayers = tester
-        .widgetList<Positioned>(
-          find.descendant(of: inputFinder, matching: find.byType(Positioned)),
-        )
-        .toList();
-    expect(hoveredInputLayers, hasLength(2));
-    expect(hoveredInputLayers.last.top, closeTo(0, 0.01));
+    final hoveredInputCap = tester.widget<AnimatedPadding>(
+      find.descendant(of: inputFinder, matching: find.byType(AnimatedPadding)),
+    );
+    expect((hoveredInputCap.padding as EdgeInsets).top, closeTo(0, 0.01));
 
     final inputRect = tester.getRect(inputFinder);
     await tester.tapAt(inputRect.topLeft + const Offset(4, 4));
@@ -1714,6 +2186,12 @@ Color _topBorderColor(BoxDecoration decoration) {
   return (decoration.border as Border).top.color;
 }
 
+Finder _textFieldWithHint(String hintText) {
+  return find.byWidgetPredicate(
+    (widget) => widget is TextField && widget.decoration?.hintText == hintText,
+  );
+}
+
 void _expectRectCloseTo(Rect actual, Rect expected) {
   expect(actual.left, closeTo(expected.left, 0.01));
   expect(actual.top, closeTo(expected.top, 0.01));
@@ -1795,6 +2273,199 @@ GangApi _roomsApi({List<String>? requestedPaths}) {
       if (request.url.path == '/api/v1/rooms') {
         return _jsonResponse({'rooms': _serverListJson});
       }
+      if (request.url.path == '/api/v1/rooms/server-alpha') {
+        if (request.method == 'PATCH') {
+          final body =
+              jsonDecode(utf8.decode(request.bodyBytes))
+                  as Map<String, Object?>;
+          return _jsonResponse({
+            'room': _roomDetailJson(
+              id: 'server-alpha',
+              name: body['name']! as String,
+              memberCount: 2,
+              onlineMemberCount: 1,
+              liveParticipantCount: 1,
+              description: body['description'] as String? ?? '',
+              visibility: body['visibility'] as String? ?? 'private',
+              joinPolicy: body['join_policy'] as String? ?? 'approval_required',
+              aiVoiceAnnouncementsEnabled:
+                  body['ai_voice_announcements_enabled'] as bool? ?? true,
+            ),
+          });
+        }
+        return _jsonResponse({
+          'room': _roomDetailJson(
+            id: 'server-alpha',
+            name: 'Alpha Room',
+            memberCount: 2,
+            onlineMemberCount: 1,
+            liveParticipantCount: 1,
+          ),
+        });
+      }
+      if (request.url.path == '/api/v1/rooms/server-alpha/members') {
+        return _jsonResponse({
+          'members': [
+            _roomMemberJson(user: _currentUserJson, role: 'owner'),
+            _roomMemberJson(
+              user: _userJson(
+                id: 'user-2',
+                username: 'morgan',
+                displayName: 'Morgan',
+                isOnline: true,
+              ),
+            ),
+          ],
+          'next_cursor': null,
+        });
+      }
+      if (request.url.path == '/api/v1/rooms/server-alpha/join-requests') {
+        return _jsonResponse({
+          'requests': [
+            _joinRequestJson(
+              id: 'join-request-riley',
+              user: _userJson(
+                id: 'user-3',
+                username: 'riley',
+                displayName: 'Riley',
+                isOnline: true,
+              ),
+            ),
+          ],
+        });
+      }
+      if (request.url.path ==
+          '/api/v1/rooms/server-alpha/join-requests/join-request-riley') {
+        return _jsonResponse({});
+      }
+      if (request.url.path == '/api/v1/users/search') {
+        return _jsonResponse({
+          'users': [
+            _userJson(
+              id: 'user-3',
+              username: 'riley',
+              displayName: 'Riley',
+              isOnline: true,
+            ),
+          ],
+        });
+      }
+      if (request.url.path == '/api/v1/rooms/server-alpha/invites') {
+        return _jsonResponse({
+          'invite': {
+            'id': 'invite-riley',
+            'status': 'pending',
+            'room': _roomCardJson(id: 'server-alpha', name: 'Alpha Room'),
+            'inviter': _currentUserJson,
+            'created_at': '2026-06-05T08:00:00Z',
+            'updated_at': '2026-06-05T08:00:00Z',
+          },
+        });
+      }
+      if (request.url.path == '/api/v1/rooms/server-alpha/messages') {
+        if (request.method == 'POST') {
+          final body =
+              jsonDecode(utf8.decode(request.bodyBytes))
+                  as Map<String, Object?>;
+          return _jsonResponse({
+            'message': _messageJson(
+              id: 'msg-sent',
+              roomId: 'server-alpha',
+              sender: _currentUserJson,
+              clientMessageId: body['client_message_id']! as String,
+              body: body['body']! as String,
+            ),
+          });
+        }
+        return _jsonResponse({
+          'messages': [
+            _messageJson(
+              id: 'msg-1',
+              roomId: 'server-alpha',
+              sender: _userJson(
+                id: 'user-2',
+                username: 'morgan',
+                displayName: 'Morgan',
+                isOnline: true,
+              ),
+              clientMessageId: 'client-msg-1',
+              body: 'Hello from Morgan',
+            ),
+            _messageJson(
+              id: 'msg-2',
+              roomId: 'server-alpha',
+              sender: _currentUserJson,
+              clientMessageId: 'client-msg-2',
+              body: 'Reply from Kai',
+            ),
+          ],
+          'has_more': false,
+          'next_before': null,
+        });
+      }
+      if (request.url.path == '/api/v1/rooms/server-alpha/live') {
+        return _jsonResponse({
+          'live': _liveStateJson(
+            roomId: 'server-alpha',
+            participantCount: 1,
+            participants: [
+              _liveParticipantJson(
+                user: _userJson(
+                  id: 'user-2',
+                  username: 'morgan',
+                  displayName: 'Morgan',
+                ),
+                liveSessionId: 'live-session-morgan',
+                micMuted: true,
+              ),
+            ],
+          ),
+        });
+      }
+      if (request.url.path == '/api/v1/rooms/server-alpha/live/join') {
+        final participant = _liveParticipantJson(
+          user: _currentUserJson,
+          liveSessionId: 'live-session-joined',
+        );
+        return _jsonResponse({
+          'livekit': {
+            'server_url': 'ws://live.example.test',
+            'token': 'live-token',
+            'token_expires_at': '2026-06-05T09:00:00Z',
+            'room_name': 'room_server_alpha',
+          },
+          'participant': participant,
+          'live': _liveStateJson(
+            roomId: 'server-alpha',
+            participantCount: 2,
+            participants: [
+              participant,
+              _liveParticipantJson(
+                user: _userJson(
+                  id: 'user-2',
+                  username: 'morgan',
+                  displayName: 'Morgan',
+                ),
+                liveSessionId: 'live-session-morgan',
+                micMuted: true,
+              ),
+            ],
+          ),
+        });
+      }
+      if (request.url.path == '/api/v1/rooms/server-alpha/live/me') {
+        final body =
+            jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>;
+        return _jsonResponse({
+          'participant': _liveParticipantJson(
+            user: _currentUserJson,
+            liveSessionId: 'live-session-joined',
+            micMuted: body['mic_muted'] as bool? ?? false,
+            cameraOn: body['camera_on'] as bool? ?? false,
+            screenSharing: body['screen_sharing'] as bool? ?? false,
+          ),
+        });
+      }
       if (request.url.path == '/api/v1/me') {
         return _jsonResponse(_currentUserJson);
       }
@@ -1840,6 +2511,142 @@ final _currentUserJson = {
   'status': 'Online',
 };
 
+Map<String, Object?> _roomDetailJson({
+  required String id,
+  required String name,
+  required int memberCount,
+  required int onlineMemberCount,
+  required int liveParticipantCount,
+  String description = '',
+  String visibility = 'private',
+  String joinPolicy = 'approval_required',
+  bool aiVoiceAnnouncementsEnabled = true,
+  String role = 'owner',
+}) {
+  return {
+    ..._roomCardJson(
+      id: id,
+      name: name,
+      memberCount: memberCount,
+      liveParticipantCount: liveParticipantCount,
+    ),
+    'online_member_count': onlineMemberCount,
+    'description': description,
+    'visibility': visibility,
+    'join_policy': joinPolicy,
+    'ai_voice_announcements_enabled': aiVoiceAnnouncementsEnabled,
+    'my_membership': {'joined_at': '2026-06-01T00:00:00Z', 'role': role},
+    'created_by': _currentUserJson,
+    'live': _liveStateJson(roomId: id, participantCount: liveParticipantCount),
+    'created_at': '2026-06-01T00:00:00Z',
+  };
+}
+
+Map<String, Object?> _messageJson({
+  required String id,
+  required String roomId,
+  required Map<String, Object?> sender,
+  required String clientMessageId,
+  required String body,
+}) {
+  return {
+    'id': id,
+    'room_id': roomId,
+    'sender': sender,
+    'client_message_id': clientMessageId,
+    'type': 'text',
+    'body': body,
+    'attachments': <Object?>[],
+    'created_at': '2026-06-05T08:00:00Z',
+  };
+}
+
+Map<String, Object?> _liveStateJson({
+  required String roomId,
+  required int participantCount,
+  List<Object?>? participants,
+}) {
+  final participantList =
+      participants ??
+      (participantCount <= 0
+          ? <Object?>[]
+          : [
+              _liveParticipantJson(
+                user: _currentUserJson,
+                liveSessionId: 'live-session-1',
+              ),
+            ]);
+  return {
+    'room_id': roomId,
+    'participant_count': participantCount,
+    'participants': participantList,
+    'updated_at': '2026-06-05T08:00:00Z',
+  };
+}
+
+Map<String, Object?> _liveParticipantJson({
+  required Map<String, Object?> user,
+  required String liveSessionId,
+  bool micMuted = false,
+  bool headphonesMuted = false,
+  bool voiceBlocked = false,
+  bool cameraOn = false,
+  bool screenSharing = false,
+}) {
+  return {
+    'live_session_id': liveSessionId,
+    'user': user,
+    'joined_at': '2026-06-05T08:00:00Z',
+    'mic_muted': micMuted,
+    'headphones_muted': headphonesMuted,
+    'voice_blocked': voiceBlocked,
+    'camera_on': cameraOn,
+    'screen_sharing': screenSharing,
+    'connection_state': 'connected',
+  };
+}
+
+Map<String, Object?> _roomMemberJson({
+  required Map<String, Object?> user,
+  String role = 'member',
+}) {
+  return {
+    'user': user,
+    'role': role,
+    'joined_at': '2026-06-01T00:00:00Z',
+    'is_online': user['is_online'] as bool? ?? false,
+  };
+}
+
+Map<String, Object?> _joinRequestJson({
+  required String id,
+  required Map<String, Object?> user,
+}) {
+  return {
+    'id': id,
+    'status': 'pending',
+    'user': user,
+    'created_at': '2026-06-05T08:00:00Z',
+  };
+}
+
+Map<String, Object?> _userJson({
+  required String id,
+  required String username,
+  required String displayName,
+  bool? isOnline,
+}) {
+  final json = <String, Object?>{
+    'id': id,
+    'username': username,
+    'display_name': displayName,
+    'avatar_url': null,
+    'default_avatar_key': 'blue-3',
+  };
+  if (isOnline != null) json['is_online'] = isOnline;
+  return json;
+}
+
 Map<String, Object?> _roomCardJson({
   required String id,
   required String name,
@@ -1863,6 +2670,160 @@ Map<String, Object?> _roomCardJson({
     'unread_count': unreadCount,
     'updated_at': '2026-06-05T00:00:00Z',
   };
+}
+
+class _FakeAudioDeviceStore extends AudioDeviceStore {
+  const _FakeAudioDeviceStore();
+
+  @override
+  Future<StoredAudioDevices> read() async {
+    return const StoredAudioDevices(inputVolume: 0.35, outputVolume: 0.75);
+  }
+
+  @override
+  Future<void> writeInputDeviceId(String deviceId) async {}
+
+  @override
+  Future<void> writeOutputDeviceId(String deviceId) async {}
+
+  @override
+  Future<void> writeInputVolume(double volume) async {}
+
+  @override
+  Future<void> writeOutputVolume(double volume) async {}
+}
+
+class _NoopRealtimeService implements RealtimeService {
+  final _events = const Stream<RealtimeEvent>.empty();
+
+  @override
+  void Function()? onReconnect;
+
+  @override
+  Stream<RealtimeEvent> get events => _events;
+
+  @override
+  Future<void> start() async {}
+
+  @override
+  Future<void> stop() async {}
+
+  @override
+  void dispose() {}
+}
+
+class _FakeRealtimeService implements RealtimeService {
+  final _controller = StreamController<RealtimeEvent>.broadcast();
+
+  @override
+  void Function()? onReconnect;
+
+  @override
+  Stream<RealtimeEvent> get events => _controller.stream;
+
+  @override
+  Future<void> start() async {}
+
+  @override
+  Future<void> stop() async {}
+
+  void add(RealtimeEvent event) => _controller.add(event);
+
+  @override
+  void dispose() {
+    _controller.close();
+  }
+}
+
+class _FakeLiveSessionController extends LiveSessionController {
+  _FakeLiveSessionController({required LiveSession session})
+    : super(
+        apiBaseUrl: 'http://localhost:3000',
+        audioDeviceStore: const _FakeAudioDeviceStore(),
+        session: session,
+        audioDeviceRestorer: (_) async {},
+      );
+
+  @override
+  Future<List<ScreenSource>> listScreenSources() async {
+    return const [
+      ScreenSource(
+        id: 'screen-primary',
+        name: 'Primary Display',
+        thumbnail: null,
+        isWindow: false,
+      ),
+    ];
+  }
+
+  @override
+  Future<void> refreshScreenSourceThumbnails() async {}
+}
+
+class _FakeLiveSession extends LiveSession {
+  int connectAttempts = 0;
+  int disconnects = 0;
+  final micMutes = <bool>[];
+  final outputMutes = <bool>[];
+  final cameraEnables = <bool>[];
+  final screenShareEnables = <bool>[];
+  final screenShareSourceIds = <String?>[];
+
+  @override
+  Future<void> connect({
+    required String url,
+    required String token,
+    required String roomName,
+    required bool micMuted,
+  }) async {
+    connectAttempts += 1;
+  }
+
+  @override
+  Future<void> disconnect() async {
+    disconnects += 1;
+  }
+
+  @override
+  Future<void> setMicMuted(bool muted) async {
+    micMutes.add(muted);
+  }
+
+  @override
+  Future<void> setOutputMuted(bool muted) async {
+    outputMutes.add(muted);
+  }
+
+  @override
+  Future<bool> setCameraEnabled(bool enabled) async {
+    cameraEnables.add(enabled);
+    return enabled;
+  }
+
+  @override
+  Future<bool> setScreenShareEnabled(bool enabled, {String? sourceId}) async {
+    screenShareEnables.add(enabled);
+    screenShareSourceIds.add(sourceId);
+    return enabled;
+  }
+}
+
+LiveVideoTrack _liveVideoTrack({
+  required String identity,
+  required bool isScreenShare,
+  required bool isLocal,
+}) {
+  return LiveVideoTrack(
+    identity: identity,
+    track: _FakeVideoTrack(),
+    isScreenShare: isScreenShare,
+    isLocal: isLocal,
+  );
+}
+
+class _FakeVideoTrack implements lk.VideoTrack {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _MemoryTokenStore extends TokenStore {

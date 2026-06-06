@@ -66,6 +66,8 @@ class _UiShowcasePageState extends State<UiShowcasePage> {
   bool _mic = true;
   bool _camera = false;
   bool _share = false;
+  bool _desktopNotifications = true;
+  bool _compactComposer = false;
   String _largeAction = 'focus';
   String _section = 'chat';
   String _navigationPreview = 'chat';
@@ -531,6 +533,31 @@ class _UiShowcasePageState extends State<UiShowcasePage> {
           ),
         ),
         const SizedBox(height: 30),
+        const _SectionTitle('Switches'),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Column(
+            children: [
+              _SwitchRow(
+                icon: Icons.notifications_active_outlined,
+                title: 'Desktop notifications',
+                subtitle: 'Surface new mentions while the app is backgrounded',
+                value: _desktopNotifications,
+                onChanged: (value) =>
+                    setState(() => _desktopNotifications = value),
+              ),
+              const SizedBox(height: 12),
+              _SwitchRow(
+                icon: Icons.vertical_align_center_outlined,
+                title: 'Compact composer',
+                subtitle: 'Keep the message bar dense in smaller rooms',
+                value: _compactComposer,
+                onChanged: (value) => setState(() => _compactComposer = value),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 30),
         const _SectionTitle('Badges'),
         Wrap(
           spacing: 10,
@@ -573,6 +600,75 @@ class _SectionTitle extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Text(title, style: UiTypography.title),
+    );
+  }
+}
+
+class _SwitchRow extends StatelessWidget {
+  const _SwitchRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = value ? UiColors.text : UiColors.textSecondary;
+    final iconColor = value ? UiColors.accent : UiColors.textMuted;
+    return PressableSurface(
+      height: 68,
+      selected: value,
+      backgroundColor: UiColors.surfaceLow,
+      selectedBackgroundColor: UiColors.selected,
+      borderColor: UiColors.border,
+      selectedBorderColor: UiColors.accentBorder,
+      borderRadius: UiRadii.md,
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      child: Row(
+        children: [
+          Icon(icon, color: iconColor, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: foreground,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: UiColors.textMuted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 14),
+          UiSwitch(value: value, onChanged: onChanged, tooltip: title),
+        ],
+      ),
     );
   }
 }

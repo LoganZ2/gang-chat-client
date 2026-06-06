@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'button.dart';
+import 'surface.dart';
 import 'tokens.dart';
 
 class Sidebar extends StatelessWidget {

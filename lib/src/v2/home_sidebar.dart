@@ -23,6 +23,7 @@ class HomeSidebar extends StatelessWidget {
     required this.currentUser,
     required this.servers,
     required this.selectedServerId,
+    required this.joinedLiveRoomId,
     required this.loading,
     required this.error,
     required this.settingsActive,
@@ -35,6 +36,7 @@ class HomeSidebar extends StatelessWidget {
   final CurrentUser currentUser;
   final List<RoomCard> servers;
   final String? selectedServerId;
+  final String? joinedLiveRoomId;
   final bool loading;
   final String? error;
   final bool settingsActive;
@@ -106,6 +108,7 @@ class HomeSidebar extends StatelessWidget {
         return _ServerCard(
           server: server,
           selected: server.id == selectedServerId,
+          voiceJoined: server.id == joinedLiveRoomId,
           onPressed: () => onServerSelected(server),
         );
       },
@@ -244,11 +247,13 @@ class _ServerCard extends StatelessWidget {
   const _ServerCard({
     required this.server,
     required this.selected,
+    required this.voiceJoined,
     required this.onPressed,
   });
 
   final RoomCard server;
   final bool selected;
+  final bool voiceJoined;
   final VoidCallback onPressed;
 
   @override
@@ -269,14 +274,8 @@ class _ServerCard extends StatelessWidget {
       onPressed: onPressed,
       child: Row(
         children: [
-          Avatar(
-            label: server.displayName,
-            imageUrl: server.avatarUrl,
-            size: 40,
-            active: selected,
-            activeBorderWidth: 1.2,
-          ),
-          const SizedBox(width: 11),
+          _ServerAvatar(server: server, selected: selected),
+          const SizedBox(width: 9),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -307,11 +306,85 @@ class _ServerCard extends StatelessWidget {
               ],
             ),
           ),
-          if (server.unreadCount > 0) ...[
+          if (voiceJoined) ...[
             const SizedBox(width: 8),
-            StatusBadge(label: '${server.unreadCount}', active: true),
+            Tooltip(
+              message: 'Joined voice',
+              child: Icon(Icons.volume_up, color: UiColors.accent, size: 17),
+            ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _ServerAvatar extends StatelessWidget {
+  const _ServerAvatar({required this.server, required this.selected});
+
+  final RoomCard server;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: 44,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Center(
+            child: Avatar(
+              label: server.displayName,
+              imageUrl: server.avatarUrl,
+              size: 40,
+              active: selected,
+              activeBorderWidth: 1.2,
+            ),
+          ),
+          if (server.unreadCount > 0)
+            Positioned(
+              top: 0,
+              right: 0,
+              child: _UnreadBadge(count: server.unreadCount),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UnreadBadge extends StatelessWidget {
+  const _UnreadBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = count > 99 ? '99+' : '$count';
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFFE14747),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFF35191D), width: 1.2),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 5),
+          child: Center(
+            child: Text(
+              label,
+              maxLines: 1,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                height: 1,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -6,6 +6,7 @@ import 'tokens.dart';
 
 const double _composerControlHeight = Input.defaultHeight;
 const double _composerControlOuterHeight = _composerControlHeight + 8;
+const double _composerControlVerticalOffset = 2;
 
 enum ComposerPanelType { list, static }
 
@@ -144,29 +145,32 @@ class _ChatComposerState extends State<ChatComposer> {
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Expanded(
-                          child: Input(
-                            controller: widget.controller,
-                            focusNode: _inputFocusNode,
-                            hintText: widget.hintText,
-                            minLines: widget.minLines,
-                            maxLines: widget.maxLines,
-                            onSubmitted: widget.onSubmitted,
-                            onChanged: widget.onChanged,
+                    child: Transform.translate(
+                      offset: const Offset(0, _composerControlVerticalOffset),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Expanded(
+                            child: Input(
+                              controller: widget.controller,
+                              focusNode: _inputFocusNode,
+                              hintText: widget.hintText,
+                              minLines: widget.minLines,
+                              maxLines: widget.maxLines,
+                              onSubmitted: widget.onSubmitted,
+                              onChanged: widget.onChanged,
+                            ),
                           ),
-                        ),
-                        if (widget.actions.isNotEmpty) ...[
-                          const SizedBox(width: 10),
-                          _ComposerActionRow(
-                            actions: widget.actions,
-                            openActionId: _openActionId,
-                            onAction: _handleAction,
-                          ),
+                          if (widget.actions.isNotEmpty) ...[
+                            const SizedBox(width: 10),
+                            _ComposerActionRow(
+                              actions: widget.actions,
+                              openActionId: _openActionId,
+                              onAction: _handleAction,
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ],

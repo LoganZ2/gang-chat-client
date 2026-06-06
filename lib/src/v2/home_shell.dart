@@ -1,45 +1,106 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:window_manager/window_manager.dart';
 
+import '../app/audio_device_store.dart';
+import '../app/authenticated_app_services.dart';
 import '../app/authenticated_app_context.dart';
+import '../app/file_transfer_state.dart';
+import '../app/live_controller.dart';
+import '../app/live_display.dart' as live_display;
+import '../app/live_session_controller.dart';
+import '../app/messages_controller.dart';
+import '../app/realtime_controller.dart';
 import '../app/rooms_controller.dart';
-import '../protocol/api_client.dart';
+import '../live/live_session.dart';
 import '../protocol/models.dart';
 import '../settings/settings_page.dart';
 import '../ui/ui.dart';
+import 'chat_pane.dart';
 import 'home_content.dart';
 import 'home_sidebar.dart';
+import 'live_channel_pane.dart';
+import 'live_screen_share_picker.dart';
 import 'navigation.dart';
+import 'room_management.dart';
+
+part 'home_shell_realtime.dart';
+part 'home_shell_room_actions.dart';
+part 'home_shell_live_actions.dart';
+part 'home_shell_messages.dart';
+part 'home_shell_layout.dart';
 
 const _windowEdgeBorder = Color(0xFF303842);
 
+bool get _supportsWindowManagement =>
+    !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+
+enum _ContentMode { chat, live }
+
 class HomeShell extends StatefulWidget {
-  const HomeShell({super.key, required this.app});
+  const HomeShell({
+    super.key,
+    required this.app,
+    required this.audioDeviceStore,
+    this.liveSessionController,
+    this.realtime,
+  });
 
   final AuthenticatedAppContext app;
+  final AudioDeviceStore audioDeviceStore;
+  final LiveSessionController? liveSessionController;
+  final RealtimeService? realtime;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
 }
 
 class _HomeShellState extends State<HomeShell> {
-  late GangApi _api;
-  late RoomsController _roomsController;
+  late AuthenticatedAppServices _services;
   late CurrentUser _currentUser;
+  final TextEditingController _composerController = TextEditingController();
+  StreamSubscription<RealtimeEvent>? _realtimeEvents;
 
   List<RoomCard> _servers = const [];
   bool _loadingServers = false;
   String? _serverLoadError;
   String? _selectedServerId;
+  RoomDetail? _selectedRoom;
+  LiveState? _live;
+  List<Message> _messages = const [];
+  Map<String, FileTransferState> _fileTransfers = const {};
+  final Map<String, LiveStageSelection?> _liveStageSelections = {};
+  LiveVideoTrack? _fullScreenLiveTrack;
+  bool _loadingRoom = false;
+  String? _roomError;
+  bool _sending = false;
+  String? _sendError;
   bool _settingsOpen = false;
   bool _narrowContentOpen = false;
+  _ContentMode _contentMode = _ContentMode.chat;
+  String? _joinedLiveRoomId;
+  bool _joiningLive = false;
+  bool _micMuted = true;
+  bool _headphonesMuted = false;
+  bool _cameraOn = false;
+  bool _screenSharing = false;
+  bool _voiceBlocked = false;
+
+  RoomsController get _roomsController => _services.rooms;
+  MessagesController get _messagesController => _services.messages;
+  LiveController get _liveController => _services.live;
+  LiveSessionController get _liveSessionController => _services.liveSession;
 
   @override
   void initState() {
     super.initState();
     _currentUser = widget.app.currentUser;
-    _installApi();
+    _installServices();
+    _attachLiveSessionCallbacks();
+    _startRealtime();
     unawaited(_loadServers());
   }
 
@@ -51,190 +112,117 @@ class _HomeShellState extends State<HomeShell> {
         !widget.app.hasSameApiSource(oldWidget.app);
     if (!appChanged) return;
 
-    _api.close();
-    _installApi();
+    _detachLiveSessionCallbacks();
+    _services.close();
+    _installServices();
+    _attachLiveSessionCallbacks();
+    _startRealtime();
     setState(() {
       _currentUser = widget.app.currentUser;
       _servers = const [];
       _serverLoadError = null;
       _selectedServerId = null;
+      _selectedRoom = null;
+      _live = null;
+      _messages = const [];
+      _fileTransfers = const {};
+      _liveStageSelections.clear();
+      _fullScreenLiveTrack = null;
+      _loadingRoom = false;
+      _roomError = null;
+      _sending = false;
+      _sendError = null;
       _settingsOpen = false;
       _narrowContentOpen = false;
+      _contentMode = _ContentMode.chat;
+      _joinedLiveRoomId = null;
+      _joiningLive = false;
+      _micMuted = true;
+      _headphonesMuted = false;
+      _cameraOn = false;
+      _screenSharing = false;
+      _voiceBlocked = false;
     });
     unawaited(_loadServers());
   }
 
   @override
   void dispose() {
-    _api.close();
+    final realtimeEvents = _realtimeEvents;
+    if (realtimeEvents != null) unawaited(realtimeEvents.cancel());
+    unawaited(_setSystemFullScreen(false));
+    _detachLiveSessionCallbacks();
+    _composerController.dispose();
+    _services.close();
     super.dispose();
   }
 
-  void _installApi() {
-    _api = widget.app.createApiClient();
-    _roomsController = RoomsController(api: _api);
+  void _installServices() {
+    _services = AuthenticatedAppServices(
+      widget.app,
+      audioDeviceStore: widget.audioDeviceStore,
+      liveSessionController: widget.liveSessionController,
+      realtime: widget.realtime,
+    );
   }
 
-  Future<void> _loadServers() async {
-    setState(() {
-      _loadingServers = true;
-      _serverLoadError = null;
-    });
+  void _setHomeState(VoidCallback update) => setState(update);
 
-    try {
-      final servers = await _roomsController.loadRooms();
-      if (!mounted) return;
-      setState(() {
-        _servers = servers;
-        _loadingServers = false;
-        if (_selectedServerId != null &&
-            !_servers.any((server) => server.id == _selectedServerId)) {
-          _selectedServerId = null;
-        }
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _loadingServers = false;
-        _serverLoadError = error.toString();
-      });
-    }
+  void _attachLiveSessionCallbacks() {
+    _liveSessionController.attachSessionCallbacks(
+      onChanged: _onLiveSessionChanged,
+      onForciblyRemoved: _onForciblyRemovedFromLive,
+      onPublishPermissionChanged: _onPublishPermissionChanged,
+    );
   }
 
-  void _selectServer(RoomCard server, {required bool openContent}) {
-    setState(() {
-      _selectedServerId = server.id;
-      _settingsOpen = false;
-      if (openContent) _narrowContentOpen = true;
-    });
-  }
-
-  void _toggleSettings({required bool openContent}) {
-    setState(() {
-      final opening = !_settingsOpen;
-      _settingsOpen = opening;
-      if (openContent) {
-        _narrowContentOpen = opening;
-      }
-    });
-  }
-
-  void _closeSettings() {
-    setState(() => _settingsOpen = false);
-  }
-
-  void _showNarrowSidebar() {
-    setState(() {
-      _settingsOpen = false;
-      _narrowContentOpen = false;
-    });
-  }
-
-  void _handleUserUpdated(CurrentUser user) {
-    setState(() => _currentUser = user);
+  void _detachLiveSessionCallbacks() {
+    _liveSessionController.detachSessionCallbacks(
+      onChanged: _onLiveSessionChanged,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final fullScreenTrack = _resolveFullScreenLiveTrack();
     return Scaffold(
       backgroundColor: UiColors.background,
       body: DecoratedBox(
         decoration: BoxDecoration(border: Border.all(color: _windowEdgeBorder)),
-        child: KeyedSubtree(
-          key: ValueKey(widget.app.currentUser.id),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final narrow = constraints.maxWidth < narrowBreakpoint;
-              if (narrow) return _buildNarrowLayout(constraints.maxWidth);
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            KeyedSubtree(
+              key: ValueKey(widget.app.currentUser.id),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final narrow = constraints.maxWidth < narrowBreakpoint;
+                  if (narrow) return _buildNarrowLayout(constraints.maxWidth);
 
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildSidebar(
-                    width: sidebarWidth,
-                    openContentOnSelect: false,
-                  ),
-                  Expanded(child: _buildContentPane()),
-                ],
-              );
-            },
-          ),
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildSidebar(
+                        width: sidebarWidth,
+                        openContentOnSelect: false,
+                      ),
+                      Expanded(child: _buildContentPane()),
+                    ],
+                  );
+                },
+              ),
+            ),
+            if (fullScreenTrack != null)
+              Positioned.fill(
+                child: LiveFullScreenStage(
+                  track: fullScreenTrack,
+                  label: liveStageTrackLabel(_live, fullScreenTrack),
+                  onExit: _exitLiveFullScreen,
+                ),
+              ),
+          ],
         ),
       ),
-    );
-  }
-
-  Widget _buildNarrowLayout(double width) {
-    if (!_narrowContentOpen) {
-      return _buildSidebar(width: width, openContentOnSelect: true);
-    }
-
-    return Column(
-      children: [
-        DecoratedBox(
-          decoration: const BoxDecoration(
-            color: UiColors.surfaceLow,
-            border: Border(bottom: BorderSide(color: UiColors.border)),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 16, 10),
-            child: Row(
-              children: [
-                ButtonIcon(
-                  tooltip: 'Show servers',
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: _showNarrowSidebar,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    _settingsOpen
-                        ? 'Settings'
-                        : _selectedServer?.displayName ?? '',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: UiTypography.title,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        Expanded(child: _buildContentPane()),
-      ],
-    );
-  }
-
-  Widget _buildContentPane() {
-    if (!_settingsOpen) return const HomeContent();
-    return SettingsPage(
-      isSubWindow: true,
-      api: _api,
-      apiBaseUrl: widget.app.apiBaseUrl,
-      stickerPackStore: widget.app.stickerPackStore,
-      currentUser: _currentUser,
-      onUserUpdated: _handleUserUpdated,
-      onAccountDeleted: widget.app.logout,
-      onClose: _closeSettings,
-    );
-  }
-
-  Widget _buildSidebar({
-    required double width,
-    required bool openContentOnSelect,
-  }) {
-    return HomeSidebar(
-      width: width,
-      currentUser: _currentUser,
-      servers: _servers,
-      selectedServerId: _selectedServerId,
-      loading: _loadingServers,
-      error: _serverLoadError,
-      settingsActive: _settingsOpen,
-      onServerSelected: (server) =>
-          _selectServer(server, openContent: openContentOnSelect),
-      onOpenSettings: () => _toggleSettings(openContent: openContentOnSelect),
-      onLogout: () => unawaited(widget.app.logout()),
     );
   }
 
@@ -244,4 +232,14 @@ class _HomeShellState extends State<HomeShell> {
     }
     return null;
   }
+}
+
+String _roomTitle(RoomDetail? room, RoomCard? card) {
+  final detailRemark = room?.remarkName?.trim();
+  if (detailRemark != null && detailRemark.isNotEmpty) return detailRemark;
+  final detailTitle = room?.name.trim();
+  if (detailTitle != null && detailTitle.isNotEmpty) return detailTitle;
+  final cardTitle = card?.displayName.trim();
+  if (cardTitle != null && cardTitle.isNotEmpty) return cardTitle;
+  return 'Chat';
 }

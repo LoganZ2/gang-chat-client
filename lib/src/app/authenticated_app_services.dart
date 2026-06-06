@@ -22,27 +22,36 @@ class AuthenticatedAppServices {
     required this.fileDownloads,
     required this.settings,
     required this.stickers,
+    required this.ownsLiveSession,
+    required this.ownsRealtime,
   });
 
   factory AuthenticatedAppServices(
     AuthenticatedAppContext context, {
     required AudioDeviceStore audioDeviceStore,
+    LiveSessionController? liveSessionController,
+    RealtimeService? realtime,
   }) {
     final api = context.createApiClient();
+    final liveSession =
+        liveSessionController ??
+        LiveSessionController(
+          apiBaseUrl: context.apiBaseUrl,
+          audioDeviceStore: audioDeviceStore,
+        );
     return AuthenticatedAppServices._(
       context: context,
       api: api,
       rooms: RoomsController(api: api),
       messages: MessagesController(api: api),
       live: LiveController(api: api),
-      liveSession: LiveSessionController(
-        apiBaseUrl: context.apiBaseUrl,
-        audioDeviceStore: audioDeviceStore,
-      ),
-      realtime: RealtimeController(
-        apiBaseUrl: context.apiBaseUrl,
-        accessTokenProvider: context.accessTokenProvider,
-      ),
+      liveSession: liveSession,
+      realtime:
+          realtime ??
+          RealtimeController(
+            apiBaseUrl: context.apiBaseUrl,
+            accessTokenProvider: context.accessTokenProvider,
+          ),
       fileDownloads: FileDownloadsController(),
       settings: SettingsController(
         api: api,
@@ -54,6 +63,8 @@ class AuthenticatedAppServices {
         apiBaseUrl: context.apiBaseUrl,
         stickerPackStore: context.stickerPackStore,
       ),
+      ownsLiveSession: liveSessionController == null,
+      ownsRealtime: realtime == null,
     );
   }
 
@@ -63,10 +74,12 @@ class AuthenticatedAppServices {
   final MessagesController messages;
   final LiveController live;
   final LiveSessionController liveSession;
-  final RealtimeController realtime;
+  final RealtimeService realtime;
   final FileDownloadsController fileDownloads;
   final SettingsController settings;
   final StickerPacksController stickers;
+  final bool ownsLiveSession;
+  final bool ownsRealtime;
 
   Future<void> warmPersonalStickerCache({required String userId}) async {
     try {
@@ -78,8 +91,8 @@ class AuthenticatedAppServices {
   }
 
   void close() {
-    realtime.dispose();
-    liveSession.dispose();
+    if (ownsRealtime) realtime.dispose();
+    if (ownsLiveSession) liveSession.dispose();
     api.close();
   }
 }

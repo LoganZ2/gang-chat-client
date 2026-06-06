@@ -10,7 +10,19 @@ class RealtimeEvent {
   final Map<String, dynamic> data;
 }
 
-class RealtimeController {
+abstract class RealtimeService {
+  void Function()? onReconnect;
+
+  Stream<RealtimeEvent> get events;
+
+  Future<void> start();
+
+  Future<void> stop();
+
+  void dispose();
+}
+
+class RealtimeController implements RealtimeService {
   RealtimeController({
     required String apiBaseUrl,
     required AccessTokenProvider accessTokenProvider,
@@ -30,14 +42,19 @@ class RealtimeController {
       StreamController<RealtimeEvent>.broadcast();
   late final StreamSubscription<LiveEvent> _sourceSubscription;
 
+  @override
   void Function()? onReconnect;
 
+  @override
   Stream<RealtimeEvent> get events => _events.stream;
 
+  @override
   Future<void> start() => _client.start();
 
+  @override
   Future<void> stop() => _client.stop();
 
+  @override
   void dispose() {
     unawaited(_sourceSubscription.cancel());
     _client.dispose();

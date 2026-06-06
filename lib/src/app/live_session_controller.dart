@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../live/live_session.dart';
 import '../live/audio_device_restorer.dart';
 import '../live/livekit_url.dart';
@@ -121,9 +123,15 @@ class LiveSessionController {
       await disconnect;
       return;
     }
+    Timer? timeoutTimer;
+    final timeoutCompleter = Completer<void>();
+    timeoutTimer = Timer(timeout, () {
+      if (!timeoutCompleter.isCompleted) timeoutCompleter.complete();
+    });
     try {
-      await Future.any([disconnect, Future<void>.delayed(timeout)]);
+      await Future.any([disconnect, timeoutCompleter.future]);
     } catch (_) {}
+    timeoutTimer.cancel();
   }
 
   void dispose() => session.dispose();
