@@ -8,6 +8,8 @@ class _RoomDialogShell extends StatelessWidget {
     required this.onClose,
     required this.maxWidth,
     required this.maxHeight,
+    this.headerAction,
+    this.embedded = false,
   });
 
   final String title;
@@ -16,9 +18,51 @@ class _RoomDialogShell extends StatelessWidget {
   final VoidCallback onClose;
   final double maxWidth;
   final double maxHeight;
+  final Widget? headerAction;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
+    final body = Padding(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              if (embedded) ...[
+                ButtonIcon(
+                  tooltip: 'Back',
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: onClose,
+                  size: 32,
+                ),
+                const SizedBox(width: 16),
+              ],
+              Icon(icon, color: UiColors.accent, size: 19),
+              const SizedBox(width: 8),
+              Expanded(child: Text(title, style: UiTypography.title)),
+              ?headerAction,
+              if (!embedded) ...[
+                if (headerAction != null) const SizedBox(width: 4),
+                ButtonIcon(
+                  tooltip: 'Close',
+                  icon: const Icon(Icons.close),
+                  onPressed: onClose,
+                  size: 32,
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 14),
+          Expanded(child: child),
+        ],
+      ),
+    );
+
+    if (embedded) {
+      return ColoredBox(color: UiColors.surfaceLow, child: body);
+    }
+
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
@@ -30,60 +74,9 @@ class _RoomDialogShell extends StatelessWidget {
             borderRadius: BorderRadius.circular(_panelRadius),
             border: Border.all(color: UiColors.border),
           ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Icon(icon, color: UiColors.accent, size: 19),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(title, style: UiTypography.title)),
-                    ButtonIcon(
-                      tooltip: 'Close',
-                      icon: const Icon(Icons.close),
-                      onPressed: onClose,
-                      size: 32,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Expanded(child: child),
-              ],
-            ),
-          ),
+          child: body,
         ),
       ),
-    );
-  }
-}
-
-class _RoomSummaryLine extends StatelessWidget {
-  const _RoomSummaryLine({required this.title, required this.subtitle});
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: UiTypography.body.copyWith(fontWeight: FontWeight.w900),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Text(
-          subtitle,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: UiTypography.label.copyWith(color: UiColors.textMuted),
-        ),
-      ],
     );
   }
 }
@@ -92,13 +85,11 @@ class _SectionBox extends StatelessWidget {
   const _SectionBox({
     required this.title,
     required this.child,
-    this.trailing,
     this.danger = false,
   });
 
   final String title;
   final Widget child;
-  final Widget? trailing;
   final bool danger;
 
   @override
@@ -126,7 +117,6 @@ class _SectionBox extends StatelessWidget {
                     ),
                   ),
                 ),
-                ?trailing,
               ],
             ),
             const SizedBox(height: 10),
@@ -433,4 +423,53 @@ class _StrongConfirmDialogState extends State<_StrongConfirmDialog> {
       ),
     );
   }
+}
+
+class _CroppedRoomAvatar {
+  const _CroppedRoomAvatar({required this.bytes, required this.filename});
+
+  final Uint8List bytes;
+  final String filename;
+}
+
+/// Open a file picker, read the bytes, and run them through the shared
+/// [AvatarCropDialog]. Returns null if the user cancels at any step.
+Future<_CroppedRoomAvatar?> _pickAndCropRoomAvatar(BuildContext context) async {
+  const fileSelectionService = FileSelectionService();
+  SelectedFile? file;
+  try {
+    file = await fileSelectionService.openFile(
+      acceptedTypeGroups: const [
+        FileTypeGroup(
+          label: 'Images',
+          extensions: ['png', 'jpg', 'jpeg', 'webp'],
+        ),
+      ],
+    );
+  } catch (error) {
+    throw Exception('无法打开文件选择器：$error');
+  }
+  if (file == null) return null;
+
+  Uint8List bytes;
+  try {
+    bytes = await file.readAsBytes();
+  } catch (error) {
+    throw Exception('无法读取图片：$error');
+  }
+  if (bytes.isEmpty) {
+    throw Exception('图片文件为空');
+  }
+  if (!context.mounted) return null;
+
+  final cropped = await showDialog<Uint8List>(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => AvatarCropDialog(bytes: bytes, title: '裁剪房间图标'),
+  );
+  if (cropped == null) return null;
+  return _CroppedRoomAvatar(
+    bytes: cropped,
+    filename: account_display.avatarUploadFilename(file.name),
+  );
 }

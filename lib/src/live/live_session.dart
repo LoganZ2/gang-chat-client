@@ -1,7 +1,8 @@
 import 'dart:async';
-import 'dart:io' show HttpOverrides;
+import 'dart:io' show HttpOverrides, Platform;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:livekit_client/livekit_client.dart' as lk;
 
@@ -51,6 +52,23 @@ const _ignoredShareWindowNameParts = <String>[
   'nvidia overlay',
   'geforce overlay',
 ];
+
+// libwebrtc's RTCDesktopSource thumbnails shear on Retina screens (same stride
+// bug the live share sidesteps via ScreenCaptureKit). For screen sources we grab
+// the thumbnail natively (CGDisplayCreateImage) instead, which is undistorted.
+const _screenThumbnailChannel = MethodChannel('gang_chat/screen_thumbnail');
+
+Future<Uint8List?> _captureNativeScreenThumbnail(String displayId) async {
+  if (kIsWeb || !Platform.isMacOS) return null;
+  try {
+    final bytes = await _screenThumbnailChannel.invokeMethod<Uint8List>(
+      'captureScreenThumbnail',
+      {'displayId': displayId, 'maxWidth': 320},
+    );
+    if (bytes != null && bytes.isNotEmpty) return bytes;
+  } catch (_) {}
+  return null;
+}
 
 @visibleForTesting
 List<ScreenSource> filterScreenSourcesForPicker(
@@ -154,7 +172,9 @@ Future<Uint8List?> _loadInitialScreenSourceThumbnail(
 ) async {
   final isScreen = source.type == rtc.SourceType.Screen;
   if (isScreen) {
-    final directThumbnail = await _getDesktopSourceThumbnail(source);
+    // macOS reports the screen source id as the CGDirectDisplayID, which the
+    // native capture path also uses to select the display.
+    final directThumbnail = await _captureNativeScreenThumbnail(source.id);
     if (directThumbnail != null && directThumbnail.isNotEmpty) {
       _screenSourceDirectThumbnailKeys.add(thumbnailKey);
       return _rememberScreenSourceThumbnail(
@@ -168,18 +188,6 @@ Future<Uint8List?> _loadInitialScreenSourceThumbnail(
     sourceId: thumbnailKey,
     thumbnail: source.thumbnail,
   );
-}
-
-Future<Uint8List?> _getDesktopSourceThumbnail(
-  rtc.DesktopCapturerSource source,
-) async {
-  try {
-    final thumbnail = await (rtc.desktopCapturer as dynamic).getThumbnail(
-      source,
-    );
-    if (thumbnail is Uint8List && thumbnail.isNotEmpty) return thumbnail;
-  } catch (_) {}
-  return null;
 }
 
 @visibleForTesting
@@ -477,12 +485,15 @@ class LiveSession extends ChangeNotifier {
       // A concrete maxFrameRate is required: livekit's desktop
       // ScreenShareCaptureOptions sends `mandatory: {frameRate: maxFrameRate}`,
       // and when maxFrameRate is null (the default) that becomes a null value.
-      // flutter_webrtc 1.2.1's native constraint parser then calls GetValue<int>
-      // on that null, throwing std::bad_variant_access and hard-crashing the
+      // flutter_webrtc's native constraint parser then calls GetValue<int> on
+      // that null, throwing std::bad_variant_access and hard-crashing the
       // process. Passing a real frame rate keeps the value a valid double.
       //
-      // params sets the capture resolution; the matching publish encoding lives
-      // in defaultVideoPublishOptions (see connect()). Keep both at 720p60.
+      // On macOS (flutter_webrtc 1.4.0+) full-screen capture goes through
+      // ScreenCaptureKit, which samples at the display's native resolution and
+      // ignores params.dimensions — so dimensions here only bounds non-SCKit
+      // platforms. The encoding (and defaultVideoPublishOptions in connect())
+      // still governs what viewers receive. Keep both at 720p60.
       final options = lk.ScreenShareCaptureOptions(
         sourceId: sourceId,
         maxFrameRate: 60.0,
@@ -551,14 +562,32 @@ class LiveSession extends ChangeNotifier {
 
   /// Ask flutter_webrtc to refresh source thumbnails. On Windows the initial
   /// getSources() call does not include thumbnail bytes; they arrive through
-  /// onThumbnailChanged after updateSources().
+  /// onThumbnailChanged after updateSources(). macOS screen thumbnails come
+  /// from a native capture (to avoid the sheared RTCDesktopSource thumbnail),
+  /// so refresh those directly rather than through onThumbnailChanged.
   static Future<void> refreshScreenSourceThumbnails() async {
     try {
       _ensureScreenSourceThumbnailCacheSubscription();
       await rtc.desktopCapturer.updateSources(
         types: [rtc.SourceType.Screen, rtc.SourceType.Window],
       );
+      await _refreshNativeScreenThumbnails();
     } catch (_) {}
+  }
+
+  static Future<void> _refreshNativeScreenThumbnails() async {
+    for (final thumbnailKey in _screenSourceDirectThumbnailKeys.toList()) {
+      final displayId = thumbnailKey.startsWith('screen:')
+          ? thumbnailKey.substring('screen:'.length)
+          : thumbnailKey;
+      final thumbnail = await _captureNativeScreenThumbnail(displayId);
+      if (thumbnail != null && thumbnail.isNotEmpty) {
+        _rememberAndEmitScreenSourceThumbnail(
+          sourceId: thumbnailKey,
+          thumbnail: thumbnail,
+        );
+      }
+    }
   }
 
   Future<void> disconnect() async {

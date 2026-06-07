@@ -71,6 +71,9 @@ extension _HomeShellRealtime on _HomeShellState {
       rooms: _servers,
       selectedRoomId: _selectedServerId,
       data: data,
+      joinedLiveRoomId: _joinedLiveRoomId,
+      currentUserId: _currentUser.id,
+      previousLive: _live,
     );
     if (patch == null || !mounted) return;
     _setHomeState(() {

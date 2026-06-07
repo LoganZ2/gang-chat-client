@@ -869,6 +869,77 @@ void main() {
     expect(failed.requestError, contains('review failed'));
     expect(failed.busyRequestIds, {'request_2'});
   });
+
+  test(
+    'patchLiveSnapshot re-inserts self when a stale snapshot drops the local '
+    'participant for the joined room',
+    () async {
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          fail('Patch test should not call the API: ${request.url}');
+        }),
+      );
+      addTearDown(api.close);
+      final controller = RoomsController(api: api);
+
+      final previousLive = LiveState.fromJson(
+        _liveJsonWithParticipants(['me', 'other']),
+      );
+
+      // Snapshot computed before we joined: it only lists "other".
+      final patch = controller.patchLiveSnapshot(
+        rooms: [_roomCard('room_1')],
+        selectedRoomId: 'room_1',
+        data: _liveSnapshotData(['other']),
+        joinedLiveRoomId: 'room_1',
+        currentUserId: 'me',
+        previousLive: previousLive,
+      );
+
+      expect(patch, isNotNull);
+      final ids = patch!.selectedLive!.participants
+          .map((participant) => participant.user.id)
+          .toList();
+      expect(ids, containsAll(<String>['me', 'other']));
+      expect(patch.selectedLive!.participantCount, 2);
+    },
+  );
+
+  test(
+    'patchLiveSnapshot does not re-insert self when not joined to the room',
+    () async {
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          fail('Patch test should not call the API: ${request.url}');
+        }),
+      );
+      addTearDown(api.close);
+      final controller = RoomsController(api: api);
+
+      final previousLive = LiveState.fromJson(
+        _liveJsonWithParticipants(['me', 'other']),
+      );
+
+      final patch = controller.patchLiveSnapshot(
+        rooms: [_roomCard('room_1')],
+        selectedRoomId: 'room_1',
+        data: _liveSnapshotData(['other']),
+        joinedLiveRoomId: null,
+        currentUserId: 'me',
+        previousLive: previousLive,
+      );
+
+      expect(patch, isNotNull);
+      final ids = patch!.selectedLive!.participants
+          .map((participant) => participant.user.id)
+          .toList();
+      expect(ids, ['other']);
+    },
+  );
 }
 
 RoomCard _roomCard(String id, {String? name, int unreadCount = 0}) {
@@ -1005,5 +1076,42 @@ Map<String, Object?> _liveJson({required int participantCount}) {
     'participant_count': participantCount,
     'participants': const [],
     'updated_at': '2026-06-04T00:00:00Z',
+  };
+}
+
+Map<String, Object?> _participantJson(String userId) {
+  return {
+    'live_session_id': 'session_$userId',
+    'user': {
+      'id': userId,
+      'username': userId,
+      'display_name': userId,
+      'avatar_url': null,
+      'default_avatar_key': 'blue-3',
+    },
+    'joined_at': '2026-06-04T00:00:00Z',
+    'mic_muted': false,
+    'headphones_muted': false,
+    'voice_blocked': false,
+    'camera_on': false,
+    'screen_sharing': false,
+    'connection_state': 'connected',
+  };
+}
+
+Map<String, Object?> _liveJsonWithParticipants(List<String> userIds) {
+  return {
+    'room_id': 'room_1',
+    'participant_count': userIds.length,
+    'participants': userIds.map(_participantJson).toList(),
+    'updated_at': '2026-06-04T00:00:00Z',
+  };
+}
+
+Map<String, dynamic> _liveSnapshotData(List<String> userIds) {
+  return {
+    'room_id': 'room_1',
+    'participant_count': userIds.length,
+    'live': _liveJsonWithParticipants(userIds),
   };
 }

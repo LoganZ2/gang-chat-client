@@ -385,7 +385,7 @@ class _CropShadePainter extends CustomPainter {
     final overlay = Path()
       ..fillType = PathFillType.evenOdd
       ..addRect(Offset.zero & size)
-      ..addRect(frame);
+      ..addOval(frame);
     canvas.drawPath(
       overlay,
       Paint()
@@ -393,7 +393,7 @@ class _CropShadePainter extends CustomPainter {
         ..style = PaintingStyle.fill
         ..blendMode = BlendMode.srcOver,
     );
-    canvas.drawRect(
+    canvas.drawOval(
       frame,
       Paint()
         ..color = UiColors.accent

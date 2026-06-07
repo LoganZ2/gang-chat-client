@@ -126,36 +126,27 @@ extension _HomeShellRoomActions on _HomeShellState {
   Future<void> _openRoomMembers() async {
     final room = _selectedRoom;
     if (room == null) return;
-    final changed = await showDialog<bool>(
-      context: context,
-      builder: (context) => RoomMembersDialog(
-        controller: _roomsController,
-        room: room,
-        currentUser: _currentUser,
-        initialLive: _live ?? room.live,
-      ),
-    );
-    if (!mounted || changed != true) return;
-    unawaited(_loadServers());
+    _setHomeState(() {
+      _settingsOpen = false;
+      _contentMode = _ContentMode.members;
+      _narrowContentOpen = true;
+    });
   }
 
   Future<void> _openRoomSettings() async {
     final room = _selectedRoom;
     if (room == null) return;
-    final result = await showDialog<RoomManagementResult>(
-      context: context,
-      builder: (context) => RoomSettingsDialog(
-        controller: _roomsController,
-        room: room,
-        currentUser: _currentUser,
-        isInLive: _joinedLiveRoomId == room.id,
-        onRoomUpdated: _applyManagedRoomUpdated,
-        onLeaveLive: () async {
-          if (_joinedLiveRoomId == room.id) await _leaveLive();
-        },
-      ),
-    );
-    if (!mounted || result == null) return;
+    _setHomeState(() {
+      _settingsOpen = false;
+      _contentMode = _ContentMode.roomSettings;
+      _narrowContentOpen = true;
+    });
+  }
+
+  void _handleRoomSettingsResult(
+    String roomId,
+    RoomManagementResult result,
+  ) {
     switch (result.kind) {
       case RoomManagementResultKind.updated:
         final updated = result.room;
@@ -164,7 +155,7 @@ extension _HomeShellRoomActions on _HomeShellState {
         break;
       case RoomManagementResultKind.left:
       case RoomManagementResultKind.deleted:
-        _applyManagedRoomRemoved(room.id);
+        _applyManagedRoomRemoved(roomId);
         unawaited(_loadServers());
         break;
     }

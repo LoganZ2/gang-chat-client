@@ -497,6 +497,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       rooms: _rooms,
       selectedRoomId: _selectedRoomId,
       data: data,
+      joinedLiveRoomId: _joinedLiveRoomId,
+      currentUserId: _currentUser.id,
+      previousLive: _live,
     );
     if (patch == null || !mounted) return;
     setState(() {

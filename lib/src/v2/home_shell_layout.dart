@@ -24,6 +24,33 @@ extension _HomeShellLayout on _HomeShellState {
     }
 
     if (_selectedServerId == null) return const HomeContent();
+    if (_contentMode == _ContentMode.members && _selectedRoom != null) {
+      return RoomMembersDialog(
+        controller: _roomsController,
+        room: _selectedRoom!,
+        currentUser: _currentUser,
+        initialLive: _live ?? _selectedRoom!.live,
+        embedded: true,
+        onClose: _openChat,
+        onChanged: () => unawaited(_loadServers()),
+      );
+    }
+    if (_contentMode == _ContentMode.roomSettings && _selectedRoom != null) {
+      final room = _selectedRoom!;
+      return RoomSettingsDialog(
+        controller: _roomsController,
+        room: room,
+        currentUser: _currentUser,
+        isInLive: _joinedLiveRoomId == room.id,
+        onRoomUpdated: _applyManagedRoomUpdated,
+        onLeaveLive: () async {
+          if (_joinedLiveRoomId == room.id) await _leaveLive();
+        },
+        embedded: true,
+        onClose: _openChat,
+        onResult: (result) => _handleRoomSettingsResult(room.id, result),
+      );
+    }
     if (_contentMode == _ContentMode.live) {
       return LiveChannelPane(
         title: _roomTitle(_selectedRoom, _selectedServer),

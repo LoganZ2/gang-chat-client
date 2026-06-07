@@ -1,15 +1,15 @@
 PODS:
-  - flutter_webrtc (1.2.0):
+  - flutter_webrtc (1.4.0):
     - FlutterMacOS
-    - WebRTC-SDK (= 137.7151.04)
+    - WebRTC-SDK (= 144.7559.01)
   - FlutterMacOS (1.0.0)
-  - livekit_client (2.6.1):
+  - livekit_client (2.7.0):
     - flutter_webrtc
     - FlutterMacOS
-    - WebRTC-SDK (= 137.7151.04)
+    - WebRTC-SDK (= 144.7559.01)
   - screen_retriever_macos (0.0.1):
     - FlutterMacOS
-  - WebRTC-SDK (137.7151.04)
+  - WebRTC-SDK (144.7559.01)
 
 DEPENDENCIES:
   - flutter_webrtc (from `Flutter/ephemeral/.symlinks/plugins/flutter_webrtc/macos`)
@@ -32,11 +32,11 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/screen_retriever_macos/macos
 
 SPEC CHECKSUMS:
-  flutter_webrtc: 718eae22a371cd94e5d56aa4f301443ebc5bb737
+  flutter_webrtc: f1fb1a00c6080461bb2bc6caa5b93d07ddb68466
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
-  livekit_client: 5568bc8a65cdfffc1fa3a6d4cd2a3233c77aca1d
+  livekit_client: 3e024a31e364d4a2e0deda1b3908e93933dbf6dc
   screen_retriever_macos: 452e51764a9e1cdb74b3c541238795849f21557f
-  WebRTC-SDK: 40d4f5ba05cadff14e4db5614aec402a633f007e
+  WebRTC-SDK: ab9b5319e458c2bfebdc92b3600740da35d5630d
 
 PODFILE CHECKSUM: 54d867c82ac51cbd61b565781b9fada492027009
 

@@ -156,7 +156,10 @@ class _LiveScreenSharePickerState extends State<LiveScreenSharePicker> {
         shrinkWrap: true,
         gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
           maxCrossAxisExtent: 220,
-          mainAxisExtent: 158,
+          // The tile is a 158px PressableSurface, whose raised base/shadow adds
+          // hoverLift + baseDepth (8px) below the cap. Give the cell that extra
+          // room so the base isn't clipped, matching the dialog's buttons.
+          mainAxisExtent: 166,
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
         ),

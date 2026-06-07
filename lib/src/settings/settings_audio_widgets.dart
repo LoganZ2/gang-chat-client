@@ -331,6 +331,7 @@ class _SettingsError extends StatelessWidget {
     return DecoratedBox(
       decoration: const BoxDecoration(
         color: Color(0xFF2E1F22),
+        borderRadius: BorderRadius.all(Radius.circular(UiRadii.md)),
         border: Border.fromBorderSide(BorderSide(color: Color(0xFF3A2A2E))),
       ),
       child: Padding(

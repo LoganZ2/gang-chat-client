@@ -456,7 +456,6 @@ class _StickerPreviewDialog extends StatefulWidget {
   const _StickerPreviewDialog({
     required this.item,
     required this.imageUrl,
-    required this.clipboardService,
     required this.canMoveUp,
     required this.canMoveDown,
     required this.canPin,
@@ -471,7 +470,6 @@ class _StickerPreviewDialog extends StatefulWidget {
 
   final ManagedSticker item;
   final String imageUrl;
-  final ClipboardService clipboardService;
   final bool canMoveUp;
   final bool canMoveDown;
   final bool canPin;
@@ -639,10 +637,6 @@ class _StickerPreviewDialogState extends State<_StickerPreviewDialog> {
     }
   }
 
-  Future<void> _copyName() async {
-    await widget.clipboardService.writeText(_nameController.text.trim());
-  }
-
   @override
   Widget build(BuildContext context) {
     final asset = _sticker.asset;
@@ -710,29 +704,11 @@ class _StickerPreviewDialogState extends State<_StickerPreviewDialog> {
                 ),
               ),
               const SizedBox(height: 14),
-              TextField(
+              Input(
                 controller: _nameController,
-                cursorColor: _textSecondary,
-                contextMenuBuilder: buildTextFieldContextMenu,
-                style: const TextStyle(
-                  color: _textPrimary,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-                decoration: InputDecoration(
-                  isDense: true,
-                  labelText: '名称',
-                  suffixIcon: ButtonIcon(
-                    onPressed: _copyName,
-                    tooltip: '复制名称',
-                    icon: const Icon(Icons.copy),
-                    size: 30,
-                  ),
-                  suffixIconConstraints: const BoxConstraints(
-                    minWidth: 38,
-                    minHeight: 38,
-                  ),
-                ),
+                hintText: '名称',
+                minLines: 1,
+                maxLines: 1,
                 onSubmitted: (_) => unawaited(_saveName()),
               ),
               const SizedBox(height: 8),

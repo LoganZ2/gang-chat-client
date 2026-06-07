@@ -123,8 +123,8 @@ class _PasswordVisibilityToggle extends StatelessWidget {
           behavior: HitTestBehavior.opaque,
           onTap: enabled ? onPressed : null,
           child: SizedBox(
-            width: 38,
-            height: 38,
+            width: 32,
+            height: 22,
             child: Icon(
               obscure
                   ? Icons.visibility_off_outlined
@@ -169,6 +169,7 @@ class _SettingsNotice extends StatelessWidget {
     return DecoratedBox(
       decoration: const BoxDecoration(
         color: Color(0xFF1F2D27),
+        borderRadius: BorderRadius.all(Radius.circular(UiRadii.md)),
         border: Border.fromBorderSide(BorderSide(color: Color(0xFF22332B))),
       ),
       child: Padding(

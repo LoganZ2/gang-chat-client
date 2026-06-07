@@ -1,0 +1,214 @@
+import 'package:flutter/material.dart';
+
+import '../app/account_display.dart' as account_display;
+import 'avatar.dart';
+import 'button.dart';
+import 'tokens.dart';
+
+/// Shared color-swatch palette offered by every avatar picker. Mirrors the
+/// keys understood by [avatarFallbackColor].
+const List<String> kAvatarPresetKeys = [
+  'blue-3',
+  'sky-2',
+  'cyan-2',
+  'mint-2',
+  'green-2',
+  'lime-2',
+  'amber-2',
+  'orange-2',
+  'coral-2',
+  'pink-2',
+  'violet-2',
+  'indigo-2',
+  'rose-2',
+  'teal-2',
+  'olive-2',
+  'slate-2',
+  'steel-2',
+  'graphite-2',
+];
+
+/// A live circular avatar preview, a row of preset color swatches, and an
+/// upload button. Used by both the account profile editor and the room
+/// settings dialog so the two stay in sync.
+///
+/// Tapping a swatch switches to that preset (callers handle the state change
+/// through [onPresetSelected]); the upload button opens the image flow.
+class AvatarPicker extends StatelessWidget {
+  const AvatarPicker({
+    super.key,
+    required this.label,
+    required this.displayName,
+    required this.imageUrl,
+    required this.defaultAvatarKey,
+    required this.usingPreset,
+    required this.uploading,
+    required this.enabled,
+    required this.onUpload,
+    required this.onPresetSelected,
+    this.presetKeys = kAvatarPresetKeys,
+    this.uploadLabel = 'Upload image',
+  });
+
+  /// Heading shown above the picker, e.g. '头像' or 'Room avatar'.
+  final String label;
+
+  /// Display name used to derive the fallback initials.
+  final String displayName;
+
+  /// Resolved URL of the uploaded image. Ignored while [usingPreset] is true.
+  final String? imageUrl;
+
+  /// Currently selected preset color key.
+  final String defaultAvatarKey;
+
+  /// Whether the preset color (rather than an uploaded image) is active.
+  final bool usingPreset;
+
+  /// Whether an upload is in flight.
+  final bool uploading;
+
+  /// Whether the picker accepts interaction.
+  final bool enabled;
+
+  final VoidCallback onUpload;
+  final ValueChanged<String> onPresetSelected;
+  final List<String> presetKeys;
+  final String uploadLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          label,
+          style: UiTypography.label.copyWith(color: UiColors.textMuted),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            _AvatarPickerPreview(
+              label: displayName,
+              imageUrl: usingPreset ? null : imageUrl,
+              defaultAvatarKey: defaultAvatarKey,
+              size: 88,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final key in presetKeys)
+                    _AvatarPickerSwatch(
+                      keyName: key,
+                      selected: usingPreset && key == defaultAvatarKey,
+                      onTap: enabled ? () => onPresetSelected(key) : null,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Button(
+          width: double.infinity,
+          height: 38,
+          tone: usingPreset ? ButtonTone.neutral : ButtonTone.primary,
+          selected: !usingPreset,
+          loading: uploading,
+          onPressed: enabled && !uploading ? onUpload : null,
+          icon: const Icon(Icons.upload_file_outlined),
+          child: Text(uploadLabel),
+        ),
+      ],
+    );
+  }
+}
+
+class _AvatarPickerPreview extends StatelessWidget {
+  const _AvatarPickerPreview({
+    required this.label,
+    required this.imageUrl,
+    required this.defaultAvatarKey,
+    required this.size,
+  });
+
+  final String label;
+  final String? imageUrl;
+  final String defaultAvatarKey;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = ColoredBox(
+      color: avatarFallbackColor(defaultAvatarKey),
+      child: Center(
+        child: Text(
+          account_display.initials(label),
+          style: TextStyle(
+            color: UiColors.text,
+            fontSize: size * 0.34,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+    final url = imageUrl;
+    return SizedBox.square(
+      dimension: size,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: UiColors.border),
+        ),
+        child: ClipOval(
+          child: url == null
+              ? fallback
+              : Image.network(
+                  url,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => fallback,
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AvatarPickerSwatch extends StatelessWidget {
+  const _AvatarPickerSwatch({
+    required this.keyName,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String keyName;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: keyName,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            color: avatarFallbackColor(keyName),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: selected ? UiColors.accent : UiColors.border,
+              width: selected ? 2 : 1,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

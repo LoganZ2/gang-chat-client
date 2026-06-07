@@ -1,4 +1,5 @@
 export 'avatar.dart';
+export 'avatar_picker.dart';
 export 'app_config_scope.dart';
 export 'anchored_panel.dart';
 export 'button.dart';

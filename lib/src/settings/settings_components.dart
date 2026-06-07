@@ -8,96 +8,32 @@ class _SettingsNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 188,
-      child: ColoredBox(
-        color: _primaryDarkLow,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 22, 14, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _NavItem(
-                title: '用户资料',
-                icon: Icons.badge_outlined,
-                selected: selected == SettingsSection.profile,
-                onPressed: () => onChanged(SettingsSection.profile),
-              ),
-              const SizedBox(height: 8),
-              _NavItem(
-                title: '隐私和安全',
-                icon: Icons.shield_outlined,
-                selected: selected == SettingsSection.security,
-                onPressed: () => onChanged(SettingsSection.security),
-              ),
-              const SizedBox(height: 8),
-              _NavItem(
-                title: '默认语音源',
-                icon: Icons.graphic_eq,
-                selected: selected == SettingsSection.voice,
-                onPressed: () => onChanged(SettingsSection.voice),
-              ),
-              const SizedBox(height: 8),
-              _NavItem(
-                title: '我的表情包',
-                icon: Icons.emoji_emotions_outlined,
-                selected: selected == SettingsSection.stickers,
-                onPressed: () => onChanged(SettingsSection.stickers),
-              ),
-            ],
-          ),
+    return SegmentedControl<SettingsSection>(
+      expanded: true,
+      value: selected,
+      onChanged: onChanged,
+      segments: const [
+        Segment(
+          value: SettingsSection.profile,
+          label: '用户资料',
+          icon: Icons.badge_outlined,
         ),
-      ),
-    );
-  }
-}
-
-class _NavItem extends StatelessWidget {
-  const _NavItem({
-    required this.title,
-    required this.icon,
-    required this.selected,
-    required this.onPressed,
-  });
-
-  final String title;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressableSurface(
-      onPressed: onPressed,
-      selected: selected,
-      height: 42,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      backgroundColor: _primaryDarkLow,
-      selectedBackgroundColor: const Color(0xFF1F2D27),
-      pressedBackgroundColor: _primaryDark,
-      borderColor: selected ? _cyan : _borderColor,
-      selectedBorderColor: _cyan,
-      hoverLift: 2,
-      pressDepth: 2,
-      baseDepth: 4,
-      child: Row(
-        children: [
-          Icon(icon, color: selected ? _cyan : _textMuted, size: 17),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: selected ? _textPrimary : _textSecondary,
-                fontSize: 13,
-                fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
+        Segment(
+          value: SettingsSection.security,
+          label: '隐私和安全',
+          icon: Icons.shield_outlined,
+        ),
+        Segment(
+          value: SettingsSection.voice,
+          label: '默认语音源',
+          icon: Icons.graphic_eq,
+        ),
+        Segment(
+          value: SettingsSection.stickers,
+          label: '我的表情包',
+          icon: Icons.emoji_emotions_outlined,
+        ),
+      ],
     );
   }
 }
@@ -150,6 +86,7 @@ class _SettingsGroup extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: _primaryDarkLow,
+        borderRadius: BorderRadius.circular(UiRadii.md),
         border: Border.all(
           color: danger ? const Color(0xFF3A2A2E) : _borderColor,
         ),
@@ -193,6 +130,7 @@ class _SettingsSubPanel extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: _primaryDark,
+        borderRadius: BorderRadius.circular(UiRadii.md),
         border: Border.all(color: _borderColor),
       ),
       child: Padding(padding: const EdgeInsets.all(14), child: child),
@@ -208,7 +146,6 @@ class _LabeledTextField extends StatelessWidget {
     this.maxLines = 1,
     this.obscureText = false,
     this.keyboardType,
-    this.suffixIcon,
     this.helperText,
     this.onTogglePasswordVisibility,
   });
@@ -219,45 +156,31 @@ class _LabeledTextField extends StatelessWidget {
   final int maxLines;
   final bool obscureText;
   final TextInputType? keyboardType;
-  final Widget? suffixIcon;
   final String? helperText;
   final VoidCallback? onTogglePasswordVisibility;
 
   @override
   Widget build(BuildContext context) {
-    final effectiveSuffixIcon = onTogglePasswordVisibility == null
-        ? suffixIcon
-        : _PasswordVisibilityToggle(
-            obscure: obscureText,
-            enabled: enabled,
-            onPressed: onTogglePasswordVisibility!,
-          );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _FieldLabel(label),
         const SizedBox(height: 8),
-        TextField(
+        Input(
           controller: controller,
+          hintText: label,
           enabled: enabled,
-          maxLines: obscureText ? 1 : maxLines,
           obscureText: obscureText,
           keyboardType: keyboardType,
-          cursorColor: _textSecondary,
-          contextMenuBuilder: buildTextFieldContextMenu,
-          style: TextStyle(
-            color: enabled ? _textPrimary : _textMuted,
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-          ),
-          decoration: InputDecoration(
-            isDense: true,
-            suffixIcon: effectiveSuffixIcon,
-            suffixIconConstraints: const BoxConstraints(
-              minWidth: 38,
-              minHeight: 38,
-            ),
-          ),
+          minLines: 1,
+          maxLines: obscureText ? 1 : maxLines,
+          suffix: onTogglePasswordVisibility == null
+              ? null
+              : _PasswordVisibilityToggle(
+                  obscure: obscureText,
+                  enabled: enabled,
+                  onPressed: onTogglePasswordVisibility!,
+                ),
         ),
         if (helperText != null) ...[
           const SizedBox(height: 6),
@@ -272,17 +195,10 @@ class _LabeledTextField extends StatelessWidget {
 }
 
 class _CopyableField extends StatelessWidget {
-  const _CopyableField({
-    required this.label,
-    required this.value,
-    required this.tooltip,
-    required this.onCopy,
-  });
+  const _CopyableField({required this.label, required this.value});
 
   final String label;
   final String value;
-  final String tooltip;
-  final VoidCallback onCopy;
 
   @override
   Widget build(BuildContext context) {
@@ -295,30 +211,19 @@ class _CopyableField extends StatelessWidget {
           decoration: BoxDecoration(
             color: _primaryDark,
             border: Border.all(color: _borderColor),
+            borderRadius: BorderRadius.circular(UiRadii.md),
           ),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(13, 7, 8, 7),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: _textSecondary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                ButtonIcon(
-                  tooltip: tooltip,
-                  onPressed: onCopy,
-                  icon: const Icon(Icons.copy),
-                  size: 30,
-                ),
-              ],
+            padding: const EdgeInsets.fromLTRB(13, 11, 13, 11),
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _textSecondary,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ),
@@ -371,14 +276,7 @@ class _ToggleSetting extends StatelessWidget {
     return Row(
       children: [
         Expanded(child: _FieldLabel(label)),
-        Switch(
-          value: value,
-          activeThumbColor: _cyan,
-          activeTrackColor: _cyan.withValues(alpha: 0.26),
-          inactiveThumbColor: _textMuted,
-          inactiveTrackColor: _borderColor,
-          onChanged: onChanged,
-        ),
+        UiSwitch(value: value, onChanged: onChanged),
       ],
     );
   }
@@ -448,185 +346,6 @@ class _SegmentedSetting extends StatelessWidget {
   }
 }
 
-class _AvatarKeyPicker extends StatelessWidget {
-  const _AvatarKeyPicker({
-    required this.value,
-    required this.displayName,
-    required this.avatarUrl,
-    required this.uploading,
-    required this.onChanged,
-    required this.onUpload,
-    required this.onUsePreset,
-  });
-
-  static const _keys = [
-    'blue-3',
-    'sky-2',
-    'cyan-2',
-    'mint-2',
-    'green-2',
-    'lime-2',
-    'amber-2',
-    'orange-2',
-    'coral-2',
-    'pink-2',
-    'violet-2',
-    'indigo-2',
-    'rose-2',
-    'teal-2',
-    'olive-2',
-    'slate-2',
-    'steel-2',
-    'graphite-2',
-  ];
-
-  final String value;
-  final String displayName;
-  final String? avatarUrl;
-  final bool uploading;
-  final ValueChanged<String> onChanged;
-  final VoidCallback onUpload;
-  final VoidCallback onUsePreset;
-
-  @override
-  Widget build(BuildContext context) {
-    final uploadedSelected = avatarUrl != null;
-    final presetSelected = !uploadedSelected;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _FieldLabel('头像'),
-        const SizedBox(height: 10),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 100,
-              child: Center(
-                child: _AvatarPreview(
-                  label: displayName,
-                  imageUrl: avatarUrl,
-                  defaultAvatarKey: value,
-                  size: 88,
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  for (final key in _keys)
-                    Tooltip(
-                      message: key,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => onChanged(key),
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: avatarFallbackColor(key),
-                            border: Border.all(
-                              color: presetSelected && value == key
-                                  ? _cyan
-                                  : _borderColor,
-                              width: presetSelected && value == key ? 2 : 1,
-                            ),
-                          ),
-                          child: const SizedBox.square(dimension: 30),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: Button(
-                onPressed: uploading ? null : onUpload,
-                loading: uploading,
-                icon: const Icon(Icons.upload_file),
-                tone: uploadedSelected
-                    ? ButtonTone.primary
-                    : ButtonTone.neutral,
-                selected: uploadedSelected,
-                height: 38,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                width: double.infinity,
-                child: const Text('上传头像'),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Button(
-                onPressed: uploading ? null : onUsePreset,
-                icon: const Icon(Icons.restart_alt),
-                tone: presetSelected ? ButtonTone.primary : ButtonTone.neutral,
-                selected: presetSelected,
-                height: 38,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                width: double.infinity,
-                child: const Text('预设头像'),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _AvatarPreview extends StatelessWidget {
-  const _AvatarPreview({
-    required this.label,
-    required this.imageUrl,
-    required this.defaultAvatarKey,
-    required this.size,
-  });
-
-  final String label;
-  final String? imageUrl;
-  final String defaultAvatarKey;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    final fallback = ColoredBox(
-      color: avatarFallbackColor(defaultAvatarKey),
-      child: Center(
-        child: Text(
-          account_display.initials(label),
-          style: TextStyle(
-            color: _textPrimary,
-            fontSize: (size * 0.36).clamp(12, 28).toDouble(),
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-      ),
-    );
-    final imageUrl = this.imageUrl;
-    return SizedBox.square(
-      dimension: size,
-      child: DecoratedBox(
-        decoration: BoxDecoration(border: Border.all(color: _borderColor)),
-        child: ClipRect(
-          child: imageUrl == null
-              ? fallback
-              : Image.network(
-                  imageUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => fallback,
-                ),
-        ),
-      ),
-    );
-  }
-}
-
 class _SessionList extends StatelessWidget {
   const _SessionList({required this.sessions, required this.loading});
 
@@ -655,6 +374,7 @@ class _SessionList extends StatelessWidget {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: _primaryDark,
+                  borderRadius: BorderRadius.circular(UiRadii.md),
                   border: Border.all(color: _borderColor),
                 ),
                 child: Padding(

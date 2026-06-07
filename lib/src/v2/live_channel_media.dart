@@ -2,6 +2,23 @@ part of 'live_channel_pane.dart';
 
 enum _LiveMediaKind { camera, screenShare }
 
+class _LiveMediaVideo extends StatelessWidget {
+  const _LiveMediaVideo({required this.track});
+
+  final LiveVideoTrack track;
+
+  @override
+  Widget build(BuildContext context) {
+    return LiveVideoTrackView(
+      track: track,
+      fit: track.isScreenShare
+          ? LiveVideoTrackFit.contain
+          : LiveVideoTrackFit.cover,
+      mirrorLocal: true,
+    );
+  }
+}
+
 class _LiveMediaStage extends StatelessWidget {
   const _LiveMediaStage({
     required this.track,
@@ -17,53 +34,49 @@ class _LiveMediaStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final content = ColoredBox(
+      color: UiColors.surfacePressed,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          _LiveMediaVideo(track: track),
+          Positioned(
+            left: 0,
+            top: 0,
+            child: _LiveStageBadge(
+              label: label,
+              kind: track.isScreenShare
+                  ? _LiveMediaKind.screenShare
+                  : _LiveMediaKind.camera,
+            ),
+          ),
+          Positioned(
+            top: 8,
+            right: 8,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _StageOverlayIconButton(
+                  tooltip: '退出观看',
+                  icon: Icons.close_fullscreen,
+                  onPressed: onExit,
+                ),
+                const SizedBox(width: 6),
+                _StageOverlayIconButton(
+                  tooltip: '全屏',
+                  icon: Icons.fullscreen,
+                  onPressed: onFullScreen,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+    if (track.isScreenShare) return content;
     return ClipRRect(
       borderRadius: BorderRadius.circular(UiRadii.lg),
-      child: ColoredBox(
-        color: UiColors.surfacePressed,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            LiveVideoTrackView(
-              track: track,
-              fit: track.isScreenShare
-                  ? LiveVideoTrackFit.contain
-                  : LiveVideoTrackFit.cover,
-              mirrorLocal: true,
-            ),
-            Positioned(
-              left: 0,
-              top: 0,
-              child: _LiveStageBadge(
-                label: label,
-                kind: track.isScreenShare
-                    ? _LiveMediaKind.screenShare
-                    : _LiveMediaKind.camera,
-              ),
-            ),
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _StageOverlayIconButton(
-                    tooltip: '退出观看',
-                    icon: Icons.close_fullscreen,
-                    onPressed: onExit,
-                  ),
-                  const SizedBox(width: 6),
-                  _StageOverlayIconButton(
-                    tooltip: '全屏',
-                    icon: Icons.fullscreen,
-                    onPressed: onFullScreen,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+      child: content,
     );
   }
 }
@@ -87,13 +100,7 @@ class LiveFullScreenStage extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          LiveVideoTrackView(
-            track: track,
-            fit: track.isScreenShare
-                ? LiveVideoTrackFit.contain
-                : LiveVideoTrackFit.cover,
-            mirrorLocal: true,
-          ),
+          _LiveMediaVideo(track: track),
           Positioned(
             left: 14,
             top: 14,

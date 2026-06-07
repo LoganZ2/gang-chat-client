@@ -125,6 +125,17 @@ class _LiveMemberCard extends StatelessWidget {
         ? UiColors.borderStrong
         : UiColors.border;
     if (previewTrack != null) {
+      if (previewTrack.isScreenShare) {
+        return _LiveMemberScreenShareCard(
+          track: previewTrack,
+          name: local ? '$name (you)' : name,
+          micMuted: state.micMutedForDisplay,
+          speaking: speaking,
+          highlighted: state.highlighted,
+          borderColor: borderColor,
+          onPressed: () => onSelectPreview(previewTrack),
+        );
+      }
       return SizedBox(
         width: _memberCardWidth,
         child: PressableSurface(
@@ -142,14 +153,7 @@ class _LiveMemberCard extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(UiRadii.lg),
-                child: LiveVideoTrackView(
-                  track: previewTrack,
-                  fit: LiveVideoTrackFit.cover,
-                  mirrorLocal: true,
-                ),
-              ),
+              _LiveMemberVideo(track: previewTrack),
               Positioned(
                 left: 0,
                 right: 0,
@@ -237,6 +241,107 @@ class _LiveMemberCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _LiveMemberScreenShareCard extends StatelessWidget {
+  const _LiveMemberScreenShareCard({
+    required this.track,
+    required this.name,
+    required this.micMuted,
+    required this.speaking,
+    required this.highlighted,
+    required this.borderColor,
+    required this.onPressed,
+  });
+
+  final LiveVideoTrack track;
+  final String name;
+  final bool micMuted;
+  final bool speaking;
+  final bool highlighted;
+  final Color borderColor;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final background = highlighted
+        ? _memberSpeakingBackground
+        : _memberIdleBackground;
+    return SizedBox(
+      width: _memberCardWidth,
+      height: _memberCardHeight + 8,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onPressed,
+          child: Stack(
+            children: [
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 8,
+                height: _memberCardHeight,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: UiColors.surfacePressed,
+                    borderRadius: BorderRadius.circular(UiRadii.lg),
+                    border: Border.all(color: borderColor),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 3,
+                height: _memberCardHeight,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: background,
+                    borderRadius: BorderRadius.circular(UiRadii.lg),
+                    border: Border.all(color: borderColor),
+                  ),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      _LiveMediaVideo(track: track),
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: _LiveVideoFooter(
+                          name: name,
+                          micMuted: micMuted,
+                          speaking: speaking,
+                          mediaKind: _LiveMediaKind.screenShare,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LiveMemberVideo extends StatelessWidget {
+  const _LiveMemberVideo({required this.track});
+
+  final LiveVideoTrack track;
+
+  @override
+  Widget build(BuildContext context) {
+    final video = _LiveMediaVideo(track: track);
+    if (track.isScreenShare) return video;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(UiRadii.lg),
+      child: video,
     );
   }
 }

@@ -307,7 +307,6 @@ class _JoinRequestsSection extends StatelessWidget {
     required this.error,
     required this.onApprove,
     required this.onReject,
-    required this.onRefresh,
   });
 
   final List<JoinRequest> requests;
@@ -315,37 +314,36 @@ class _JoinRequestsSection extends StatelessWidget {
   final String? error;
   final ValueChanged<JoinRequest> onApprove;
   final ValueChanged<JoinRequest> onReject;
-  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
     return _SectionBox(
       title: 'Join requests',
-      trailing: ButtonIcon(
-        tooltip: 'Refresh requests',
-        icon: const Icon(Icons.refresh),
-        onPressed: onRefresh,
-        size: 30,
-      ),
-      child: Column(
-        children: [
-          if (error != null) _NoticeStrip(message: error!, danger: true),
-          if (requests.isEmpty)
-            Text(
-              'No pending requests',
-              style: UiTypography.label.copyWith(color: UiColors.textMuted),
-            )
-          else
-            for (final request in requests) ...[
-              _JoinRequestRow(
-                request: request,
-                busy: busyRequestIds.contains(request.id),
-                onApprove: () => onApprove(request),
-                onReject: () => onReject(request),
-              ),
-              if (request != requests.last) const SizedBox(height: 6),
-            ],
-        ],
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 64),
+        child: Column(
+          children: [
+            if (error != null) _NoticeStrip(message: error!, danger: true),
+            if (requests.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 12, bottom: 6),
+                child: Text(
+                  'No pending requests',
+                  style: UiTypography.label.copyWith(color: UiColors.textMuted),
+                ),
+              )
+            else
+              for (final request in requests) ...[
+                _JoinRequestRow(
+                  request: request,
+                  busy: busyRequestIds.contains(request.id),
+                  onApprove: () => onApprove(request),
+                  onReject: () => onReject(request),
+                ),
+                if (request != requests.last) const SizedBox(height: 6),
+              ],
+          ],
+        ),
       ),
     );
   }

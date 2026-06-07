@@ -443,10 +443,6 @@ class _SettingsPageState extends State<SettingsPage> {
     _notice = patch.notice;
   }
 
-  void _applySettingsNoticePatch(SettingsNoticePatch patch) {
-    _notice = patch.notice;
-  }
-
   void _syncStickerOrderDrafts(List<StickerPack> packs) {
     _stickerOrderDrafts
       ..clear()
@@ -1380,7 +1376,6 @@ class _SettingsPageState extends State<SettingsPage> {
         builder: (context) => _StickerPreviewDialog(
           item: item,
           imageUrl: imageUrl,
-          clipboardService: widget.clipboardService,
           canMoveUp: !_stickerFilterActive && (placement?.canMoveUp ?? false),
           canMoveDown:
               !_stickerFilterActive && (placement?.canMoveDown ?? false),
@@ -1803,10 +1798,6 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  void _usePresetAvatar() {
-    _selectDefaultAvatarKey(_defaultAvatarKey);
-  }
-
   void _selectDefaultAvatarKey(String value) {
     setState(
       () => _applyAccountPresetAvatarSelectionPatch(
@@ -1898,11 +1889,6 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  void _showNotice(String message) {
-    if (!mounted) return;
-    setState(() => _applySettingsNoticePatch(settingsNoticeShown(message)));
-  }
-
   Future<void> _loadStoredAudioSettings() async {
     try {
       final stored = await widget.audioDeviceStore.read();
@@ -1929,8 +1915,13 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
     try {
-      await _ensureDeviceAccess();
-      final devices = await widget.audioDeviceService.enumerateDevices();
+      // Enumerate while a mic capture track is live. On macOS the device list
+      // is empty until the audio module has been initialized by a running
+      // capture unit, which is why devices only used to appear after joining a
+      // room. Holding the track open across enumeration reproduces that state.
+      final devices = await _audioTestService.withCaptureSession(
+        widget.audioDeviceService.enumerateDevices,
+      );
       await _applyDevices(devices);
     } catch (e) {
       if (!mounted) return;
@@ -1946,10 +1937,6 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       );
     }
-  }
-
-  Future<void> _ensureDeviceAccess() async {
-    await _audioTestService.ensureDeviceAccess();
   }
 
   Future<void> _applyDevices(List<AudioDeviceInfo> devices) async {
@@ -2286,6 +2273,26 @@ class _SettingsPageState extends State<SettingsPage> {
 
   String get _activeTitle => settingsSectionTitle(_section);
 
+  void _selectSection(SettingsSection section) {
+    final patch = settingsSectionSelected(
+      section: section,
+      sessionsEmpty: _sessions.isEmpty,
+      loadingSessions: _loadingSessions,
+    );
+    setState(() {
+      _applySettingsSectionPatch(patch);
+    });
+    if (patch.shouldLoadStickers) {
+      unawaited(_ensureStickersLoaded());
+    }
+    if (patch.shouldLoadSessions) {
+      unawaited(_loadSessions());
+    }
+    if (patch.shouldInitializeVoice) {
+      unawaited(_ensureVoiceInitialized());
+    }
+  }
+
   Widget _buildSectionContent() {
     return switch (_section) {
       SettingsSection.profile => _buildProfileContent(),
@@ -2488,22 +2495,12 @@ class _SettingsPageState extends State<SettingsPage> {
           _SettingsGroup(
             title: '账号标识',
             children: [
-              _CopyableField(
-                label: '个人 UID',
-                value: user.uid,
-                tooltip: '复制 UID',
-                onCopy: () => _copyText(user.uid, 'UID 已复制'),
-              ),
+              _CopyableField(label: '个人 UID', value: user.uid),
               const SizedBox(height: 14),
               _LabeledTextField(
                 label: '登录 Username',
                 controller: _usernameController,
                 enabled: account_display.canEditUsername(user),
-                suffixIcon: _copyControllerButton(
-                  _usernameController,
-                  '复制 Username',
-                  'Username 已复制',
-                ),
                 helperText: account_display.usernameHelperText(user),
               ),
             ],
@@ -2515,11 +2512,6 @@ class _SettingsPageState extends State<SettingsPage> {
               _LabeledTextField(
                 label: '用户名',
                 controller: _displayNameController,
-                suffixIcon: _copyControllerButton(
-                  _displayNameController,
-                  '复制用户名',
-                  '用户名已复制',
-                ),
                 helperText: '没有房间个人资料覆盖时展示。',
               ),
               const SizedBox(height: 14),
@@ -2542,25 +2534,23 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
               const SizedBox(height: 14),
-              _AvatarKeyPicker(
-                value: _defaultAvatarKey,
+              AvatarPicker(
+                label: '头像',
                 displayName: _displayNameController.text,
-                avatarUrl: avatarPreviewUrl,
+                imageUrl: avatarPreviewUrl,
+                defaultAvatarKey: _defaultAvatarKey,
+                usingPreset: avatarPreviewUrl == null,
                 uploading: _uploadingAvatar,
-                onChanged: _selectDefaultAvatarKey,
+                enabled: !_uploadingAvatar,
                 onUpload: _pickAndUploadAvatar,
-                onUsePreset: _usePresetAvatar,
+                onPresetSelected: _selectDefaultAvatarKey,
+                uploadLabel: '上传头像',
               ),
               const SizedBox(height: 14),
               _LabeledTextField(
                 label: '签名',
                 controller: _bioController,
                 maxLines: 4,
-                suffixIcon: _copyControllerButton(
-                  _bioController,
-                  '复制签名',
-                  '签名已复制',
-                ),
                 helperText: '用于个人资料面板展示。',
               ),
             ],
@@ -2607,11 +2597,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 label: '邮箱绑定',
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
-                suffixIcon: _copyControllerButton(
-                  _emailController,
-                  '复制邮箱',
-                  '邮箱已复制',
-                ),
                 helperText: '用于登录、账号找回和安全通知。',
               ),
               const SizedBox(height: 10),
@@ -2633,11 +2618,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 label: '手机号绑定',
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
-                suffixIcon: _copyControllerButton(
-                  _phoneController,
-                  '复制手机号',
-                  '手机号已复制',
-                ),
                 helperText: '用于账号找回和安全通知，留空表示解绑。',
               ),
               const SizedBox(height: 10),
@@ -2875,24 +2855,6 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Future<void> _copyText(String value, String notice) async {
-    await widget.clipboardService.writeText(value);
-    _showNotice(notice);
-  }
-
-  Widget _copyControllerButton(
-    TextEditingController controller,
-    String tooltip,
-    String notice,
-  ) {
-    return ButtonIcon(
-      tooltip: tooltip,
-      onPressed: () => _copyText(controller.text.trim(), notice),
-      icon: const Icon(Icons.copy),
-      size: 30,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -2900,31 +2862,31 @@ class _SettingsPageState extends State<SettingsPage> {
       body: Column(
         children: [
           Container(
-            height: 48 + titleBarHeight,
-            padding: const EdgeInsets.fromLTRB(22, titleBarHeight, 22, 0),
+            height: 48 + titleBarHeight + 16,
+            padding: const EdgeInsets.fromLTRB(22, titleBarHeight + 16, 22, 0),
             color: _primaryDarkLow,
             child: Row(
               children: [
-                if (!widget.isSubWindow) ...[
+                if (widget.onClose != null || !widget.isSubWindow) ...[
                   ButtonIcon(
                     tooltip: 'Back',
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed:
+                        widget.onClose ?? () => Navigator.of(context).pop(),
                     icon: const Icon(Icons.arrow_back),
                     size: 38,
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 16),
                 ],
+                const Icon(Icons.settings_outlined, color: _cyan, size: 19),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 14),
-                    child: Text(
-                      'Settings · $_activeTitle',
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: _textPrimary,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                      ),
+                  child: Text(
+                    'Settings · $_activeTitle',
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _textPrimary,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
                     ),
                   ),
                 ),
@@ -2953,68 +2915,22 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ),
                 ),
-                if (widget.onClose != null) ...[
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: 34,
-                    child: PressableSurface(
-                      onPressed: widget.onClose,
-                      tooltip: 'Close settings',
-                      height: 34,
-                      padding: EdgeInsets.zero,
-                      backgroundColor: _primaryDarkLow,
-                      selectedBackgroundColor: _primaryDarkLow,
-                      pressedBackgroundColor: _primaryDark,
-                      borderColor: _primaryDarkLow,
-                      selectedBorderColor: _primaryDarkLow,
-                      hoverLift: 3,
-                      pressDepth: 3,
-                      baseDepth: 5,
-                      child: IconTheme.merge(
-                        data: const IconThemeData(
-                          color: _textSecondary,
-                          size: 16,
-                        ),
-                        child: const Center(child: Icon(Icons.close)),
-                      ),
-                    ),
-                  ),
-                ],
                 // Pull the refresh button further inward from the edge.
                 const SizedBox(width: 16),
               ],
             ),
           ),
           Expanded(
-            child: Row(
+            child: Column(
               children: [
-                _SettingsNavigation(
-                  selected: _section,
-                  onChanged: (section) {
-                    final patch = settingsSectionSelected(
-                      section: section,
-                      sessionsEmpty: _sessions.isEmpty,
-                      loadingSessions: _loadingSessions,
-                    );
-                    setState(() {
-                      _applySettingsSectionPatch(patch);
-                    });
-                    if (patch.shouldLoadStickers) {
-                      unawaited(_ensureStickersLoaded());
-                    }
-                    if (patch.shouldLoadSessions) {
-                      unawaited(_loadSessions());
-                    }
-                    if (patch.shouldInitializeVoice) {
-                      unawaited(_ensureVoiceInitialized());
-                    }
-                  },
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 4, 22, 14),
+                  child: _SettingsNavigation(
+                    selected: _section,
+                    onChanged: _selectSection,
+                  ),
                 ),
-                const VerticalDivider(
-                  width: 1,
-                  thickness: 1,
-                  color: _borderColor,
-                ),
+                const Divider(height: 1, thickness: 1, color: _borderColor),
                 Expanded(child: _buildSectionContent()),
               ],
             ),

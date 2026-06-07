@@ -423,7 +423,7 @@ void main() {
 
     expect(requestedPaths, contains('/api/v1/rooms/server-alpha/invites'));
 
-    await tester.tap(find.byTooltip('Close').last);
+    await tester.tap(find.byTooltip('Back').last);
     await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('Room actions'));
@@ -454,14 +454,27 @@ void main() {
     );
 
     await tester.enterText(_textFieldWithHint('Room name'), 'Alpha Renamed');
-    await tester.tap(find.widgetWithText(ui.Button, 'Save room settings'));
+    final saveButton = find.widgetWithText(ui.Button, 'Save room settings');
+    await tester.ensureVisible(saveButton);
+    await tester.pumpAndSettle();
+    await tester.tap(saveButton);
     await tester.pumpAndSettle();
 
     expect(requestedPaths, contains('/api/v1/rooms/server-alpha'));
+    // The success notice renders at the top of the scrollable dialog body;
+    // scroll back up so the lazily-built strip is in the tree before asserting.
+    await tester.scrollUntilVisible(
+      find.text('房间信息已保存'),
+      -200,
+      scrollable: find
+          .ancestor(of: saveButton, matching: find.byType(Scrollable))
+          .first,
+    );
+    await tester.pumpAndSettle();
     expect(find.text('房间信息已保存'), findsOneWidget);
     expect(find.textContaining('Alpha Renamed'), findsAtLeastNWidgets(1));
 
-    await tester.tap(find.byTooltip('Close').last);
+    await tester.tap(find.byTooltip('Back').last);
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Alpha Renamed'), findsOneWidget);
@@ -578,7 +591,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Settings ·'), findsOneWidget);
-    expect(find.byTooltip('Close settings'), findsOneWidget);
+    expect(find.byTooltip('Refresh settings'), findsOneWidget);
     expect(
       tester
           .widget<ui.PressableSurface>(
@@ -2140,7 +2153,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('embedded settings page exposes a close button', (
+  testWidgets('embedded settings page exposes a back button', (
     WidgetTester tester,
   ) async {
     var closeCount = 0;
@@ -2152,9 +2165,9 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byTooltip('Close settings'), findsOneWidget);
+    expect(find.byTooltip('Back'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Close settings'));
+    await tester.tap(find.byTooltip('Back'));
     await tester.pump();
 
     expect(closeCount, 1);

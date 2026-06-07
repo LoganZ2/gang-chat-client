@@ -1051,6 +1051,9 @@ class RoomsController {
     required List<RoomCard> rooms,
     required String? selectedRoomId,
     required Map<String, dynamic> data,
+    String? joinedLiveRoomId,
+    String? currentUserId,
+    LiveState? previousLive,
   }) {
     final roomId = data['room_id'] as String?;
     if (roomId == null) return null;
@@ -1088,9 +1091,43 @@ class RoomsController {
       );
     }
 
-    final selectedLive = selectedRoomId == roomId && liveJson != null
+    var selectedLive = selectedRoomId == roomId && liveJson != null
         ? LiveState.fromJson(liveJson)
         : null;
+
+    // Self-preservation: a snapshot computed server-side before our own join
+    // (SSE delivery and the LiveKit webhook can lag/reorder) can arrive right
+    // after we join and drop us from the roster — making us briefly invisible
+    // in our own channel. While we're joined to this room, if the snapshot
+    // omits us but our prior state had us, re-insert our own participant from
+    // that prior state. A later, correct snapshot reconciles.
+    if (selectedLive != null &&
+        joinedLiveRoomId == roomId &&
+        currentUserId != null) {
+      final present = selectedLive.participants.any(
+        (p) => p.user.id == currentUserId,
+      );
+      if (!present) {
+        LiveParticipant? self;
+        if (previousLive?.roomId == roomId) {
+          for (final p in previousLive!.participants) {
+            if (p.user.id == currentUserId) {
+              self = p;
+              break;
+            }
+          }
+        }
+        if (self != null) {
+          selectedLive = LiveState(
+            roomId: selectedLive.roomId,
+            participantCount: selectedLive.participantCount + 1,
+            participants: [...selectedLive.participants, self],
+            updatedAt: selectedLive.updatedAt,
+          );
+        }
+      }
+    }
+
     return RoomLiveSnapshotPatch(
       roomId: roomId,
       rooms: nextRooms,

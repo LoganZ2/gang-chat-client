@@ -19,15 +19,18 @@ class LiveVideoTrackView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mirrorMode = track.isScreenShare
+        ? lk.VideoViewMirrorMode.off
+        : mirrorLocal && track.isLocal
+        ? lk.VideoViewMirrorMode.mirror
+        : lk.VideoViewMirrorMode.auto;
     return lk.VideoTrackRenderer(
       track.track,
       fit: switch (fit) {
         LiveVideoTrackFit.cover => lk.VideoViewFit.cover,
         LiveVideoTrackFit.contain => lk.VideoViewFit.contain,
       },
-      mirrorMode: mirrorLocal && track.isLocal
-          ? lk.VideoViewMirrorMode.mirror
-          : lk.VideoViewMirrorMode.auto,
+      mirrorMode: mirrorMode,
     );
   }
 }

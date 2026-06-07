@@ -7,12 +7,18 @@ class RoomMembersDialog extends StatefulWidget {
     required this.room,
     required this.currentUser,
     required this.initialLive,
+    this.embedded = false,
+    this.onClose,
+    this.onChanged,
   });
 
   final RoomsController controller;
   final RoomDetail room;
   final CurrentUser currentUser;
   final LiveState initialLive;
+  final bool embedded;
+  final VoidCallback? onClose;
+  final VoidCallback? onChanged;
 
   @override
   State<RoomMembersDialog> createState() => _RoomMembersDialogState();
@@ -77,7 +83,14 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
     super.dispose();
   }
 
-  void _close() => Navigator.of(context).pop(_changed);
+  void _close() {
+    if (widget.embedded) {
+      if (_changed) widget.onChanged?.call();
+      widget.onClose?.call();
+      return;
+    }
+    Navigator.of(context).pop(_changed);
+  }
 
   void _onMemberSearchChanged() {
     setState(() => _memberQuery = _memberSearchController.text);
@@ -303,23 +316,27 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       icon: Icons.group_outlined,
       maxWidth: _dialogMaxWidth,
       maxHeight: _dialogMaxHeight,
+      embedded: widget.embedded,
       onClose: _close,
+      headerAction: _canReviewRequests
+          ? ButtonIcon(
+              tooltip: 'Refresh',
+              icon: const Icon(Icons.refresh),
+              onPressed: _load,
+              size: 32,
+            )
+          : null,
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          _RoomSummaryLine(
-            title: room_display.roomDisplayName(_room),
-            subtitle: '${_members.length} members',
-          ),
           if (_notice != null) ...[
-            const SizedBox(height: 10),
             _NoticeStrip(message: _notice!, icon: Icons.check_circle_outline),
+            const SizedBox(height: 10),
           ],
           if (_error != null) ...[
-            const SizedBox(height: 10),
             _NoticeStrip(message: _error!, danger: true),
+            const SizedBox(height: 10),
           ],
-          const SizedBox(height: 14),
           _MemberFilters(
             controller: _memberSearchController,
             presenceFilter: _presenceFilter,
@@ -349,7 +366,6 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
               error: _requestError,
               onApprove: (request) => _reviewRequest(request, true),
               onReject: (request) => _reviewRequest(request, false),
-              onRefresh: _load,
             ),
           ],
         ],
