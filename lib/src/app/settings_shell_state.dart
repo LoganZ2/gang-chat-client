@@ -1,4 +1,4 @@
-enum SettingsSection { profile, security, voice, stickers }
+enum SettingsSection { profile, preferences, security, voice, stickers }
 
 class SettingsSectionPatch {
   const SettingsSectionPatch({
@@ -42,6 +42,7 @@ SettingsSectionPatch settingsSectionSelected({
 String settingsSectionTitle(SettingsSection section) {
   return switch (section) {
     SettingsSection.profile => '用户资料',
+    SettingsSection.preferences => '偏好设置',
     SettingsSection.stickers => '表情包管理',
     SettingsSection.security => '隐私和安全',
     SettingsSection.voice => '默认语音源',
@@ -61,6 +62,7 @@ bool settingsSectionRefreshing({
 }) {
   return switch (section) {
     SettingsSection.profile => loadingAccount,
+    SettingsSection.preferences => false,
     SettingsSection.stickers => loadingStickers,
     SettingsSection.security => loadingAccount || loadingSessions,
     SettingsSection.voice => loadingVoice,

@@ -85,10 +85,10 @@ void main() {
 
   test('messageDeliveryStatusText reflects pending and failed states', () {
     expect(messageDeliveryStatusText(_message()), isNull);
-    expect(messageDeliveryStatusText(_message(pending: true)), 'Sending');
+    expect(messageDeliveryStatusText(_message(pending: true)), '发送中');
     expect(
       messageDeliveryStatusText(_message(pending: true, failed: true)),
-      'Failed',
+      '发送失败',
     );
   });
 

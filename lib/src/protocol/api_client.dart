@@ -73,6 +73,7 @@ abstract interface class GangApi {
     bool? emailPublic,
     String? phoneNumber,
     bool? phoneNumberPublic,
+    String? language,
   });
 
   Future<CurrentUser> updateProfile({
@@ -328,6 +329,7 @@ class GangApiClient implements GangApi {
     bool? emailPublic,
     String? phoneNumber,
     bool? phoneNumberPublic,
+    String? language,
   }) async {
     final body = <String, Object?>{};
     if (username != null) body['username'] = username;
@@ -337,6 +339,7 @@ class GangApiClient implements GangApi {
     if (phoneNumberPublic != null) {
       body['phone_number_public'] = phoneNumberPublic;
     }
+    if (language != null) body['language'] = language;
     final decoded = await _sendJson((token) {
       return _httpClient.patch(
         _uri('/users/me/account'),
@@ -1394,7 +1397,7 @@ class ApiException implements Exception {
       // Fall through to the status-based message.
     }
     return ApiException(
-      'Request failed (${response.statusCode})',
+      '请求失败 (${response.statusCode})',
       statusCode: response.statusCode,
       code: 'request_failed',
       requestId: headerRequestId,

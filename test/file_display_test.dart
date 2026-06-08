@@ -30,19 +30,16 @@ void main() {
       clipboardFilesReadFailureMessage('denied'),
       'Unable to read clipboard files: denied',
     );
-    expect(
-      filePickerOpenFailureMessage('blocked'),
-      'Unable to open file picker: blocked',
-    );
-    expect(fileReadFailureMessage('missing'), 'Unable to read file: missing');
-    expect(fileEmptyMessage(), 'File is empty');
+    expect(filePickerOpenFailureMessage('blocked'), '无法打开文件选择器：blocked');
+    expect(fileReadFailureMessage('missing'), '无法读取文件：missing');
+    expect(fileEmptyMessage(), '文件为空');
     expect(
       fileDownloadUri('https://example.test/file.txt')?.host,
       'example.test',
     );
     expect(fileDownloadUri('://bad'), isNull);
-    expect(fileDownloadUnavailableMessage(), 'Cannot download file');
-    expect(fileDownloadedNotice(), 'File downloaded');
+    expect(fileDownloadUnavailableMessage(), '无法下载文件');
+    expect(fileDownloadedNotice(), '文件已下载');
   });
 
   test('extension and mime type are inferred from normalized basename', () {
@@ -137,14 +134,14 @@ void main() {
           ..sentBytes = 2048
           ..bytesPerSecond = 2048;
 
-    expect(fileTransferLabel(transfer), 'Uploading 50% - 2.0 KB/s');
+    expect(fileTransferLabel(transfer), '上传中 50% · 2.0 KB/s');
 
     transfer.pauseTransfer();
-    expect(fileTransferLabel(transfer), 'Paused 50%');
+    expect(fileTransferLabel(transfer), '已暂停 50%');
 
     transfer.resumeTransfer();
     transfer.markFailed('network failed');
-    expect(fileTransferLabel(transfer), 'Failed');
+    expect(fileTransferLabel(transfer), '传输失败');
   });
 
   test('fileTransferProgressState exposes progress label and error state', () {
@@ -155,13 +152,13 @@ void main() {
 
     var state = fileTransferProgressState(transfer);
     expect(state.value, 0.25);
-    expect(state.label, 'Uploading 25%');
+    expect(state.label, '上传中 25%');
     expect(state.failed, isFalse);
 
     transfer.markSendingMessage();
     state = fileTransferProgressState(transfer);
     expect(state.value, 1);
-    expect(state.label, 'Sending');
+    expect(state.label, '发送中');
 
     final failedTransfer = FileTransferState.upload(
       controller: UploadTransferController(),
@@ -264,13 +261,13 @@ void main() {
       canDownload: false,
     );
     expect(state.kind, FileAttachmentTrailingKind.activeTransfer);
-    expect(state.pauseResumeTooltip, 'Pause upload');
+    expect(state.pauseResumeTooltip, '暂停上传');
     expect(state.pauseResumeIsResume, isFalse);
-    expect(state.cancelTooltip, 'Cancel upload');
+    expect(state.cancelTooltip, '取消上传');
 
     upload.pauseTransfer();
     state = fileAttachmentTrailingState(transfer: upload, canDownload: false);
-    expect(state.pauseResumeTooltip, 'Resume upload');
+    expect(state.pauseResumeTooltip, '继续上传');
     expect(state.pauseResumeIsResume, isTrue);
 
     upload.resumeTransfer();

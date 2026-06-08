@@ -260,19 +260,19 @@ class _WindowControls extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
             _WindowControlButton(
-              tooltip: 'Minimize',
+              tooltip: '最小化',
               icon: Icons.remove,
               onPressed: onMinimize,
             ),
             const SizedBox(width: _homeTitleBarControlGap),
             _WindowControlButton(
-              tooltip: maximized ? 'Restore' : 'Maximize',
+              tooltip: maximized ? '还原' : '最大化',
               icon: maximized ? Icons.filter_none : Icons.crop_square,
               onPressed: onToggleMaximize,
             ),
             const SizedBox(width: _homeTitleBarControlGap),
             _WindowControlButton(
-              tooltip: 'Close',
+              tooltip: '关闭',
               icon: Icons.close,
               danger: true,
               onPressed: onClose,

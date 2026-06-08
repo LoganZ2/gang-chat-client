@@ -148,6 +148,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _voiceInitialized = false;
   String? _error;
   bool _loading = false;
+  String _language = 'zh-Hans';
   final _audioTestService = AudioTestService();
   AudioTestHandle? _inputTest;
   AudioTestHandle? _outputTest;
@@ -206,6 +207,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _defaultAvatarKey = user.defaultAvatarKey;
     _emailPublic = user.emailPublic;
     _phonePublic = user.phoneNumberPublic;
+    _language = normalizeAccountLanguage(user.language);
     _clearUploadedAvatar = false;
     _pendingAvatarAssetId = null;
     _pendingAvatarUrl = null;
@@ -461,6 +463,8 @@ class _SettingsPageState extends State<SettingsPage> {
       case SettingsSection.profile:
         await _loadAccount();
         break;
+      case SettingsSection.preferences:
+        break;
       case SettingsSection.stickers:
         await _loadStickers(forceReload: true);
         break;
@@ -487,18 +491,23 @@ class _SettingsPageState extends State<SettingsPage> {
     await _loadDevices();
   }
 
-  Future<void> _saveAccount() async {
+  Future<void> _saveAccount({
+    AccountFormSaveTarget target = AccountFormSaveTarget.account,
+  }) async {
     final user = _user;
     if (!_settingsController.hasApi || user == null || _savingAccount) return;
 
-    final draft = accountUpdateDraftFromForm(
-      user: user,
-      username: _usernameController.text,
-      email: _emailController.text,
-      emailPublic: _emailPublic,
-      phoneNumber: _phoneController.text,
-      phoneNumberPublic: _phonePublic,
-    );
+    final draft = target == AccountFormSaveTarget.preferences
+        ? preferencesUpdateDraftFromForm(user: user, language: _language)
+        : accountUpdateDraftFromForm(
+            user: user,
+            username: _usernameController.text,
+            email: _emailController.text,
+            emailPublic: _emailPublic,
+            phoneNumber: _phoneController.text,
+            phoneNumberPublic: _phonePublic,
+            language: _language,
+          );
     if (draft.error != null) {
       setState(
         () => _applyAccountFormSaveStatePatch(
@@ -516,7 +525,7 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(
         () => _applyAccountFormSaveStatePatch(
           accountFormSaveNoChanges(
-            target: AccountFormSaveTarget.account,
+            target: target,
             savingAccount: _savingAccount,
             savingProfile: _savingProfile,
             accountError: _accountError,
@@ -529,7 +538,7 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(
       () => _applyAccountFormSaveStatePatch(
         accountFormSaveStarted(
-          target: AccountFormSaveTarget.account,
+          target: target,
           savingAccount: _savingAccount,
           savingProfile: _savingProfile,
         ),
@@ -542,13 +551,14 @@ class _SettingsPageState extends State<SettingsPage> {
         emailPublic: draft.emailPublic,
         phoneNumber: draft.phoneNumber,
         phoneNumberPublic: draft.phoneNumberPublic,
+        language: draft.language,
       );
       if (!mounted) return;
       if (updated == null) {
         setState(
           () => _applyAccountFormSaveStatePatch(
             accountFormSaveCancelled(
-              target: AccountFormSaveTarget.account,
+              target: target,
               savingAccount: _savingAccount,
               savingProfile: _savingProfile,
               accountError: _accountError,
@@ -563,7 +573,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _syncUserFields(updated);
         _applyAccountFormSaveStatePatch(
           accountFormSaveSucceeded(
-            target: AccountFormSaveTarget.account,
+            target: target,
             savingAccount: _savingAccount,
             savingProfile: _savingProfile,
           ),
@@ -575,7 +585,7 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(
         () => _applyAccountFormSaveStatePatch(
           accountFormSaveFailed(
-            target: AccountFormSaveTarget.account,
+            target: target,
             savingAccount: _savingAccount,
             savingProfile: _savingProfile,
             failure: e,
@@ -2271,8 +2281,6 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  String get _activeTitle => settingsSectionTitle(_section);
-
   void _selectSection(SettingsSection section) {
     final patch = settingsSectionSelected(
       section: section,
@@ -2296,6 +2304,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _buildSectionContent() {
     return switch (_section) {
       SettingsSection.profile => _buildProfileContent(),
+      SettingsSection.preferences => _buildPreferencesContent(),
       SettingsSection.stickers => _buildStickersContent(),
       SettingsSection.security => _buildSecurityContent(),
       SettingsSection.voice => _buildVoiceContent(),
@@ -2312,16 +2321,14 @@ class _SettingsPageState extends State<SettingsPage> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(28, 24, 30, 32),
       children: [
-        _ContentTitle(title: '我的表情包', loading: _loadingStickers),
         if (_notice != null) ...[
-          const SizedBox(height: 12),
           _SettingsNotice(message: _notice!),
+          const SizedBox(height: 12),
         ],
         if (_stickerError != null) ...[
-          const SizedBox(height: 12),
           _SettingsError(message: _stickerError!),
+          const SizedBox(height: 12),
         ],
-        const SizedBox(height: 18),
         if (unavailable)
           const _SettingsEmptyState(text: '表情包需要登录后从服务端读取')
         else
@@ -2465,6 +2472,58 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  Widget _buildPreferencesContent() {
+    final unavailable = !_settingsController.hasApi || _user == null;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(28, 24, 30, 32),
+      children: [
+        if (_notice != null) ...[
+          _SettingsNotice(message: _notice!),
+          const SizedBox(height: 12),
+        ],
+        if (_accountError != null) ...[
+          _SettingsError(message: _accountError!),
+          const SizedBox(height: 12),
+        ],
+        if (unavailable)
+          const _SettingsEmptyState(text: '偏好设置需要登录后从服务端读取')
+        else
+          _SettingsGroup(
+            title: '语言切换',
+            children: [
+              _SegmentedSetting(
+                label: '语言',
+                value: _language,
+                options: const [
+                  _SegmentOption(value: 'zh-Hans', label: '简体中文'),
+                  _SegmentOption(value: 'zh-Hant', label: '繁體中文'),
+                  _SegmentOption(value: 'en', label: 'English'),
+                ],
+                onChanged: (value) => setState(() => _language = value),
+              ),
+              const SizedBox(height: 14),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Button(
+                  onPressed: _savingAccount
+                      ? null
+                      : () => unawaited(
+                          _saveAccount(
+                            target: AccountFormSaveTarget.preferences,
+                          ),
+                        ),
+                  loading: _savingAccount,
+                  icon: const Icon(Icons.save_outlined),
+                  tone: ButtonTone.primary,
+                  child: const Text('保存偏好设置'),
+                ),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+
   Widget _buildProfileContent() {
     final user = _user;
     final unavailable = !_settingsController.hasApi || user == null;
@@ -2479,16 +2538,14 @@ class _SettingsPageState extends State<SettingsPage> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(28, 24, 30, 32),
       children: [
-        _ContentTitle(title: '用户资料', loading: _loadingAccount),
         if (_notice != null) ...[
-          const SizedBox(height: 12),
           _SettingsNotice(message: _notice!),
+          const SizedBox(height: 12),
         ],
         if (_accountError != null) ...[
-          const SizedBox(height: 12),
           _SettingsError(message: _accountError!),
+          const SizedBox(height: 12),
         ],
-        const SizedBox(height: 18),
         if (unavailable)
           const _SettingsEmptyState(text: '账号资料需要登录后从服务端读取')
         else ...[
@@ -2577,16 +2634,14 @@ class _SettingsPageState extends State<SettingsPage> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(28, 24, 30, 32),
       children: [
-        _ContentTitle(title: '隐私和安全', loading: _loadingAccount),
         if (_notice != null) ...[
-          const SizedBox(height: 12),
           _SettingsNotice(message: _notice!),
+          const SizedBox(height: 12),
         ],
         if (_securityError != null) ...[
-          const SizedBox(height: 12),
           _SettingsError(message: _securityError!),
+          const SizedBox(height: 12),
         ],
-        const SizedBox(height: 18),
         if (unavailable)
           const _SettingsEmptyState(text: '安全设置需要登录后从服务端读取')
         else ...[
@@ -2782,8 +2837,6 @@ class _SettingsPageState extends State<SettingsPage> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(28, 24, 30, 32),
       children: [
-        _ContentTitle(title: '默认语音源', loading: _loading),
-        const SizedBox(height: 18),
         _SettingsGroup(
           title: '输入',
           children: [
@@ -2861,7 +2914,7 @@ class _SettingsPageState extends State<SettingsPage> {
       backgroundColor: _primaryDarkLow,
       body: SettingsScaffold(
         icon: Icons.settings_outlined,
-        title: '设置 · $_activeTitle',
+        title: '设置',
         onBack: widget.onClose != null || !widget.isSubWindow
             ? (widget.onClose ?? () => Navigator.of(context).pop())
             : null,

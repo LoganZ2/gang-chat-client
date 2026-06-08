@@ -114,11 +114,11 @@ class _PasswordVisibilityToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = enabled ? _textSecondary : _textMuted;
     return Tooltip(
-      message: obscure ? 'Show password' : 'Hide password',
+      message: obscure ? '显示密码' : '隐藏密码',
       child: Semantics(
         button: true,
         enabled: enabled,
-        label: obscure ? 'Show password' : 'Hide password',
+        label: obscure ? '显示密码' : '隐藏密码',
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: enabled ? onPressed : null,

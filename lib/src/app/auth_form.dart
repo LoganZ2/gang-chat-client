@@ -30,7 +30,7 @@ AuthFormResult authRequestFromForm({
 }) {
   final normalizedLogin = login.trim();
   if (normalizedLogin.isEmpty || password.isEmpty) {
-    return const AuthFormResult.invalid('Enter your credentials to continue.');
+    return const AuthFormResult.invalid('请输入账号和密码后继续。');
   }
 
   if (!registering) {
@@ -41,10 +41,10 @@ AuthFormResult authRequestFromForm({
 
   final normalizedUsername = username.trim();
   if (normalizedUsername.isEmpty) {
-    return const AuthFormResult.invalid('Username is required.');
+    return const AuthFormResult.invalid('用户名不能为空。');
   }
   if (password != confirmPassword) {
-    return const AuthFormResult.invalid('Passwords do not match.');
+    return const AuthFormResult.invalid('两次输入的密码不一致。');
   }
 
   return AuthFormResult.valid(
@@ -70,5 +70,5 @@ AuthSubmitState authSubmitFailed(Object failure) {
 
 String authSubmitFailureMessage(Object failure) {
   if (failure is AuthException) return failure.message;
-  return 'Cannot reach the server: $failure';
+  return '无法连接服务器：$failure';
 }

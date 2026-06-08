@@ -76,6 +76,8 @@ void main() {
   test('account profile and avatar notices stay outside UI', () {
     expect(accountNoBindingChangesNotice(), '没有账号绑定变更');
     expect(accountBindingsSavedNotice(), '账号绑定已保存');
+    expect(preferencesNoChangesNotice(), '没有偏好设置变更');
+    expect(preferencesSavedNotice(), '偏好设置已保存');
     expect(profileNoChangesNotice(), '没有用户资料变更');
     expect(profileSavedNotice(), '用户资料已保存');
     expect(avatarPickerOpenFailureMessage('denied'), '无法打开文件选择器：denied');
@@ -171,9 +173,9 @@ void main() {
   test('session display helpers provide fallback device and detail text', () {
     final session = _session(userAgent: '  ', ipAddress: '');
 
-    expect(sessionDeviceLabel(session), 'Unknown device');
-    expect(sessionIpAddressLabel(session), 'Unknown IP');
-    expect(sessionDetailText(session), 'Local · Unknown IP · 2026-06-04 00:00');
+    expect(sessionDeviceLabel(session), '未知设备');
+    expect(sessionIpAddressLabel(session), '未知 IP');
+    expect(sessionDetailText(session), 'Local · 未知 IP · 2026-06-04 00:00');
   });
 
   test('sessionListBodyState separates loading empty and result states', () {

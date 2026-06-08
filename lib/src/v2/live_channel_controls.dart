@@ -125,7 +125,7 @@ class _LiveControlBar extends StatelessWidget {
                   loading: joining,
                   icon: const Icon(Icons.call),
                   onPressed: onJoin,
-                  child: const Text('Join'),
+                  child: const Text('加入'),
                 ),
                 const SizedBox(width: 12),
               ] else ...[
@@ -133,7 +133,7 @@ class _LiveControlBar extends StatelessWidget {
                 const SizedBox(width: 10),
               ],
               ButtonIcon(
-                tooltip: 'Collapse live channel',
+                tooltip: '收起直播频道',
                 icon: const Icon(Icons.keyboard_arrow_up),
                 onPressed: onCollapse,
                 size: _controlButtonSize,

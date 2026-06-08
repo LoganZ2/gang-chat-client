@@ -185,7 +185,7 @@ class AuthException implements Exception {
       // Fall through to the status-based message.
     }
     return AuthException(
-      'Request failed (${response.statusCode})',
+      '请求失败 (${response.statusCode})',
       statusCode: response.statusCode,
       code: 'request_failed',
     );

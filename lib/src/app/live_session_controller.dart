@@ -83,7 +83,7 @@ class LiveSessionController {
       if (attempt > 0) {
         await Future<void>.delayed(const Duration(milliseconds: 650));
       }
-      if (isCancelled?.call() ?? false) throw 'Join cancelled';
+      if (isCancelled?.call() ?? false) throw '已取消加入直播';
       try {
         final liveKitUrl = resolveLiveKitServerUrl(
           serverUrl: result.liveKit.serverUrl,
@@ -102,7 +102,7 @@ class LiveSessionController {
         await disconnect();
       }
     }
-    throw lastError ?? 'LiveKit connection failed';
+    throw lastError ?? 'LiveKit 连接失败';
   }
 
   Future<void> restoreStoredAudioSettings() async {

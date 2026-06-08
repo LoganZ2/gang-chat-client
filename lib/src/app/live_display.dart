@@ -262,7 +262,7 @@ LiveMicControlState liveMicControlState({
     );
   }
   return LiveMicControlState(
-    tooltip: micMuted ? 'Unmute' : 'Mute',
+    tooltip: micMuted ? '取消静音' : '静音',
     mutedForDisplay: micMuted,
     active: !micMuted,
     enabled: true,
@@ -270,15 +270,15 @@ LiveMicControlState liveMicControlState({
 }
 
 String liveHeadphonesControlTooltip(bool headphonesMuted) {
-  return headphonesMuted ? 'Unmute headphones' : 'Mute headphones';
+  return headphonesMuted ? '取消耳机静音' : '耳机静音';
 }
 
 String liveCameraControlTooltip(bool cameraOn) {
-  return cameraOn ? 'Camera off' : 'Camera on';
+  return cameraOn ? '关闭摄像头' : '开启摄像头';
 }
 
 String liveScreenShareControlTooltip(bool screenSharing) {
-  return screenSharing ? 'Stop sharing' : 'Share screen';
+  return screenSharing ? '停止共享屏幕' : '共享屏幕';
 }
 
 String liveForciblyRemovedNotice() {
@@ -286,7 +286,7 @@ String liveForciblyRemovedNotice() {
 }
 
 String liveVoiceConnectFailureMessage(Object error) {
-  return 'Failed to connect to voice: $error';
+  return '无法连接语音：$error';
 }
 
 String liveCameraOpenFailureMessage(Object error) {

@@ -90,15 +90,15 @@ String clipboardFilesReadFailureMessage(Object error) {
 }
 
 String filePickerOpenFailureMessage(Object error) {
-  return 'Unable to open file picker: $error';
+  return '无法打开文件选择器：$error';
 }
 
 String fileReadFailureMessage(Object error) {
-  return 'Unable to read file: $error';
+  return '无法读取文件：$error';
 }
 
 String fileEmptyMessage() {
-  return 'File is empty';
+  return '文件为空';
 }
 
 Uri? fileDownloadUri(String url) {
@@ -106,11 +106,11 @@ Uri? fileDownloadUri(String url) {
 }
 
 String fileDownloadUnavailableMessage() {
-  return 'Cannot download file';
+  return '无法下载文件';
 }
 
 String fileDownloadedNotice() {
-  return 'File downloaded';
+  return '文件已下载';
 }
 
 String extensionOf(String filename) {
@@ -210,20 +210,20 @@ String formatPercent(double value) {
 }
 
 String fileTransferLabel(FileTransferState transfer) {
-  if (transfer.failed) return 'Failed';
-  if (transfer.sendingMessage) return 'Sending';
+  if (transfer.failed) return '传输失败';
+  if (transfer.sendingMessage) return '发送中';
 
   final status = transfer.paused
-      ? 'Paused'
+      ? '已暂停'
       : transfer.isDownload
-      ? 'Downloading'
-      : 'Uploading';
+      ? '下载中'
+      : '上传中';
   final progress = transfer.hasKnownTotal
       ? formatPercent(transfer.progress)
       : formatFileSize(transfer.sentBytes);
   final speed = transfer.paused || transfer.bytesPerSecond <= 0
       ? ''
-      : ' - ${formatFileSpeed(transfer.bytesPerSecond)}';
+      : ' · ${formatFileSpeed(transfer.bytesPerSecond)}';
   return '$status $progress$speed';
 }
 
@@ -281,7 +281,7 @@ FileAttachmentInteractionState fileAttachmentInteractionState({
   final canDownload = url != null && transfer == null;
   return FileAttachmentInteractionState(
     canDownload: canDownload,
-    tooltip: canDownload ? 'Download file' : title,
+    tooltip: canDownload ? '下载文件' : title,
   );
 }
 
@@ -302,12 +302,12 @@ FileAttachmentTrailingState fileAttachmentTrailingState({
       );
     }
 
-    final action = transfer.isDownload ? 'download' : 'upload';
+    final action = transfer.isDownload ? '下载' : '上传';
     return FileAttachmentTrailingState(
       kind: FileAttachmentTrailingKind.activeTransfer,
-      pauseResumeTooltip: transfer.paused ? 'Resume $action' : 'Pause $action',
+      pauseResumeTooltip: transfer.paused ? '继续$action' : '暂停$action',
       pauseResumeIsResume: transfer.paused,
-      cancelTooltip: 'Cancel $action',
+      cancelTooltip: '取消$action',
     );
   }
 

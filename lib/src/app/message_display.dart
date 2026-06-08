@@ -73,8 +73,8 @@ bool shouldShowFileAttachmentBody({
 }
 
 String? messageDeliveryStatusText(Message message) {
-  if (message.failed) return 'Failed';
-  if (message.pending) return 'Sending';
+  if (message.failed) return '发送失败';
+  if (message.pending) return '发送中';
   return null;
 }
 

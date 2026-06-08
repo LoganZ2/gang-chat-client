@@ -70,6 +70,7 @@ class SettingsController {
     bool? emailPublic,
     String? phoneNumber,
     bool? phoneNumberPublic,
+    String? language,
   }) {
     final client = api;
     if (client == null) return Future.value();
@@ -79,6 +80,7 @@ class SettingsController {
       emailPublic: emailPublic,
       phoneNumber: phoneNumber,
       phoneNumberPublic: phoneNumberPublic,
+      language: language,
     );
   }
 

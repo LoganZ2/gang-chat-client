@@ -414,7 +414,7 @@ String _userStatus(CurrentUser user) {
 }
 
 String _serverMeta(RoomCard server) {
-  final parts = ['${server.memberCount} 成员'];
+  final parts = ['${server.memberCount} 名成员'];
   if (server.liveParticipantCount > 0) {
     parts.add('${server.liveParticipantCount} 直播中');
   }

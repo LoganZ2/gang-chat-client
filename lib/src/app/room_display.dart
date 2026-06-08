@@ -61,9 +61,9 @@ String roomSubtitle(RoomCard room) {
   final online = room.onlineMemberCount;
   final last = room.lastMessage;
   if (last != null) {
-    return '${room.memberCount} members · $online online · $live live · ${last.senderDisplayName}: ${last.bodyPreview}';
+    return '${room.memberCount} 名成员 · $online 人在线 · $live 直播中 · ${last.senderDisplayName}: ${last.bodyPreview}';
   }
-  return '${room.memberCount} members · $online online · $live live';
+  return '${room.memberCount} 名成员 · $online 人在线 · $live 直播中';
 }
 
 String roomCopySuccessNotice(String label) {

@@ -1,3 +1,5 @@
+const defaultUserLanguage = 'zh-Hans';
+
 class UserCommonRoom {
   const UserCommonRoom({
     required this.id,
@@ -230,6 +232,7 @@ class CurrentUser {
     required this.defaultAvatarKey,
     required this.isSuperuser,
     required this.createdAt,
+    this.language = defaultUserLanguage,
     this.usernameUpdatedAt,
     this.canChangeUsernameAt,
     this.status,
@@ -248,6 +251,7 @@ class CurrentUser {
   final String? avatarUrl;
   final String defaultAvatarKey;
   final bool isSuperuser;
+  final String language;
   final DateTime? usernameUpdatedAt;
   final DateTime? canChangeUsernameAt;
   final DateTime? createdAt;
@@ -270,6 +274,9 @@ class CurrentUser {
       avatarUrl: json['avatar_url'] as String?,
       defaultAvatarKey: json['default_avatar_key'] as String? ?? 'blue-3',
       isSuperuser: json['is_superuser'] as bool? ?? false,
+      language:
+          _stringFromJson(json, const ['language', 'locale']) ??
+          defaultUserLanguage,
       usernameUpdatedAt: _parseDateTime(json['username_updated_at']),
       canChangeUsernameAt: _parseDateTime(json['can_change_username_at']),
       createdAt: _parseDateTime(json['created_at']),

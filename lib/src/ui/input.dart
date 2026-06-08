@@ -18,7 +18,7 @@ class Input extends StatefulWidget {
     super.key,
     this.controller,
     this.focusNode,
-    this.hintText = 'Message',
+    this.hintText = '输入消息',
     this.enabled = true,
     this.obscureText = false,
     this.autofillHints,

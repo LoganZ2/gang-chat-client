@@ -347,10 +347,10 @@ class _LiveMemberVideo extends StatelessWidget {
 }
 
 String _participantMeta(LiveParticipant participant, {required bool speaking}) {
-  if (participant.voiceBlocked) return 'Voice blocked';
-  if (participant.screenSharing) return 'Sharing screen';
-  if (participant.cameraOn) return 'Camera on';
-  if (participant.micMuted) return 'Muted';
-  if (speaking) return 'Speaking';
-  return 'Listening';
+  if (participant.voiceBlocked) return '已被禁言';
+  if (participant.screenSharing) return '正在共享屏幕';
+  if (participant.cameraOn) return '摄像头已开启';
+  if (participant.micMuted) return '已静音';
+  if (speaking) return '正在说话';
+  return '正在收听';
 }

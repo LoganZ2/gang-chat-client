@@ -23,7 +23,6 @@ import 'package:client/src/settings/settings_page.dart';
 import 'package:client/src/ui/ui.dart' as ui;
 import 'package:client/src/v2/home_page.dart' as current_home;
 import 'package:client/src/v2/live_channel_pane.dart' as live_pane;
-import 'package:client/src/v2/navigation.dart' as current_navigation;
 import 'package:client/ui_showcase.dart' as showcase;
 
 void main() {
@@ -94,7 +93,7 @@ void main() {
     expect(find.text('密码'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '登录'), findsOneWidget);
     expect(find.text('注册'), findsOneWidget);
-    expect(find.byTooltip('Show password'), findsOneWidget);
+    expect(find.byTooltip('显示密码'), findsOneWidget);
 
     final authSurfaceRect = tester.getRect(
       find.byKey(const ValueKey('auth-surface')),
@@ -116,23 +115,23 @@ void main() {
       contains(SystemMouseCursors.basic),
     );
     expect(modeSwitchRect.top - authSurfaceRect.top, closeTo(36, 0.01));
-    _expectSubmitButtonFullWidth(tester, submitLabel: 'Login');
-    expect(find.text('Enter your credentials to continue.'), findsNothing);
+    _expectSubmitButtonFullWidth(tester, submitLabel: '登录');
+    expect(find.text('请输入账号和密码后继续。'), findsNothing);
     final normalSurfaceHeight = tester
         .getSize(find.byKey(const ValueKey('auth-surface')))
         .height;
-    final normalBottomGap = _submitBottomGap(tester, submitLabel: 'Login');
+    final normalBottomGap = _submitBottomGap(tester, submitLabel: '登录');
 
-    await tester.tap(find.widgetWithText(ui.Button, 'Login'));
+    await tester.tap(find.widgetWithText(ui.Button, '登录'));
     await tester.pump();
 
-    expect(find.text('Enter your credentials to continue.'), findsOneWidget);
+    expect(find.text('请输入账号和密码后继续。'), findsOneWidget);
     expect(
       tester.getSize(find.byKey(const ValueKey('auth-surface'))).height,
       closeTo(normalSurfaceHeight + 20, 0.01),
     );
     expect(
-      _submitBottomGap(tester, submitLabel: 'Login'),
+      _submitBottomGap(tester, submitLabel: '登录'),
       closeTo(normalBottomGap, 0.01),
     );
     expect(tester.takeException(), isNull);
@@ -146,42 +145,42 @@ void main() {
     );
     await tester.pump();
 
-    final loginGap = _authActionGap(tester, submitLabel: 'Login');
-    final loginBottomGap = _submitBottomGap(tester, submitLabel: 'Login');
+    final loginGap = _authActionGap(tester, submitLabel: '登录');
+    final loginBottomGap = _submitBottomGap(tester, submitLabel: '登录');
 
-    await tester.tap(find.text('Register'));
+    await tester.tap(find.text('注册'));
     await tester.pump();
 
-    expect(find.text('Username'), findsOneWidget);
-    expect(find.text('Email address'), findsOneWidget);
-    expect(find.text('Password'), findsOneWidget);
-    expect(find.text('Confirm password'), findsOneWidget);
-    expect(find.byTooltip('Show password'), findsNWidgets(2));
-    expect(find.widgetWithText(ui.Button, 'Create account'), findsOneWidget);
+    expect(find.text('用户名'), findsOneWidget);
+    expect(find.text('邮箱地址'), findsOneWidget);
+    expect(find.text('密码'), findsOneWidget);
+    expect(find.text('确认密码'), findsOneWidget);
+    expect(find.byTooltip('显示密码'), findsNWidgets(2));
+    expect(find.widgetWithText(ui.Button, '创建账号'), findsOneWidget);
     expect(
-      _authActionGap(tester, submitLabel: 'Create account'),
+      _authActionGap(tester, submitLabel: '创建账号'),
       closeTo(loginGap, 0.01),
     );
     expect(
-      _submitBottomGap(tester, submitLabel: 'Create account'),
+      _submitBottomGap(tester, submitLabel: '创建账号'),
       closeTo(loginBottomGap, 0.01),
     );
-    _expectSubmitButtonFullWidth(tester, submitLabel: 'Create account');
-    expect(find.text('Enter your credentials to continue.'), findsNothing);
+    _expectSubmitButtonFullWidth(tester, submitLabel: '创建账号');
+    expect(find.text('请输入账号和密码后继续。'), findsNothing);
     final normalSurfaceHeight = tester
         .getSize(find.byKey(const ValueKey('auth-surface')))
         .height;
 
-    await tester.tap(find.byTooltip('Show password').first);
+    await tester.tap(find.byTooltip('显示密码').first);
     await tester.pump();
 
-    expect(find.byTooltip('Hide password'), findsOneWidget);
-    expect(find.byTooltip('Show password'), findsOneWidget);
+    expect(find.byTooltip('隐藏密码'), findsOneWidget);
+    expect(find.byTooltip('显示密码'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(ui.Button, 'Create account'));
+    await tester.tap(find.widgetWithText(ui.Button, '创建账号'));
     await tester.pump();
 
-    expect(find.text('Enter your credentials to continue.'), findsOneWidget);
+    expect(find.text('请输入账号和密码后继续。'), findsOneWidget);
     expect(
       tester.getSize(find.byKey(const ValueKey('auth-surface'))).height,
       closeTo(normalSurfaceHeight + 20, 0.01),
@@ -209,9 +208,9 @@ void main() {
     expect(find.byType(ui.Sidebar), findsNothing);
     expect(find.text('Gang Chat'), findsNothing);
     expect(find.byKey(const ValueKey('home-title-search')), findsOneWidget);
-    expect(find.byTooltip('Minimize'), findsOneWidget);
-    expect(find.byTooltip('Maximize'), findsOneWidget);
-    expect(find.byTooltip('Close'), findsOneWidget);
+    expect(find.byTooltip('最小化'), findsOneWidget);
+    expect(find.byTooltip('最大化'), findsOneWidget);
+    expect(find.byTooltip('关闭'), findsOneWidget);
     expect(find.text('Workspace'), findsNothing);
     expect(find.text('Tools'), findsNothing);
     expect(find.text('Rooms'), findsNothing);
@@ -222,12 +221,12 @@ void main() {
     expect(find.byTooltip('设置'), findsOneWidget);
     expect(find.byTooltip('退出登录'), findsOneWidget);
     expect(find.text('Kai'), findsOneWidget);
-    expect(find.text('Online'), findsOneWidget);
+    expect(find.text('在线'), findsOneWidget);
     expect(find.text('@kai'), findsNothing);
     expect(find.text('Alpha Room'), findsOneWidget);
     expect(find.text('Beta Room'), findsOneWidget);
-    expect(find.text('2 members · 1 live'), findsOneWidget);
-    expect(find.text('5 members'), findsOneWidget);
+    expect(find.text('2 名成员 · 1 直播中'), findsOneWidget);
+    expect(find.text('5 名成员'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
 
     final searchRect = tester.getRect(
@@ -295,7 +294,7 @@ void main() {
       ),
       'Fresh message',
     );
-    await tester.tap(find.byTooltip('Send'));
+    await tester.tap(find.byTooltip('发送'));
     await tester.pumpAndSettle();
 
     expect(requestedPaths, contains('/api/v1/rooms/server-alpha/messages'));
@@ -331,29 +330,29 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Morgan'), findsOneWidget);
-    expect(find.widgetWithText(ui.Button, 'Join'), findsOneWidget);
-    expect(find.byTooltip('Collapse live channel'), findsOneWidget);
-    expect(find.byTooltip('Joined voice'), findsNothing);
+    expect(find.widgetWithText(ui.Button, '加入'), findsOneWidget);
+    expect(find.byTooltip('收起直播频道'), findsOneWidget);
+    expect(find.byTooltip('已加入语音'), findsNothing);
 
-    await tester.tap(find.widgetWithText(ui.Button, 'Join'));
+    await tester.tap(find.widgetWithText(ui.Button, '加入'));
     await tester.pumpAndSettle();
 
     expect(requestedPaths, contains('/api/v1/rooms/server-alpha/live/join'));
     expect(liveSession.connectAttempts, 1);
     expect(find.text('Kai (you)'), findsOneWidget);
     expect(find.text('Morgan'), findsOneWidget);
-    expect(find.widgetWithText(ui.Button, 'Join'), findsNothing);
-    expect(find.byTooltip('Mute'), findsOneWidget);
-    expect(find.byTooltip('Leave'), findsOneWidget);
-    expect(find.byTooltip('Joined voice'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '加入'), findsNothing);
+    expect(find.byTooltip('静音'), findsOneWidget);
+    expect(find.byTooltip('离开'), findsOneWidget);
+    expect(find.byTooltip('已加入语音'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Mute'));
+    await tester.tap(find.byTooltip('静音'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Mute headphones'));
+    await tester.tap(find.byTooltip('耳机静音'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Camera on'));
+    await tester.tap(find.byTooltip('开启摄像头'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Share screen'));
+    await tester.tap(find.byTooltip('共享屏幕'));
     await tester.pumpAndSettle();
     expect(find.text('Primary Display'), findsOneWidget);
     await tester.tap(find.text('Primary Display'));
@@ -373,14 +372,14 @@ void main() {
       greaterThanOrEqualTo(3),
     );
 
-    await tester.tap(find.byTooltip('Leave'));
+    await tester.tap(find.byTooltip('离开'));
     await tester.pumpAndSettle();
 
     expect(liveSession.disconnects, 1);
-    expect(find.widgetWithText(ui.Button, 'Join'), findsOneWidget);
-    expect(find.byTooltip('Joined voice'), findsNothing);
+    expect(find.widgetWithText(ui.Button, '加入'), findsOneWidget);
+    expect(find.byTooltip('已加入语音'), findsNothing);
 
-    await tester.tap(find.byTooltip('Collapse live channel'));
+    await tester.tap(find.byTooltip('收起直播频道'));
     await tester.pumpAndSettle();
 
     expect(find.text('Kai (you)'), findsNothing);
@@ -407,11 +406,11 @@ void main() {
     await tester.tap(find.text('Alpha Room'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Room details'));
+    await tester.tap(find.byTooltip('房间详情'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Members'), findsAtLeastNWidgets(1));
-    expect(find.text('Invite people'), findsOneWidget);
+    expect(find.text('成员'), findsAtLeastNWidgets(1));
+    expect(find.text('邀请成员'), findsOneWidget);
     expect(find.text('Kai'), findsWidgets);
     expect(find.text('Morgan'), findsWidgets);
     expect(requestedPaths, contains('/api/v1/rooms/server-alpha/members'));
@@ -420,43 +419,35 @@ void main() {
       contains('/api/v1/rooms/server-alpha/join-requests'),
     );
 
-    await tester.ensureVisible(
-      _textFieldWithHint('Search by username, name, or UID'),
-    );
+    await tester.ensureVisible(_textFieldWithHint('按用户名、昵称或 UID 搜索'));
     await tester.pumpAndSettle();
-    await tester.enterText(
-      _textFieldWithHint('Search by username, name, or UID'),
-      'ri',
-    );
+    await tester.enterText(_textFieldWithHint('按用户名、昵称或 UID 搜索'), 'ri');
     await tester.pump(const Duration(milliseconds: 320));
     await tester.pumpAndSettle();
 
     expect(requestedPaths, contains('/api/v1/users/search'));
     expect(find.textContaining('Riley'), findsAtLeastNWidgets(1));
 
-    await tester.tap(find.widgetWithText(ui.Button, 'Invite'));
+    await tester.tap(find.widgetWithText(ui.Button, '邀请'));
     await tester.pumpAndSettle();
 
     expect(requestedPaths, contains('/api/v1/rooms/server-alpha/invites'));
 
-    await tester.tap(find.byTooltip('Back').last);
+    await tester.tap(find.byTooltip('返回').last);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Room actions'));
+    await tester.tap(find.byTooltip('房间操作'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Room settings'), findsOneWidget);
-    expect(find.text('Room info'), findsOneWidget);
+    expect(find.text('房间设置'), findsOneWidget);
+    expect(find.text('房间信息'), findsOneWidget);
     expect(find.byType(ui.UiSwitch), findsOneWidget);
     expect(find.byType(Switch), findsNothing);
-    expect(
-      tester.widget<TextField>(_textFieldWithHint('Description')).maxLines,
-      isNull,
-    );
+    expect(tester.widget<TextField>(_textFieldWithHint('简介')).maxLines, isNull);
     final roomInfoSectionDecorations = tester
         .widgetList<DecoratedBox>(
           find.ancestor(
-            of: find.text('Room info'),
+            of: find.text('房间信息'),
             matching: find.byType(DecoratedBox),
           ),
         )
@@ -469,8 +460,8 @@ void main() {
       isTrue,
     );
 
-    await tester.enterText(_textFieldWithHint('Room name'), 'Alpha Renamed');
-    final saveButton = find.widgetWithText(ui.Button, 'Save room settings');
+    await tester.enterText(_textFieldWithHint('房间名称'), 'Alpha Renamed');
+    final saveButton = find.widgetWithText(ui.Button, '保存房间设置');
     await tester.ensureVisible(saveButton);
     await tester.pumpAndSettle();
     await tester.tap(saveButton);
@@ -490,7 +481,7 @@ void main() {
     expect(find.text('房间信息已保存'), findsOneWidget);
     expect(find.textContaining('Alpha Renamed'), findsAtLeastNWidgets(1));
 
-    await tester.tap(find.byTooltip('Back').last);
+    await tester.tap(find.byTooltip('返回').last);
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Alpha Renamed'), findsOneWidget);
@@ -519,7 +510,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Riley'), findsNothing);
-    expect(find.text('2 members · 1 live'), findsOneWidget);
+    expect(find.text('2 名成员 · 1 直播中'), findsOneWidget);
 
     realtime.add(
       const RealtimeEvent(
@@ -575,20 +566,24 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Riley'), findsOneWidget);
-    expect(find.text('2 members · 2 live'), findsOneWidget);
+    expect(find.text('2 名成员 · 2 直播中'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('authenticated home shell footer opens settings and logs out', (
     WidgetTester tester,
   ) async {
+    final accountUpdates = <Map<String, Object?>>[];
     var logoutCount = 0;
 
     await tester.pumpWidget(
       MaterialApp(
         theme: ui.uiTheme(),
         home: current_home.HomePage(
-          app: _homeTestAppContext(onLogout: () async => logoutCount++),
+          app: _homeTestAppContext(
+            onLogout: () async => logoutCount++,
+            accountUpdates: accountUpdates,
+          ),
           realtime: _NoopRealtimeService(),
         ),
       ),
@@ -606,7 +601,10 @@ void main() {
     await tester.tap(find.byTooltip('设置'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('设置 ·'), findsOneWidget);
+    expect(find.text('设置'), findsOneWidget);
+    expect(find.textContaining('设置 ·'), findsNothing);
+    expect(find.text('用户资料'), findsOneWidget);
+    expect(find.text('偏好设置'), findsOneWidget);
     expect(find.byTooltip('刷新设置'), findsOneWidget);
     expect(
       tester
@@ -619,6 +617,27 @@ void main() {
           .selected,
       isTrue,
     );
+
+    await tester.tap(find.text('偏好设置'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('语言切换'), findsOneWidget);
+    expect(find.text('语言'), findsOneWidget);
+    expect(find.text('简体中文'), findsOneWidget);
+    expect(find.text('繁體中文'), findsOneWidget);
+    expect(find.text('English'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '保存偏好设置'), findsOneWidget);
+    expect(find.text('隐私和安全'), findsOneWidget);
+    expect(find.text('用户资料'), findsOneWidget);
+
+    await tester.tap(find.text('English'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ui.Button, '保存偏好设置'));
+    await tester.pumpAndSettle();
+
+    expect(accountUpdates, hasLength(1));
+    expect(accountUpdates.single['language'], 'en');
+    expect(find.text('偏好设置已保存'), findsOneWidget);
 
     await tester.tap(find.byTooltip('退出登录'));
     await tester.pump();
@@ -684,9 +703,9 @@ void main() {
     );
 
     expect(find.text('Gang Chat'), findsNothing);
-    expect(find.byTooltip('Minimize'), findsNothing);
-    expect(find.byTooltip('Maximize'), findsNothing);
-    expect(find.byTooltip('Close'), findsNothing);
+    expect(find.byTooltip('最小化'), findsNothing);
+    expect(find.byTooltip('最大化'), findsNothing);
+    expect(find.byTooltip('关闭'), findsNothing);
     expect(searchRect.center.dx, closeTo(400, 0.01));
     expect(userSummaryRect.top, closeTo(60, 0.01));
     expect(tester.takeException(), isNull);
@@ -740,7 +759,7 @@ void main() {
     );
     final regularInputRect = tester.getRect(find.byType(ui.Input).first);
     final regularSubmitRect = tester.getRect(
-      find.widgetWithText(ui.Button, 'Login'),
+      find.widgetWithText(ui.Button, '登录'),
     );
     final regularCursorColor = Theme.of(
       tester.element(find.byKey(const ValueKey('auth-surface'))),
@@ -766,7 +785,7 @@ void main() {
       regularInputRect,
     );
     _expectRectCloseTo(
-      tester.getRect(find.widgetWithText(ui.Button, 'Login')),
+      tester.getRect(find.widgetWithText(ui.Button, '登录')),
       regularSubmitRect,
     );
     expect(
@@ -784,15 +803,15 @@ void main() {
 
     expect(find.text('Gang Chat'), findsAtLeastNWidgets(1));
     expect(find.text('用户名或邮箱地址'), findsOneWidget);
-    expect(find.text('Password'), findsOneWidget);
-    expect(find.byTooltip('Show password'), findsOneWidget);
-    expect(find.widgetWithText(ui.Button, 'Login'), findsOneWidget);
+    expect(find.text('密码'), findsOneWidget);
+    expect(find.byTooltip('显示密码'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '登录'), findsOneWidget);
     expect(find.byType(SelectionArea), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Show password'));
+    await tester.tap(find.byTooltip('显示密码'));
     await tester.pump();
 
-    expect(find.byTooltip('Hide password'), findsOneWidget);
+    expect(find.byTooltip('隐藏密码'), findsOneWidget);
   });
 
   testWidgets('switching to register reveals additional fields', (
@@ -801,20 +820,20 @@ void main() {
     await tester.pumpWidget(GangApp(tokenStore: _MemoryTokenStore()));
     await tester.pump();
 
-    await tester.tap(find.text('Register'));
+    await tester.tap(find.text('注册'));
     await tester.pump();
 
-    expect(find.text('Username'), findsOneWidget);
-    expect(find.text('Email address'), findsOneWidget);
-    expect(find.text('Confirm password'), findsOneWidget);
-    expect(find.byTooltip('Show password'), findsNWidgets(2));
-    expect(find.widgetWithText(ui.Button, 'Create account'), findsOneWidget);
+    expect(find.text('用户名'), findsOneWidget);
+    expect(find.text('邮箱地址'), findsOneWidget);
+    expect(find.text('确认密码'), findsOneWidget);
+    expect(find.byTooltip('显示密码'), findsNWidgets(2));
+    expect(find.widgetWithText(ui.Button, '创建账号'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Show password').first);
+    await tester.tap(find.byTooltip('显示密码').first);
     await tester.pump();
 
-    expect(find.byTooltip('Hide password'), findsOneWidget);
-    expect(find.byTooltip('Show password'), findsOneWidget);
+    expect(find.byTooltip('隐藏密码'), findsOneWidget);
+    expect(find.byTooltip('显示密码'), findsOneWidget);
   });
 
   testWidgets('submitting empty form surfaces inline error', (
@@ -823,10 +842,10 @@ void main() {
     await tester.pumpWidget(GangApp(tokenStore: _MemoryTokenStore()));
     await tester.pump();
 
-    await tester.tap(find.widgetWithText(ui.Button, 'Login'));
+    await tester.tap(find.widgetWithText(ui.Button, '登录'));
     await tester.pump();
 
-    expect(find.text('Enter your credentials to continue.'), findsOneWidget);
+    expect(find.text('请输入账号和密码后继续。'), findsOneWidget);
   });
 
   testWidgets('button lays out with automatic width in a row', (
@@ -2023,7 +2042,10 @@ void main() {
     );
     expect(
       surfaces.map((surface) => surface.borderColor),
-      containsAllInOrder([ui.UiColors.selectedBorder, ui.UiColors.dangerBorder]),
+      containsAllInOrder([
+        ui.UiColors.selectedBorder,
+        ui.UiColors.dangerBorder,
+      ]),
     );
     expect(surfaces.map((surface) => surface.enabled), everyElement(isTrue));
     expect(surfaces.map((surface) => surface.onPressed), everyElement(isNull));
@@ -2189,9 +2211,9 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byTooltip('Back'), findsOneWidget);
+    expect(find.byTooltip('返回'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Back'));
+    await tester.tap(find.byTooltip('返回'));
     await tester.pump();
 
     expect(closeCount, 1);
@@ -2269,6 +2291,7 @@ void _expectSubmitButtonFullWidth(
 AuthenticatedAppContext _homeTestAppContext({
   Future<void> Function()? onLogout,
   List<String>? requestedPaths,
+  List<Map<String, Object?>>? accountUpdates,
 }) {
   final user = CurrentUser(
     id: 'user-1',
@@ -2297,11 +2320,17 @@ AuthenticatedAppContext _homeTestAppContext({
     apiBaseUrl: 'http://localhost:3000',
     accessTokenProvider: ({bool forceRefresh = false}) async => 'access-token',
     logout: onLogout ?? () async {},
-    api: _roomsApi(requestedPaths: requestedPaths),
+    api: _roomsApi(
+      requestedPaths: requestedPaths,
+      accountUpdates: accountUpdates,
+    ),
   );
 }
 
-GangApi _roomsApi({List<String>? requestedPaths}) {
+GangApi _roomsApi({
+  List<String>? requestedPaths,
+  List<Map<String, Object?>>? accountUpdates,
+}) {
   return GangApiClient(
     baseUrl: 'http://example.test/api/v1',
     accessTokenProvider: ({bool forceRefresh = false}) async => 'access-token',
@@ -2309,6 +2338,14 @@ GangApi _roomsApi({List<String>? requestedPaths}) {
       requestedPaths?.add(request.url.path);
       if (request.url.path == '/api/v1/rooms') {
         return _jsonResponse({'rooms': _serverListJson});
+      }
+      if (request.url.path == '/api/v1/users/me/account') {
+        final body =
+            jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>;
+        accountUpdates?.add(body);
+        return _jsonResponse({
+          'user': {..._currentUserJson, ...body},
+        });
       }
       if (request.url.path == '/api/v1/rooms/server-alpha') {
         if (request.method == 'PATCH') {
@@ -2545,7 +2582,8 @@ final _currentUserJson = {
   'default_avatar_key': 'blue-3',
   'is_superuser': false,
   'created_at': '2026-01-01T00:00:00Z',
-  'status': 'Online',
+  'status': '在线',
+  'language': 'zh-Hans',
 };
 
 Map<String, Object?> _roomDetailJson({

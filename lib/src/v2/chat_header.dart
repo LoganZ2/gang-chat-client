@@ -235,9 +235,9 @@ String _roomMeta({
 }) {
   final parts = <String>[];
   final members = memberCount ?? 0;
-  if (members > 0) parts.add('$members 成员');
+  if (members > 0) parts.add('$members 名成员');
   final online = onlineMemberCount ?? 0;
-  if (online > 0) parts.add('$online 在线');
+  if (online > 0) parts.add('$online 人在线');
   final live = liveParticipantCount ?? 0;
   if (live > 0) parts.add('$live 直播中');
   return parts.isEmpty ? '就绪' : parts.join(' - ');

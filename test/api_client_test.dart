@@ -765,6 +765,45 @@ void main() {
     api.close();
   });
 
+  test('updateAccount sends language preference and parses it', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'PATCH');
+        expect(request.url.path, '/api/v1/users/me/account');
+        expect(request.headers['authorization'], 'Bearer token');
+        expect(jsonDecode(request.body) as Map<String, Object?>, {
+          'language': 'en',
+        });
+        return http.Response(
+          jsonEncode({
+            'user': {
+              'id': 'user_1',
+              'uid': '1000001',
+              'username': 'alice',
+              'display_name': 'Alice',
+              'bio': '',
+              'gender': 'secret',
+              'email': 'alice@example.test',
+              'email_public': false,
+              'phone_number_public': false,
+              'avatar_url': null,
+              'default_avatar_key': 'blue-3',
+              'language': 'en',
+            },
+          }),
+          200,
+        );
+      }),
+    );
+
+    final user = await api.updateAccount(language: 'en');
+
+    expect(user.language, 'en');
+    api.close();
+  });
+
   test('uploadImageAsset posts multipart image data', () async {
     final api = GangApiClient(
       baseUrl: 'http://example.test/api/v1',

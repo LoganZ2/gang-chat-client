@@ -13,8 +13,9 @@ void main() {
         emailPublic: false,
         phoneNumber: '',
         phoneNumberPublic: false,
+        language: defaultUserLanguage,
       ).error,
-      'Username 不能为空',
+      '用户名不能为空',
     );
     expect(
       accountUpdateDraftFromForm(
@@ -24,6 +25,7 @@ void main() {
         emailPublic: false,
         phoneNumber: '',
         phoneNumberPublic: false,
+        language: defaultUserLanguage,
       ).error,
       '邮箱不能为空',
     );
@@ -37,6 +39,7 @@ void main() {
       emailPublic: true,
       phoneNumber: ' 123 ',
       phoneNumberPublic: false,
+      language: 'zh-Hant',
     );
 
     expect(draft.error, isNull);
@@ -46,6 +49,31 @@ void main() {
     expect(draft.emailPublic, true);
     expect(draft.phoneNumber, '123');
     expect(draft.phoneNumberPublic, isNull);
+    expect(draft.language, 'zh-Hant');
+  });
+
+  test('preferencesUpdateDraftFromForm returns language changes only', () {
+    expect(
+      preferencesUpdateDraftFromForm(
+        user: _user(language: 'zh-Hans'),
+        language: 'zh-Hans',
+      ).noChanges,
+      isTrue,
+    );
+
+    final draft = preferencesUpdateDraftFromForm(
+      user: _user(username: 'dirty', email: 'dirty@example.test'),
+      language: 'en',
+    );
+
+    expect(draft.error, isNull);
+    expect(draft.noChanges, isFalse);
+    expect(draft.username, isNull);
+    expect(draft.email, isNull);
+    expect(draft.emailPublic, isNull);
+    expect(draft.phoneNumber, isNull);
+    expect(draft.phoneNumberPublic, isNull);
+    expect(draft.language, 'en');
   });
 
   test(
@@ -91,6 +119,7 @@ void main() {
         emailPublic: false,
         phoneNumber: '',
         phoneNumberPublic: false,
+        language: defaultUserLanguage,
       ).noChanges,
       isTrue,
     );
@@ -301,6 +330,12 @@ void main() {
       savingProfile: false,
       accountError: null,
     );
+    final preferencesPatch = accountFormSaveNoChanges(
+      target: AccountFormSaveTarget.preferences,
+      savingAccount: true,
+      savingProfile: false,
+      accountError: null,
+    );
 
     expect(accountPatch.savingAccount, isFalse);
     expect(accountPatch.savingProfile, isTrue);
@@ -310,6 +345,9 @@ void main() {
     expect(profilePatch.savingProfile, isFalse);
     expect(profilePatch.accountError, isNull);
     expect(profilePatch.notice, '没有用户资料变更');
+    expect(preferencesPatch.savingAccount, isTrue);
+    expect(preferencesPatch.savingProfile, isFalse);
+    expect(preferencesPatch.notice, '没有偏好设置变更');
   });
 
   test('accountFormSaveStarted sets only the target busy flag', () {
@@ -323,6 +361,11 @@ void main() {
       savingAccount: true,
       savingProfile: false,
     );
+    final preferencesPatch = accountFormSaveStarted(
+      target: AccountFormSaveTarget.preferences,
+      savingAccount: false,
+      savingProfile: true,
+    );
 
     expect(accountPatch.savingAccount, isTrue);
     expect(accountPatch.savingProfile, isTrue);
@@ -332,6 +375,8 @@ void main() {
     expect(profilePatch.savingProfile, isTrue);
     expect(profilePatch.accountError, isNull);
     expect(profilePatch.notice, isNull);
+    expect(preferencesPatch.savingAccount, isTrue);
+    expect(preferencesPatch.savingProfile, isTrue);
   });
 
   test('accountFormSaveCancelled clears only the target busy flag', () {
@@ -374,6 +419,11 @@ void main() {
       savingAccount: false,
       savingProfile: true,
     );
+    final preferencesPatch = accountFormSaveSucceeded(
+      target: AccountFormSaveTarget.preferences,
+      savingAccount: true,
+      savingProfile: false,
+    );
 
     expect(accountPatch.savingAccount, isFalse);
     expect(accountPatch.savingProfile, isFalse);
@@ -383,6 +433,9 @@ void main() {
     expect(profilePatch.savingProfile, isFalse);
     expect(profilePatch.accountError, isNull);
     expect(profilePatch.notice, '用户资料已保存');
+    expect(preferencesPatch.savingAccount, isFalse);
+    expect(preferencesPatch.savingProfile, isFalse);
+    expect(preferencesPatch.notice, '偏好设置已保存');
   });
 
   test('accountPresetAvatarSelected clears pending upload state', () {
@@ -531,6 +584,7 @@ CurrentUser _user({
   String? phoneNumber,
   bool phoneNumberPublic = false,
   String defaultAvatarKey = 'blue-3',
+  String language = defaultUserLanguage,
 }) {
   return CurrentUser(
     id: 'user_1',
@@ -546,6 +600,7 @@ CurrentUser _user({
     avatarUrl: null,
     defaultAvatarKey: defaultAvatarKey,
     isSuperuser: false,
+    language: language,
     createdAt: DateTime.utc(2026, 6, 4),
   );
 }

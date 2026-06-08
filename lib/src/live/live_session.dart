@@ -546,7 +546,7 @@ class LiveSession extends ChangeNotifier {
         screenSources.add(
           ScreenSource(
             id: s.id,
-            name: name.isEmpty ? (isWindow ? 'Window' : 'Screen') : name,
+            name: name.isEmpty ? (isWindow ? '窗口' : '屏幕') : name,
             thumbnail: thumbnail,
             isWindow: isWindow,
             thumbnailKey: thumbnailKey,
@@ -778,7 +778,7 @@ class LiveSessionConnectException implements Exception {
 
   @override
   String toString() {
-    return 'Could not connect to LiveKit at $url: ${_describeError(cause)}';
+    return '无法连接到 $url 的 LiveKit：${_describeError(cause)}';
   }
 }
 

@@ -13,7 +13,7 @@ class DownloadCancelledException implements Exception {
   const DownloadCancelledException();
 
   @override
-  String toString() => 'Download cancelled';
+  String toString() => '下载已取消';
 }
 
 class FileDownloadStatePatch {
@@ -192,7 +192,7 @@ class FileDownloadsController {
       final request = http.Request('GET', uri);
       final response = await client.send(request);
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw StateError('Download failed (${response.statusCode})');
+        throw StateError('下载失败 (${response.statusCode})');
       }
 
       final totalBytes = response.contentLength ?? transfer.totalBytes;

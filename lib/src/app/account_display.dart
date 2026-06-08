@@ -85,6 +85,14 @@ String accountBindingsSavedNotice() {
   return '账号绑定已保存';
 }
 
+String preferencesNoChangesNotice() {
+  return '没有偏好设置变更';
+}
+
+String preferencesSavedNotice() {
+  return '偏好设置已保存';
+}
+
 String profileNoChangesNotice() {
   return '没有用户资料变更';
 }
@@ -162,13 +170,13 @@ String sessionStateText(UserSession session, {DateTime? now}) {
 
 String sessionDeviceLabel(UserSession session) {
   final userAgent = session.userAgent?.trim();
-  if (userAgent == null || userAgent.isEmpty) return 'Unknown device';
+  if (userAgent == null || userAgent.isEmpty) return '未知设备';
   return userAgent;
 }
 
 String sessionIpAddressLabel(UserSession session) {
   final ipAddress = session.ipAddress?.trim();
-  if (ipAddress == null || ipAddress.isEmpty) return 'Unknown IP';
+  if (ipAddress == null || ipAddress.isEmpty) return '未知 IP';
   return ipAddress;
 }
 

@@ -12,7 +12,7 @@ void main() {
     );
 
     expect(result.request, isNull);
-    expect(result.error, 'Enter your credentials to continue.');
+    expect(result.error, '请输入账号和密码后继续。');
   });
 
   test('authRequestFromForm builds trimmed login request', () {
@@ -35,7 +35,7 @@ void main() {
         login: 'a@example.test',
         password: 'secret',
       ).error,
-      'Username is required.',
+      '用户名不能为空。',
     );
     expect(
       authRequestFromForm(
@@ -45,7 +45,7 @@ void main() {
         password: 'secret',
         confirmPassword: 'different',
       ).error,
-      'Passwords do not match.',
+      '两次输入的密码不一致。',
     );
   });
 
@@ -78,7 +78,7 @@ void main() {
     final failed = authSubmitFailed(StateError('offline'));
 
     expect(failed.busy, isFalse);
-    expect(failed.error, 'Cannot reach the server: Bad state: offline');
+    expect(failed.error, '无法连接服务器：Bad state: offline');
   });
 
   test('auth submit failure uses auth exception messages directly', () {

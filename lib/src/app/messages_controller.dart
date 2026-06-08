@@ -224,7 +224,7 @@ class MessagesController {
 
     final transfer = pending.transfer;
     final bytes = await readBytes();
-    if (bytes.isEmpty) throw StateError('File is empty');
+    if (bytes.isEmpty) throw StateError('文件为空');
     if (transfer.cancelled) throw const UploadCancelledException();
 
     final asset = await uploadFileAsset(

@@ -19,6 +19,11 @@ class _SettingsNavigation extends StatelessWidget {
           icon: Icons.badge_outlined,
         ),
         Segment(
+          value: SettingsSection.preferences,
+          label: '偏好设置',
+          icon: Icons.tune_outlined,
+        ),
+        Segment(
           value: SettingsSection.security,
           label: '隐私和安全',
           icon: Icons.shield_outlined,
@@ -33,36 +38,6 @@ class _SettingsNavigation extends StatelessWidget {
           label: '我的表情包',
           icon: Icons.emoji_emotions_outlined,
         ),
-      ],
-    );
-  }
-}
-
-class _ContentTitle extends StatelessWidget {
-  const _ContentTitle({required this.title, required this.loading});
-
-  final String title;
-  final bool loading;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            title,
-            style: const TextStyle(
-              color: _textPrimary,
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-        if (loading)
-          const SizedBox.square(
-            dimension: 18,
-            child: CircularProgressIndicator(strokeWidth: 2, color: _cyan),
-          ),
       ],
     );
   }

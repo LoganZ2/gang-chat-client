@@ -62,7 +62,7 @@ class ChatComposer extends StatefulWidget {
     super.key,
     required this.actions,
     this.controller,
-    this.hintText = 'Message',
+    this.hintText = '输入消息',
     this.minLines = 1,
     this.maxLines = 5,
     this.onSubmitted,

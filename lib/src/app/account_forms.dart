@@ -1,7 +1,7 @@
 import '../protocol/models.dart';
 import 'account_display.dart';
 
-enum AccountFormSaveTarget { account, profile }
+enum AccountFormSaveTarget { account, profile, preferences }
 
 enum AccountAvatarErrorTarget { account, sticker }
 
@@ -14,6 +14,7 @@ class AccountUpdateDraft {
     this.emailPublic,
     this.phoneNumber,
     this.phoneNumberPublic,
+    this.language,
     this.error,
     this.noChanges = false,
   });
@@ -28,6 +29,7 @@ class AccountUpdateDraft {
     this.emailPublic,
     this.phoneNumber,
     this.phoneNumberPublic,
+    this.language,
   }) : error = null,
        noChanges = false;
 
@@ -36,6 +38,7 @@ class AccountUpdateDraft {
   final bool? emailPublic;
   final String? phoneNumber;
   final bool? phoneNumberPublic;
+  final String? language;
   final String? error;
   final bool noChanges;
 
@@ -575,12 +578,13 @@ AccountUpdateDraft accountUpdateDraftFromForm({
   required bool emailPublic,
   required String phoneNumber,
   required bool phoneNumberPublic,
+  required String language,
 }) {
   final nextUsername = username.trim();
   final nextEmailValue = email.trim();
   final nextPhoneValue = phoneNumber.trim();
   if (nextUsername.isEmpty) {
-    return const AccountUpdateDraft.invalid('Username 不能为空');
+    return const AccountUpdateDraft.invalid('用户名不能为空');
   }
   if (nextEmailValue.isEmpty) {
     return const AccountUpdateDraft.invalid('邮箱不能为空');
@@ -599,12 +603,18 @@ AccountUpdateDraft accountUpdateDraftFromForm({
   final changedPhonePublic = phoneNumberPublic == user.phoneNumberPublic
       ? null
       : phoneNumberPublic;
+  final nextLanguage = normalizeAccountLanguage(language);
+  final changedLanguage =
+      nextLanguage == normalizeAccountLanguage(user.language)
+      ? null
+      : nextLanguage;
 
   if (changedUsername == null &&
       changedEmail == null &&
       changedEmailPublic == null &&
       changedPhone == null &&
-      changedPhonePublic == null) {
+      changedPhonePublic == null &&
+      changedLanguage == null) {
     return const AccountUpdateDraft.noChanges();
   }
 
@@ -614,7 +624,28 @@ AccountUpdateDraft accountUpdateDraftFromForm({
     emailPublic: changedEmailPublic,
     phoneNumber: changedPhone,
     phoneNumberPublic: changedPhonePublic,
+    language: changedLanguage,
   );
+}
+
+AccountUpdateDraft preferencesUpdateDraftFromForm({
+  required CurrentUser user,
+  required String language,
+}) {
+  final nextLanguage = normalizeAccountLanguage(language);
+  if (nextLanguage == normalizeAccountLanguage(user.language)) {
+    return const AccountUpdateDraft.noChanges();
+  }
+  return AccountUpdateDraft.valid(language: nextLanguage);
+}
+
+String normalizeAccountLanguage(String language) {
+  return switch (language.trim()) {
+    'zh-Hans' => 'zh-Hans',
+    'zh-Hant' => 'zh-Hant',
+    'en' => 'en',
+    _ => defaultUserLanguage,
+  };
 }
 
 ProfileUpdateDraft profileUpdateDraftFromForm({
@@ -687,7 +718,7 @@ bool _savingAccountForTarget(
   required bool savingAccount,
   required bool targetSaving,
 }) {
-  return target == AccountFormSaveTarget.account ? targetSaving : savingAccount;
+  return target == AccountFormSaveTarget.profile ? savingAccount : targetSaving;
 }
 
 bool _savingProfileForTarget(
@@ -701,6 +732,7 @@ bool _savingProfileForTarget(
 String _accountFormNoChangesNotice(AccountFormSaveTarget target) {
   return switch (target) {
     AccountFormSaveTarget.account => accountNoBindingChangesNotice(),
+    AccountFormSaveTarget.preferences => preferencesNoChangesNotice(),
     AccountFormSaveTarget.profile => profileNoChangesNotice(),
   };
 }
@@ -708,6 +740,7 @@ String _accountFormNoChangesNotice(AccountFormSaveTarget target) {
 String _accountFormSavedNotice(AccountFormSaveTarget target) {
   return switch (target) {
     AccountFormSaveTarget.account => accountBindingsSavedNotice(),
+    AccountFormSaveTarget.preferences => preferencesSavedNotice(),
     AccountFormSaveTarget.profile => profileSavedNotice(),
   };
 }
