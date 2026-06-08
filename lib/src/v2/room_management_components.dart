@@ -23,21 +23,22 @@ class _RoomDialogShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (embedded) {
+      return SettingsScaffold(
+        icon: icon,
+        title: title,
+        headerAction: headerAction,
+        onBack: onClose,
+        body: child,
+      );
+    }
+
     final body = Padding(
       padding: const EdgeInsets.fromLTRB(22, 16, 22, 18),
       child: Column(
         children: [
           Row(
             children: [
-              if (embedded) ...[
-                ButtonIcon(
-                  tooltip: '返回',
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: onClose,
-                  size: 38,
-                ),
-                const SizedBox(width: 16),
-              ],
               Icon(icon, color: UiColors.accent, size: 19),
               const SizedBox(width: 8),
               Expanded(
@@ -51,15 +52,13 @@ class _RoomDialogShell extends StatelessWidget {
                 ),
               ),
               ?headerAction,
-              if (!embedded) ...[
-                if (headerAction != null) const SizedBox(width: 4),
-                ButtonIcon(
-                  tooltip: '关闭',
-                  icon: const Icon(Icons.close),
-                  onPressed: onClose,
-                  size: 38,
-                ),
-              ],
+              if (headerAction != null) const SizedBox(width: 4),
+              ButtonIcon(
+                tooltip: '关闭',
+                icon: const Icon(Icons.close),
+                onPressed: onClose,
+                size: 38,
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -67,10 +66,6 @@ class _RoomDialogShell extends StatelessWidget {
         ],
       ),
     );
-
-    if (embedded) {
-      return ColoredBox(color: UiColors.surfaceLow, child: body);
-    }
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -84,53 +79,6 @@ class _RoomDialogShell extends StatelessWidget {
             border: Border.all(color: UiColors.border),
           ),
           child: body,
-        ),
-      ),
-    );
-  }
-}
-
-class _SectionBox extends StatelessWidget {
-  const _SectionBox({
-    required this.title,
-    required this.child,
-    this.danger = false,
-  });
-
-  final String title;
-  final Widget child;
-  final bool danger;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(_sectionRadius),
-        border: Border.all(
-          color: danger ? UiColors.dangerBorder : UiColors.border,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: UiTypography.label.copyWith(
-                      color: danger ? UiColors.danger : UiColors.textMuted,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            child,
-          ],
         ),
       ),
     );

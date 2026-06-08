@@ -309,121 +309,107 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
       maxHeight: _dialogMaxHeight,
       embedded: widget.embedded,
       onClose: _close,
-      child: ListView(
-        padding: EdgeInsets.zero,
+      child: SettingsList(
         children: [
-          if (_notice != null) ...[
+          if (_notice != null)
             _NoticeStrip(message: _notice!, icon: Icons.check_circle_outline),
-            const SizedBox(height: 10),
-          ],
-          if (_error != null) ...[
-            _NoticeStrip(message: _error!, danger: true),
-            const SizedBox(height: 10),
-          ],
-          _SectionBox(
+          if (_error != null) _NoticeStrip(message: _error!, danger: true),
+          SettingsCard(
             title: '房间信息',
-            child: Column(
+            children: [
+              AvatarPicker(
+                label: '房间头像',
+                displayName: _nameController.text.trim().isEmpty
+                    ? room_display.roomDisplayName(_room)
+                    : _nameController.text,
+                imageUrl: _avatarPreviewUrl(AppConfigScope.of(context)),
+                defaultAvatarKey: _defaultAvatarKey,
+                usingPreset: _usingPresetAvatar,
+                uploading: _uploadingAvatar,
+                enabled: _canManageRoom && !_saving,
+                onUpload: _pickAvatar,
+                onPresetSelected: _selectPreset,
+                presetKeys: const ['room-1', ...kAvatarPresetKeys],
+              ),
+              Input(
+                controller: _nameController,
+                hintText: '房间名称',
+                enabled: _canManageRoom && !_saving,
+                prefixIcon: Icons.tag_outlined,
+              ),
+              Input(
+                controller: _descriptionController,
+                hintText: '简介',
+                enabled: _canManageRoom && !_saving,
+                prefixIcon: Icons.notes_outlined,
+                maxLines: null,
+              ),
+              _LabeledSegmented<String>(
+                label: '可见性',
+                value: _visibility,
+                enabled: _canManageRoom && !_saving,
+                segments: const [
+                  Segment(value: 'private', label: '私密'),
+                  Segment(value: 'public', label: '公开'),
+                ],
+                onChanged: (value) => setState(() => _visibility = value),
+              ),
+              _LabeledSegmented<String>(
+                label: '加入方式',
+                value: _joinPolicy,
+                enabled: _canManageRoom && !_saving,
+                segments: const [
+                  Segment(value: 'approval_required', label: '需审批'),
+                  Segment(value: 'open', label: '开放'),
+                  Segment(value: 'closed', label: '关闭'),
+                ],
+                onChanged: (value) => setState(() => _joinPolicy = value),
+              ),
+              _ToggleRow(
+                label: 'AI 语音播报',
+                value: _aiVoiceAnnouncementsEnabled,
+                enabled: _canManageRoom && !_saving,
+                onChanged: (value) =>
+                    setState(() => _aiVoiceAnnouncementsEnabled = value),
+              ),
+              Button(
+                width: double.infinity,
+                tone: ButtonTone.primary,
+                loading: _saving,
+                onPressed: _canManageRoom ? _save : null,
+                icon: const Icon(Icons.save_outlined),
+                child: const Text('保存房间设置'),
+              ),
+            ],
+          ),
+          SettingsCard(
+            title: '离开房间',
+            children: [
+              Button(
+                width: double.infinity,
+                tone: ButtonTone.danger,
+                loading: _leaving,
+                onPressed: _leaveRoom,
+                icon: const Icon(Icons.logout),
+                child: const Text('离开房间'),
+              ),
+            ],
+          ),
+          if (_canDeleteRoom)
+            SettingsCard(
+              title: '删除房间',
+              danger: true,
               children: [
-                const SizedBox(height: 6),
-                AvatarPicker(
-                  label: '房间头像',
-                  displayName: _nameController.text.trim().isEmpty
-                      ? room_display.roomDisplayName(_room)
-                      : _nameController.text,
-                  imageUrl: _avatarPreviewUrl(AppConfigScope.of(context)),
-                  defaultAvatarKey: _defaultAvatarKey,
-                  usingPreset: _usingPresetAvatar,
-                  uploading: _uploadingAvatar,
-                  enabled: _canManageRoom && !_saving,
-                  onUpload: _pickAvatar,
-                  onPresetSelected: _selectPreset,
-                  presetKeys: const ['room-1', ...kAvatarPresetKeys],
-                ),
-                const SizedBox(height: 14),
-                Input(
-                  controller: _nameController,
-                  hintText: '房间名称',
-                  enabled: _canManageRoom && !_saving,
-                  prefixIcon: Icons.tag_outlined,
-                ),
-                const SizedBox(height: 10),
-                Input(
-                  controller: _descriptionController,
-                  hintText: '简介',
-                  enabled: _canManageRoom && !_saving,
-                  prefixIcon: Icons.notes_outlined,
-                  maxLines: null,
-                ),
-                const SizedBox(height: 12),
-                _LabeledSegmented<String>(
-                  label: '可见性',
-                  value: _visibility,
-                  enabled: _canManageRoom && !_saving,
-                  segments: const [
-                    Segment(value: 'private', label: '私密'),
-                    Segment(value: 'public', label: '公开'),
-                  ],
-                  onChanged: (value) => setState(() => _visibility = value),
-                ),
-                const SizedBox(height: 12),
-                _LabeledSegmented<String>(
-                  label: '加入方式',
-                  value: _joinPolicy,
-                  enabled: _canManageRoom && !_saving,
-                  segments: const [
-                    Segment(value: 'approval_required', label: '需审批'),
-                    Segment(value: 'open', label: '开放'),
-                    Segment(value: 'closed', label: '关闭'),
-                  ],
-                  onChanged: (value) => setState(() => _joinPolicy = value),
-                ),
-                const SizedBox(height: 12),
-                _ToggleRow(
-                  label: 'AI 语音播报',
-                  value: _aiVoiceAnnouncementsEnabled,
-                  enabled: _canManageRoom && !_saving,
-                  onChanged: (value) =>
-                      setState(() => _aiVoiceAnnouncementsEnabled = value),
-                ),
-                const SizedBox(height: 14),
                 Button(
                   width: double.infinity,
-                  tone: ButtonTone.primary,
-                  loading: _saving,
-                  onPressed: _canManageRoom ? _save : null,
-                  icon: const Icon(Icons.save_outlined),
-                  child: const Text('保存房间设置'),
+                  tone: ButtonTone.danger,
+                  loading: _deleting,
+                  onPressed: _deleteRoom,
+                  icon: const Icon(Icons.delete_forever_outlined),
+                  child: const Text('删除房间'),
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: 14),
-          _SectionBox(
-            title: '离开房间',
-            child: Button(
-              width: double.infinity,
-              tone: ButtonTone.danger,
-              loading: _leaving,
-              onPressed: _leaveRoom,
-              icon: const Icon(Icons.logout),
-              child: const Text('离开房间'),
-            ),
-          ),
-          if (_canDeleteRoom) ...[
-            const SizedBox(height: 14),
-            _SectionBox(
-              title: '删除房间',
-              danger: true,
-              child: Button(
-                width: double.infinity,
-                tone: ButtonTone.danger,
-                loading: _deleting,
-                onPressed: _deleteRoom,
-                icon: const Icon(Icons.delete_forever_outlined),
-                child: const Text('删除房间'),
-              ),
-            ),
-          ],
         ],
       ),
     );

@@ -2859,76 +2859,24 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _primaryDarkLow,
-      body: Column(
-        children: [
-          Container(
-            height: titleBarHeight + 64,
-            padding: const EdgeInsets.fromLTRB(22, titleBarHeight + 16, 22, 0),
-            color: _primaryDarkLow,
-            child: Row(
-              children: [
-                if (widget.onClose != null || !widget.isSubWindow) ...[
-                  ButtonIcon(
-                    tooltip: '返回',
-                    onPressed:
-                        widget.onClose ?? () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.arrow_back),
-                    size: 38,
-                  ),
-                  const SizedBox(width: 16),
-                ],
-                const Icon(Icons.settings_outlined, color: _cyan, size: 19),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '设置 · $_activeTitle',
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: _textPrimary,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  width: 34,
-                  child: PressableSurface(
-                    onPressed: _isRefreshing ? null : _refreshActiveSection,
-                    tooltip: '刷新设置',
-                    enabled: !_isRefreshing,
-                    height: 34,
-                    padding: EdgeInsets.zero,
-                    backgroundColor: _primaryDarkLow,
-                    selectedBackgroundColor: _primaryDarkLow,
-                    pressedBackgroundColor: _primaryDark,
-                    borderColor: _primaryDarkLow,
-                    selectedBorderColor: _primaryDarkLow,
-                    hoverLift: 3,
-                    pressDepth: 3,
-                    baseDepth: 5,
-                    child: IconTheme.merge(
-                      data: const IconThemeData(
-                        color: _textSecondary,
-                        size: 16,
-                      ),
-                      child: const Center(child: Icon(Icons.refresh)),
-                    ),
-                  ),
-                ),
-                // Pull the refresh button further inward from the edge.
-                const SizedBox(width: 16),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
-            child: _SettingsNavigation(
-              selected: _section,
-              onChanged: _selectSection,
-            ),
-          ),
-          Expanded(child: _buildSectionContent()),
-        ],
+      body: SettingsScaffold(
+        icon: Icons.settings_outlined,
+        title: '设置 · $_activeTitle',
+        onBack: widget.onClose != null || !widget.isSubWindow
+            ? (widget.onClose ?? () => Navigator.of(context).pop())
+            : null,
+        headerAction: ButtonIcon(
+          tooltip: '刷新设置',
+          onPressed: _isRefreshing ? null : _refreshActiveSection,
+          icon: const Icon(Icons.refresh),
+          size: 38,
+          loading: _isRefreshing,
+        ),
+        pinned: _SettingsNavigation(
+          selected: _section,
+          onChanged: _selectSection,
+        ),
+        body: _buildSectionContent(),
       ),
     );
   }

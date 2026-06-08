@@ -323,20 +323,14 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
               tooltip: '刷新',
               icon: const Icon(Icons.refresh),
               onPressed: _load,
-              size: 32,
+              size: 38,
             )
           : null,
-      child: ListView(
-        padding: EdgeInsets.zero,
+      child: SettingsList(
         children: [
-          if (_notice != null) ...[
+          if (_notice != null)
             _NoticeStrip(message: _notice!, icon: Icons.check_circle_outline),
-            const SizedBox(height: 10),
-          ],
-          if (_error != null) ...[
-            _NoticeStrip(message: _error!, danger: true),
-            const SizedBox(height: 10),
-          ],
+          if (_error != null) _NoticeStrip(message: _error!, danger: true),
           _MemberFilters(
             controller: _memberSearchController,
             presenceFilter: _presenceFilter,
@@ -345,9 +339,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
                 setState(() => _presenceFilter = value),
             onRoleChanged: (value) => setState(() => _roleFilter = value),
           ),
-          const SizedBox(height: 12),
           SizedBox(height: 220, child: _buildMemberList()),
-          const SizedBox(height: 12),
           _InviteSection(
             controller: _inviteSearchController,
             query: _inviteQuery,
@@ -358,8 +350,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
             error: _inviteError,
             onInvite: _invite,
           ),
-          if (_canReviewRequests) ...[
-            const SizedBox(height: 12),
+          if (_canReviewRequests)
             _JoinRequestsSection(
               requests: _requests,
               busyRequestIds: _busyRequestIds,
@@ -367,7 +358,6 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
               onApprove: (request) => _reviewRequest(request, true),
               onReject: (request) => _reviewRequest(request, false),
             ),
-          ],
         ],
       ),
     );

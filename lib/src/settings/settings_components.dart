@@ -83,39 +83,13 @@ class _SettingsGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: _primaryDarkLow,
-        borderRadius: BorderRadius.circular(UiRadii.md),
-        border: Border.all(
-          color: danger ? const Color(0xFF3A2A2E) : _borderColor,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      color: danger ? _danger : _textPrimary,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-                ?trailing,
-              ],
-            ),
-            const SizedBox(height: 14),
-            ...children,
-          ],
-        ),
-      ),
+    // 复用统一的分区模版;children 自带手写间距,故关闭自动间距。
+    return SettingsCard(
+      title: title,
+      trailing: trailing,
+      danger: danger,
+      spacing: 0,
+      children: children,
     );
   }
 }

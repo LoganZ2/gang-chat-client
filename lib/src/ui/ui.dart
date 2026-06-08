@@ -11,6 +11,7 @@ export 'input.dart';
 export 'member_presence_icons.dart';
 export 'navigation.dart';
 export 'segmented_control.dart';
+export 'settings_scaffold.dart';
 export 'sidebar.dart';
 export 'switch.dart';
 export 'surface.dart';

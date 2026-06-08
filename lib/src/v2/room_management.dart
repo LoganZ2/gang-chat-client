@@ -22,7 +22,6 @@ part 'room_management_components.dart';
 const _dialogMaxWidth = 680.0;
 const _dialogMaxHeight = 700.0;
 const _panelRadius = UiRadii.lg;
-const _sectionRadius = UiRadii.md;
 const _rowRadius = UiRadii.md;
 
 enum RoomManagementResultKind { updated, left, deleted }

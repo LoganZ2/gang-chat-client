@@ -209,46 +209,50 @@ class _InviteSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final memberIds = members.map((member) => member.user.id).toSet();
-    return _SectionBox(
+    return SettingsCard(
       title: '邀请成员',
-      child: Column(
-        children: [
-          Input(
-            controller: controller,
-            hintText: '按用户名、昵称或 UID 搜索',
-            prefixIcon: Icons.person_add_alt_1,
-          ),
-          if (error != null) ...[
-            const SizedBox(height: 8),
-            _NoticeStrip(message: error!, danger: true),
-          ],
-          if (searching) ...[
-            const SizedBox(height: 10),
-            const LinearProgressIndicator(
-              minHeight: 2,
-              color: UiColors.accent,
-              backgroundColor: UiColors.surfacePressed,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Input(
+              controller: controller,
+              hintText: '按用户名、昵称或 UID 搜索',
+              prefixIcon: Icons.person_add_alt_1,
             ),
-          ] else if (query.length >= 2) ...[
-            const SizedBox(height: 8),
-            if (results.isEmpty)
-              Text(
-                '未找到用户',
-                style: UiTypography.label.copyWith(color: UiColors.textMuted),
-              )
-            else
-              for (final user in results.take(4)) ...[
-                _InviteUserRow(
-                  user: user,
-                  alreadyMember: memberIds.contains(user.id),
-                  busy: busyUserIds.contains(user.id),
-                  onInvite: () => onInvite(user),
-                ),
-                if (user != results.take(4).last) const SizedBox(height: 6),
-              ],
+            if (error != null) ...[
+              const SizedBox(height: 8),
+              _NoticeStrip(message: error!, danger: true),
+            ],
+            if (searching) ...[
+              const SizedBox(height: 10),
+              const LinearProgressIndicator(
+                minHeight: 2,
+                color: UiColors.accent,
+                backgroundColor: UiColors.surfacePressed,
+              ),
+            ] else if (query.length >= 2) ...[
+              const SizedBox(height: 8),
+              if (results.isEmpty)
+                Text(
+                  '未找到用户',
+                  style: UiTypography.label.copyWith(color: UiColors.textMuted),
+                )
+              else
+                for (final user in results.take(4)) ...[
+                  _InviteUserRow(
+                    user: user,
+                    alreadyMember: memberIds.contains(user.id),
+                    busy: busyUserIds.contains(user.id),
+                    onInvite: () => onInvite(user),
+                  ),
+                  if (user != results.take(4).last)
+                    const SizedBox(height: 6),
+                ],
+            ],
           ],
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -317,34 +321,39 @@ class _JoinRequestsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _SectionBox(
+    return SettingsCard(
       title: '加入申请',
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 64),
-        child: Column(
-          children: [
-            if (error != null) _NoticeStrip(message: error!, danger: true),
-            if (requests.isEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 12, bottom: 6),
-                child: Text(
-                  '暂无待处理申请',
-                  style: UiTypography.label.copyWith(color: UiColors.textMuted),
-                ),
-              )
-            else
-              for (final request in requests) ...[
-                _JoinRequestRow(
-                  request: request,
-                  busy: busyRequestIds.contains(request.id),
-                  onApprove: () => onApprove(request),
-                  onReject: () => onReject(request),
-                ),
-                if (request != requests.last) const SizedBox(height: 6),
-              ],
-          ],
+      children: [
+        ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 64),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (error != null) _NoticeStrip(message: error!, danger: true),
+              if (requests.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12, bottom: 6),
+                  child: Text(
+                    '暂无待处理申请',
+                    style: UiTypography.label.copyWith(
+                      color: UiColors.textMuted,
+                    ),
+                  ),
+                )
+              else
+                for (final request in requests) ...[
+                  _JoinRequestRow(
+                    request: request,
+                    busy: busyRequestIds.contains(request.id),
+                    onApprove: () => onApprove(request),
+                    onReject: () => onReject(request),
+                  ),
+                  if (request != requests.last) const SizedBox(height: 6),
+                ],
+            ],
+          ),
         ),
-      ),
+      ],
     );
   }
 }
