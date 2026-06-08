@@ -76,6 +76,37 @@ class DesktopWindowController {
     });
   }
 
+  Future<void> startDragging() {
+    return _configure(() => windowManager.startDragging());
+  }
+
+  Future<void> minimizeWindow() {
+    return _configure(() => windowManager.minimize());
+  }
+
+  Future<void> toggleMaximizeWindow() {
+    return _configure(() async {
+      if (await windowManager.isMaximized()) {
+        await windowManager.unmaximize();
+      } else {
+        await windowManager.maximize();
+      }
+    });
+  }
+
+  Future<bool> isMaximizedWindow() async {
+    if (!supportsWindowManagement) return false;
+    try {
+      return await windowManager.isMaximized();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> closeWindow() {
+    return _configure(() => windowManager.close());
+  }
+
   Future<void> lockAuthWindow({
     bool registering = false,
     bool moveWindow = true,
@@ -83,6 +114,7 @@ class DesktopWindowController {
     Size? size,
   }) {
     return _configure(() async {
+      await _setAuthTitleBar();
       final targetSize = size ?? _authWindowSize(registering);
       final alreadySized = await _isAuthWindowSized(targetSize);
       if (await windowManager.isFullScreen()) {
@@ -109,6 +141,7 @@ class DesktopWindowController {
 
   Future<void> restoreAppWindow() {
     return _configure(() async {
+      await _setAppTitleBar();
       await windowManager.setResizable(true);
       await _setWindowMaximizable(true);
       await _setWindowShadow(true);
@@ -193,6 +226,7 @@ class DesktopWindowController {
 
   Future<void> _prepareInitialWindow() {
     return _configure(() async {
+      await _setAuthTitleBar();
       await _setWindowMaximizable(false);
       await _setWindowShadow(true);
       await windowManager.setResizable(false);
@@ -211,6 +245,7 @@ class DesktopWindowController {
   /// completes.
   Future<void> _prepareAuthenticatedInitialWindow() {
     return _configure(() async {
+      await _setAppTitleBar();
       await windowManager.setResizable(true);
       await _setWindowMaximizable(true);
       await _setWindowShadow(true);
@@ -247,6 +282,23 @@ class DesktopWindowController {
   Future<void> _setWindowShadow(bool hasShadow) async {
     try {
       await windowManager.setHasShadow(hasShadow);
+    } catch (_) {}
+  }
+
+  Future<void> _setAuthTitleBar() {
+    return _setTitleBar(windowButtonVisibility: true);
+  }
+
+  Future<void> _setAppTitleBar() {
+    return _setTitleBar(windowButtonVisibility: !_useResponsiveAppWindow);
+  }
+
+  Future<void> _setTitleBar({required bool windowButtonVisibility}) async {
+    try {
+      await windowManager.setTitleBarStyle(
+        TitleBarStyle.hidden,
+        windowButtonVisibility: windowButtonVisibility,
+      );
     } catch (_) {}
   }
 

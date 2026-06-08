@@ -115,6 +115,7 @@ extension _HomeShellLayout on _HomeShellState {
       loading: _loadingServers,
       error: _serverLoadError,
       settingsActive: _settingsOpen,
+      includeWindowChromeOffset: false,
       onServerSelected: (server) =>
           _selectServer(server, openContent: openContentOnSelect),
       onOpenSettings: () => _toggleSettings(openContent: openContentOnSelect),
