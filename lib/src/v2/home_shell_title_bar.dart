@@ -7,7 +7,6 @@ const _homeTitleBarControlsWidth = 134.0;
 const _homeTitleBarControlWidth = 34.0;
 const _homeTitleBarControlHeight = 28.0;
 const _homeTitleBarControlGap = 6.0;
-const _macNativeControlsInset = 76.0;
 
 class _HomeTitleBar extends StatefulWidget {
   const _HomeTitleBar({required this.windowController});
@@ -98,16 +97,10 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
                   children: [
                     SizedBox(
                       width: brandWidth,
-                      child: SelectionContainer.disabled(
-                        child: _WindowDragRegion(
-                          windowController: widget.windowController,
-                          onDoubleTap: _toggleMaximize,
-                          child: _BrandLockup(
-                            leadingInset: nativeMacControls
-                                ? _macNativeControlsInset
-                                : 0,
-                          ),
-                        ),
+                      child: _WindowDragRegion(
+                        windowController: widget.windowController,
+                        onDoubleTap: _toggleMaximize,
+                        child: const SizedBox.expand(),
                       ),
                     ),
                     Expanded(
@@ -141,54 +134,6 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
             );
           },
         ),
-      ),
-    );
-  }
-}
-
-class _BrandLockup extends StatelessWidget {
-  const _BrandLockup({required this.leadingInset});
-
-  final double leadingInset;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(14 + leadingInset, 0, 14, 0),
-      child: Row(
-        children: [
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: UiColors.selected,
-              borderRadius: BorderRadius.circular(UiRadii.md),
-              border: Border.all(color: UiColors.accentBorder),
-            ),
-            child: const SizedBox.square(
-              dimension: 28,
-              child: Center(
-                child: Icon(
-                  Icons.forum_outlined,
-                  size: 17,
-                  color: UiColors.accent,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          const Expanded(
-            child: Text(
-              'Gang Chat',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: UiColors.text,
-                fontSize: 14,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 0,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

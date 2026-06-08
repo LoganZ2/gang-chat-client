@@ -207,7 +207,7 @@ void main() {
 
     expect(requestedPaths, contains('/api/v1/rooms'));
     expect(find.byType(ui.Sidebar), findsNothing);
-    expect(find.text('Gang Chat'), findsOneWidget);
+    expect(find.text('Gang Chat'), findsNothing);
     expect(find.byKey(const ValueKey('home-title-search')), findsOneWidget);
     expect(find.byTooltip('Minimize'), findsOneWidget);
     expect(find.byTooltip('Maximize'), findsOneWidget);
@@ -683,7 +683,7 @@ void main() {
       find.byKey(const ValueKey('home-title-search')),
     );
 
-    expect(find.text('Gang Chat'), findsOneWidget);
+    expect(find.text('Gang Chat'), findsNothing);
     expect(find.byTooltip('Minimize'), findsNothing);
     expect(find.byTooltip('Maximize'), findsNothing);
     expect(find.byTooltip('Close'), findsNothing);

@@ -4,6 +4,10 @@ import FlutterMacOS
 
 private let loginWindowSize = NSSize(width: 430, height: 256)
 private let resizeCursorEdgeWidth: CGFloat = 8
+// Logical height of the v2 Flutter title bar. The native traffic lights are
+// vertically centered within this band. Keep in sync with `_homeTitleBarHeight`
+// in lib/src/v2/home_shell_title_bar.dart.
+private let v2TitleBarHeight: CGFloat = 44
 private let screenThumbnailChannel = "gang_chat/screen_thumbnail"
 private let appBackground = NSColor(
   red: CGFloat(0x14) / 255.0,
@@ -35,7 +39,62 @@ class MainFlutterWindow: NSWindow {
     registerScreenThumbnailChannel(flutterViewController)
     RegisterGeneratedPlugins(registry: flutterViewController)
 
+    // AppKit re-pins the traffic lights to the top edge on resize and key
+    // changes, so re-center them on those events as well as once after setup.
+    let center = NotificationCenter.default
+    center.addObserver(
+      self,
+      selector: #selector(repositionTrafficLights),
+      name: NSWindow.didResizeNotification,
+      object: self
+    )
+    center.addObserver(
+      self,
+      selector: #selector(repositionTrafficLights),
+      name: NSWindow.didBecomeKeyNotification,
+      object: self
+    )
+    DispatchQueue.main.async { [weak self] in self?.repositionTrafficLights() }
+
     super.awakeFromNib()
+  }
+
+  deinit {
+    NotificationCenter.default.removeObserver(self)
+  }
+
+  // Centers the native traffic lights within the v2 title-bar band and insets
+  // them from the left so the surrounding gap is even on all sides. No-op while
+  // the buttons are hidden (e.g. the login window), so it is safe to call
+  // unconditionally.
+  @objc private func repositionTrafficLights() {
+    let buttons: [NSButton] = [
+      standardWindowButton(.closeButton),
+      standardWindowButton(.miniaturizeButton),
+      standardWindowButton(.zoomButton),
+    ].compactMap { $0 }
+
+    guard let titleBarView = buttons.first?.superview,
+      let closeButton = buttons.first
+    else { return }
+
+    // Match the left gap to the vertical gap so the lights look evenly inset.
+    let sideGap = (v2TitleBarHeight - closeButton.frame.height) / 2
+    let dx = sideGap - closeButton.frame.origin.x
+
+    for button in buttons where !button.isHidden {
+      let buttonHeight = button.frame.height
+      // Center the button within a band of `v2TitleBarHeight` measured from the
+      // top of the title bar view. The title bar uses non-flipped coordinates
+      // (y grows upward), so the top edge sits at the view's full height.
+      let originY: CGFloat
+      if titleBarView.isFlipped {
+        originY = (v2TitleBarHeight - buttonHeight) / 2
+      } else {
+        originY = titleBarView.frame.height - v2TitleBarHeight / 2 - buttonHeight / 2
+      }
+      button.setFrameOrigin(NSPoint(x: button.frame.origin.x + dx, y: originY))
+    }
   }
 
   override func mouseMoved(with event: NSEvent) {
