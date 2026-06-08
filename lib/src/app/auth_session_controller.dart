@@ -60,6 +60,8 @@ class AuthSessionController {
   Future<String>? _refreshInFlight;
   final List<AuthSessionListener> _listeners = <AuthSessionListener>[];
 
+  static const Duration _refreshRetryDelay = Duration(seconds: 30);
+
   AuthSession? get session => _session;
 
   void addListener(AuthSessionListener listener) {
@@ -71,7 +73,13 @@ class AuthSessionController {
   }
 
   Future<AuthRestoreResult> restoreSession() async {
-    final refreshToken = await _tokenStore.readRefreshToken();
+    final String? refreshToken;
+    try {
+      refreshToken = await _tokenStore.readRefreshToken();
+    } catch (e) {
+      _clearSession();
+      return AuthRestoreResult.refreshFailed(e);
+    }
     if (refreshToken == null || refreshToken.isEmpty) {
       _clearSession();
       return const AuthRestoreResult.missingRefreshToken();
@@ -80,12 +88,14 @@ class AuthSessionController {
     final client = _authClientFactory(apiBaseUrl);
     try {
       final session = await client.refresh(refreshToken);
-      await _tokenStore.writeRefreshToken(session.refreshToken);
       _setSession(session);
       _scheduleTokenRefresh(session);
+      await _writeRefreshTokenBestEffort(session.refreshToken);
       return const AuthRestoreResult.restored();
     } catch (e) {
-      await _tokenStore.clearRefreshToken();
+      if (_isTerminalRefreshFailure(e)) {
+        await _tokenStore.clearRefreshToken();
+      }
       _clearSession();
       return AuthRestoreResult.refreshFailed(e);
     } finally {
@@ -167,7 +177,12 @@ class AuthSessionController {
 
     final refresh = _refreshSession(session.refreshToken);
     _refreshInFlight = refresh;
-    refresh.whenComplete(() => _refreshInFlight = null);
+    unawaited(
+      refresh.then<void>(
+        (_) => _refreshInFlight = null,
+        onError: (_) => _refreshInFlight = null,
+      ),
+    );
     return refresh;
   }
 
@@ -175,13 +190,17 @@ class AuthSessionController {
     final client = _authClientFactory(apiBaseUrl);
     try {
       final session = await client.refresh(refreshToken);
-      await _tokenStore.writeRefreshToken(session.refreshToken);
       _setSession(session);
       _scheduleTokenRefresh(session);
+      await _writeRefreshTokenBestEffort(session.refreshToken);
       return session.accessToken;
-    } catch (_) {
-      await _tokenStore.clearRefreshToken();
-      _clearSession();
+    } catch (e) {
+      if (_isTerminalRefreshFailure(e)) {
+        await _tokenStore.clearRefreshToken();
+        _clearSession();
+      } else {
+        _scheduleRefreshRetry(refreshToken);
+      }
       rethrow;
     } finally {
       client.close();
@@ -196,6 +215,27 @@ class AuthSessionController {
     _refreshTimer = Timer(delay.isNegative ? Duration.zero : delay, () {
       _refreshAccessToken().catchError((_) => '');
     });
+  }
+
+  void _scheduleRefreshRetry(String refreshToken) {
+    final session = _session;
+    if (session == null || session.refreshToken != refreshToken) return;
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer(_refreshRetryDelay, () {
+      _refreshAccessToken().catchError((_) => '');
+    });
+  }
+
+  bool _isTerminalRefreshFailure(Object error) {
+    return error is AuthException && error.isUnauthorized;
+  }
+
+  Future<void> _writeRefreshTokenBestEffort(String refreshToken) async {
+    try {
+      await _tokenStore.writeRefreshToken(refreshToken);
+    } catch (_) {
+      // Keep the in-memory rotated token. A later refresh can persist it again.
+    }
   }
 
   void _setSession(AuthSession session) {
