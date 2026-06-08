@@ -1398,7 +1398,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final filename = file_display.fileAttachmentTitle(attachment);
     final location = await widget.fileSelectionService.getSaveLocation(
       suggestedName: filename,
-      confirmButtonText: 'Save',
+      confirmButtonText: '保存',
     );
     if (location == null || !mounted) return;
 
@@ -2509,7 +2509,7 @@ class _CreateRoomDialogState extends State<_CreateRoomDialog> {
               const SizedBox(height: 18),
               const Center(
                 child: _Avatar(
-                  label: 'Room',
+                  label: '房间',
                   imageUrl: null,
                   defaultAvatarKey: 'room-1',
                   size: 62,
@@ -4566,7 +4566,7 @@ class _RoomNameInput extends StatelessWidget {
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
                 disabledBorder: InputBorder.none,
-                hintText: 'room-name',
+                hintText: '房间名称',
                 contentPadding: EdgeInsets.symmetric(vertical: 12),
               ),
             ),
@@ -4674,7 +4674,7 @@ class _LiveCount extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(
-      '$count live',
+      '$count 人直播',
       style: TextStyle(
         color: count > 0 ? _textSecondary : _textMuted,
         fontSize: 12,
@@ -4728,7 +4728,7 @@ class _ErrorPane extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              message ?? 'Request failed',
+              message ?? '请求失败',
               textAlign: TextAlign.center,
               style: const TextStyle(color: _textSecondary),
             ),
@@ -4736,7 +4736,7 @@ class _ErrorPane extends StatelessWidget {
             Button(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh),
-              child: const Text('Retry'),
+              child: const Text('重试'),
             ),
           ],
         ),

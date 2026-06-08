@@ -212,12 +212,12 @@ class _LoginPageState extends State<LoginPage> {
                       segments: const [
                         Segment(
                           value: _AuthMode.login,
-                          label: 'Login',
+                          label: '登录',
                           icon: Icons.login_outlined,
                         ),
                         Segment(
                           value: _AuthMode.register,
-                          label: 'Register',
+                          label: '注册',
                           icon: Icons.person_add_alt_1_outlined,
                         ),
                       ],
@@ -231,7 +231,7 @@ class _LoginPageState extends State<LoginPage> {
                       Input(
                         controller: _username,
                         enabled: !_submitState.busy,
-                        hintText: 'Username',
+                        hintText: '用户名',
                         prefixIcon: Icons.person_outline,
                         autofillHints: const [AutofillHints.username],
                         maxLines: 1,
@@ -243,8 +243,8 @@ class _LoginPageState extends State<LoginPage> {
                       controller: _login,
                       enabled: !_submitState.busy,
                       hintText: _registering
-                          ? 'Email address'
-                          : 'Username or email address',
+                          ? '邮箱地址'
+                          : '用户名或邮箱地址',
                       prefixIcon: _registering
                           ? Icons.alternate_email
                           : Icons.person_outline,
@@ -261,7 +261,7 @@ class _LoginPageState extends State<LoginPage> {
                     Input(
                       controller: _password,
                       enabled: !_submitState.busy,
-                      hintText: 'Password',
+                      hintText: '密码',
                       prefixIcon: Icons.lock_outline,
                       autofillHints: [
                         _registering
@@ -284,7 +284,7 @@ class _LoginPageState extends State<LoginPage> {
                       Input(
                         controller: _confirmPassword,
                         enabled: !_submitState.busy,
-                        hintText: 'Confirm password',
+                        hintText: '确认密码',
                         prefixIcon: Icons.lock_outline,
                         autofillHints: const [AutofillHints.newPassword],
                         obscureText: _obscureConfirmPassword,
@@ -328,7 +328,7 @@ class _LoginPageState extends State<LoginPage> {
                       height: 32,
                       loading: _submitState.busy,
                       onPressed: _submit,
-                      child: Text(_registering ? 'Create account' : 'Login'),
+                      child: Text(_registering ? '创建账号' : '登录'),
                     ),
                   ],
                 ),
@@ -356,11 +356,11 @@ class _PasswordVisibilityToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = enabled ? UiColors.textSecondary : UiColors.textMuted;
     return Tooltip(
-      message: obscure ? 'Show password' : 'Hide password',
+      message: obscure ? '显示密码' : '隐藏密码',
       child: Semantics(
         button: true,
         enabled: enabled,
-        label: obscure ? 'Show password' : 'Hide password',
+        label: obscure ? '显示密码' : '隐藏密码',
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: enabled ? onPressed : null,

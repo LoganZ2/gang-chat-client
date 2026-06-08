@@ -184,7 +184,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       setState(() {
         _busyInviteUserIds.remove(user.id);
         _changed = true;
-        _notice = 'Invite sent';
+        _notice = '邀请已发送';
       });
     } catch (error) {
       if (!mounted) return;
@@ -216,7 +216,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
             if (item.id != request.id) item,
         ];
         _changed = true;
-        _notice = approve ? 'Request approved' : 'Request rejected';
+        _notice = approve ? '申请已通过' : '申请已拒绝';
       });
       if (approve) unawaited(_load());
     } catch (error) {
@@ -246,7 +246,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
         _busyMemberIds.remove(member.user.id);
         _members = member_filter.replaceRoomMember(_members, updated);
         _changed = true;
-        _notice = role == 'admin' ? 'Admin role granted' : 'Admin role removed';
+        _notice = role == 'admin' ? '已授予管理员身份' : '已移除管理员身份';
       });
     } catch (error) {
       if (!mounted) return;
@@ -262,10 +262,10 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => _ConfirmDialog(
-        title: 'Transfer ownership',
+        title: '转让群主',
         message:
-            'Ownership will move to ${member_filter.roomMemberDisplayName(member)}. You will become an admin.',
-        confirmLabel: 'Transfer',
+            '群主将转让给 ${member_filter.roomMemberDisplayName(member)}。你将成为管理员。',
+        confirmLabel: '转让',
         danger: true,
       ),
     );
@@ -286,7 +286,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
         _busyMemberIds.remove(member.user.id);
         _room = updated;
         _changed = true;
-        _notice = 'Ownership transferred';
+        _notice = '群主已转让';
       });
       unawaited(_load());
     } catch (error) {
@@ -312,7 +312,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
   @override
   Widget build(BuildContext context) {
     return _RoomDialogShell(
-      title: 'Members',
+      title: '成员',
       icon: Icons.group_outlined,
       maxWidth: _dialogMaxWidth,
       maxHeight: _dialogMaxHeight,
@@ -320,7 +320,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       onClose: _close,
       headerAction: _canReviewRequests
           ? ButtonIcon(
-              tooltip: 'Refresh',
+              tooltip: '刷新',
               icon: const Icon(Icons.refresh),
               onPressed: _load,
               size: 32,
@@ -389,7 +389,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
     if (members.isEmpty) {
       return const _EmptyState(
         icon: Icons.person_search_outlined,
-        title: 'No matching members',
+        title: '没有匹配的成员',
       );
     }
 

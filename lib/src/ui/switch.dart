@@ -91,7 +91,7 @@ class _UiSwitchState extends State<UiSwitch> {
     final thumbBorder = !enabled
         ? UiColors.disabledBorder
         : active
-        ? UiColors.accentBorder
+        ? UiColors.selectedBorder
         : UiColors.border;
     final thumbTop =
         ((_switchHeight - _switchThumbSize) / 2) - _switchThumbDepth;

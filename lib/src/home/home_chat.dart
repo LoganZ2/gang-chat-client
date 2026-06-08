@@ -1038,7 +1038,7 @@ class _MessageBubble extends StatelessWidget {
                             tooltip: '查看用户信息',
                             onTap: onOpenUserInfo,
                             child: Text(
-                              mine ? 'You' : message.sender.displayName,
+                              mine ? '你' : message.sender.displayName,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -1403,7 +1403,7 @@ class _FileAttachmentTrailing extends StatelessWidget {
             if (state.showDismiss) ...[
               const SizedBox(width: 6),
               _InlineIconButton(
-                tooltip: 'Dismiss download',
+                tooltip: '关闭下载',
                 icon: Icons.close,
                 onPressed: onCancel,
                 danger: true,

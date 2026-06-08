@@ -100,8 +100,8 @@ class _StickerGridTile extends StatelessWidget {
             backgroundColor: _primaryDark,
             selectedBackgroundColor: const Color(0xFF1F2D27),
             pressedBackgroundColor: _primaryDarkLow,
-            borderColor: selected ? _cyan : _borderColor,
-            selectedBorderColor: _cyan,
+            borderColor: selected ? UiColors.selectedBorder : _borderColor,
+            selectedBorderColor: UiColors.selectedBorder,
             hoverLift: 2,
             baseDepth: 4,
             child: Stack(
@@ -298,9 +298,9 @@ class _StickerFilterDialogState extends State<_StickerFilterDialog> {
                         selectedBackgroundColor: const Color(0xFF1F2D27),
                         pressedBackgroundColor: _primaryDarkLow,
                         borderColor: _mimeType == filter.mimeType
-                            ? _cyan
+                            ? UiColors.selectedBorder
                             : _borderColor,
-                        selectedBorderColor: _cyan,
+                        selectedBorderColor: UiColors.selectedBorder,
                         child: Center(
                           child: Text(
                             filter.label,

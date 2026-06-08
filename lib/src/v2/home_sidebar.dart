@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import '../protocol/models.dart';
 import '../ui/ui.dart';
 
-const _selectedServerBackground = Color(0xFF0F3F2A);
-const _selectedServerBorder = Color(0xFF4EAD76);
 const _sidebarHorizontalPadding = 14.0;
 const _sidebarTopPadding = 16.0;
 const _sidebarBottomPadding = 16.0;
@@ -135,7 +133,7 @@ class _SidebarFooter extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           ButtonIcon(
-            tooltip: 'Settings',
+            tooltip: '设置',
             icon: const Icon(Icons.settings_outlined),
             selected: settingsActive,
             onPressed: onOpenSettings,
@@ -143,7 +141,7 @@ class _SidebarFooter extends StatelessWidget {
           ),
           const SizedBox(width: _footerButtonGap),
           ButtonIcon(
-            tooltip: 'Logout',
+            tooltip: '退出登录',
             icon: const Icon(Icons.logout),
             onPressed: onLogout,
             size: _footerButtonSize,
@@ -265,10 +263,10 @@ class _ServerCard extends StatelessWidget {
       baseDepth: _serverCardBaseDepth,
       selected: selected,
       backgroundColor: UiColors.surfaceLow,
-      selectedBackgroundColor: _selectedServerBackground,
+      selectedBackgroundColor: UiColors.selected,
       pressedBackgroundColor: UiColors.surfacePressed,
       borderColor: UiColors.border,
-      selectedBorderColor: _selectedServerBorder,
+      selectedBorderColor: UiColors.selectedBorder,
       borderRadius: UiRadii.md,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       onPressed: onPressed,
@@ -309,7 +307,7 @@ class _ServerCard extends StatelessWidget {
           if (voiceJoined) ...[
             const SizedBox(width: 8),
             Tooltip(
-              message: 'Joined voice',
+              message: '已加入语音',
               child: Icon(Icons.volume_up, color: UiColors.accent, size: 17),
             ),
           ],
@@ -393,13 +391,13 @@ class _UnreadBadge extends StatelessWidget {
 String _userStatus(CurrentUser user) {
   final status = user.status?.trim();
   if (status != null && status.isNotEmpty) return status;
-  return 'Online';
+  return '在线';
 }
 
 String _serverMeta(RoomCard server) {
-  final parts = ['${server.memberCount} members'];
+  final parts = ['${server.memberCount} 成员'];
   if (server.liveParticipantCount > 0) {
-    parts.add('${server.liveParticipantCount} live');
+    parts.add('${server.liveParticipantCount} 直播中');
   }
   return parts.join(' · ');
 }

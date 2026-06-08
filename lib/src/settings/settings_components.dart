@@ -321,7 +321,7 @@ class _SegmentedSetting extends StatelessWidget {
                   selectedBackgroundColor: const Color(0xFF1F2D27),
                   pressedBackgroundColor: _primaryDarkLow,
                   borderColor: _borderColor,
-                  selectedBorderColor: _cyan,
+                  selectedBorderColor: UiColors.selectedBorder,
                   hoverLift: 2,
                   pressDepth: 2,
                   baseDepth: 4,

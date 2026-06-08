@@ -222,7 +222,7 @@ class _SidebarItemButton extends StatelessWidget {
           selectedBackgroundColor: UiColors.selected,
           pressedBackgroundColor: UiColors.surfacePressed,
           borderColor: UiColors.border,
-          selectedBorderColor: UiColors.accentBorder,
+          selectedBorderColor: UiColors.selectedBorder,
           borderRadius: UiRadii.md,
           padding: const EdgeInsets.symmetric(horizontal: 10),
           child: IconTheme.merge(

@@ -303,7 +303,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
   @override
   Widget build(BuildContext context) {
     return _RoomDialogShell(
-      title: 'Room settings',
+      title: '房间设置',
       icon: Icons.tune,
       maxWidth: _dialogMaxWidth,
       maxHeight: _dialogMaxHeight,
@@ -321,12 +321,12 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
             const SizedBox(height: 10),
           ],
           _SectionBox(
-            title: 'Room info',
+            title: '房间信息',
             child: Column(
               children: [
                 const SizedBox(height: 6),
                 AvatarPicker(
-                  label: 'Room avatar',
+                  label: '房间头像',
                   displayName: _nameController.text.trim().isEmpty
                       ? room_display.roomDisplayName(_room)
                       : _nameController.text,
@@ -342,44 +342,44 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
                 const SizedBox(height: 14),
                 Input(
                   controller: _nameController,
-                  hintText: 'Room name',
+                  hintText: '房间名称',
                   enabled: _canManageRoom && !_saving,
                   prefixIcon: Icons.tag_outlined,
                 ),
                 const SizedBox(height: 10),
                 Input(
                   controller: _descriptionController,
-                  hintText: 'Description',
+                  hintText: '简介',
                   enabled: _canManageRoom && !_saving,
                   prefixIcon: Icons.notes_outlined,
                   maxLines: null,
                 ),
                 const SizedBox(height: 12),
                 _LabeledSegmented<String>(
-                  label: 'Visibility',
+                  label: '可见性',
                   value: _visibility,
                   enabled: _canManageRoom && !_saving,
                   segments: const [
-                    Segment(value: 'private', label: 'Private'),
-                    Segment(value: 'public', label: 'Public'),
+                    Segment(value: 'private', label: '私密'),
+                    Segment(value: 'public', label: '公开'),
                   ],
                   onChanged: (value) => setState(() => _visibility = value),
                 ),
                 const SizedBox(height: 12),
                 _LabeledSegmented<String>(
-                  label: 'Join policy',
+                  label: '加入方式',
                   value: _joinPolicy,
                   enabled: _canManageRoom && !_saving,
                   segments: const [
-                    Segment(value: 'approval_required', label: 'Approval'),
-                    Segment(value: 'open', label: 'Open'),
-                    Segment(value: 'closed', label: 'Closed'),
+                    Segment(value: 'approval_required', label: '需审批'),
+                    Segment(value: 'open', label: '开放'),
+                    Segment(value: 'closed', label: '关闭'),
                   ],
                   onChanged: (value) => setState(() => _joinPolicy = value),
                 ),
                 const SizedBox(height: 12),
                 _ToggleRow(
-                  label: 'AI voice announcements',
+                  label: 'AI 语音播报',
                   value: _aiVoiceAnnouncementsEnabled,
                   enabled: _canManageRoom && !_saving,
                   onChanged: (value) =>
@@ -392,27 +392,27 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
                   loading: _saving,
                   onPressed: _canManageRoom ? _save : null,
                   icon: const Icon(Icons.save_outlined),
-                  child: const Text('Save room settings'),
+                  child: const Text('保存房间设置'),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 14),
           _SectionBox(
-            title: 'Leave room',
+            title: '离开房间',
             child: Button(
               width: double.infinity,
               tone: ButtonTone.danger,
               loading: _leaving,
               onPressed: _leaveRoom,
               icon: const Icon(Icons.logout),
-              child: const Text('Leave room'),
+              child: const Text('离开房间'),
             ),
           ),
           if (_canDeleteRoom) ...[
             const SizedBox(height: 14),
             _SectionBox(
-              title: 'Delete room',
+              title: '删除房间',
               danger: true,
               child: Button(
                 width: double.infinity,
@@ -420,7 +420,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
                 loading: _deleting,
                 onPressed: _deleteRoom,
                 icon: const Icon(Icons.delete_forever_outlined),
-                child: const Text('Delete room'),
+                child: const Text('删除房间'),
               ),
             ),
           ],

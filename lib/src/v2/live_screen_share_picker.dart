@@ -209,7 +209,7 @@ class _ScreenSourceTile extends StatelessWidget {
       backgroundColor: UiColors.surface,
       selectedBackgroundColor: UiColors.selected,
       borderColor: UiColors.border,
-      selectedBorderColor: UiColors.accentBorder,
+      selectedBorderColor: UiColors.selectedBorder,
       padding: const EdgeInsets.all(8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

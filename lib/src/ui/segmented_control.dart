@@ -210,7 +210,7 @@ class _SegmentThumb extends StatelessWidget {
             decoration: BoxDecoration(
               color: UiColors.surfacePressed,
               borderRadius: radius,
-              border: Border.all(color: UiColors.accentBorder),
+              border: Border.all(color: UiColors.selectedBorder),
             ),
           ),
         ),
@@ -225,7 +225,7 @@ class _SegmentThumb extends StatelessWidget {
             decoration: BoxDecoration(
               color: UiColors.selected,
               borderRadius: radius,
-              border: Border.all(color: UiColors.accentBorder),
+              border: Border.all(color: UiColors.selectedBorder),
             ),
           ),
         ),

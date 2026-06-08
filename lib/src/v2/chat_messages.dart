@@ -24,12 +24,12 @@ class _MessageStage extends StatelessWidget {
     if (error != null && !roomReady) {
       return _CenteredState(
         icon: Icons.error_outline,
-        title: 'Unable to load chat',
+        title: '无法加载聊天',
         detail: error!,
         action: Button(
           icon: const Icon(Icons.refresh),
           onPressed: onRetry,
-          child: const Text('Retry'),
+          child: const Text('重试'),
         ),
       );
     }
@@ -49,8 +49,8 @@ class _MessageStage extends StatelessWidget {
     if (messages.isEmpty) {
       return const _CenteredState(
         icon: Icons.forum_outlined,
-        title: 'No messages yet',
-        detail: 'Start the conversation below.',
+        title: '还没有消息',
+        detail: '在下方开始对话吧',
       );
     }
 
@@ -229,7 +229,7 @@ class _StickerBody extends StatelessWidget {
         : AppConfigScope.of(
             context,
           ).resolveAssetUrl(asset.thumbnailUrl ?? asset.url);
-    final name = attachment.name ?? 'Sticker';
+    final name = attachment.name ?? '表情';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

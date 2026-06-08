@@ -2057,7 +2057,7 @@ class _RoomStickerManagerState extends State<_RoomStickerManager> {
       files = await widget.fileSelectionService.openFiles(
         acceptedTypeGroups: const [
           FileTypeGroup(
-            label: 'Images and ZIP',
+            label: '图片和 ZIP',
             extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'zip'],
           ),
         ],
@@ -2460,7 +2460,7 @@ class _RoomStickerManagerState extends State<_RoomStickerManager> {
         suggestedName: file.filename,
         acceptedTypeGroups: const [
           FileTypeGroup(
-            label: 'Images and ZIP',
+            label: '图片和 ZIP',
             extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'zip'],
           ),
         ],
@@ -3686,7 +3686,7 @@ class _AvatarSwatch extends StatelessWidget {
           decoration: BoxDecoration(
             color: avatarFallbackColor(keyName),
             border: Border.all(
-              color: selected ? _cyan : _borderColor,
+              color: selected ? UiColors.selectedBorder : _borderColor,
               width: selected ? 2 : 1,
             ),
           ),
@@ -3723,7 +3723,7 @@ Future<_CroppedAvatarFile?> _pickAndCropAvatarFile(
     file = await fileSelectionService.openFile(
       acceptedTypeGroups: const [
         FileTypeGroup(
-          label: 'Images',
+          label: '图片',
           extensions: ['png', 'jpg', 'jpeg', 'webp'],
         ),
       ],
@@ -4022,8 +4022,8 @@ class _RoomStickerTile extends StatelessWidget {
             backgroundColor: _primaryDark,
             selectedBackgroundColor: _selectedSurface,
             pressedBackgroundColor: _primaryDarkLow,
-            borderColor: selected ? _cyan : _borderColor,
-            selectedBorderColor: _cyan,
+            borderColor: selected ? UiColors.selectedBorder : _borderColor,
+            selectedBorderColor: UiColors.selectedBorder,
             hoverLift: 2,
             baseDepth: 4,
             child: Stack(
@@ -4224,9 +4224,9 @@ class _RoomStickerFilterDialogState extends State<_RoomStickerFilterDialog> {
                         selectedBackgroundColor: _selectedSurface,
                         pressedBackgroundColor: _primaryDarkLow,
                         borderColor: _mimeType == filter.mimeType
-                            ? _cyan
+                            ? UiColors.selectedBorder
                             : _borderColor,
-                        selectedBorderColor: _cyan,
+                        selectedBorderColor: UiColors.selectedBorder,
                         child: Center(
                           child: Text(
                             filter.label,

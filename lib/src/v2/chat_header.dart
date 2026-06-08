@@ -88,12 +88,12 @@ class _LiveChannelHeaderCard extends StatelessWidget {
       baseDepth: _headerSurfaceBaseDepth,
       borderRadius: UiRadii.md,
       backgroundColor: UiColors.surface,
-      selectedBackgroundColor: _selectedLiveHeaderBackground,
+      selectedBackgroundColor: UiColors.selected,
       borderColor: UiColors.border,
-      selectedBorderColor: UiColors.accentBorder,
+      selectedBorderColor: UiColors.selectedBorder,
       selected: liveActive,
       padding: const EdgeInsets.symmetric(horizontal: 10),
-      tooltip: 'Enter live channel',
+      tooltip: '进入直播频道',
       onPressed: onPressed,
       child: Row(
         children: [
@@ -120,7 +120,7 @@ class _LiveChannelHeaderCard extends StatelessWidget {
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        'Enter Live Channel',
+                        '进入直播频道',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: UiTypography.label.copyWith(
@@ -169,13 +169,13 @@ class _RoomHeaderActions extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               _HeaderIconButton(
-                tooltip: 'Room details',
+                tooltip: '房间详情',
                 icon: Icons.info_outline,
                 onPressed: onMembersPressed,
               ),
               const SizedBox(height: _headerActionGap),
               _HeaderIconButton(
-                tooltip: 'Room actions',
+                tooltip: '房间操作',
                 icon: Icons.more_horiz,
                 onPressed: onSettingsPressed,
               ),
@@ -235,10 +235,10 @@ String _roomMeta({
 }) {
   final parts = <String>[];
   final members = memberCount ?? 0;
-  if (members > 0) parts.add('$members members');
+  if (members > 0) parts.add('$members 成员');
   final online = onlineMemberCount ?? 0;
-  if (online > 0) parts.add('$online online');
+  if (online > 0) parts.add('$online 在线');
   final live = liveParticipantCount ?? 0;
-  if (live > 0) parts.add('$live live');
-  return parts.isEmpty ? 'Ready' : parts.join(' - ');
+  if (live > 0) parts.add('$live 直播中');
+  return parts.isEmpty ? '就绪' : parts.join(' - ');
 }

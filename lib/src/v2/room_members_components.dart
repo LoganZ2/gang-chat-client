@@ -21,7 +21,7 @@ class _MemberFilters extends StatelessWidget {
       children: [
         Input(
           controller: controller,
-          hintText: 'Search members',
+          hintText: '搜索成员',
           prefixIcon: Icons.search,
         ),
         const SizedBox(height: 10),
@@ -35,15 +35,15 @@ class _MemberFilters extends StatelessWidget {
                 segments: const [
                   Segment(
                     value: member_filter.RoomMemberPresenceFilter.all,
-                    label: 'All',
+                    label: '全部',
                   ),
                   Segment(
                     value: member_filter.RoomMemberPresenceFilter.online,
-                    label: 'Online',
+                    label: '在线',
                   ),
                   Segment(
                     value: member_filter.RoomMemberPresenceFilter.offline,
-                    label: 'Offline',
+                    label: '离线',
                   ),
                 ],
               ),
@@ -57,15 +57,15 @@ class _MemberFilters extends StatelessWidget {
                 segments: const [
                   Segment(
                     value: member_filter.RoomMemberRoleFilter.all,
-                    label: 'All roles',
+                    label: '所有身份',
                   ),
                   Segment(
                     value: member_filter.RoomMemberRoleFilter.member,
-                    label: 'Members',
+                    label: '成员',
                   ),
                   Segment(
                     value: member_filter.RoomMemberRoleFilter.admin,
-                    label: 'Admins',
+                    label: '管理员',
                   ),
                 ],
               ),
@@ -160,7 +160,7 @@ class _MemberRow extends StatelessWidget {
           ] else if (permission.canRoleEdit) ...[
             const SizedBox(width: 8),
             ButtonIcon(
-              tooltip: permission.isAdmin ? 'Remove admin' : 'Make admin',
+              tooltip: permission.isAdmin ? '移除管理员' : '设为管理员',
               icon: Icon(
                 permission.isAdmin
                     ? Icons.admin_panel_settings_outlined
@@ -172,7 +172,7 @@ class _MemberRow extends StatelessWidget {
             ),
             const SizedBox(width: 6),
             ButtonIcon(
-              tooltip: 'Transfer ownership',
+              tooltip: '转让群主',
               icon: const Icon(Icons.swap_horiz),
               tone: ButtonTone.danger,
               onPressed: onTransferCreator,
@@ -210,12 +210,12 @@ class _InviteSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final memberIds = members.map((member) => member.user.id).toSet();
     return _SectionBox(
-      title: 'Invite people',
+      title: '邀请成员',
       child: Column(
         children: [
           Input(
             controller: controller,
-            hintText: 'Search by username, name, or UID',
+            hintText: '按用户名、昵称或 UID 搜索',
             prefixIcon: Icons.person_add_alt_1,
           ),
           if (error != null) ...[
@@ -233,7 +233,7 @@ class _InviteSection extends StatelessWidget {
             const SizedBox(height: 8),
             if (results.isEmpty)
               Text(
-                'No users found',
+                '未找到用户',
                 style: UiTypography.label.copyWith(color: UiColors.textMuted),
               )
             else
@@ -292,7 +292,7 @@ class _InviteUserRow extends StatelessWidget {
             height: 34,
             loading: busy,
             onPressed: alreadyMember ? null : onInvite,
-            child: Text(alreadyMember ? 'Member' : 'Invite'),
+            child: Text(alreadyMember ? '成员' : '邀请'),
           ),
         ],
       ),
@@ -318,7 +318,7 @@ class _JoinRequestsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _SectionBox(
-      title: 'Join requests',
+      title: '加入申请',
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 64),
         child: Column(
@@ -328,7 +328,7 @@ class _JoinRequestsSection extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(top: 12, bottom: 6),
                 child: Text(
-                  'No pending requests',
+                  '暂无待处理申请',
                   style: UiTypography.label.copyWith(color: UiColors.textMuted),
                 ),
               )
@@ -394,7 +394,7 @@ class _JoinRequestRow extends StatelessWidget {
             )
           else ...[
             ButtonIcon(
-              tooltip: 'Reject',
+              tooltip: '拒绝',
               icon: const Icon(Icons.close),
               tone: ButtonTone.danger,
               onPressed: onReject,
@@ -402,7 +402,7 @@ class _JoinRequestRow extends StatelessWidget {
             ),
             const SizedBox(width: 6),
             ButtonIcon(
-              tooltip: 'Approve',
+              tooltip: '通过',
               icon: const Icon(Icons.check),
               tone: ButtonTone.primary,
               onPressed: onApprove,

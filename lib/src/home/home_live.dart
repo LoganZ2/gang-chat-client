@@ -75,7 +75,7 @@ class _LiveHeader extends StatelessWidget {
                       const SizedBox(height: 4),
                       Flexible(
                         child: Text(
-                          '${room.memberCount} members',
+                          '${room.memberCount} 名成员',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -163,7 +163,7 @@ class _LiveHeaderActions extends StatelessWidget {
     final Widget joinControl = !joined
         ? (compactButton
               ? ButtonIcon(
-                  tooltip: 'Join live',
+                  tooltip: '加入直播',
                   onPressed: onJoin,
                   loading: joining,
                   icon: joining
@@ -193,7 +193,7 @@ class _LiveHeaderActions extends StatelessWidget {
                       : const Icon(Icons.call),
                   tone: ButtonTone.primary,
                   height: 38,
-                  child: const Text('Join'),
+                  child: const Text('加入'),
                 ))
         : const SizedBox.shrink();
 
@@ -1120,9 +1120,9 @@ class _ScreenSourceTile extends StatelessWidget {
       selected: selected,
       onPressed: onTap,
       backgroundColor: _primaryDark,
-      selectedBackgroundColor: _primaryDark,
+      selectedBackgroundColor: _selectedSurface,
       borderColor: _borderColor,
-      selectedBorderColor: _cyan,
+      selectedBorderColor: UiColors.selectedBorder,
       padding: const EdgeInsets.all(8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1211,7 +1211,7 @@ class _LiveControls extends StatelessWidget {
         children: [
           if (!joined)
             _LiveControlKey(
-              tooltip: 'Join',
+              tooltip: '加入',
               icon: Icons.call,
               active: true,
               busy: joining,
@@ -1247,7 +1247,7 @@ class _LiveControls extends StatelessWidget {
               onPressed: onToggleShare,
             ),
             _LiveControlKey(
-              tooltip: 'Leave',
+              tooltip: '离开',
               icon: Icons.call_end,
               active: true,
               danger: true,
@@ -1256,7 +1256,7 @@ class _LiveControls extends StatelessWidget {
             ),
           ],
           _LiveControlKey(
-            tooltip: 'Collapse',
+            tooltip: '收起',
             icon: Icons.keyboard_arrow_up,
             active: false,
             onPressed: onCollapse,

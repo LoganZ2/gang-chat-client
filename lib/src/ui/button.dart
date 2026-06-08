@@ -233,7 +233,7 @@ _ButtonColors _colorsFor(ButtonTone tone, bool enabled, {bool active = false}) {
         return const _ButtonColors(
           background: UiColors.selected,
           pressedBackground: Color(0xFF14211B),
-          border: UiColors.accentBorder,
+          border: UiColors.selectedBorder,
           foreground: UiColors.accent,
         );
       }
@@ -247,7 +247,7 @@ _ButtonColors _colorsFor(ButtonTone tone, bool enabled, {bool active = false}) {
       return const _ButtonColors(
         background: UiColors.selected,
         pressedBackground: Color(0xFF14211B),
-        border: UiColors.accentBorder,
+        border: UiColors.selectedBorder,
         foreground: UiColors.accent,
       );
     case ButtonTone.danger:

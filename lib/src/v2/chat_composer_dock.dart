@@ -37,14 +37,14 @@ class _ComposerDock extends StatelessWidget {
             alignment: Alignment.bottomCenter,
             child: ChatComposer(
               controller: controller,
-              hintText: 'Write a message',
+              hintText: '写点什么…',
               maxLines: 5,
               onSubmitted: onSubmit,
               actions: [
                 ComposerAction(
                   id: 'stickers',
                   icon: Icons.emoji_emotions_outlined,
-                  label: 'Stickers',
+                  label: '表情',
                   panel: ComposerPanel.list(
                     itemCount: _composerStickerIcons.length,
                     itemBuilder: (context, index) {
@@ -61,14 +61,14 @@ class _ComposerDock extends StatelessWidget {
                 const ComposerAction(
                   id: 'voice',
                   icon: Icons.mic_none,
-                  label: 'Voice',
+                  label: '语音',
                   panel: ComposerPanel.static(child: _VoicePanelPreview()),
                 ),
                 ComposerAction(
                   id: 'send',
                   icon: Icons.send_rounded,
-                  label: 'Send',
-                  tooltip: sending ? 'Sending' : 'Send',
+                  label: '发送',
+                  tooltip: sending ? '发送中' : '发送',
                   tone: ButtonTone.primary,
                   onPressed: () => onSubmit(controller.text),
                 ),
@@ -147,7 +147,7 @@ class _VoicePanelPreview extends StatelessWidget {
           icon: const Icon(Icons.fiber_manual_record),
           tone: ButtonTone.primary,
           onPressed: () {},
-          child: const Text('Record'),
+          child: const Text('录制'),
         ),
       ],
     );
@@ -175,7 +175,7 @@ class _VoiceMeter extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const Text(
-                'Voice note',
+                '语音消息',
                 style: TextStyle(
                   color: UiColors.textSecondary,
                   fontSize: 13,

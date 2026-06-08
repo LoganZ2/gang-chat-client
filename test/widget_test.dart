@@ -89,10 +89,10 @@ void main() {
     await tester.pump();
 
     expect(find.text('Gang Chat'), findsOneWidget);
-    expect(find.text('Username or email address'), findsOneWidget);
-    expect(find.text('Password'), findsOneWidget);
-    expect(find.widgetWithText(ui.Button, 'Login'), findsOneWidget);
-    expect(find.text('Register'), findsOneWidget);
+    expect(find.text('用户名或邮箱地址'), findsOneWidget);
+    expect(find.text('密码'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '登录'), findsOneWidget);
+    expect(find.text('注册'), findsOneWidget);
     expect(find.byTooltip('Show password'), findsOneWidget);
 
     final authSurfaceRect = tester.getRect(
@@ -213,9 +213,9 @@ void main() {
     expect(find.text('Activity'), findsNothing);
     expect(find.text('People'), findsNothing);
     expect(find.text('Files'), findsNothing);
-    expect(find.text('Settings'), findsNothing);
-    expect(find.byTooltip('Settings'), findsOneWidget);
-    expect(find.byTooltip('Logout'), findsOneWidget);
+    expect(find.text('设置'), findsNothing);
+    expect(find.byTooltip('设置'), findsOneWidget);
+    expect(find.byTooltip('退出登录'), findsOneWidget);
     expect(find.text('Kai'), findsOneWidget);
     expect(find.text('Online'), findsOneWidget);
     expect(find.text('@kai'), findsNothing);
@@ -311,7 +311,7 @@ void main() {
     await tester.tap(find.text('Alpha Room'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Enter Live Channel'));
+    await tester.tap(find.text('进入直播频道'));
     await tester.pumpAndSettle();
 
     expect(find.text('Morgan'), findsOneWidget);
@@ -499,7 +499,7 @@ void main() {
 
     await tester.tap(find.text('Alpha Room'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Enter Live Channel'));
+    await tester.tap(find.text('进入直播频道'));
     await tester.pumpAndSettle();
 
     expect(find.text('Riley'), findsNothing);
@@ -582,21 +582,21 @@ void main() {
     final userSummaryRect = tester.getRect(
       find.byKey(const ValueKey('home-sidebar-user-summary')),
     );
-    final settingsRect = tester.getRect(find.byTooltip('Settings'));
-    final logoutRect = tester.getRect(find.byTooltip('Logout'));
+    final settingsRect = tester.getRect(find.byTooltip('设置'));
+    final logoutRect = tester.getRect(find.byTooltip('退出登录'));
     expect(logoutRect.right, closeTo(userSummaryRect.right, 0.01));
     expect(logoutRect.left - settingsRect.right, closeTo(8, 0.01));
 
-    await tester.tap(find.byTooltip('Settings'));
+    await tester.tap(find.byTooltip('设置'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Settings ·'), findsOneWidget);
-    expect(find.byTooltip('Refresh settings'), findsOneWidget);
+    expect(find.textContaining('设置 ·'), findsOneWidget);
+    expect(find.byTooltip('刷新设置'), findsOneWidget);
     expect(
       tester
           .widget<ui.PressableSurface>(
             find.ancestor(
-              of: find.byTooltip('Settings'),
+              of: find.byTooltip('设置'),
               matching: find.byType(ui.PressableSurface),
             ),
           )
@@ -604,7 +604,7 @@ void main() {
       isTrue,
     );
 
-    await tester.tap(find.byTooltip('Logout'));
+    await tester.tap(find.byTooltip('退出登录'));
     await tester.pump();
 
     expect(logoutCount, 1);
@@ -696,7 +696,7 @@ void main() {
 
       expect(find.text('Beta Room'), findsNothing);
       expect(find.byTooltip('Show servers'), findsNothing);
-      expect(find.text('Enter Live Channel'), findsOneWidget);
+      expect(find.text('进入直播频道'), findsOneWidget);
       expect(find.text('Hello from Morgan'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
@@ -759,7 +759,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Gang Chat'), findsAtLeastNWidgets(1));
-    expect(find.text('Username or email address'), findsOneWidget);
+    expect(find.text('用户名或邮箱地址'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
     expect(find.byTooltip('Show password'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, 'Login'), findsOneWidget);
@@ -1999,7 +1999,7 @@ void main() {
     );
     expect(
       surfaces.map((surface) => surface.borderColor),
-      containsAllInOrder([ui.UiColors.accentBorder, ui.UiColors.dangerBorder]),
+      containsAllInOrder([ui.UiColors.selectedBorder, ui.UiColors.dangerBorder]),
     );
     expect(surfaces.map((surface) => surface.enabled), everyElement(isTrue));
     expect(surfaces.map((surface) => surface.onPressed), everyElement(isNull));

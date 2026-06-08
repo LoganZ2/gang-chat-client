@@ -25,7 +25,7 @@ class PressableSurface extends StatefulWidget {
     this.pressedBackgroundColor = UiColors.surfacePressed,
     this.disabledBackgroundColor = UiColors.disabledSurface,
     this.borderColor = UiColors.border,
-    this.selectedBorderColor = UiColors.accentBorder,
+    this.selectedBorderColor = UiColors.selectedBorder,
     this.disabledBorderColor = UiColors.disabledBorder,
     this.borderRadius = UiRadii.sm,
     this.hoverLift = 3,

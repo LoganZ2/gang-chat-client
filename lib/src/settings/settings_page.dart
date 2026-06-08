@@ -705,7 +705,7 @@ class _SettingsPageState extends State<SettingsPage> {
       file = await widget.fileSelectionService.openFile(
         acceptedTypeGroups: const [
           FileTypeGroup(
-            label: 'Images',
+            label: '图片',
             extensions: ['png', 'jpg', 'jpeg', 'webp'],
           ),
         ],
@@ -897,7 +897,7 @@ class _SettingsPageState extends State<SettingsPage> {
       files = await widget.fileSelectionService.openFiles(
         acceptedTypeGroups: const [
           FileTypeGroup(
-            label: 'Images and ZIP',
+            label: '图片和 ZIP',
             extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'zip'],
           ),
         ],
@@ -1204,7 +1204,7 @@ class _SettingsPageState extends State<SettingsPage> {
         suggestedName: downloaded.filename,
         acceptedTypeGroups: const [
           FileTypeGroup(
-            label: 'Images and ZIP',
+            label: '图片和 ZIP',
             extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'zip'],
           ),
         ],
@@ -2862,14 +2862,14 @@ class _SettingsPageState extends State<SettingsPage> {
       body: Column(
         children: [
           Container(
-            height: 48 + titleBarHeight + 16,
+            height: titleBarHeight + 64,
             padding: const EdgeInsets.fromLTRB(22, titleBarHeight + 16, 22, 0),
             color: _primaryDarkLow,
             child: Row(
               children: [
                 if (widget.onClose != null || !widget.isSubWindow) ...[
                   ButtonIcon(
-                    tooltip: 'Back',
+                    tooltip: '返回',
                     onPressed:
                         widget.onClose ?? () => Navigator.of(context).pop(),
                     icon: const Icon(Icons.arrow_back),
@@ -2881,7 +2881,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Settings · $_activeTitle',
+                    '设置 · $_activeTitle',
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: _textPrimary,
@@ -2894,7 +2894,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   width: 34,
                   child: PressableSurface(
                     onPressed: _isRefreshing ? null : _refreshActiveSection,
-                    tooltip: 'Refresh settings',
+                    tooltip: '刷新设置',
                     enabled: !_isRefreshing,
                     height: 34,
                     padding: EdgeInsets.zero,
@@ -2920,21 +2920,14 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
           ),
-          Expanded(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 4, 22, 14),
-                  child: _SettingsNavigation(
-                    selected: _section,
-                    onChanged: _selectSection,
-                  ),
-                ),
-                const Divider(height: 1, thickness: 1, color: _borderColor),
-                Expanded(child: _buildSectionContent()),
-              ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+            child: _SettingsNavigation(
+              selected: _section,
+              onChanged: _selectSection,
             ),
           ),
+          Expanded(child: _buildSectionContent()),
         ],
       ),
     );

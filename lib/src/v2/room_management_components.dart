@@ -24,31 +24,40 @@ class _RoomDialogShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final body = Padding(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+      padding: const EdgeInsets.fromLTRB(22, 16, 22, 18),
       child: Column(
         children: [
           Row(
             children: [
               if (embedded) ...[
                 ButtonIcon(
-                  tooltip: 'Back',
+                  tooltip: '返回',
                   icon: const Icon(Icons.arrow_back),
                   onPressed: onClose,
-                  size: 32,
+                  size: 38,
                 ),
                 const SizedBox(width: 16),
               ],
               Icon(icon, color: UiColors.accent, size: 19),
               const SizedBox(width: 8),
-              Expanded(child: Text(title, style: UiTypography.title)),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    color: UiColors.text,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
               ?headerAction,
               if (!embedded) ...[
                 if (headerAction != null) const SizedBox(width: 4),
                 ButtonIcon(
-                  tooltip: 'Close',
+                  tooltip: '关闭',
                   icon: const Icon(Icons.close),
                   onPressed: onClose,
-                  size: 32,
+                  size: 38,
                 ),
               ],
             ],
@@ -350,7 +359,7 @@ class _ConfirmDialog extends StatelessWidget {
       actions: [
         Button(
           onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
+          child: const Text('取消'),
         ),
         Button(
           tone: danger ? ButtonTone.danger : ButtonTone.primary,
@@ -404,7 +413,7 @@ class _StrongConfirmDialogState extends State<_StrongConfirmDialog> {
       actions: [
         Button(
           onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
+          child: const Text('取消'),
         ),
         Button(
           tone: ButtonTone.danger,
@@ -441,7 +450,7 @@ Future<_CroppedRoomAvatar?> _pickAndCropRoomAvatar(BuildContext context) async {
     file = await fileSelectionService.openFile(
       acceptedTypeGroups: const [
         FileTypeGroup(
-          label: 'Images',
+          label: '图片',
           extensions: ['png', 'jpg', 'jpeg', 'webp'],
         ),
       ],

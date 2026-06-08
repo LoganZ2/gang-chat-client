@@ -136,7 +136,7 @@ Future<void> showUiDialog(
         Button(
           onPressed: () => Navigator.of(context).pop(),
           tone: ButtonTone.primary,
-          child: const Text('Done'),
+          child: const Text('完成'),
         ),
       ],
       child: child,

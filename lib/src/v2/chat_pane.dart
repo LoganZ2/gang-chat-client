@@ -27,7 +27,6 @@ const _composerHorizontalInset = _chatFloatingEdgeInset;
 const _composerBottomInset = _chatFloatingEdgeInset;
 const _outgoingBubble = Color(0xFF1F352B);
 const _incomingBubble = UiColors.surface;
-const _selectedLiveHeaderBackground = Color(0xFF1B2F27);
 const _composerStickerIcons = [
   Icons.sentiment_satisfied_alt,
   Icons.waving_hand_outlined,

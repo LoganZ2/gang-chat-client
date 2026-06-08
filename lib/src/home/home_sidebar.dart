@@ -200,14 +200,14 @@ class _RoomListPane extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     _SidebarIconButton(
-                      tooltip: 'Settings',
+                      tooltip: '设置',
                       onPressed: onOpenSettings,
                       selected: settingsActive,
                       icon: const Icon(Icons.settings),
                     ),
                     const SizedBox(width: 8),
                     _SidebarIconButton(
-                      tooltip: 'Logout',
+                      tooltip: '退出登录',
                       onPressed: () => onLogout(),
                       icon: const Icon(Icons.logout),
                     ),
@@ -219,7 +219,7 @@ class _RoomListPane extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
               child: _SidebarIconButton(
-                tooltip: 'Settings',
+                tooltip: '设置',
                 onPressed: onOpenSettings,
                 selected: settingsActive,
                 icon: const Icon(Icons.settings),
@@ -259,7 +259,7 @@ class _SidebarIconButton extends StatelessWidget {
         selectedBackgroundColor: _selectedSurface,
         pressedBackgroundColor: _primaryDark,
         borderColor: _primaryDarkLow,
-        selectedBorderColor: _cyan,
+        selectedBorderColor: UiColors.selectedBorder,
         child: IconTheme.merge(
           data: IconThemeData(color: selected ? _cyan : _textPrimary, size: 17),
           child: Center(child: icon),
@@ -360,7 +360,7 @@ class _ExpandedRoomTile extends StatelessWidget {
       backgroundColor: _primaryDarkRaised,
       selectedBackgroundColor: _selectedSurface,
       borderColor: _borderColor,
-      selectedBorderColor: _cyan,
+      selectedBorderColor: UiColors.selectedBorder,
       hoverLift: 3,
       pressDepth: 3,
       baseDepth: 5,
@@ -562,7 +562,9 @@ class _CollapsedRoomTileState extends State<_CollapsedRoomTile> {
                         ).resolveAssetUrl(widget.room.avatarUrl),
                         defaultAvatarKey: widget.room.defaultAvatarKey,
                         size: 44,
-                        borderColor: widget.selected ? _cyan : _borderColor,
+                        borderColor: widget.selected
+                            ? UiColors.selectedBorder
+                            : _borderColor,
                       ),
                     ),
                   ),
