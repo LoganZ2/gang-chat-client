@@ -28,7 +28,7 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
     return Dialog(
       backgroundColor: _primaryDarkLow,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.zero,
+        borderRadius: BorderRadius.all(Radius.circular(UiRadii.lg)),
         side: BorderSide(color: Color(0xFF3A2A2E)),
       ),
       child: ConstrainedBox(

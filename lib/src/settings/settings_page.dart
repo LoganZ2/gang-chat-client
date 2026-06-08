@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -16,7 +15,6 @@ import '../app/audio_levels.dart';
 import '../app/confirmation.dart';
 import '../app/settings_controller.dart';
 import '../app/settings_shell_state.dart';
-import '../app/sticker_display.dart';
 import '../app/sticker_management.dart';
 import '../app/sticker_ordering.dart' as sticker_ordering;
 import '../app/sticker_uploads.dart';
@@ -34,7 +32,6 @@ import '../ui/sticker_upload_adapter.dart';
 import '../ui/ui.dart';
 
 part 'settings_components.dart';
-part 'settings_stickers.dart';
 part 'settings_profile_widgets.dart';
 part 'settings_audio_widgets.dart';
 
@@ -1092,7 +1089,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => _ConfirmActionDialog(
+      builder: (context) => StickerConfirmDialog(
         title: stickerDeleteDialogTitle(StickerManagementScope.personal),
         body: stickerBulkDeleteConfirmBody(
           scope: StickerManagementScope.personal,
@@ -1383,7 +1380,7 @@ class _SettingsPageState extends State<SettingsPage> {
     unawaited(
       showDialog<void>(
         context: context,
-        builder: (context) => _StickerPreviewDialog(
+        builder: (context) => StickerPreviewDialog(
           item: item,
           imageUrl: imageUrl,
           canMoveUp: !_stickerFilterActive && (placement?.canMoveUp ?? false),
@@ -1446,7 +1443,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => _ConfirmActionDialog(
+      builder: (context) => StickerConfirmDialog(
         title: stickerDeleteDialogTitle(StickerManagementScope.personal),
         body: stickerSingleDeleteConfirmBody(
           scope: StickerManagementScope.personal,
@@ -1791,7 +1788,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _openStickerFilter() async {
     final result = await showDialog<StickerFilterDraft>(
       context: context,
-      builder: (context) => _StickerFilterDialog(
+      builder: (context) => StickerFilterDialog(
         keyword: _stickerFilterKeyword,
         mimeType: _stickerFilterMimeType,
       ),
@@ -2340,7 +2337,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
             children: [
-              _StickerActionRow(
+              StickerActionRow(
                 children: [
                   Button(
                     onPressed: canStartStickerPrimaryAction(busy: busy)
@@ -2392,7 +2389,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               if (_managingStickers) ...[
                 const SizedBox(height: 10),
-                _StickerActionRow(
+                StickerActionRow(
                   children: [
                     Button(
                       onPressed:
@@ -2446,7 +2443,7 @@ class _SettingsPageState extends State<SettingsPage> {
               else if (items.isEmpty)
                 const _SettingsEmptyState(text: '没有匹配的表情')
               else
-                _StickerGrid(
+                StickerGrid(
                   items: items,
                   managing: _managingStickers,
                   selectionNumbers: selectionNumbers,

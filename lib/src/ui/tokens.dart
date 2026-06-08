@@ -10,7 +10,7 @@ abstract final class UiColors {
   static const border = Color(0xFF2A2F38);
   static const borderStrong = Color(0xFF3A424D);
   static const accentBorder = Color(0xFF355C49);
-  static const selectedBorder = Color(0xFF529678);
+  static const selectedBorder = Color(0xFF3D705A);
   static const dangerBorder = Color(0xFF57343A);
   static const disabledSurface = Color(0xFF1A1D23);
   static const disabledBorder = Color(0xFF22262E);
@@ -18,7 +18,7 @@ abstract final class UiColors {
   static const text = Color(0xFFECEFF1);
   static const textSecondary = Color(0xFFB0B8C0);
   static const textMuted = Color(0xFF6F7785);
-  static const accent = Color(0xFF6FCFA6);
+  static const accent = Color(0xFF52A07C);
   static const violet = Color(0xFFB8A3FF);
   static const amber = Color(0xFFD4B675);
   static const danger = Color(0xFFE58383);

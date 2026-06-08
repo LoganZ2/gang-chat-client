@@ -55,6 +55,9 @@ extension _HomeShellRoomActions on _HomeShellState {
       _fileTransfers = const {};
       _roomError = null;
       _sendError = null;
+      _stickerPanelState = sticker_display.stickerPanelReset(
+        source: _stickerPanelState.source,
+      );
       _loadingRoom = true;
     });
 

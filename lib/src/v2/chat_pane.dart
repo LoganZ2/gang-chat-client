@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app/file_display.dart' as file_display;
 import '../app/file_transfer_state.dart';
 import '../app/message_display.dart' as message_display;
+import '../app/sticker_display.dart' as sticker_display;
 import '../protocol/models.dart';
 import '../ui/ui.dart';
 
@@ -27,40 +28,6 @@ const _composerHorizontalInset = _chatFloatingEdgeInset;
 const _composerBottomInset = _chatFloatingEdgeInset;
 const _outgoingBubble = Color(0xFF1F352B);
 const _incomingBubble = UiColors.surface;
-const _composerStickerIcons = [
-  Icons.sentiment_satisfied_alt,
-  Icons.waving_hand_outlined,
-  Icons.auto_awesome,
-  Icons.local_fire_department_outlined,
-  Icons.coffee_outlined,
-  Icons.celebration_outlined,
-  Icons.favorite_border,
-  Icons.lightbulb_outline,
-  Icons.bolt_outlined,
-  Icons.nightlight_round,
-  Icons.public_outlined,
-  Icons.workspace_premium_outlined,
-];
-const _composerStickerLabels = [
-  '微笑',
-  '挥手',
-  '闪耀',
-  '火热',
-  '咖啡',
-  '庆祝',
-  '爱心',
-  '灵感',
-  '加速',
-  '夜晚',
-  '世界',
-  '胜利',
-];
-const _composerStickerColors = [
-  UiColors.accent,
-  UiColors.violet,
-  UiColors.amber,
-  UiColors.danger,
-];
 
 class ChatPane extends StatelessWidget {
   const ChatPane({
@@ -76,7 +43,12 @@ class ChatPane extends StatelessWidget {
     required this.sending,
     required this.sendError,
     required this.composerController,
+    required this.stickerPanel,
     required this.onSubmit,
+    required this.onSendSticker,
+    required this.onLoadStickers,
+    required this.onRefreshStickers,
+    required this.onStickerSourceChanged,
     required this.onRetry,
     required this.onOpenLiveChannel,
     required this.onOpenRoomMembers,
@@ -94,7 +66,12 @@ class ChatPane extends StatelessWidget {
   final bool sending;
   final String? sendError;
   final TextEditingController composerController;
+  final sticker_display.StickerPanelLoadState stickerPanel;
   final ValueChanged<String> onSubmit;
+  final ValueChanged<Sticker> onSendSticker;
+  final VoidCallback onLoadStickers;
+  final VoidCallback onRefreshStickers;
+  final ValueChanged<sticker_display.StickerPanelSource> onStickerSourceChanged;
   final VoidCallback onRetry;
   final VoidCallback onOpenLiveChannel;
   final VoidCallback onOpenRoomMembers;
@@ -150,7 +127,12 @@ class ChatPane extends StatelessWidget {
                     controller: composerController,
                     sending: sending,
                     sendError: sendError,
+                    stickerPanel: stickerPanel,
                     onSubmit: onSubmit,
+                    onSendSticker: onSendSticker,
+                    onOpenStickers: onLoadStickers,
+                    onRefreshStickers: onRefreshStickers,
+                    onStickerSourceChanged: onStickerSourceChanged,
                   ),
                 ),
               ],

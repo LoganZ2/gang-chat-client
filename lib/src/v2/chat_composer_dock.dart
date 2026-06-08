@@ -1,17 +1,30 @@
 part of 'chat_pane.dart';
 
+const _stickerPanelHeight = 268.0;
+const _stickerTileSize = 56.0;
+
 class _ComposerDock extends StatelessWidget {
   const _ComposerDock({
     required this.controller,
     required this.sending,
     required this.sendError,
+    required this.stickerPanel,
     required this.onSubmit,
+    required this.onSendSticker,
+    required this.onOpenStickers,
+    required this.onRefreshStickers,
+    required this.onStickerSourceChanged,
   });
 
   final TextEditingController controller;
   final bool sending;
   final String? sendError;
+  final sticker_display.StickerPanelLoadState stickerPanel;
   final ValueChanged<String> onSubmit;
+  final ValueChanged<Sticker> onSendSticker;
+  final VoidCallback onOpenStickers;
+  final VoidCallback onRefreshStickers;
+  final ValueChanged<sticker_display.StickerPanelSource> onStickerSourceChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -45,17 +58,16 @@ class _ComposerDock extends StatelessWidget {
                   id: 'stickers',
                   icon: Icons.emoji_emotions_outlined,
                   label: '表情',
-                  panel: ComposerPanel.list(
-                    itemCount: _composerStickerIcons.length,
-                    itemBuilder: (context, index) {
-                      return _StickerPanelItem(
-                        icon: _composerStickerIcons[index],
-                        label: _composerStickerLabels[index],
-                        color:
-                            _composerStickerColors[index %
-                                _composerStickerColors.length],
-                      );
-                    },
+                  onPressed: onOpenStickers,
+                  panel: ComposerPanel.static(
+                    height: _stickerPanelHeight,
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                    child: _StickerPanel(
+                      state: stickerPanel,
+                      onSendSticker: onSendSticker,
+                      onRefresh: onRefreshStickers,
+                      onSourceChanged: onStickerSourceChanged,
+                    ),
                   ),
                 ),
                 const ComposerAction(
@@ -81,44 +93,235 @@ class _ComposerDock extends StatelessWidget {
   }
 }
 
-class _StickerPanelItem extends StatelessWidget {
-  const _StickerPanelItem({
-    required this.icon,
-    required this.label,
-    required this.color,
+/// The composer's sticker picker. Shows the user's personal packs and the
+/// current room's packs behind a source toggle, sending the real managed
+/// sticker (asset + id) rather than a decorative placeholder.
+class _StickerPanel extends StatelessWidget {
+  const _StickerPanel({
+    required this.state,
+    required this.onSendSticker,
+    required this.onRefresh,
+    required this.onSourceChanged,
   });
 
-  final IconData icon;
-  final String label;
-  final Color color;
+  final sticker_display.StickerPanelLoadState state;
+  final ValueChanged<Sticker> onSendSticker;
+  final VoidCallback onRefresh;
+  final ValueChanged<sticker_display.StickerPanelSource> onSourceChanged;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 88,
-      child: PressableSurface(
-        height: 76,
-        onPressed: () {},
-        padding: const EdgeInsets.all(10),
-        backgroundColor: UiColors.surfaceLow,
-        borderColor: UiColors.border,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: UiColors.textSecondary,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-              ),
+    final packs = state.source == sticker_display.StickerPanelSource.personal
+        ? state.personalPacks
+        : state.roomPacks;
+    final stickers = sticker_display.stickerPanelStickers(
+      source: state.source,
+      personalPacks: state.personalPacks,
+      roomPacks: state.roomPacks,
+    );
+    final bodyState = sticker_display.stickerPanelBodyState(
+      loading: state.loading,
+      error: state.error,
+      stickers: stickers,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SegmentedControl<sticker_display.StickerPanelSource>(
+          value: state.source,
+          expanded: true,
+          onChanged: onSourceChanged,
+          segments: const [
+            Segment(
+              value: sticker_display.StickerPanelSource.personal,
+              label: '我的表情包',
+            ),
+            Segment(
+              value: sticker_display.StickerPanelSource.room,
+              label: '房间表情包',
             ),
           ],
         ),
+        const SizedBox(height: 12),
+        Expanded(
+          child: switch (bodyState) {
+            sticker_display.StickerPanelBodyState.loading =>
+              const _StickerPanelCentered(
+                child: SizedBox.square(
+                  dimension: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.2,
+                    color: UiColors.accent,
+                  ),
+                ),
+              ),
+            sticker_display.StickerPanelBodyState.error => _StickerPanelMessage(
+              icon: Icons.warning_amber_rounded,
+              text: state.error ?? '加载表情失败',
+              onRefresh: onRefresh,
+            ),
+            sticker_display.StickerPanelBodyState.empty => _StickerPanelMessage(
+              icon: Icons.emoji_emotions_outlined,
+              text: sticker_display.stickerPanelEmptyText(state.source),
+            ),
+            sticker_display.StickerPanelBodyState.results => _StickerPackList(
+              packs: packs,
+              onSendSticker: onSendSticker,
+            ),
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _StickerPackList extends StatelessWidget {
+  const _StickerPackList({required this.packs, required this.onSendSticker});
+
+  final List<StickerPack> packs;
+  final ValueChanged<Sticker> onSendSticker;
+
+  @override
+  Widget build(BuildContext context) {
+    // Packs are the unit of layering: a personal pack groups the user's saved
+    // stickers, a room pack groups the room's shared ones. Multiple packs in a
+    // scope render as separate labelled sections so the grouping stays visible.
+    final visiblePacks = [
+      for (final pack in packs)
+        if (pack.stickers.isNotEmpty) pack,
+    ];
+    final showHeaders = visiblePacks.length > 1;
+
+    return ListView.builder(
+      padding: EdgeInsets.zero,
+      itemCount: visiblePacks.length,
+      itemBuilder: (context, index) {
+        final pack = visiblePacks[index];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (showHeaders) ...[
+              if (index > 0) const SizedBox(height: 10),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8, left: 2),
+                child: Text(
+                  pack.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: UiTypography.label.copyWith(
+                    color: UiColors.textMuted,
+                  ),
+                ),
+              ),
+            ],
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final sticker in pack.stickers)
+                  _StickerTile(
+                    sticker: sticker,
+                    onPressed: () => onSendSticker(sticker),
+                  ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _StickerTile extends StatelessWidget {
+  const _StickerTile({required this.sticker, required this.onPressed});
+
+  final Sticker sticker;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageUrl = AppConfigScope.of(
+      context,
+    ).resolveAssetUrl(sticker.asset.thumbnailUrl ?? sticker.asset.url);
+
+    return Tooltip(
+      message: sticker.name,
+      child: PressableSurface(
+        width: _stickerTileSize,
+        height: _stickerTileSize,
+        onPressed: onPressed,
+        padding: const EdgeInsets.all(6),
+        backgroundColor: UiColors.surfaceLow,
+        borderColor: UiColors.border,
+        child: Center(
+          child: imageUrl == null
+              ? const Icon(
+                  Icons.image_not_supported_outlined,
+                  color: UiColors.textMuted,
+                  size: 20,
+                )
+              : Image.network(
+                  imageUrl,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => const Icon(
+                    Icons.broken_image_outlined,
+                    color: UiColors.textMuted,
+                    size: 20,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StickerPanelCentered extends StatelessWidget {
+  const _StickerPanelCentered({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(child: child);
+  }
+}
+
+class _StickerPanelMessage extends StatelessWidget {
+  const _StickerPanelMessage({
+    required this.icon,
+    required this.text,
+    this.onRefresh,
+  });
+
+  final IconData icon;
+  final String text;
+  final VoidCallback? onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: UiColors.textMuted, size: 26),
+          const SizedBox(height: 10),
+          Text(
+            text,
+            maxLines: 2,
+            textAlign: TextAlign.center,
+            overflow: TextOverflow.ellipsis,
+            style: UiTypography.label.copyWith(color: UiColors.textMuted),
+          ),
+          if (onRefresh != null) ...[
+            const SizedBox(height: 12),
+            Button(
+              icon: const Icon(Icons.refresh),
+              onPressed: onRefresh,
+              child: const Text('刷新'),
+            ),
+          ],
+        ],
       ),
     );
   }

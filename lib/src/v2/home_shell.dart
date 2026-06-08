@@ -12,9 +12,12 @@ import '../app/file_transfer_state.dart';
 import '../app/live_controller.dart';
 import '../app/live_display.dart' as live_display;
 import '../app/live_session_controller.dart';
+import '../app/message_display.dart' as message_display;
 import '../app/messages_controller.dart';
 import '../app/realtime_controller.dart';
 import '../app/rooms_controller.dart';
+import '../app/sticker_display.dart' as sticker_display;
+import '../app/sticker_packs_controller.dart';
 import '../live/live_session.dart';
 import '../protocol/models.dart';
 import '../settings/settings_page.dart';
@@ -82,6 +85,8 @@ class _HomeShellState extends State<HomeShell> {
   String? _roomError;
   bool _sending = false;
   String? _sendError;
+  sticker_display.StickerPanelLoadState _stickerPanelState =
+      const sticker_display.StickerPanelLoadState();
   bool _settingsOpen = false;
   bool _narrowContentOpen = false;
   _ContentMode _contentMode = _ContentMode.chat;
@@ -95,6 +100,7 @@ class _HomeShellState extends State<HomeShell> {
 
   RoomsController get _roomsController => _services.rooms;
   MessagesController get _messagesController => _services.messages;
+  StickerPacksController get _stickerPacksController => _services.stickers;
   LiveController get _liveController => _services.live;
   LiveSessionController get _liveSessionController => _services.liveSession;
 
@@ -136,6 +142,7 @@ class _HomeShellState extends State<HomeShell> {
       _roomError = null;
       _sending = false;
       _sendError = null;
+      _stickerPanelState = const sticker_display.StickerPanelLoadState();
       _settingsOpen = false;
       _narrowContentOpen = false;
       _contentMode = _ContentMode.chat;

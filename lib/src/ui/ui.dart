@@ -13,6 +13,7 @@ export 'navigation.dart';
 export 'segmented_control.dart';
 export 'settings_scaffold.dart';
 export 'sidebar.dart';
+export 'sticker_manager.dart';
 export 'switch.dart';
 export 'surface.dart';
 export 'text_context_menu.dart';

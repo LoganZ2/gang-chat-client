@@ -180,7 +180,7 @@ class _AvatarCropDialogState extends State<AvatarCropDialog> {
     return Dialog(
       backgroundColor: UiColors.surfaceLow,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.zero,
+        borderRadius: BorderRadius.all(Radius.circular(UiRadii.lg)),
         side: BorderSide(color: UiColors.border),
       ),
       child: ConstrainedBox(

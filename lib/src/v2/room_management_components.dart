@@ -9,6 +9,7 @@ class _RoomDialogShell extends StatelessWidget {
     required this.maxWidth,
     required this.maxHeight,
     this.headerAction,
+    this.pinned,
     this.embedded = false,
   });
 
@@ -19,6 +20,7 @@ class _RoomDialogShell extends StatelessWidget {
   final double maxWidth;
   final double maxHeight;
   final Widget? headerAction;
+  final Widget? pinned;
   final bool embedded;
 
   @override
@@ -29,6 +31,7 @@ class _RoomDialogShell extends StatelessWidget {
         title: title,
         headerAction: headerAction,
         onBack: onClose,
+        pinned: pinned,
         body: child,
       );
     }
@@ -61,6 +64,10 @@ class _RoomDialogShell extends StatelessWidget {
               ),
             ],
           ),
+          if (pinned != null) ...[
+            const SizedBox(height: 14),
+            pinned!,
+          ],
           const SizedBox(height: 14),
           Expanded(child: child),
         ],
