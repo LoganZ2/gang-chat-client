@@ -88,6 +88,21 @@ extension _HomeShellRoomActions on _HomeShellState {
     });
   }
 
+  void _openCreateRoom({required bool openContent}) {
+    _setHomeState(() {
+      _settingsOpen = false;
+      _contentMode = _ContentMode.createRoom;
+      if (openContent) _narrowContentOpen = true;
+    });
+  }
+
+  void _closeCreateRoom() {
+    _setHomeState(() {
+      _contentMode = _ContentMode.chat;
+      if (_selectedServerId == null) _narrowContentOpen = false;
+    });
+  }
+
   void _closeSettings() {
     _setHomeState(() => _settingsOpen = false);
   }
@@ -143,11 +158,10 @@ extension _HomeShellRoomActions on _HomeShellState {
     });
   }
 
-  void _handleRoomSettingsResult(
-    String roomId,
-    RoomManagementResult result,
-  ) {
+  void _handleRoomSettingsResult(String roomId, RoomManagementResult result) {
     switch (result.kind) {
+      case RoomManagementResultKind.created:
+        break;
       case RoomManagementResultKind.updated:
         final updated = result.room;
         if (updated != null) _applyManagedRoomUpdated(updated);
@@ -159,6 +173,35 @@ extension _HomeShellRoomActions on _HomeShellState {
         unawaited(_loadServers());
         break;
     }
+  }
+
+  void _handleCreateRoomResult(RoomManagementResult result) {
+    if (result.kind != RoomManagementResultKind.created) return;
+    final room = result.room;
+    if (room == null) return;
+    _applyCreatedRoom(room);
+    unawaited(_loadServers());
+  }
+
+  void _applyCreatedRoom(RoomDetail room) {
+    final patch = _roomsController.patchRoomDetailApplied(
+      rooms: _servers,
+      detail: room,
+    );
+    _setHomeState(() {
+      _selectedServerId = room.id;
+      _selectedRoom = patch.selectedRoom;
+      _servers = patch.rooms;
+      _live = room.live;
+      _messages = const [];
+      _fileTransfers = const {};
+      _settingsOpen = false;
+      _contentMode = _ContentMode.chat;
+      _roomError = null;
+      _sendError = null;
+      _loadingRoom = false;
+      _narrowContentOpen = true;
+    });
   }
 
   void _applyManagedRoomUpdated(RoomDetail room) {

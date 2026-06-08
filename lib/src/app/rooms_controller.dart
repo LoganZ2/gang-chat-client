@@ -602,8 +602,24 @@ class RoomsController {
     return api.getRoomMemberProfile(roomId: roomId, userId: userId);
   }
 
-  Future<RoomDetail> createRoom({required String name}) {
-    return api.createRoom(name: name);
+  Future<RoomDetail> createRoom({
+    required String name,
+    String? description,
+    String? visibility,
+    String? joinPolicy,
+    bool? aiVoiceAnnouncementsEnabled,
+    String? avatarAssetId,
+    String? defaultAvatarKey,
+  }) {
+    return api.createRoom(
+      name: name,
+      description: description,
+      visibility: visibility,
+      joinPolicy: joinPolicy,
+      aiVoiceAnnouncementsEnabled: aiVoiceAnnouncementsEnabled,
+      avatarAssetId: avatarAssetId,
+      defaultAvatarKey: defaultAvatarKey,
+    );
   }
 
   Future<UploadedAsset> uploadImageAsset({

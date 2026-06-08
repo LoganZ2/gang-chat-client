@@ -46,7 +46,7 @@ class AvatarPicker extends StatelessWidget {
     required this.onUpload,
     required this.onPresetSelected,
     this.presetKeys = kAvatarPresetKeys,
-    this.uploadLabel = 'Upload image',
+    this.uploadLabel = '上传图片',
   });
 
   /// Heading shown above the picker, e.g. '头像' or 'Room avatar'.

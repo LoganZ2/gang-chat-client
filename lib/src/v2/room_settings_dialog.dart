@@ -1,5 +1,7 @@
 part of 'room_management.dart';
 
+enum _RoomSettingsDialogMode { create, edit }
+
 class RoomSettingsDialog extends StatefulWidget {
   const RoomSettingsDialog({
     super.key,
@@ -12,7 +14,33 @@ class RoomSettingsDialog extends StatefulWidget {
     this.embedded = false,
     this.onClose,
     this.onResult,
-  });
+    bool createMode = false,
+  }) : _mode = createMode
+           ? _RoomSettingsDialogMode.create
+           : _RoomSettingsDialogMode.edit;
+
+  factory RoomSettingsDialog.create({
+    Key? key,
+    required RoomsController controller,
+    required CurrentUser currentUser,
+    bool embedded = false,
+    VoidCallback? onClose,
+    ValueChanged<RoomManagementResult>? onResult,
+  }) {
+    return RoomSettingsDialog(
+      key: key,
+      controller: controller,
+      room: _draftCreateRoom(currentUser),
+      currentUser: currentUser,
+      isInLive: false,
+      onLeaveLive: () async {},
+      onRoomUpdated: (_) {},
+      embedded: embedded,
+      onClose: onClose,
+      onResult: onResult,
+      createMode: true,
+    );
+  }
 
   final RoomsController controller;
   final RoomDetail room;
@@ -23,6 +51,7 @@ class RoomSettingsDialog extends StatefulWidget {
   final bool embedded;
   final VoidCallback? onClose;
   final ValueChanged<RoomManagementResult>? onResult;
+  final _RoomSettingsDialogMode _mode;
 
   @override
   State<RoomSettingsDialog> createState() => _RoomSettingsDialogState();
@@ -49,16 +78,28 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
   String? _error;
   String? _notice;
 
-  bool get _canManageRoom => room_display
-      .roomAccessState(room: _room, currentUser: widget.currentUser)
-      .canManageRoom;
+  bool get _creating => widget._mode == _RoomSettingsDialogMode.create;
 
-  bool get _canDeleteRoom => room_display
-      .roomManagementPermissionState(
-        room: _room,
-        currentUser: widget.currentUser,
-      )
-      .canDeleteRoom;
+  bool get _canManageRoom =>
+      _creating ||
+      room_display
+          .roomAccessState(room: _room, currentUser: widget.currentUser)
+          .canManageRoom;
+
+  bool get _canDeleteRoom =>
+      !_creating &&
+      room_display
+          .roomManagementPermissionState(
+            room: _room,
+            currentUser: widget.currentUser,
+          )
+          .canDeleteRoom;
+
+  String get _avatarDisplayName {
+    final name = _nameController.text.trim();
+    if (name.isNotEmpty) return name;
+    return _creating ? '房间' : room_display.roomDisplayName(_room);
+  }
 
   @override
   void initState() {
@@ -82,13 +123,15 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
 
   void _close() {
     if (widget.embedded) {
-      if (_changed) widget.onResult?.call(RoomManagementResult.updated(_room));
+      if (!_creating && _changed) {
+        widget.onResult?.call(RoomManagementResult.updated(_room));
+      }
       widget.onClose?.call();
       return;
     }
     Navigator.of(
       context,
-    ).pop(_changed ? RoomManagementResult.updated(_room) : null);
+    ).pop(!_creating && _changed ? RoomManagementResult.updated(_room) : null);
   }
 
   void _emitResult(RoomManagementResult result) {
@@ -125,17 +168,31 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
       _notice = null;
     });
     try {
-      final updated = await widget.controller.updateRoom(
-        roomId: _room.id,
-        name: draft.name,
-        description: draft.description,
-        visibility: draft.visibility,
-        joinPolicy: draft.joinPolicy,
-        aiVoiceAnnouncementsEnabled: draft.aiVoiceAnnouncementsEnabled,
-        avatarAssetId: draft.avatarAssetId,
-        defaultAvatarKey: draft.defaultAvatarKey,
-      );
+      final updated = _creating
+          ? await widget.controller.createRoom(
+              name: draft.name!,
+              description: draft.description,
+              visibility: draft.visibility,
+              joinPolicy: draft.joinPolicy,
+              aiVoiceAnnouncementsEnabled: draft.aiVoiceAnnouncementsEnabled,
+              avatarAssetId: draft.avatarAssetId,
+              defaultAvatarKey: draft.defaultAvatarKey,
+            )
+          : await widget.controller.updateRoom(
+              roomId: _room.id,
+              name: draft.name,
+              description: draft.description,
+              visibility: draft.visibility,
+              joinPolicy: draft.joinPolicy,
+              aiVoiceAnnouncementsEnabled: draft.aiVoiceAnnouncementsEnabled,
+              avatarAssetId: draft.avatarAssetId,
+              defaultAvatarKey: draft.defaultAvatarKey,
+            );
       if (!mounted) return;
+      if (_creating) {
+        _emitResult(RoomManagementResult.created(updated));
+        return;
+      }
       setState(() {
         _room = updated;
         _defaultAvatarKey = updated.defaultAvatarKey;
@@ -303,8 +360,8 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
   @override
   Widget build(BuildContext context) {
     return _RoomDialogShell(
-      title: '房间设置',
-      icon: Icons.tune,
+      title: _creating ? '创建房间' : '房间设置',
+      icon: _creating ? Icons.add_circle_outline : Icons.tune,
       maxWidth: _dialogMaxWidth,
       maxHeight: _dialogMaxHeight,
       embedded: widget.embedded,
@@ -318,10 +375,8 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
             title: '房间信息',
             children: [
               AvatarPicker(
-                label: '房间头像',
-                displayName: _nameController.text.trim().isEmpty
-                    ? room_display.roomDisplayName(_room)
-                    : _nameController.text,
+                label: '房间图标',
+                displayName: _avatarDisplayName,
                 imageUrl: _avatarPreviewUrl(AppConfigScope.of(context)),
                 defaultAvatarKey: _defaultAvatarKey,
                 usingPreset: _usingPresetAvatar,
@@ -330,6 +385,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
                 onUpload: _pickAvatar,
                 onPresetSelected: _selectPreset,
                 presetKeys: const ['room-1', ...kAvatarPresetKeys],
+                uploadLabel: '上传图标',
               ),
               Input(
                 controller: _nameController,
@@ -377,24 +433,27 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
                 tone: ButtonTone.primary,
                 loading: _saving,
                 onPressed: _canManageRoom ? _save : null,
-                icon: const Icon(Icons.save_outlined),
-                child: const Text('保存房间设置'),
+                icon: Icon(
+                  _creating ? Icons.check_circle_outline : Icons.save_outlined,
+                ),
+                child: Text(_creating ? '确定' : '保存房间设置'),
               ),
             ],
           ),
-          SettingsCard(
-            title: '离开房间',
-            children: [
-              Button(
-                width: double.infinity,
-                tone: ButtonTone.danger,
-                loading: _leaving,
-                onPressed: _leaveRoom,
-                icon: const Icon(Icons.logout),
-                child: const Text('离开房间'),
-              ),
-            ],
-          ),
+          if (!_creating)
+            SettingsCard(
+              title: '离开房间',
+              children: [
+                Button(
+                  width: double.infinity,
+                  tone: ButtonTone.danger,
+                  loading: _leaving,
+                  onPressed: _leaveRoom,
+                  icon: const Icon(Icons.logout),
+                  child: const Text('离开房间'),
+                ),
+              ],
+            ),
           if (_canDeleteRoom)
             SettingsCard(
               title: '删除房间',
@@ -414,4 +473,28 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
       ),
     );
   }
+}
+
+RoomDetail _draftCreateRoom(CurrentUser currentUser) {
+  final now = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+  return RoomDetail(
+    id: '__new_room__',
+    name: '',
+    visibility: 'public',
+    joinPolicy: 'approval_required',
+    avatarUrl: null,
+    defaultAvatarKey: 'room-1',
+    memberCount: 1,
+    onlineMemberCount: 1,
+    createdBy: currentUser.toSummary(),
+    myMembership: RoomMembership(joinedAt: now, role: 'owner'),
+    live: LiveState(
+      roomId: '__new_room__',
+      participantCount: 0,
+      participants: const [],
+      updatedAt: now,
+    ),
+    createdAt: now,
+    updatedAt: now,
+  );
 }

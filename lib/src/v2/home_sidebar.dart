@@ -28,6 +28,7 @@ class HomeSidebar extends StatelessWidget {
     required this.error,
     required this.settingsActive,
     required this.onServerSelected,
+    required this.onCreateRoom,
     required this.onOpenSettings,
     required this.onLogout,
     this.includeWindowChromeOffset = true,
@@ -43,6 +44,7 @@ class HomeSidebar extends StatelessWidget {
   final bool settingsActive;
   final bool includeWindowChromeOffset;
   final ValueChanged<RoomCard> onServerSelected;
+  final VoidCallback onCreateRoom;
   final VoidCallback onOpenSettings;
   final VoidCallback onLogout;
 
@@ -83,6 +85,7 @@ class HomeSidebar extends StatelessWidget {
                     const SizedBox(height: 12),
                     _SidebarFooter(
                       settingsActive: settingsActive,
+                      onCreateRoom: onCreateRoom,
                       onOpenSettings: onOpenSettings,
                       onLogout: onLogout,
                     ),
@@ -136,11 +139,13 @@ class HomeSidebar extends StatelessWidget {
 class _SidebarFooter extends StatelessWidget {
   const _SidebarFooter({
     required this.settingsActive,
+    required this.onCreateRoom,
     required this.onOpenSettings,
     required this.onLogout,
   });
 
   final bool settingsActive;
+  final VoidCallback onCreateRoom;
   final VoidCallback onOpenSettings;
   final VoidCallback onLogout;
 
@@ -149,21 +154,32 @@ class _SidebarFooter extends StatelessWidget {
     return SizedBox(
       height: _footerButtonOuterHeight,
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
         children: [
           ButtonIcon(
-            tooltip: '设置',
-            icon: const Icon(Icons.settings_outlined),
-            selected: settingsActive,
-            onPressed: onOpenSettings,
+            tooltip: '创建房间',
+            icon: const Icon(Icons.add_circle_outline),
+            onPressed: onCreateRoom,
             size: _footerButtonSize,
           ),
-          const SizedBox(width: _footerButtonGap),
-          ButtonIcon(
-            tooltip: '退出登录',
-            icon: const Icon(Icons.logout),
-            onPressed: onLogout,
-            size: _footerButtonSize,
+          const Spacer(),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ButtonIcon(
+                tooltip: '设置',
+                icon: const Icon(Icons.settings_outlined),
+                selected: settingsActive,
+                onPressed: onOpenSettings,
+                size: _footerButtonSize,
+              ),
+              const SizedBox(width: _footerButtonGap),
+              ButtonIcon(
+                tooltip: '退出登录',
+                icon: const Icon(Icons.logout),
+                onPressed: onLogout,
+                size: _footerButtonSize,
+              ),
+            ],
           ),
         ],
       ),

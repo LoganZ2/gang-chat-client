@@ -172,6 +172,10 @@ abstract interface class GangApi {
 
   Future<RoomDetail> createRoom({
     required String name,
+    String? description,
+    String? visibility,
+    String? joinPolicy,
+    bool? aiVoiceAnnouncementsEnabled,
     String? avatarAssetId,
     String? defaultAvatarKey,
     String? idempotencyKey,
@@ -789,12 +793,22 @@ class GangApiClient implements GangApi {
   @override
   Future<RoomDetail> createRoom({
     required String name,
+    String? description,
+    String? visibility,
+    String? joinPolicy,
+    bool? aiVoiceAnnouncementsEnabled,
     String? avatarAssetId,
     String? defaultAvatarKey,
     String? idempotencyKey,
   }) async {
     final decoded = await _sendJson((token) {
       final body = <String, Object?>{'name': name};
+      if (description != null) body['description'] = description;
+      if (visibility != null) body['visibility'] = visibility;
+      if (joinPolicy != null) body['join_policy'] = joinPolicy;
+      if (aiVoiceAnnouncementsEnabled != null) {
+        body['ai_voice_announcements_enabled'] = aiVoiceAnnouncementsEnabled;
+      }
       if (avatarAssetId != null) body['avatar_asset_id'] = avatarAssetId;
       if (defaultAvatarKey != null) {
         body['default_avatar_key'] = defaultAvatarKey;

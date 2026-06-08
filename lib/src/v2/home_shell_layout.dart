@@ -23,6 +23,16 @@ extension _HomeShellLayout on _HomeShellState {
       );
     }
 
+    if (_contentMode == _ContentMode.createRoom) {
+      return RoomSettingsDialog.create(
+        controller: _roomsController,
+        currentUser: _currentUser,
+        embedded: true,
+        onClose: _closeCreateRoom,
+        onResult: _handleCreateRoomResult,
+      );
+    }
+
     if (_selectedServerId == null) return const HomeContent();
     if (_contentMode == _ContentMode.members && _selectedRoom != null) {
       return RoomMembersDialog(
@@ -118,6 +128,7 @@ extension _HomeShellLayout on _HomeShellState {
       includeWindowChromeOffset: false,
       onServerSelected: (server) =>
           _selectServer(server, openContent: openContentOnSelect),
+      onCreateRoom: () => _openCreateRoom(openContent: openContentOnSelect),
       onOpenSettings: () => _toggleSettings(openContent: openContentOnSelect),
       onLogout: () => unawaited(_logout()),
     );

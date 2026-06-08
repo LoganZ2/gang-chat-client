@@ -40,7 +40,7 @@ const _windowEdgeBorder = Color(0xFF303842);
 bool get _supportsWindowManagement =>
     !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
 
-enum _ContentMode { chat, live, members, roomSettings }
+enum _ContentMode { chat, live, members, roomSettings, createRoom }
 
 class HomeShell extends StatefulWidget {
   const HomeShell({

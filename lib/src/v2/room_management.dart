@@ -24,10 +24,13 @@ const _dialogMaxHeight = 700.0;
 const _panelRadius = UiRadii.lg;
 const _rowRadius = UiRadii.md;
 
-enum RoomManagementResultKind { updated, left, deleted }
+enum RoomManagementResultKind { created, updated, left, deleted }
 
 class RoomManagementResult {
   const RoomManagementResult._({required this.kind, this.room});
+
+  const RoomManagementResult.created(RoomDetail room)
+    : this._(kind: RoomManagementResultKind.created, room: room);
 
   const RoomManagementResult.updated(RoomDetail room)
     : this._(kind: RoomManagementResultKind.updated, room: room);

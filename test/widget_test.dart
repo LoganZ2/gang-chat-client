@@ -218,6 +218,7 @@ void main() {
     expect(find.text('People'), findsNothing);
     expect(find.text('Files'), findsNothing);
     expect(find.text('设置'), findsNothing);
+    expect(find.byTooltip('创建房间'), findsOneWidget);
     expect(find.byTooltip('设置'), findsOneWidget);
     expect(find.byTooltip('退出登录'), findsOneWidget);
     expect(find.text('Kai'), findsOneWidget);
@@ -265,6 +266,53 @@ void main() {
           .selected,
       isTrue,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('authenticated home shell creates room from footer template', (
+    WidgetTester tester,
+  ) async {
+    final roomCreations = <Map<String, Object?>>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: current_home.HomePage(
+          app: _homeTestAppContext(roomCreations: roomCreations),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('创建房间'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('创建房间'), findsOneWidget);
+    expect(find.text('房间信息'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '确定'), findsOneWidget);
+    expect(find.text('保存房间设置'), findsNothing);
+    expect(find.text('离开房间'), findsNothing);
+    expect(find.text('删除房间'), findsNothing);
+
+    await tester.enterText(_textFieldWithHint('房间名称'), 'Project Nest');
+    await tester.enterText(_textFieldWithHint('简介'), 'A focused room');
+    final confirmButton = find.widgetWithText(ui.Button, '确定');
+    await tester.ensureVisible(confirmButton);
+    await tester.pumpAndSettle();
+    await tester.tap(confirmButton);
+    await tester.pumpAndSettle();
+
+    expect(roomCreations, hasLength(1));
+    final body = roomCreations.single;
+    expect(body['name'], 'Project Nest');
+    expect(body['description'], 'A focused room');
+    expect(body['visibility'], 'public');
+    expect(body['join_policy'], 'approval_required');
+    expect(body['ai_voice_announcements_enabled'], isTrue);
+    expect(body['default_avatar_key'], 'room-1');
+    expect(find.text('Project Nest'), findsAtLeastNWidgets(1));
+    expect(find.text('创建房间'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -593,8 +641,10 @@ void main() {
     final userSummaryRect = tester.getRect(
       find.byKey(const ValueKey('home-sidebar-user-summary')),
     );
+    final createRect = tester.getRect(find.byTooltip('创建房间'));
     final settingsRect = tester.getRect(find.byTooltip('设置'));
     final logoutRect = tester.getRect(find.byTooltip('退出登录'));
+    expect(createRect.left, closeTo(userSummaryRect.left, 0.01));
     expect(logoutRect.right, closeTo(userSummaryRect.right, 0.01));
     expect(logoutRect.left - settingsRect.right, closeTo(8, 0.01));
 
@@ -2292,6 +2342,7 @@ AuthenticatedAppContext _homeTestAppContext({
   Future<void> Function()? onLogout,
   List<String>? requestedPaths,
   List<Map<String, Object?>>? accountUpdates,
+  List<Map<String, Object?>>? roomCreations,
 }) {
   final user = CurrentUser(
     id: 'user-1',
@@ -2323,6 +2374,7 @@ AuthenticatedAppContext _homeTestAppContext({
     api: _roomsApi(
       requestedPaths: requestedPaths,
       accountUpdates: accountUpdates,
+      roomCreations: roomCreations,
     ),
   );
 }
@@ -2330,6 +2382,7 @@ AuthenticatedAppContext _homeTestAppContext({
 GangApi _roomsApi({
   List<String>? requestedPaths,
   List<Map<String, Object?>>? accountUpdates,
+  List<Map<String, Object?>>? roomCreations,
 }) {
   return GangApiClient(
     baseUrl: 'http://example.test/api/v1',
@@ -2337,7 +2390,41 @@ GangApi _roomsApi({
     httpClient: MockClient((request) async {
       requestedPaths?.add(request.url.path);
       if (request.url.path == '/api/v1/rooms') {
-        return _jsonResponse({'rooms': _serverListJson});
+        if (request.method == 'POST') {
+          final body =
+              jsonDecode(utf8.decode(request.bodyBytes))
+                  as Map<String, Object?>;
+          final created = {
+            ...body,
+            'id': 'server-created-${(roomCreations?.length ?? 0) + 1}',
+          };
+          roomCreations?.add(created);
+          return _jsonResponse({
+            'room': _roomDetailJson(
+              id: created['id']! as String,
+              name: body['name']! as String,
+              memberCount: 1,
+              onlineMemberCount: 1,
+              liveParticipantCount: 0,
+              description: body['description'] as String? ?? '',
+              visibility: body['visibility'] as String? ?? 'public',
+              joinPolicy: body['join_policy'] as String? ?? 'approval_required',
+              aiVoiceAnnouncementsEnabled:
+                  body['ai_voice_announcements_enabled'] as bool? ?? true,
+            ),
+          });
+        }
+        return _jsonResponse({
+          'rooms': [
+            for (final created in roomCreations ?? const [])
+              _roomCardJson(
+                id: created['id']! as String,
+                name: created['name']! as String,
+                memberCount: 1,
+              ),
+            ..._serverListJson,
+          ],
+        });
       }
       if (request.url.path == '/api/v1/users/me/account') {
         final body =
