@@ -7,6 +7,7 @@ const _homeTitleBarControlsWidth = 134.0;
 const _homeTitleBarControlWidth = 34.0;
 const _homeTitleBarControlHeight = 32.0;
 const _homeTitleBarControlGap = 6.0;
+const _macNativeControlsInset = 76.0;
 
 class _HomeTitleBar extends StatefulWidget {
   const _HomeTitleBar({required this.windowController});
@@ -66,10 +67,12 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
+            final nativeMacControls =
+                Theme.of(context).platform == TargetPlatform.macOS;
             final wide = constraints.maxWidth >= narrowBreakpoint;
             final compactBrandWidth =
                 (constraints.maxWidth -
-                        _homeTitleBarControlsWidth -
+                        (nativeMacControls ? 0 : _homeTitleBarControlsWidth) -
                         _homeTitleBarMinSearchWidth)
                     .clamp(118.0, 168.0)
                     .toDouble();
@@ -89,7 +92,11 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
                       child: _WindowDragRegion(
                         windowController: widget.windowController,
                         onDoubleTap: _toggleMaximize,
-                        child: const _BrandLockup(),
+                        child: _BrandLockup(
+                          leadingInset: nativeMacControls
+                              ? _macNativeControlsInset
+                              : 0,
+                        ),
                       ),
                     ),
                   ),
@@ -100,14 +107,15 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
                     onDoubleTap: _toggleMaximize,
                   ),
                 ),
-                SelectionContainer.disabled(
-                  child: _WindowControls(
-                    maximized: _maximized,
-                    onMinimize: _minimize,
-                    onToggleMaximize: _toggleMaximize,
-                    onClose: _close,
+                if (!nativeMacControls)
+                  SelectionContainer.disabled(
+                    child: _WindowControls(
+                      maximized: _maximized,
+                      onMinimize: _minimize,
+                      onToggleMaximize: _toggleMaximize,
+                      onClose: _close,
+                    ),
                   ),
-                ),
               ],
             );
           },
@@ -118,12 +126,14 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
 }
 
 class _BrandLockup extends StatelessWidget {
-  const _BrandLockup();
+  const _BrandLockup({required this.leadingInset});
+
+  final double leadingInset;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      padding: EdgeInsets.fromLTRB(14 + leadingInset, 0, 14, 0),
       child: Row(
         children: [
           DecoratedBox(
