@@ -290,7 +290,9 @@ class DesktopWindowController {
   }
 
   Future<void> _setAppTitleBar() {
-    return _setTitleBar(windowButtonVisibility: !_useResponsiveAppWindow);
+    return _setTitleBar(
+      windowButtonVisibility: !_useResponsiveAppWindow || Platform.isMacOS,
+    );
   }
 
   Future<void> _setTitleBar({required bool windowButtonVisibility}) async {
