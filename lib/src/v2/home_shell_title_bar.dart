@@ -7,6 +7,7 @@ const _homeTitleBarControlsWidth = 134.0;
 const _homeTitleBarControlWidth = 34.0;
 const _homeTitleBarControlHeight = 28.0;
 const _homeTitleBarControlGap = 6.0;
+const _macNativeControlsInset = 76.0;
 
 class _HomeTitleBar extends StatefulWidget {
   const _HomeTitleBar({required this.windowController});
@@ -66,20 +67,27 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
+            // mac 使用系统原生红绿灯,其它平台用自定义窗口按钮。
+            final nativeMacControls =
+                Theme.of(context).platform == TargetPlatform.macOS;
             final wide = constraints.maxWidth >= narrowBreakpoint;
             final compactBrandWidth =
                 (constraints.maxWidth -
-                        _homeTitleBarControlsWidth -
+                        (nativeMacControls ? 0 : _homeTitleBarControlsWidth) -
                         _homeTitleBarMinSearchWidth)
                     .clamp(118.0, 168.0)
                     .toDouble();
             final brandWidth = wide ? sidebarWidth : compactBrandWidth;
 
             // 搜索框相对整个标题栏居中。为了不压到左侧品牌区或右侧窗口控制,
-            // 用两侧较宽者(品牌区)来对称收窄可用宽度,再夹到上限。
-            final reserved = brandWidth > _homeTitleBarControlsWidth
-                ? brandWidth
+            // 用两侧较宽者来对称收窄可用宽度,再夹到上限。mac 右侧没有自定义
+            // 按钮,但左侧品牌区已包含红绿灯让位,仍按品牌区宽度对称即可。
+            final rightReserved = nativeMacControls
+                ? 0.0
                 : _homeTitleBarControlsWidth;
+            final reserved = brandWidth > rightReserved
+                ? brandWidth
+                : rightReserved;
             final searchWidth = (constraints.maxWidth - reserved * 2 - 24)
                 .clamp(0.0, _homeTitleBarSearchMaxWidth)
                 .toDouble();
@@ -94,7 +102,11 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
                         child: _WindowDragRegion(
                           windowController: widget.windowController,
                           onDoubleTap: _toggleMaximize,
-                          child: const _BrandLockup(leadingInset: 0),
+                          child: _BrandLockup(
+                            leadingInset: nativeMacControls
+                                ? _macNativeControlsInset
+                                : 0,
+                          ),
                         ),
                       ),
                     ),
@@ -105,14 +117,15 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
                         child: const SizedBox.expand(),
                       ),
                     ),
-                    SelectionContainer.disabled(
-                      child: _WindowControls(
-                        maximized: _maximized,
-                        onMinimize: _minimize,
-                        onToggleMaximize: _toggleMaximize,
-                        onClose: _close,
+                    if (!nativeMacControls)
+                      SelectionContainer.disabled(
+                        child: _WindowControls(
+                          maximized: _maximized,
+                          onMinimize: _minimize,
+                          onToggleMaximize: _toggleMaximize,
+                          onClose: _close,
+                        ),
                       ),
-                    ),
                   ],
                 ),
                 if (searchWidth >= 96)

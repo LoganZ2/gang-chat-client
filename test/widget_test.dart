@@ -684,9 +684,9 @@ void main() {
     );
 
     expect(find.text('Gang Chat'), findsOneWidget);
-    expect(find.byTooltip('Minimize'), findsOneWidget);
-    expect(find.byTooltip('Maximize'), findsOneWidget);
-    expect(find.byTooltip('Close'), findsOneWidget);
+    expect(find.byTooltip('Minimize'), findsNothing);
+    expect(find.byTooltip('Maximize'), findsNothing);
+    expect(find.byTooltip('Close'), findsNothing);
     expect(searchRect.center.dx, closeTo(400, 0.01));
     expect(userSummaryRect.top, closeTo(60, 0.01));
     expect(tester.takeException(), isNull);
