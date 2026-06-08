@@ -23,6 +23,7 @@ import 'package:client/src/settings/settings_page.dart';
 import 'package:client/src/ui/ui.dart' as ui;
 import 'package:client/src/v2/home_page.dart' as current_home;
 import 'package:client/src/v2/live_channel_pane.dart' as live_pane;
+import 'package:client/src/v2/navigation.dart' as current_navigation;
 import 'package:client/ui_showcase.dart' as showcase;
 
 void main() {
@@ -206,7 +207,11 @@ void main() {
 
     expect(requestedPaths, contains('/api/v1/rooms'));
     expect(find.byType(ui.Sidebar), findsNothing);
-    expect(find.text('Gang Chat'), findsNothing);
+    expect(find.text('Gang Chat'), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-title-search')), findsOneWidget);
+    expect(find.byTooltip('Minimize'), findsOneWidget);
+    expect(find.byTooltip('Maximize'), findsOneWidget);
+    expect(find.byTooltip('Close'), findsOneWidget);
     expect(find.text('Workspace'), findsNothing);
     expect(find.text('Tools'), findsNothing);
     expect(find.text('Rooms'), findsNothing);
@@ -224,6 +229,11 @@ void main() {
     expect(find.text('2 members · 1 live'), findsOneWidget);
     expect(find.text('5 members'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
+
+    final searchRect = tester.getRect(
+      find.byKey(const ValueKey('home-title-search')),
+    );
+    expect(searchRect.left, closeTo(current_navigation.sidebarWidth, 0.01));
 
     final userSummaryRect = tester.getRect(
       find.byKey(const ValueKey('home-sidebar-user-summary')),
@@ -278,7 +288,13 @@ void main() {
     await tester.tap(find.text('Alpha Room'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField), 'Fresh message');
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(ui.ChatComposer),
+        matching: find.byType(TextField),
+      ),
+      'Fresh message',
+    );
     await tester.tap(find.byTooltip('Send'));
     await tester.pumpAndSettle();
 
@@ -646,7 +662,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('authenticated home shell offsets macOS sidebar content', (
+  testWidgets('authenticated home shell keeps macOS sidebar below title bar', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -664,7 +680,7 @@ void main() {
       find.byKey(const ValueKey('home-sidebar-user-summary')),
     );
 
-    expect(userSummaryRect.top, closeTo(34, 0.01));
+    expect(userSummaryRect.top, closeTo(72, 0.01));
     expect(tester.takeException(), isNull);
   });
 

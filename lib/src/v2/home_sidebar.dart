@@ -15,6 +15,8 @@ const _serverCardGap = 10.0;
 const _footerButtonSize = 38.0;
 const _footerButtonGap = 8.0;
 const _footerButtonOuterHeight = _footerButtonSize + 3.0 + 5.0;
+const _compactFooterBreakpoint = 130.0;
+const _compactSummaryBreakpoint = 88.0;
 
 class HomeSidebar extends StatelessWidget {
   const HomeSidebar({
@@ -30,6 +32,7 @@ class HomeSidebar extends StatelessWidget {
     required this.onServerSelected,
     required this.onOpenSettings,
     required this.onLogout,
+    this.includeWindowChromeOffset = true,
   });
 
   final double width;
@@ -40,6 +43,7 @@ class HomeSidebar extends StatelessWidget {
   final bool loading;
   final String? error;
   final bool settingsActive;
+  final bool includeWindowChromeOffset;
   final ValueChanged<RoomCard> onServerSelected;
   final VoidCallback onOpenSettings;
   final VoidCallback onLogout;
@@ -47,6 +51,9 @@ class HomeSidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chrome = WindowChromeInsets.of(context);
+    final topChromeOffset = includeWindowChromeOffset
+        ? chrome.sidebarTopOffset
+        : 0.0;
     return SizedBox(
       width: width,
       child: DecoratedBox(
@@ -57,22 +64,34 @@ class HomeSidebar extends StatelessWidget {
         child: Padding(
           padding: EdgeInsets.fromLTRB(
             _sidebarHorizontalPadding,
-            _sidebarTopPadding + chrome.sidebarTopOffset,
+            _sidebarTopPadding + topChromeOffset,
             _sidebarHorizontalPadding,
             _sidebarBottomPadding,
           ),
-          child: Column(
-            children: [
-              _UserSummaryBar(user: currentUser),
-              const SizedBox(height: 14),
-              Expanded(child: _buildServerList()),
-              const SizedBox(height: 12),
-              _SidebarFooter(
-                settingsActive: settingsActive,
-                onOpenSettings: onOpenSettings,
-                onLogout: onLogout,
-              ),
-            ],
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final showSummary =
+                  constraints.maxHeight >= _compactSummaryBreakpoint;
+              final showFooter =
+                  constraints.maxHeight >= _compactFooterBreakpoint;
+              return Column(
+                children: [
+                  if (showSummary) ...[
+                    _UserSummaryBar(user: currentUser),
+                    SizedBox(height: showFooter ? 14 : 10),
+                  ],
+                  Expanded(child: _buildServerList()),
+                  if (showFooter) ...[
+                    const SizedBox(height: 12),
+                    _SidebarFooter(
+                      settingsActive: settingsActive,
+                      onOpenSettings: onOpenSettings,
+                      onLogout: onLogout,
+                    ),
+                  ],
+                ],
+              );
+            },
           ),
         ),
       ),

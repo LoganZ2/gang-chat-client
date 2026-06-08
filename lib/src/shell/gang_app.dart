@@ -280,7 +280,12 @@ class _AuthGateState extends State<_AuthGate> {
       logout: _logout,
     );
 
-    if (widget.useV2) return current_home.HomePage(app: app);
+    if (widget.useV2) {
+      return current_home.HomePage(
+        app: app,
+        windowController: widget.windowController,
+      );
+    }
 
     return legacy_home.HomePage(app: app);
   }

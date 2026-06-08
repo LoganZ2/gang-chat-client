@@ -18,6 +18,7 @@ import '../app/rooms_controller.dart';
 import '../live/live_session.dart';
 import '../protocol/models.dart';
 import '../settings/settings_page.dart';
+import '../shell/desktop_window_controller.dart';
 import '../ui/ui.dart';
 import 'chat_pane.dart';
 import 'home_content.dart';
@@ -32,6 +33,7 @@ part 'home_shell_room_actions.dart';
 part 'home_shell_live_actions.dart';
 part 'home_shell_messages.dart';
 part 'home_shell_layout.dart';
+part 'home_shell_title_bar.dart';
 
 const _windowEdgeBorder = Color(0xFF303842);
 
@@ -45,12 +47,14 @@ class HomeShell extends StatefulWidget {
     super.key,
     required this.app,
     required this.audioDeviceStore,
+    required this.windowController,
     this.liveSessionController,
     this.realtime,
   });
 
   final AuthenticatedAppContext app;
   final AudioDeviceStore audioDeviceStore;
+  final DesktopWindowController windowController;
   final LiveSessionController? liveSessionController;
   final RealtimeService? realtime;
 
@@ -194,22 +198,31 @@ class _HomeShellState extends State<HomeShell> {
           children: [
             KeyedSubtree(
               key: ValueKey(widget.app.currentUser.id),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final narrow = constraints.maxWidth < narrowBreakpoint;
-                  if (narrow) return _buildNarrowLayout(constraints.maxWidth);
+              child: Column(
+                children: [
+                  _HomeTitleBar(windowController: widget.windowController),
+                  Expanded(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final narrow = constraints.maxWidth < narrowBreakpoint;
+                        if (narrow) {
+                          return _buildNarrowLayout(constraints.maxWidth);
+                        }
 
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _buildSidebar(
-                        width: sidebarWidth,
-                        openContentOnSelect: false,
-                      ),
-                      Expanded(child: _buildContentPane()),
-                    ],
-                  );
-                },
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildSidebar(
+                              width: sidebarWidth,
+                              openContentOnSelect: false,
+                            ),
+                            Expanded(child: _buildContentPane()),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
             if (fullScreenTrack != null)
