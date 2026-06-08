@@ -233,7 +233,7 @@ void main() {
     final searchRect = tester.getRect(
       find.byKey(const ValueKey('home-title-search')),
     );
-    expect(searchRect.left, closeTo(current_navigation.sidebarWidth, 0.01));
+    expect(searchRect.center.dx, closeTo(400, 0.01));
 
     final userSummaryRect = tester.getRect(
       find.byKey(const ValueKey('home-sidebar-user-summary')),
@@ -684,11 +684,11 @@ void main() {
     );
 
     expect(find.text('Gang Chat'), findsOneWidget);
-    expect(find.byTooltip('Minimize'), findsNothing);
-    expect(find.byTooltip('Maximize'), findsNothing);
-    expect(find.byTooltip('Close'), findsNothing);
-    expect(searchRect.left, closeTo(current_navigation.sidebarWidth, 0.01));
-    expect(userSummaryRect.top, closeTo(72, 0.01));
+    expect(find.byTooltip('Minimize'), findsOneWidget);
+    expect(find.byTooltip('Maximize'), findsOneWidget);
+    expect(find.byTooltip('Close'), findsOneWidget);
+    expect(searchRect.center.dx, closeTo(400, 0.01));
+    expect(userSummaryRect.top, closeTo(60, 0.01));
     expect(tester.takeException(), isNull);
   });
 

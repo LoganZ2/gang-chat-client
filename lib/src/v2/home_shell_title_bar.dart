@@ -1,13 +1,12 @@
 part of 'home_shell.dart';
 
-const _homeTitleBarHeight = 56.0;
+const _homeTitleBarHeight = 44.0;
 const _homeTitleBarSearchMaxWidth = 520.0;
 const _homeTitleBarMinSearchWidth = 122.0;
 const _homeTitleBarControlsWidth = 134.0;
 const _homeTitleBarControlWidth = 34.0;
-const _homeTitleBarControlHeight = 32.0;
+const _homeTitleBarControlHeight = 28.0;
 const _homeTitleBarControlGap = 6.0;
-const _macNativeControlsInset = 76.0;
 
 class _HomeTitleBar extends StatefulWidget {
   const _HomeTitleBar({required this.windowController});
@@ -67,53 +66,62 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final nativeMacControls =
-                Theme.of(context).platform == TargetPlatform.macOS;
             final wide = constraints.maxWidth >= narrowBreakpoint;
             final compactBrandWidth =
                 (constraints.maxWidth -
-                        (nativeMacControls ? 0 : _homeTitleBarControlsWidth) -
+                        _homeTitleBarControlsWidth -
                         _homeTitleBarMinSearchWidth)
                     .clamp(118.0, 168.0)
                     .toDouble();
             final brandWidth = wide ? sidebarWidth : compactBrandWidth;
 
-            return Row(
+            // 搜索框相对整个标题栏居中。为了不压到左侧品牌区或右侧窗口控制,
+            // 用两侧较宽者(品牌区)来对称收窄可用宽度,再夹到上限。
+            final reserved = brandWidth > _homeTitleBarControlsWidth
+                ? brandWidth
+                : _homeTitleBarControlsWidth;
+            final searchWidth = (constraints.maxWidth - reserved * 2 - 24)
+                .clamp(0.0, _homeTitleBarSearchMaxWidth)
+                .toDouble();
+
+            return Stack(
               children: [
-                SizedBox(
-                  width: brandWidth,
-                  child: SelectionContainer.disabled(
-                    child: DecoratedBox(
-                      decoration: const BoxDecoration(
-                        border: Border(
-                          right: BorderSide(color: UiColors.border),
-                        ),
-                      ),
-                      child: _WindowDragRegion(
-                        windowController: widget.windowController,
-                        onDoubleTap: _toggleMaximize,
-                        child: _BrandLockup(
-                          leadingInset: nativeMacControls
-                              ? _macNativeControlsInset
-                              : 0,
+                Row(
+                  children: [
+                    SizedBox(
+                      width: brandWidth,
+                      child: SelectionContainer.disabled(
+                        child: _WindowDragRegion(
+                          windowController: widget.windowController,
+                          onDoubleTap: _toggleMaximize,
+                          child: const _BrandLockup(leadingInset: 0),
                         ),
                       ),
                     ),
-                  ),
+                    Expanded(
+                      child: _WindowDragRegion(
+                        windowController: widget.windowController,
+                        onDoubleTap: _toggleMaximize,
+                        child: const SizedBox.expand(),
+                      ),
+                    ),
+                    SelectionContainer.disabled(
+                      child: _WindowControls(
+                        maximized: _maximized,
+                        onMinimize: _minimize,
+                        onToggleMaximize: _toggleMaximize,
+                        onClose: _close,
+                      ),
+                    ),
+                  ],
                 ),
-                Expanded(
-                  child: _TitleSearchLane(
-                    windowController: widget.windowController,
-                    onDoubleTap: _toggleMaximize,
-                  ),
-                ),
-                if (!nativeMacControls)
-                  SelectionContainer.disabled(
-                    child: _WindowControls(
-                      maximized: _maximized,
-                      onMinimize: _minimize,
-                      onToggleMaximize: _toggleMaximize,
-                      onClose: _close,
+                if (searchWidth >= 96)
+                  Align(
+                    alignment: Alignment.center,
+                    child: SizedBox(
+                      key: const ValueKey('home-title-search'),
+                      width: searchWidth,
+                      child: const _TitleSearchField(),
                     ),
                   ),
               ],
@@ -173,47 +181,78 @@ class _BrandLockup extends StatelessWidget {
   }
 }
 
-class _TitleSearchLane extends StatelessWidget {
-  const _TitleSearchLane({
-    required this.windowController,
-    required this.onDoubleTap,
-  });
+/// 标题栏中央的搜索框。不复用通用 [Input] 封装,而是一个普通的圆角矩形,
+/// 获得焦点时会像按钮一样显示绿色边框与底色。
+class _TitleSearchField extends StatefulWidget {
+  const _TitleSearchField();
 
-  final DesktopWindowController windowController;
-  final VoidCallback onDoubleTap;
+  @override
+  State<_TitleSearchField> createState() => _TitleSearchFieldState();
+}
+
+class _TitleSearchFieldState extends State<_TitleSearchField> {
+  final FocusNode _focusNode = FocusNode();
+  bool _focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_handleFocusChange);
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_handleFocusChange);
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _handleFocusChange() {
+    if (_focused != _focusNode.hasFocus) {
+      setState(() => _focused = _focusNode.hasFocus);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        _WindowDragRegion(
-          windowController: windowController,
-          onDoubleTap: onDoubleTap,
-          child: const SizedBox.expand(),
+    final accent = _focused ? UiColors.accent : UiColors.textMuted;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 90),
+      curve: Curves.easeOutCubic,
+      height: 30,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: _focused ? UiColors.selected : UiColors.surface,
+        borderRadius: BorderRadius.circular(UiRadii.md),
+        border: Border.all(
+          color: _focused ? UiColors.selectedBorder : UiColors.border,
         ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final width = constraints.maxWidth
-                  .clamp(0.0, _homeTitleBarSearchMaxWidth)
-                  .toDouble();
-              if (width < 96) return const SizedBox.shrink();
-              return SizedBox(
-                key: const ValueKey('home-title-search'),
-                width: width,
-                child: Input(
-                  hintText: 'Search',
-                  prefixIcon: Icons.search,
-                  maxLines: 1,
-                  style: UiTypography.body.copyWith(fontSize: 13, height: 1.2),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.search, size: 16, color: accent),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              focusNode: _focusNode,
+              maxLines: 1,
+              cursorColor: UiColors.accent,
+              cursorWidth: 1.5,
+              style: UiTypography.body.copyWith(fontSize: 13, height: 1.2),
+              decoration: InputDecoration(
+                isCollapsed: true,
+                border: InputBorder.none,
+                hintText: '搜索',
+                hintStyle: UiTypography.body.copyWith(
+                  fontSize: 13,
+                  height: 1.2,
+                  color: UiColors.textMuted,
                 ),
-              );
-            },
+              ),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
