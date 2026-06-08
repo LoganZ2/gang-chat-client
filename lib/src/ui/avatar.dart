@@ -2,8 +2,16 @@ import 'package:flutter/material.dart';
 
 import 'tokens.dart';
 
-Color avatarFallbackColor(String key) {
-  return switch (key) {
+/// Fallback initials shown when an avatar has no image. Takes the first two
+/// characters of the label so list avatars, the settings preview, and every
+/// other fallback stay identical. Returns '?' for an empty label.
+String avatarInitials(String label) {
+  final trimmed = label.trim();
+  if (trimmed.isEmpty) return '?';
+  return trimmed.characters.take(2).toString().toUpperCase();
+}
+
+Color avatarFallbackColor(String key) {  return switch (key) {
     'blue-3' => const Color(0xFF526C9F),
     'sky-2' => const Color(0xFF4F7F92),
     'cyan-2' => const Color(0xFF47777A),
@@ -31,6 +39,7 @@ class Avatar extends StatelessWidget {
     super.key,
     required this.label,
     this.imageUrl,
+    this.defaultAvatarKey,
     this.size = 40,
     this.active = false,
     this.activeBorderWidth = 2,
@@ -38,20 +47,28 @@ class Avatar extends StatelessWidget {
 
   final String label;
   final String? imageUrl;
+
+  /// Preset color key driving the fallback fill. When null, the neutral
+  /// surface color is used. Matches the swatch colors offered by the avatar
+  /// picker (see [avatarFallbackColor]) so list avatars and the settings
+  /// preview stay in sync.
+  final String? defaultAvatarKey;
   final double size;
   final bool active;
   final double activeBorderWidth;
 
   @override
   Widget build(BuildContext context) {
-    final initials = label.trim().isEmpty
-        ? '?'
-        : label.trim().characters.take(2).toString().toUpperCase();
+    final initials = avatarInitials(label);
+    final key = defaultAvatarKey;
+    final fillColor = key == null
+        ? UiColors.surface
+        : avatarFallbackColor(key);
     return SizedBox.square(
       dimension: size,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: UiColors.surface,
+          color: fillColor,
           shape: BoxShape.circle,
           border: Border.all(
             color: active ? UiColors.accent : UiColors.border,
@@ -64,7 +81,9 @@ class Avatar extends StatelessWidget {
                   child: Text(
                     initials,
                     style: TextStyle(
-                      color: active ? UiColors.accent : UiColors.text,
+                      color: key == null && active
+                          ? UiColors.accent
+                          : UiColors.text,
                       fontSize: size * 0.34,
                       fontWeight: FontWeight.w900,
                     ),

@@ -4,6 +4,7 @@ class _RoomHeader extends StatelessWidget {
   const _RoomHeader({
     required this.title,
     required this.avatarUrl,
+    required this.defaultAvatarKey,
     required this.memberCount,
     required this.onlineMemberCount,
     required this.liveParticipantCount,
@@ -15,6 +16,7 @@ class _RoomHeader extends StatelessWidget {
 
   final String title;
   final String? avatarUrl;
+  final String defaultAvatarKey;
   final int? memberCount;
   final int? onlineMemberCount;
   final int? liveParticipantCount;
@@ -42,6 +44,7 @@ class _RoomHeader extends StatelessWidget {
               child: _LiveChannelHeaderCard(
                 title: title,
                 avatarUrl: avatarUrl,
+                defaultAvatarKey: defaultAvatarKey,
                 memberCount: memberCount,
                 onlineMemberCount: onlineMemberCount,
                 liveParticipantCount: liveParticipantCount,
@@ -65,6 +68,7 @@ class _LiveChannelHeaderCard extends StatelessWidget {
   const _LiveChannelHeaderCard({
     required this.title,
     required this.avatarUrl,
+    required this.defaultAvatarKey,
     required this.memberCount,
     required this.onlineMemberCount,
     required this.liveParticipantCount,
@@ -73,6 +77,7 @@ class _LiveChannelHeaderCard extends StatelessWidget {
 
   final String title;
   final String? avatarUrl;
+  final String defaultAvatarKey;
   final int? memberCount;
   final int? onlineMemberCount;
   final int? liveParticipantCount;
@@ -100,6 +105,7 @@ class _LiveChannelHeaderCard extends StatelessWidget {
           Avatar(
             label: title,
             imageUrl: AppConfigScope.of(context).resolveAssetUrl(avatarUrl),
+            defaultAvatarKey: defaultAvatarKey,
             size: 34,
             active: liveActive,
             activeBorderWidth: 1.1,

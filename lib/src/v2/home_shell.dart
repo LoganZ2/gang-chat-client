@@ -254,5 +254,5 @@ String _roomTitle(RoomDetail? room, RoomCard? card) {
   if (detailTitle != null && detailTitle.isNotEmpty) return detailTitle;
   final cardTitle = card?.displayName.trim();
   if (cardTitle != null && cardTitle.isNotEmpty) return cardTitle;
-  return 'Chat';
+  return '聊天';
 }

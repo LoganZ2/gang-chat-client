@@ -2318,17 +2318,10 @@ class _SettingsPageState extends State<SettingsPage> {
     final selectionNumbers = _stickerSelectionNumbers();
     final busy = _stickerManagementBusy;
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(28, 24, 30, 32),
+    return SettingsList(
       children: [
-        if (_notice != null) ...[
-          _SettingsNotice(message: _notice!),
-          const SizedBox(height: 12),
-        ],
-        if (_stickerError != null) ...[
-          _SettingsError(message: _stickerError!),
-          const SizedBox(height: 12),
-        ],
+        if (_notice != null) _SettingsNotice(message: _notice!),
+        if (_stickerError != null) _SettingsError(message: _stickerError!),
         if (unavailable)
           const _SettingsEmptyState(text: '表情包需要登录后从服务端读取')
         else
@@ -2474,17 +2467,10 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget _buildPreferencesContent() {
     final unavailable = !_settingsController.hasApi || _user == null;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(28, 24, 30, 32),
+    return SettingsList(
       children: [
-        if (_notice != null) ...[
-          _SettingsNotice(message: _notice!),
-          const SizedBox(height: 12),
-        ],
-        if (_accountError != null) ...[
-          _SettingsError(message: _accountError!),
-          const SizedBox(height: 12),
-        ],
+        if (_notice != null) _SettingsNotice(message: _notice!),
+        if (_accountError != null) _SettingsError(message: _accountError!),
         if (unavailable)
           const _SettingsEmptyState(text: '偏好设置需要登录后从服务端读取')
         else
@@ -2535,17 +2521,10 @@ class _SettingsPageState extends State<SettingsPage> {
         currentAvatarUrl: user?.avatarUrl,
       ),
     );
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(28, 24, 30, 32),
+    return SettingsList(
       children: [
-        if (_notice != null) ...[
-          _SettingsNotice(message: _notice!),
-          const SizedBox(height: 12),
-        ],
-        if (_accountError != null) ...[
-          _SettingsError(message: _accountError!),
-          const SizedBox(height: 12),
-        ],
+        if (_notice != null) _SettingsNotice(message: _notice!),
+        if (_accountError != null) _SettingsError(message: _accountError!),
         if (unavailable)
           const _SettingsEmptyState(text: '账号资料需要登录后从服务端读取')
         else ...[
@@ -2562,7 +2541,6 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ],
           ),
-          const SizedBox(height: 18),
           _SettingsGroup(
             title: '默认资料',
             children: [
@@ -2612,7 +2590,6 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ],
           ),
-          const SizedBox(height: 18),
           Align(
             alignment: Alignment.centerRight,
             child: Button(
@@ -2631,17 +2608,10 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _buildSecurityContent() {
     final user = _user;
     final unavailable = !_settingsController.hasApi || user == null;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(28, 24, 30, 32),
+    return SettingsList(
       children: [
-        if (_notice != null) ...[
-          _SettingsNotice(message: _notice!),
-          const SizedBox(height: 12),
-        ],
-        if (_securityError != null) ...[
-          _SettingsError(message: _securityError!),
-          const SizedBox(height: 12),
-        ],
+        if (_notice != null) _SettingsNotice(message: _notice!),
+        if (_securityError != null) _SettingsError(message: _securityError!),
         if (unavailable)
           const _SettingsEmptyState(text: '安全设置需要登录后从服务端读取')
         else ...[
@@ -2702,7 +2672,6 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ],
           ),
-          const SizedBox(height: 18),
           _SettingsGroup(
             title: '重置密码',
             children: [
@@ -2777,7 +2746,6 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ],
           ),
-          const SizedBox(height: 18),
           _SettingsGroup(
             title: '账号活动',
             trailing: ButtonIcon(
@@ -2795,7 +2763,6 @@ class _SettingsPageState extends State<SettingsPage> {
               _SessionList(sessions: _sessions, loading: _loadingSessions),
             ],
           ),
-          const SizedBox(height: 18),
           _SettingsGroup(
             title: '注销账号',
             danger: true,
@@ -2834,8 +2801,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildVoiceContent() {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(28, 24, 30, 32),
+    return SettingsList(
       children: [
         _SettingsGroup(
           title: '输入',
@@ -2868,7 +2834,6 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ],
         ),
-        const SizedBox(height: 18),
         _SettingsGroup(
           title: '输出',
           children: [
@@ -2900,10 +2865,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ],
         ),
-        if (_error != null) ...[
-          const SizedBox(height: 28),
-          _SettingsError(message: _error!),
-        ],
+        if (_error != null) _SettingsError(message: _error!),
       ],
     );
   }

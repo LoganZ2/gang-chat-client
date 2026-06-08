@@ -42,18 +42,18 @@ const _composerStickerIcons = [
   Icons.workspace_premium_outlined,
 ];
 const _composerStickerLabels = [
-  'Smile',
-  'Wave',
-  'Spark',
-  'Fire',
-  'Coffee',
-  'Party',
-  'Heart',
-  'Idea',
-  'Fast',
-  'Night',
-  'World',
-  'Win',
+  '微笑',
+  '挥手',
+  '闪耀',
+  '火热',
+  '咖啡',
+  '庆祝',
+  '爱心',
+  '灵感',
+  '加速',
+  '夜晚',
+  '世界',
+  '胜利',
 ];
 const _composerStickerColors = [
   UiColors.accent,
@@ -104,6 +104,8 @@ class ChatPane extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = _roomTitle(room, roomCard);
     final avatarUrl = room?.avatarUrl ?? roomCard?.avatarUrl;
+    final defaultAvatarKey =
+        room?.defaultAvatarKey ?? roomCard?.defaultAvatarKey ?? 'room-1';
     final liveParticipantCount =
         live?.participantCount ??
         room?.live.participantCount ??
@@ -116,6 +118,7 @@ class ChatPane extends StatelessWidget {
           _RoomHeader(
             title: title,
             avatarUrl: avatarUrl,
+            defaultAvatarKey: defaultAvatarKey,
             memberCount: room?.memberCount ?? roomCard?.memberCount,
             onlineMemberCount:
                 room?.onlineMemberCount ?? roomCard?.onlineMemberCount,
@@ -166,5 +169,5 @@ String _roomTitle(RoomDetail? room, RoomCard? card) {
   if (detailTitle != null && detailTitle.isNotEmpty) return detailTitle;
   final cardTitle = card?.displayName.trim();
   if (cardTitle != null && cardTitle.isNotEmpty) return cardTitle;
-  return 'Chat';
+  return '聊天';
 }

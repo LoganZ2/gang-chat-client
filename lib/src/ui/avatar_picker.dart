@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../app/account_display.dart' as account_display;
 import 'avatar.dart';
 import 'button.dart';
 import 'tokens.dart';
@@ -147,7 +146,7 @@ class _AvatarPickerPreview extends StatelessWidget {
       color: avatarFallbackColor(defaultAvatarKey),
       child: Center(
         child: Text(
-          account_display.initials(label),
+          avatarInitials(label),
           style: TextStyle(
             color: UiColors.text,
             fontSize: size * 0.34,

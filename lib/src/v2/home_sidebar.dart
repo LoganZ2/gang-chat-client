@@ -196,9 +196,8 @@ class _UserSummaryBar extends StatelessWidget {
                 imageUrl: AppConfigScope.of(
                   context,
                 ).resolveAssetUrl(user.avatarUrl),
+                defaultAvatarKey: user.defaultAvatarKey,
                 size: 38,
-                active: true,
-                activeBorderWidth: 1.2,
               ),
               const SizedBox(width: 11),
               Expanded(
@@ -353,6 +352,7 @@ class _ServerAvatar extends StatelessWidget {
             child: Avatar(
               label: server.displayName,
               imageUrl: server.avatarUrl,
+              defaultAvatarKey: server.defaultAvatarKey,
               size: 40,
               active: selected,
               activeBorderWidth: 1.2,

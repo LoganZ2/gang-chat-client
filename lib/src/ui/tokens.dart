@@ -69,6 +69,13 @@ ThemeData uiTheme() {
     ),
     fontFamily: 'Roboto',
     scaffoldBackgroundColor: UiColors.background,
+    // v2 styles its own flat focus/hover/selected states (see the title bar
+    // search field). Suppress Material's default interaction overlays so the
+    // accent-tinted focus layer doesn't flash green on top of our own.
+    splashFactory: NoSplash.splashFactory,
+    highlightColor: Colors.transparent,
+    hoverColor: Colors.transparent,
+    focusColor: Colors.transparent,
     textSelectionTheme: TextSelectionThemeData(
       cursorColor: UiColors.accent,
       selectionColor: UiColors.accent.withValues(alpha: 0.28),

@@ -113,6 +113,7 @@ class _MemberRow extends StatelessWidget {
             imageUrl: AppConfigScope.of(
               context,
             ).resolveAssetUrl(member.user.avatarUrl),
+            defaultAvatarKey: member.user.defaultAvatarKey,
             active: presence != member_filter.RoomMemberPresence.offline,
             activeBorderWidth: 1.1,
             size: 38,
@@ -281,6 +282,7 @@ class _InviteUserRow extends StatelessWidget {
             imageUrl: AppConfigScope.of(
               context,
             ).resolveAssetUrl(user.avatarUrl),
+            defaultAvatarKey: user.defaultAvatarKey,
             size: 32,
           ),
           const SizedBox(width: 9),
@@ -382,6 +384,7 @@ class _JoinRequestRow extends StatelessWidget {
             imageUrl: AppConfigScope.of(
               context,
             ).resolveAssetUrl(request.user.avatarUrl),
+            defaultAvatarKey: request.user.defaultAvatarKey,
             size: 32,
           ),
           const SizedBox(width: 9),

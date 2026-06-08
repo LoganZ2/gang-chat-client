@@ -41,6 +41,11 @@ class SettingsScaffold extends StatelessWidget {
   /// 标题栏中内容(按钮/图标/标题)所占的高度,与窗口预留高度无关。
   static const double _headerContentHeight = 48;
 
+  /// 标题栏与下方内容之间的固定间距:既用于标题到分类导航,也用于分类
+  /// 导航到正文,以及无分类时标题到正文。所有设置类页面共用此间距,确保
+  /// 标题与内容的留白始终一致。
+  static const double _contentTopGap = 14;
+
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
@@ -78,11 +83,14 @@ class SettingsScaffold extends StatelessWidget {
               ],
             ),
           ),
-          if (pinned != null)
+          if (pinned != null) ...[
+            const SizedBox(height: _contentTopGap),
             Padding(
-              padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+              padding: const EdgeInsets.symmetric(horizontal: 22),
               child: pinned,
             ),
+          ],
+          const SizedBox(height: _contentTopGap),
           Expanded(child: body),
         ],
       ),
@@ -95,7 +103,7 @@ class SettingsList extends StatelessWidget {
   const SettingsList({
     super.key,
     required this.children,
-    this.padding = const EdgeInsets.fromLTRB(22, 4, 22, 22),
+    this.padding = const EdgeInsets.fromLTRB(22, 0, 22, 22),
     this.spacing = 14,
   });
 

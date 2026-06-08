@@ -111,6 +111,7 @@ class _MessageRow extends StatelessWidget {
             imageUrl: AppConfigScope.of(
               context,
             ).resolveAssetUrl(message.sender.avatarUrl),
+            defaultAvatarKey: message.sender.defaultAvatarKey,
             size: 32,
             active: message.sender.isOnline ?? false,
             activeBorderWidth: 1,
