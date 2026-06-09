@@ -186,6 +186,31 @@ jobs:
           $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
           dart tool/check_utf8.dart
 
+      # flutter pub get 会重置 pub cache 目录，每次 build 前重新下载解压 libwebrtc
+      # cmake 的 ZIP 解压在 Windows 上有 bug，用 PowerShell Expand-Archive 更可靠
+      - name: Setup libwebrtc
+        shell: powershell
+        env:
+          HTTP_PROXY: http://127.0.0.1:7890
+          HTTPS_PROXY: http://127.0.0.1:7890
+        run: |
+          $thirdParty = "$env:LOCALAPPDATA\Pub\Cache\hosted\pub.flutter-io.cn\flutter_webrtc-1.2.1\third_party"
+          if (Test-Path "$thirdParty\libwebrtc\include\libwebrtc.h") {
+            Write-Host "libwebrtc already cached, skip"
+            exit 0
+          }
+          Write-Host "Downloading libwebrtc.zip via proxy..."
+          New-Item -ItemType Directory -Force -Path "$thirdParty\downloads" | Out-Null
+          curl.exe -L --connect-timeout 30 --retry 5 --retry-delay 10 -o "$thirdParty\downloads\libwebrtc.zip" "https://github.com/flutter-webrtc/flutter-webrtc/releases/download/v1.2.1/libwebrtc.zip"
+          if ($LASTEXITCODE -ne 0) { Write-Error "libwebrtc download failed"; exit 1 }
+          Write-Host "Extracting..."
+          Expand-Archive -Path "$thirdParty\downloads\libwebrtc.zip" -DestinationPath $thirdParty -Force
+          if (-not (Test-Path "$thirdParty\libwebrtc\include\libwebrtc.h")) {
+            Write-Error "extraction failed: libwebrtc.h not found"
+            exit 1
+          }
+          Write-Host "libwebrtc setup OK"
+
       - name: Build Windows (release)
         shell: powershell
         run: |
