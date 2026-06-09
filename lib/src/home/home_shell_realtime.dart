@@ -61,6 +61,9 @@ extension _HomeShellRealtime on _HomeShellState {
       case 'room_deleted':
         _applyRoomDeleted(event.data);
         break;
+      case 'room_invites_updated':
+        _applyRoomInvitesUpdated();
+        break;
       default:
         break;
     }

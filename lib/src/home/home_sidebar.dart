@@ -27,8 +27,11 @@ class HomeSidebar extends StatelessWidget {
     required this.loading,
     required this.error,
     required this.settingsActive,
+    required this.notificationsActive,
+    required this.hasPendingNotifications,
     required this.onServerSelected,
     required this.onCreateRoom,
+    required this.onOpenNotifications,
     required this.onOpenSettings,
     required this.onLogout,
     this.includeWindowChromeOffset = true,
@@ -42,9 +45,12 @@ class HomeSidebar extends StatelessWidget {
   final bool loading;
   final String? error;
   final bool settingsActive;
+  final bool notificationsActive;
+  final bool hasPendingNotifications;
   final bool includeWindowChromeOffset;
   final ValueChanged<RoomCard> onServerSelected;
   final VoidCallback onCreateRoom;
+  final VoidCallback onOpenNotifications;
   final VoidCallback onOpenSettings;
   final VoidCallback onLogout;
 
@@ -85,7 +91,10 @@ class HomeSidebar extends StatelessWidget {
                     const SizedBox(height: 12),
                     _SidebarFooter(
                       settingsActive: settingsActive,
+                      notificationsActive: notificationsActive,
+                      hasPendingNotifications: hasPendingNotifications,
                       onCreateRoom: onCreateRoom,
+                      onOpenNotifications: onOpenNotifications,
                       onOpenSettings: onOpenSettings,
                       onLogout: onLogout,
                     ),
@@ -139,13 +148,19 @@ class HomeSidebar extends StatelessWidget {
 class _SidebarFooter extends StatelessWidget {
   const _SidebarFooter({
     required this.settingsActive,
+    required this.notificationsActive,
+    required this.hasPendingNotifications,
     required this.onCreateRoom,
+    required this.onOpenNotifications,
     required this.onOpenSettings,
     required this.onLogout,
   });
 
   final bool settingsActive;
+  final bool notificationsActive;
+  final bool hasPendingNotifications;
   final VoidCallback onCreateRoom;
+  final VoidCallback onOpenNotifications;
   final VoidCallback onOpenSettings;
   final VoidCallback onLogout;
 
@@ -160,6 +175,12 @@ class _SidebarFooter extends StatelessWidget {
             icon: const Icon(Icons.add_circle_outline),
             onPressed: onCreateRoom,
             size: _footerButtonSize,
+          ),
+          const SizedBox(width: _footerButtonGap),
+          _NotificationFooterButton(
+            selected: notificationsActive,
+            hasPending: hasPendingNotifications,
+            onPressed: onOpenNotifications,
           ),
           const Spacer(),
           Row(
@@ -181,6 +202,51 @@ class _SidebarFooter extends StatelessWidget {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NotificationFooterButton extends StatelessWidget {
+  const _NotificationFooterButton({
+    required this.selected,
+    required this.hasPending,
+    required this.onPressed,
+  });
+
+  final bool selected;
+  final bool hasPending;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: _footerButtonSize,
+      height: _footerButtonOuterHeight,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          ButtonIcon(
+            tooltip: '通知',
+            icon: const Icon(Icons.notifications_none),
+            selected: selected,
+            onPressed: onPressed,
+            size: _footerButtonSize,
+          ),
+          if (hasPending)
+            Positioned(
+              right: 2,
+              top: 2,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: UiColors.danger,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: UiColors.surfaceLow, width: 1.4),
+                ),
+                child: const SizedBox.square(dimension: 9),
+              ),
+            ),
         ],
       ),
     );

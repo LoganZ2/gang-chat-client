@@ -33,6 +33,18 @@ extension _HomeShellLayout on _HomeShellState {
       );
     }
 
+    if (_contentMode == _ContentMode.notifications) {
+      return HomeNotificationsPane(
+        invites: _notificationInvites,
+        loading: _loadingNotifications,
+        error: _notificationError,
+        busyInviteId: _busyNotificationInviteId,
+        onClose: _closeNotifications,
+        onRefresh: () => unawaited(_loadNotifications()),
+        onReviewInvite: _reviewNotificationInvite,
+      );
+    }
+
     if (_selectedServerId == null) return const HomeContent();
     if (_contentMode == _ContentMode.members && _selectedRoom != null) {
       return RoomMembersDialog(
@@ -135,10 +147,15 @@ extension _HomeShellLayout on _HomeShellState {
       loading: _loadingServers,
       error: _serverLoadError,
       settingsActive: _settingsOpen,
+      notificationsActive:
+          !_settingsOpen && _contentMode == _ContentMode.notifications,
+      hasPendingNotifications: _hasPendingRoomInvites,
       includeWindowChromeOffset: false,
       onServerSelected: (server) =>
           _selectServer(server, openContent: openContentOnSelect),
       onCreateRoom: () => _openCreateRoom(openContent: openContentOnSelect),
+      onOpenNotifications: () =>
+          _openNotifications(openContent: openContentOnSelect),
       onOpenSettings: () => _toggleSettings(openContent: openContentOnSelect),
       onLogout: () => unawaited(_logout()),
     );

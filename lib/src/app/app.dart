@@ -29,6 +29,7 @@ export 'room_join.dart';
 export 'room_join_requests.dart';
 export 'room_live_state.dart';
 export 'room_members_filter.dart';
+export 'room_notifications.dart';
 export 'rooms_controller.dart';
 export 'settings_controller.dart';
 export 'settings_shell_state.dart';

@@ -16,6 +16,7 @@ import '../app/message_display.dart' as message_display;
 import '../app/messages_controller.dart';
 import '../app/realtime_controller.dart';
 import '../app/room_display.dart' as room_display;
+import '../app/room_notifications.dart' as room_notifications;
 import '../app/rooms_controller.dart';
 import '../app/sticker_display.dart' as sticker_display;
 import '../app/sticker_packs_controller.dart';
@@ -28,6 +29,7 @@ import '../shell/desktop_window_controller.dart';
 import '../ui/ui.dart';
 import 'chat_pane.dart';
 import 'home_content.dart';
+import 'home_notifications.dart';
 import 'home_sidebar.dart';
 import 'live_channel_pane.dart';
 import 'live_screen_share_picker.dart';
@@ -38,6 +40,7 @@ part 'home_shell_realtime.dart';
 part 'home_shell_room_actions.dart';
 part 'home_shell_live_actions.dart';
 part 'home_shell_messages.dart';
+part 'home_shell_notifications.dart';
 part 'home_shell_layout.dart';
 part 'home_shell_title_bar.dart';
 
@@ -46,7 +49,14 @@ const _windowEdgeBorder = Color(0xFF303842);
 bool get _supportsWindowManagement =>
     !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
 
-enum _ContentMode { chat, live, members, roomSettings, createRoom }
+enum _ContentMode {
+  chat,
+  live,
+  members,
+  roomSettings,
+  createRoom,
+  notifications,
+}
 
 class HomeShell extends StatefulWidget {
   const HomeShell({
@@ -97,6 +107,11 @@ class _HomeShellState extends State<HomeShell> {
   bool _settingsOpen = false;
   bool _narrowContentOpen = false;
   _ContentMode _contentMode = _ContentMode.chat;
+  List<RoomInvite> _notificationInvites = const [];
+  bool _loadingNotifications = false;
+  String? _notificationError;
+  String? _busyNotificationInviteId;
+  bool _hasPendingRoomInvites = false;
   String? _joinedLiveRoomId;
   bool _joiningLive = false;
   bool _micMuted = true;
@@ -120,6 +135,7 @@ class _HomeShellState extends State<HomeShell> {
     _attachLiveSessionCallbacks();
     _startRealtime();
     unawaited(_loadServers());
+    unawaited(_refreshPendingRoomInviteBadge());
   }
 
   @override
@@ -154,6 +170,11 @@ class _HomeShellState extends State<HomeShell> {
       _settingsOpen = false;
       _narrowContentOpen = false;
       _contentMode = _ContentMode.chat;
+      _notificationInvites = const [];
+      _loadingNotifications = false;
+      _notificationError = null;
+      _busyNotificationInviteId = null;
+      _hasPendingRoomInvites = false;
       _joinedLiveRoomId = null;
       _joiningLive = false;
       _micMuted = true;
@@ -163,6 +184,7 @@ class _HomeShellState extends State<HomeShell> {
       _voiceBlocked = false;
     });
     unawaited(_loadServers());
+    unawaited(_refreshPendingRoomInviteBadge());
   }
 
   @override

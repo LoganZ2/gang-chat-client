@@ -515,6 +515,7 @@ void main() {
     expect(invite.status, 'pending');
     expect(invite.room.name, 'Invite Room');
     expect(invite.inviter.username, 'alice');
+    expect(invite.inviter.roomRole, 'owner');
     api.close();
   });
 
@@ -547,6 +548,33 @@ void main() {
       api.close();
     },
   );
+
+  test('listRoomInvites can request all invites for notifications', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/api/v1/room-invites');
+        expect(request.url.queryParameters, {'status': 'all'});
+        expect(request.headers['authorization'], 'Bearer token');
+
+        return http.Response(
+          jsonEncode({
+            'invites': [_roomInviteJson(status: 'accepted')],
+            'next_cursor': null,
+          }),
+          200,
+        );
+      }),
+    );
+
+    final invites = await api.listRoomInvites(status: 'all');
+
+    expect(invites.single.status, 'accepted');
+    expect(invites.single.inviter.roomRole, 'owner');
+    api.close();
+  });
 
   test(
     'reviewRoomInvite accepts an invite and parses the joined room',
@@ -1855,6 +1883,8 @@ Map<String, Object?> _roomInviteJson({String status = 'pending'}) {
       'display_name': 'Alice',
       'avatar_url': null,
       'default_avatar_key': 'blue-3',
+      'room_display_name': 'Alice in Invite Room',
+      'room_role': 'owner',
     },
   };
 }

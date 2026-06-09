@@ -76,9 +76,7 @@ void main() {
   testWidgets('app renders login entrypoint on real auth gate', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(
-      GangApp(tokenStore: _MemoryTokenStore()),
-    );
+    await tester.pumpWidget(GangApp(tokenStore: _MemoryTokenStore()));
     await tester.pump();
 
     expect(find.text('Gang Chat'), findsOneWidget);
@@ -133,9 +131,7 @@ void main() {
   testWidgets('register mode exposes full auth form', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(
-      GangApp(tokenStore: _MemoryTokenStore()),
-    );
+    await tester.pumpWidget(GangApp(tokenStore: _MemoryTokenStore()));
     await tester.pump();
 
     final loginGap = _authActionGap(tester, submitLabel: '登录');
@@ -212,6 +208,7 @@ void main() {
     expect(find.text('Files'), findsNothing);
     expect(find.text('设置'), findsNothing);
     expect(find.byTooltip('创建房间'), findsOneWidget);
+    expect(find.byTooltip('通知'), findsOneWidget);
     expect(find.byTooltip('设置'), findsOneWidget);
     expect(find.byTooltip('退出登录'), findsOneWidget);
     expect(find.text('Kai'), findsOneWidget);
@@ -308,6 +305,53 @@ void main() {
     expect(find.text('创建房间'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'authenticated home shell opens notifications and reviews invite',
+    (WidgetTester tester) async {
+      final requestedUris = <Uri>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: HomePage(
+            app: _homeTestAppContext(requestedUris: requestedUris),
+            realtime: _NoopRealtimeService(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('通知'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('通知'), findsOneWidget);
+      expect(find.text('全部'), findsOneWidget);
+      expect(find.text('邀请'), findsOneWidget);
+      expect(find.text('房间通知'), findsOneWidget);
+      expect(find.textContaining('Morgan Admin'), findsOneWidget);
+      expect(find.textContaining('管理员'), findsOneWidget);
+      expect(
+        requestedUris.any(
+          (uri) =>
+              uri.path == '/api/v1/room-invites' &&
+              uri.queryParameters['status'] == 'all',
+        ),
+        isTrue,
+      );
+
+      await tester.tap(find.byTooltip('接受邀请'));
+      await tester.pumpAndSettle();
+
+      expect(
+        requestedUris.any(
+          (uri) => uri.path == '/api/v1/room-invites/invite-alpha',
+        ),
+        isTrue,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('authenticated home shell sends messages through real API path', (
     WidgetTester tester,
@@ -537,10 +581,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: ui.uiTheme(),
-        home: HomePage(
-          app: _homeTestAppContext(),
-          realtime: realtime,
-        ),
+        home: HomePage(app: _homeTestAppContext(), realtime: realtime),
       ),
     );
     await tester.pumpAndSettle();
@@ -635,9 +676,16 @@ void main() {
       find.byKey(const ValueKey('home-sidebar-user-summary')),
     );
     final createRect = tester.getRect(find.byTooltip('创建房间'));
+    final notificationsRect = tester.getRect(find.byTooltip('通知'));
     final settingsRect = tester.getRect(find.byTooltip('设置'));
     final logoutRect = tester.getRect(find.byTooltip('退出登录'));
     expect(createRect.left, closeTo(userSummaryRect.left, 0.01));
+    expect(notificationsRect.top, closeTo(createRect.top, 0.01));
+    expect(notificationsRect.bottom, closeTo(createRect.bottom, 0.01));
+    expect(settingsRect.top, closeTo(createRect.top, 0.01));
+    expect(settingsRect.bottom, closeTo(createRect.bottom, 0.01));
+    expect(logoutRect.top, closeTo(createRect.top, 0.01));
+    expect(logoutRect.bottom, closeTo(createRect.bottom, 0.01));
     expect(logoutRect.right, closeTo(userSummaryRect.right, 0.01));
     expect(logoutRect.left - settingsRect.right, closeTo(8, 0.01));
 
@@ -808,9 +856,7 @@ void main() {
       tester.element(find.byKey(const ValueKey('auth-surface'))),
     ).textSelectionTheme.cursorColor;
 
-    await tester.pumpWidget(
-      GangApp(tokenStore: _MemoryTokenStore()),
-    );
+    await tester.pumpWidget(GangApp(tokenStore: _MemoryTokenStore()));
     await tester.pump();
 
     _expectRectCloseTo(
@@ -2334,6 +2380,7 @@ void _expectSubmitButtonFullWidth(
 AuthenticatedAppContext _homeTestAppContext({
   Future<void> Function()? onLogout,
   List<String>? requestedPaths,
+  List<Uri>? requestedUris,
   List<Map<String, Object?>>? accountUpdates,
   List<Map<String, Object?>>? roomCreations,
 }) {
@@ -2366,6 +2413,7 @@ AuthenticatedAppContext _homeTestAppContext({
     logout: onLogout ?? () async {},
     api: _roomsApi(
       requestedPaths: requestedPaths,
+      requestedUris: requestedUris,
       accountUpdates: accountUpdates,
       roomCreations: roomCreations,
     ),
@@ -2374,6 +2422,7 @@ AuthenticatedAppContext _homeTestAppContext({
 
 GangApi _roomsApi({
   List<String>? requestedPaths,
+  List<Uri>? requestedUris,
   List<Map<String, Object?>>? accountUpdates,
   List<Map<String, Object?>>? roomCreations,
 }) {
@@ -2382,6 +2431,7 @@ GangApi _roomsApi({
     accessTokenProvider: ({bool forceRefresh = false}) async => 'access-token',
     httpClient: MockClient((request) async {
       requestedPaths?.add(request.url.path);
+      requestedUris?.add(request.url);
       if (request.url.path == '/api/v1/rooms') {
         if (request.method == 'POST') {
           final body =
@@ -2505,15 +2555,34 @@ GangApi _roomsApi({
         });
       }
       if (request.url.path == '/api/v1/rooms/server-alpha/invites') {
+        return _jsonResponse({'invite': _roomInviteJson(id: 'invite-riley')});
+      }
+      if (request.url.path == '/api/v1/room-invites') {
         return _jsonResponse({
-          'invite': {
-            'id': 'invite-riley',
-            'status': 'pending',
-            'room': _roomCardJson(id: 'server-alpha', name: 'Alpha Room'),
-            'inviter': _currentUserJson,
-            'created_at': '2026-06-05T08:00:00Z',
-            'updated_at': '2026-06-05T08:00:00Z',
-          },
+          'invites': [
+            _roomInviteJson(
+              inviter: _userJson(
+                id: 'user-2',
+                username: 'morgan',
+                displayName: 'Morgan',
+              ),
+            ),
+          ],
+          'next_cursor': null,
+        });
+      }
+      if (request.url.path == '/api/v1/room-invites/invite-alpha') {
+        return _jsonResponse({
+          'ok': true,
+          'invite': _roomInviteJson(status: 'accepted'),
+          'room': _roomDetailJson(
+            id: 'server-alpha',
+            name: 'Alpha Room',
+            memberCount: 2,
+            onlineMemberCount: 1,
+            liveParticipantCount: 1,
+            role: 'member',
+          ),
         });
       }
       if (request.url.path == '/api/v1/rooms/server-alpha/messages') {
@@ -2824,6 +2893,35 @@ Map<String, Object?> _roomCardJson({
     'last_message': null,
     'unread_count': unreadCount,
     'updated_at': '2026-06-05T00:00:00Z',
+  };
+}
+
+Map<String, Object?> _roomInviteJson({
+  String id = 'invite-alpha',
+  String status = 'pending',
+  Map<String, Object?>? inviter,
+}) {
+  return {
+    'id': id,
+    'status': status,
+    'room': {
+      ..._roomCardJson(
+        id: 'server-alpha',
+        name: 'Alpha Room',
+        memberCount: 2,
+        liveParticipantCount: 1,
+      ),
+      'join_policy': 'closed',
+      'joined': false,
+      'join_state': 'none',
+    },
+    'inviter': {
+      ...(inviter ?? _currentUserJson),
+      'room_display_name': 'Morgan Admin',
+      'room_role': 'admin',
+    },
+    'created_at': '2026-06-05T08:00:00Z',
+    'updated_at': '2026-06-05T08:00:00Z',
   };
 }
 
