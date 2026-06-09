@@ -51,14 +51,26 @@ jobs:
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -x
           API="${GITHUB_SERVER_URL}/api/v1/repos/${GITHUB_REPOSITORY}"
           TAG="${{ steps.version.outputs.tag }}"
+          command -v python3 >/dev/null || { echo "python3 missing"; exit 1; }
+          [ -n "$TOKEN" ] || { echo "TOKEN is empty"; exit 1; }
 
-          # 不用 -f，让 409 时也能拿到响应体
-          RESP="$(curl -sS -X POST "$API/releases" \
+          # 把 HTTP 状态码和响应体一起拿出来：-w 追加状态码，关闭 -f 让错误体也可见。
+          # 临时关 pipefail/errexit，避免 curl 或解析非零退出时整步被静默打断。
+          set +e
+          BODY="$(curl -sS -w $'\nHTTP_CODE:%{http_code}' -X POST "$API/releases" \
             -H "Authorization: token $TOKEN" \
             -H "Content-Type: application/json" \
             -d "{\"tag_name\":\"$TAG\",\"target_commitish\":\"${GITHUB_SHA}\",\"name\":\"$TAG\",\"draft\":true,\"prerelease\":false}")"
+          CURL_EXIT=$?
+          set -e
+          echo "curl exit: $CURL_EXIT"
+          echo "POST /releases response: $BODY"
+          HTTP_CODE="$(printf '%s' "$BODY" | sed -n 's/^HTTP_CODE://p' | tail -1)"
+          RESP="$(printf '%s' "$BODY" | sed '/^HTTP_CODE:/d')"
+          echo "HTTP_CODE=$HTTP_CODE"
           RELEASE_ID="$(printf '%s' "$RESP" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("id",""))' 2>/dev/null)"
 
           # 409（tag/release 已存在）= workflow_dispatch 创建 release 时生成了 tag，
