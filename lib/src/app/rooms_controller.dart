@@ -790,6 +790,12 @@ class RoomsController {
     return api.listRoomInvites(status: status);
   }
 
+  Future<List<RoomApplication>> listRoomApplications({
+    String status = 'pending',
+  }) {
+    return api.listRoomApplications(status: status);
+  }
+
   Future<RoomMemberPage> listRoomMembers(
     String roomId, {
     int limit = 100,
@@ -882,6 +888,10 @@ class RoomsController {
     required bool accept,
   }) {
     return api.reviewRoomInvite(inviteId: inviteId, accept: accept);
+  }
+
+  Future<RoomApplication> withdrawRoomApplication({required String requestId}) {
+    return api.withdrawRoomApplication(requestId: requestId);
   }
 
   Future<void> reviewJoinRequest({

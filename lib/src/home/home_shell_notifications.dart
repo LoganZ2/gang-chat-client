@@ -7,7 +7,13 @@ extension _HomeShellNotifications on _HomeShellState {
       _contentMode = _ContentMode.notifications;
       if (openContent) _narrowContentOpen = true;
     });
-    unawaited(_loadNotifications(silent: _notificationInvites.isNotEmpty));
+    unawaited(
+      _loadNotifications(
+        silent:
+            _notificationInvites.isNotEmpty ||
+            _notificationApplications.isNotEmpty,
+      ),
+    );
   }
 
   void _closeNotifications() {
@@ -26,14 +32,22 @@ extension _HomeShellNotifications on _HomeShellState {
     }
 
     try {
-      final invites = await _roomsController.listRoomInvites(status: 'all');
+      final (invites, applications) = await (
+        _roomsController.listRoomInvites(status: 'all'),
+        _roomsController.listRoomApplications(status: 'all'),
+      ).wait;
       if (!mounted) return;
       _setHomeState(() {
         _notificationInvites = invites;
+        _notificationApplications = applications;
         _loadingNotifications = false;
         _notificationError = null;
         _hasPendingRoomInvites =
-            room_notifications.pendingRoomInviteCount(invites) > 0;
+            room_notifications.pendingRoomNotificationCount(
+              invites: invites,
+              applications: applications,
+            ) >
+            0;
       });
     } catch (error) {
       if (!mounted) return;
@@ -46,9 +60,15 @@ extension _HomeShellNotifications on _HomeShellState {
 
   Future<void> _refreshPendingRoomInviteBadge() async {
     try {
-      final hasPending = await _roomsController.hasPendingRoomInvites();
+      final (invites, applications) = await (
+        _roomsController.listRoomInvites(),
+        _roomsController.listRoomApplications(),
+      ).wait;
       if (!mounted) return;
-      _setHomeState(() => _hasPendingRoomInvites = hasPending);
+      _setHomeState(
+        () => _hasPendingRoomInvites =
+            invites.isNotEmpty || applications.isNotEmpty,
+      );
     } catch (_) {}
   }
 
@@ -91,7 +111,45 @@ extension _HomeShellNotifications on _HomeShellState {
     }
   }
 
+  Future<void> _withdrawNotificationApplication(
+    RoomApplication application,
+  ) async {
+    if (!room_notifications.canWithdrawNotificationApplication(
+      application: application,
+      busyApplicationId: _busyNotificationApplicationId,
+    )) {
+      return;
+    }
+
+    _setHomeState(() {
+      _busyNotificationApplicationId = application.id;
+      _notificationError = null;
+    });
+
+    try {
+      await _roomsController.withdrawRoomApplication(requestId: application.id);
+      if (!mounted) return;
+      _setHomeState(() {
+        _busyNotificationApplicationId = null;
+      });
+      await _loadNotifications(silent: true);
+    } catch (error) {
+      if (!mounted) return;
+      _setHomeState(() {
+        _busyNotificationApplicationId = null;
+        _notificationError = error.toString();
+      });
+    }
+  }
+
   void _applyRoomInvitesUpdated() {
+    unawaited(_refreshPendingRoomInviteBadge());
+    if (_contentMode == _ContentMode.notifications) {
+      unawaited(_loadNotifications(silent: true));
+    }
+  }
+
+  void _applyRoomApplicationsUpdated() {
     unawaited(_refreshPendingRoomInviteBadge());
     if (_contentMode == _ContentMode.notifications) {
       unawaited(_loadNotifications(silent: true));

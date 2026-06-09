@@ -133,6 +133,132 @@ void main() {
       '2026/06/09 08:05',
     );
   });
+
+  test('room notifications combine invites and applications for view', () {
+    final pendingInvite = _invite(
+      'pending_invite',
+      status: 'pending',
+      createdAt: DateTime.utc(2026, 6, 5, 8),
+    );
+    final pendingApplication = _application(
+      'pending_application',
+      status: 'pending',
+      createdAt: DateTime.utc(2026, 6, 6, 8),
+    );
+    final approvedApplication = _application(
+      'approved_application',
+      status: 'approved',
+      createdAt: DateTime.utc(2026, 6, 1, 8),
+      updatedAt: DateTime.utc(2026, 6, 7, 8),
+      reviewedAt: DateTime.utc(2026, 6, 7, 8),
+      reviewer: _user(
+        'reviewer_1',
+        displayName: 'Robin Reviewer',
+        roomRole: 'admin',
+      ),
+    );
+
+    final visible = roomNotificationsForView(
+      invites: [pendingInvite],
+      applications: [approvedApplication, pendingApplication],
+      query: '',
+      filter: RoomNotificationFilter.all,
+    );
+
+    expect(visible.map((item) => item.id), [
+      'application-requested:pending_application',
+      'invite:pending_invite',
+      'application-reviewed:approved_application',
+      'application-requested:approved_application',
+    ]);
+    expect(
+      pendingRoomNotificationCount(
+        invites: [pendingInvite],
+        applications: [pendingApplication, approvedApplication],
+      ),
+      2,
+    );
+  });
+
+  test('room application notifications filter and search reviewer fields', () {
+    final application = _application(
+      'application_1',
+      status: 'rejected',
+      roomName: 'Launch Room',
+      reviewedAt: DateTime.utc(2026, 6, 7, 8),
+      reviewer: _user(
+        'reviewer_1',
+        username: 'robin',
+        displayName: 'Robin Reviewer',
+        roomRole: 'owner',
+        roomDisplayName: 'Room Robin',
+      ),
+    );
+
+    final applicationsOnly = roomNotificationsForView(
+      invites: [_invite('invite_1')],
+      applications: [application],
+      query: '',
+      filter: RoomNotificationFilter.applications,
+    );
+    expect(applicationsOnly.map((item) => item.type), [
+      RoomNotificationItemType.applicationReviewed,
+      RoomNotificationItemType.applicationRequested,
+    ]);
+
+    expect(
+      roomNotificationsForView(
+        invites: const [],
+        applications: [application],
+        query: 'Room Robin',
+        filter: RoomNotificationFilter.all,
+      ),
+      isNotEmpty,
+    );
+    expect(
+      roomNotificationsForView(
+        invites: const [],
+        applications: [application],
+        query: 'missing',
+        filter: RoomNotificationFilter.all,
+      ),
+      isEmpty,
+    );
+  });
+
+  test('room application notification display helpers format labels', () {
+    final pending = _application('pending', status: 'pending');
+    final approved = _application('approved', status: 'approved');
+    final rejected = _application('rejected', status: 'rejected');
+    final withdrawn = _application('withdrawn', status: 'withdrawn');
+
+    expect(
+      canWithdrawNotificationApplication(
+        application: pending,
+        busyApplicationId: null,
+      ),
+      isTrue,
+    );
+    expect(
+      canWithdrawNotificationApplication(
+        application: pending,
+        busyApplicationId: 'pending',
+      ),
+      isFalse,
+    );
+    expect(
+      canWithdrawNotificationApplication(
+        application: approved,
+        busyApplicationId: null,
+      ),
+      isFalse,
+    );
+    expect(roomApplicationStatusLabel(approved), '已批准');
+    expect(roomApplicationStatusLabel(rejected), '已拒绝');
+    expect(roomApplicationStatusLabel(withdrawn), '已撤回');
+    expect(roomApplicationReviewActionLabel(approved), '批准了您的申请');
+    expect(roomApplicationReviewActionLabel(rejected), '拒绝了您的申请');
+  });
 }
 
 RoomInvite _invite(
@@ -162,6 +288,40 @@ RoomInvite _invite(
     ),
     inviter: inviter ?? _user('inviter_$id', roomRole: 'owner'),
     createdAt: createdAt ?? DateTime.utc(2026, 6, 5, 12),
+  );
+}
+
+RoomApplication _application(
+  String id, {
+  String status = 'pending',
+  DateTime? createdAt,
+  DateTime? updatedAt,
+  DateTime? reviewedAt,
+  String roomName = 'Application Room',
+  String roomRid = 'A-1',
+  UserSummary? reviewer,
+}) {
+  return RoomApplication(
+    id: id,
+    status: status,
+    room: PublicRoom(
+      id: 'room_$id',
+      rid: roomRid,
+      name: roomName,
+      avatarUrl: null,
+      defaultAvatarKey: 'room-1',
+      visibility: 'private',
+      joinPolicy: 'approval_required',
+      memberCount: 3,
+      onlineMemberCount: 1,
+      liveParticipantCount: 0,
+      joined: false,
+      joinState: 'pending',
+    ),
+    createdAt: createdAt ?? DateTime.utc(2026, 6, 5, 12),
+    updatedAt: updatedAt ?? DateTime.utc(2026, 6, 5, 12),
+    reviewedAt: reviewedAt,
+    reviewer: reviewer,
   );
 }
 

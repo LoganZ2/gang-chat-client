@@ -960,6 +960,44 @@ class RoomInvite {
   }
 }
 
+class RoomApplication {
+  const RoomApplication({
+    required this.id,
+    required this.status,
+    required this.room,
+    required this.createdAt,
+    required this.updatedAt,
+    this.reviewedAt,
+    this.reviewer,
+  });
+
+  final String id;
+  final String status;
+  final PublicRoom room;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? reviewedAt;
+  final UserSummary? reviewer;
+
+  factory RoomApplication.fromJson(Map<String, Object?> json) {
+    return RoomApplication(
+      id: json['id']! as String,
+      status: json['status'] as String? ?? 'pending',
+      room: PublicRoom.fromJson(json['room']! as Map<String, Object?>),
+      createdAt:
+          _parseDateTime(json['created_at']) ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      updatedAt:
+          _parseDateTime(json['updated_at']) ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      reviewedAt: _parseDateTime(json['reviewed_at']),
+      reviewer: _nullableMap(json['reviewer']) == null
+          ? null
+          : UserSummary.fromJson(_nullableMap(json['reviewer'])!),
+    );
+  }
+}
+
 class RoomDetail {
   const RoomDetail({
     required this.id,

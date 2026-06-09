@@ -650,6 +650,72 @@ void main() {
     },
   );
 
+  test(
+    'listRoomApplications requests all applications for notifications',
+    () async {
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          expect(request.method, 'GET');
+          expect(request.url.path, '/api/v1/room-applications');
+          expect(request.url.queryParameters, {'status': 'all'});
+          expect(request.headers['authorization'], 'Bearer token');
+
+          return http.Response(
+            jsonEncode({
+              'applications': [_roomApplicationJson(status: 'approved')],
+              'next_cursor': null,
+            }),
+            200,
+          );
+        }),
+      );
+
+      final applications = await api.listRoomApplications(status: 'all');
+
+      expect(applications.single.id, 'jrq_1');
+      expect(applications.single.status, 'approved');
+      expect(applications.single.room.name, 'Invite Room');
+      expect(applications.single.reviewer?.roomRole, 'owner');
+      expect(applications.single.reviewedAt, isNotNull);
+      api.close();
+    },
+  );
+
+  test(
+    'withdrawRoomApplication sends withdraw decision and parses result',
+    () async {
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          expect(request.method, 'PATCH');
+          expect(request.url.path, '/api/v1/room-applications/jrq_1');
+          expect(request.headers['authorization'], 'Bearer token');
+          expect(
+            jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>,
+            {'decision': 'withdraw'},
+          );
+
+          return http.Response(
+            jsonEncode({
+              'ok': true,
+              'application': _roomApplicationJson(status: 'withdrawn'),
+            }),
+            200,
+          );
+        }),
+      );
+
+      final application = await api.withdrawRoomApplication(requestId: 'jrq_1');
+
+      expect(application.status, 'withdrawn');
+      expect(application.reviewer, isNull);
+      api.close();
+    },
+  );
+
   test('sendMessage can send and parse a file attachment', () async {
     final fileAsset = UploadedAsset(
       id: 'asset_1',
@@ -1886,6 +1952,30 @@ Map<String, Object?> _roomInviteJson({String status = 'pending'}) {
       'room_display_name': 'Alice in Invite Room',
       'room_role': 'owner',
     },
+  };
+}
+
+Map<String, Object?> _roomApplicationJson({String status = 'pending'}) {
+  final reviewed = status == 'approved' || status == 'rejected';
+  return {
+    'id': 'jrq_1',
+    'status': status,
+    'created_at': '2026-05-30T13:00:00Z',
+    'updated_at': '2026-05-31T13:00:00Z',
+    'reviewed_at': reviewed ? '2026-05-31T13:00:00Z' : null,
+    'room': _roomInviteJson()['room'],
+    'reviewer': reviewed
+        ? {
+            'id': 'user_1',
+            'uid': '1000001',
+            'username': 'alice',
+            'display_name': 'Alice',
+            'avatar_url': null,
+            'default_avatar_key': 'blue-3',
+            'room_display_name': 'Alice in Invite Room',
+            'room_role': 'owner',
+          }
+        : null,
   };
 }
 

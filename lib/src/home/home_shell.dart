@@ -108,9 +108,11 @@ class _HomeShellState extends State<HomeShell> {
   bool _narrowContentOpen = false;
   _ContentMode _contentMode = _ContentMode.chat;
   List<RoomInvite> _notificationInvites = const [];
+  List<RoomApplication> _notificationApplications = const [];
   bool _loadingNotifications = false;
   String? _notificationError;
   String? _busyNotificationInviteId;
+  String? _busyNotificationApplicationId;
   bool _hasPendingRoomInvites = false;
   String? _joinedLiveRoomId;
   bool _joiningLive = false;
@@ -171,9 +173,11 @@ class _HomeShellState extends State<HomeShell> {
       _narrowContentOpen = false;
       _contentMode = _ContentMode.chat;
       _notificationInvites = const [];
+      _notificationApplications = const [];
       _loadingNotifications = false;
       _notificationError = null;
       _busyNotificationInviteId = null;
+      _busyNotificationApplicationId = null;
       _hasPendingRoomInvites = false;
       _joinedLiveRoomId = null;
       _joiningLive = false;

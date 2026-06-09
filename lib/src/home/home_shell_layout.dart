@@ -36,12 +36,15 @@ extension _HomeShellLayout on _HomeShellState {
     if (_contentMode == _ContentMode.notifications) {
       return HomeNotificationsPane(
         invites: _notificationInvites,
+        applications: _notificationApplications,
         loading: _loadingNotifications,
         error: _notificationError,
         busyInviteId: _busyNotificationInviteId,
+        busyApplicationId: _busyNotificationApplicationId,
         onClose: _closeNotifications,
         onRefresh: () => unawaited(_loadNotifications()),
         onReviewInvite: _reviewNotificationInvite,
+        onWithdrawApplication: _withdrawNotificationApplication,
       );
     }
 

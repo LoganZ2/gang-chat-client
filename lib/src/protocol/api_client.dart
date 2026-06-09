@@ -251,6 +251,12 @@ abstract interface class GangApi {
     required bool accept,
   });
 
+  Future<List<RoomApplication>> listRoomApplications({
+    String status = 'pending',
+  });
+
+  Future<RoomApplication> withdrawRoomApplication({required String requestId});
+
   Future<List<UserSummary>> searchUsers({
     required String query,
     int limit = 20,
@@ -1064,6 +1070,38 @@ class GangApiClient implements GangApi {
       return const JoinRoomResult(pending: true);
     }
     return const JoinRoomResult();
+  }
+
+  @override
+  Future<List<RoomApplication>> listRoomApplications({
+    String status = 'pending',
+  }) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.get(
+        _uri('/room-applications', {'status': status}),
+        headers: _headers(token),
+      );
+    }, retryTransientFailures: true);
+    return (decoded['applications'] as List<Object?>? ?? const [])
+        .cast<Map<String, Object?>>()
+        .map(RoomApplication.fromJson)
+        .toList();
+  }
+
+  @override
+  Future<RoomApplication> withdrawRoomApplication({
+    required String requestId,
+  }) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.patch(
+        _uri('/room-applications/$requestId'),
+        headers: _headers(token),
+        body: encodeJsonBody({'decision': 'withdraw'}),
+      );
+    });
+    return RoomApplication.fromJson(
+      decoded['application']! as Map<String, Object?>,
+    );
   }
 
   @override

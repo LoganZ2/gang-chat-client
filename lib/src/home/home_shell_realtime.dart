@@ -64,6 +64,9 @@ extension _HomeShellRealtime on _HomeShellState {
       case 'room_invites_updated':
         _applyRoomInvitesUpdated();
         break;
+      case 'room_applications_updated':
+        _applyRoomApplicationsUpdated();
+        break;
       default:
         break;
     }

@@ -328,14 +328,83 @@ void main() {
       expect(find.text('通知'), findsOneWidget);
       expect(find.text('全部'), findsOneWidget);
       expect(find.text('邀请'), findsOneWidget);
+      expect(find.text('申请'), findsOneWidget);
       expect(find.text('房间通知'), findsOneWidget);
+      expect(
+        find.ancestor(
+          of: _textFieldWithHint('搜索通知'),
+          matching: find.byType(ui.Input),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('邀请您加入'), findsOneWidget);
+      expect(find.text('您已申请加入'), findsAtLeastNWidgets(1));
+      expect(find.text('批准了您的申请'), findsOneWidget);
       expect(find.textContaining('Morgan Admin'), findsOneWidget);
       expect(find.textContaining('管理员'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('notification-inviter-avatar-invite-alpha')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('notification-room-avatar-invite-alpha')),
+        findsOneWidget,
+      );
+      final notificationRects = [
+        tester.getRect(
+          find.byKey(const ValueKey('notification-time-invite-alpha')),
+        ),
+        tester.getRect(
+          find.byKey(
+            const ValueKey('notification-inviter-avatar-invite-alpha'),
+          ),
+        ),
+        tester.getRect(
+          find.byKey(const ValueKey('notification-inviter-name-invite-alpha')),
+        ),
+        tester.getRect(
+          find.byKey(const ValueKey('notification-inviter-role-invite-alpha')),
+        ),
+        tester.getRect(
+          find.byKey(const ValueKey('notification-invite-action-invite-alpha')),
+        ),
+        tester.getRect(
+          find.byKey(const ValueKey('notification-room-avatar-invite-alpha')),
+        ),
+        tester.getRect(
+          find.byKey(const ValueKey('notification-room-name-invite-alpha')),
+        ),
+        tester.getRect(find.byTooltip('接受邀请')),
+      ];
+      for (var index = 1; index < notificationRects.length; index++) {
+        expect(
+          notificationRects[index].left,
+          greaterThan(notificationRects[index - 1].left),
+        );
+      }
       expect(
         requestedUris.any(
           (uri) =>
               uri.path == '/api/v1/room-invites' &&
               uri.queryParameters['status'] == 'all',
+        ),
+        isTrue,
+      );
+      expect(
+        requestedUris.any(
+          (uri) =>
+              uri.path == '/api/v1/room-applications' &&
+              uri.queryParameters['status'] == 'all',
+        ),
+        isTrue,
+      );
+
+      await tester.tap(find.byTooltip('撤回申请'));
+      await tester.pumpAndSettle();
+
+      expect(
+        requestedUris.any(
+          (uri) => uri.path == '/api/v1/room-applications/application-alpha',
         ),
         isTrue,
       );
@@ -2571,6 +2640,35 @@ GangApi _roomsApi({
           'next_cursor': null,
         });
       }
+      if (request.url.path == '/api/v1/room-applications') {
+        return _jsonResponse({
+          'applications': [
+            _roomApplicationJson(id: 'application-alpha'),
+            _roomApplicationJson(
+              id: 'application-approved',
+              status: 'approved',
+              createdAt: '2026-06-04T08:00:00Z',
+              updatedAt: '2026-06-07T08:00:00Z',
+              reviewedAt: '2026-06-07T08:00:00Z',
+              reviewer: {
+                ..._userJson(id: 'user-4', username: 'ivy', displayName: 'Ivy'),
+                'room_display_name': 'Ivy Owner',
+                'room_role': 'owner',
+              },
+            ),
+          ],
+          'next_cursor': null,
+        });
+      }
+      if (request.url.path == '/api/v1/room-applications/application-alpha') {
+        return _jsonResponse({
+          'ok': true,
+          'application': _roomApplicationJson(
+            id: 'application-alpha',
+            status: 'withdrawn',
+          ),
+        });
+      }
       if (request.url.path == '/api/v1/room-invites/invite-alpha') {
         return _jsonResponse({
           'ok': true,
@@ -2922,6 +3020,35 @@ Map<String, Object?> _roomInviteJson({
     },
     'created_at': '2026-06-05T08:00:00Z',
     'updated_at': '2026-06-05T08:00:00Z',
+  };
+}
+
+Map<String, Object?> _roomApplicationJson({
+  String id = 'application-alpha',
+  String status = 'pending',
+  String createdAt = '2026-06-06T08:00:00Z',
+  String updatedAt = '2026-06-06T08:00:00Z',
+  String? reviewedAt,
+  Map<String, Object?>? reviewer,
+}) {
+  return {
+    'id': id,
+    'status': status,
+    'room': {
+      ..._roomCardJson(
+        id: 'server-alpha',
+        name: 'Alpha Room',
+        memberCount: 2,
+        liveParticipantCount: 1,
+      ),
+      'join_policy': 'approval_required',
+      'joined': false,
+      'join_state': status == 'pending' ? 'pending' : 'none',
+    },
+    'created_at': createdAt,
+    'updated_at': updatedAt,
+    'reviewed_at': reviewedAt,
+    'reviewer': reviewer,
   };
 }
 
