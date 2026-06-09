@@ -259,12 +259,13 @@ class _RoomInviteNotificationRow extends StatelessWidget {
     final inviterName = _displayName(inviter);
     final role = roomInviteRoleLabel(inviter);
     final time = roomInviteTimestampLabel(invite.createdAt);
+    final invalid = isInvalidPendingRoomInvite(invite);
     return DecoratedBox(
       decoration: BoxDecoration(
         color: UiColors.surface,
         borderRadius: BorderRadius.circular(UiRadii.lg),
         border: Border.all(
-          color: isPendingRoomInvite(invite)
+          color: isPendingRoomInvite(invite) && !invalid
               ? UiColors.accentBorder
               : UiColors.border,
         ),
@@ -312,9 +313,12 @@ class _RoomInviteNotificationRow extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 7),
-                  _InviteRoleBadge(
-                    key: ValueKey('notification-inviter-role-${invite.id}'),
-                    label: role,
+                  Flexible(
+                    flex: 2,
+                    child: _InviteRoleBadge(
+                      key: ValueKey('notification-inviter-role-${invite.id}'),
+                      label: role,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -340,7 +344,9 @@ class _RoomInviteNotificationRow extends StatelessWidget {
               width: 88,
               child: Align(
                 alignment: Alignment.centerRight,
-                child: isPendingRoomInvite(invite)
+                child: invalid
+                    ? _InvalidInviteLabel(invite: invite)
+                    : isPendingRoomInvite(invite)
                     ? _InviteDecisionActions(
                         invite: invite,
                         busy: busy,
@@ -517,11 +523,14 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 7),
-                  _InviteRoleBadge(
-                    key: ValueKey(
-                      'notification-application-reviewer-role-${application.id}',
+                  Flexible(
+                    flex: 2,
+                    child: _InviteRoleBadge(
+                      key: ValueKey(
+                        'notification-application-reviewer-role-${application.id}',
+                      ),
+                      label: role,
                     ),
-                    label: role,
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -691,6 +700,35 @@ class _ApplicationWithdrawAction extends StatelessWidget {
       height: 34,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       child: const Text('撤回'),
+    );
+  }
+}
+
+class _InvalidInviteLabel extends StatelessWidget {
+  const _InvalidInviteLabel({required this.invite});
+
+  final RoomInvite invite;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: UiColors.surfacePressed,
+        borderRadius: BorderRadius.circular(UiRadii.md),
+        border: Border.all(color: UiColors.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+        child: Text(
+          roomInviteDecisionLabel(invite),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: UiTypography.label.copyWith(
+            color: UiColors.textMuted,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
     );
   }
 }

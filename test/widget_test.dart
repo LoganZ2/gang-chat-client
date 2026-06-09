@@ -337,7 +337,8 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(find.text('邀请您加入'), findsOneWidget);
+      expect(find.text('邀请您加入'), findsAtLeastNWidgets(1));
+      expect(find.text('已失效'), findsOneWidget);
       expect(find.text('您已申请加入'), findsAtLeastNWidgets(1));
       expect(find.text('批准了您的申请'), findsOneWidget);
       expect(find.textContaining('Morgan Admin'), findsOneWidget);
@@ -2636,6 +2637,17 @@ GangApi _roomsApi({
                 displayName: 'Morgan',
               ),
             ),
+            _roomInviteJson(
+              id: 'invite-invalid',
+              inviter: _userJson(
+                id: 'user-left',
+                username: 'lefty',
+                displayName: 'Lefty',
+              ),
+              inviterRoomRole: 'left',
+              inviterRoomDisplayName: 'Lefty',
+              invalidReason: 'inviter_left',
+            ),
           ],
           'next_cursor': null,
         });
@@ -2998,10 +3010,16 @@ Map<String, Object?> _roomInviteJson({
   String id = 'invite-alpha',
   String status = 'pending',
   Map<String, Object?>? inviter,
+  String inviterRoomRole = 'admin',
+  String inviterRoomDisplayName = 'Morgan Admin',
+  bool roomExists = true,
+  String? invalidReason,
 }) {
   return {
     'id': id,
     'status': status,
+    'room_exists': roomExists,
+    'invalid_reason': invalidReason,
     'room': {
       ..._roomCardJson(
         id: 'server-alpha',
@@ -3015,8 +3033,8 @@ Map<String, Object?> _roomInviteJson({
     },
     'inviter': {
       ...(inviter ?? _currentUserJson),
-      'room_display_name': 'Morgan Admin',
-      'room_role': 'admin',
+      'room_display_name': inviterRoomDisplayName,
+      'room_role': inviterRoomRole,
     },
     'created_at': '2026-06-05T08:00:00Z',
     'updated_at': '2026-06-05T08:00:00Z',

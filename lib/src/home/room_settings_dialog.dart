@@ -457,8 +457,8 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
               value: _joinPolicy,
               enabled: _canManageRoom && !_saving,
               segments: const [
-                Segment(value: 'approval_required', label: '需审批'),
                 Segment(value: 'open', label: '开放'),
+                Segment(value: 'approval_required', label: '需审批'),
                 Segment(value: 'closed', label: '关闭'),
               ],
               onChanged: (value) => setState(() => _joinPolicy = value),

@@ -65,6 +65,9 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       )
       .canEditCreatorOnly;
 
+  bool get _canInviteMembers =>
+      room_invites.roomInvitesEnabled(_room.joinPolicy);
+
   @override
   void initState() {
     super.initState();
@@ -97,6 +100,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
   }
 
   void _onInviteSearchChanged() {
+    if (!_canInviteMembers) return;
     final query = _inviteSearchController.text.trim();
     setState(() {
       _inviteQuery = query;
@@ -147,6 +151,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
   }
 
   Future<void> _searchInviteCandidates(String query, int seq) async {
+    if (!_canInviteMembers) return;
     setState(() {
       _searchingInvites = true;
       _inviteError = null;
@@ -171,6 +176,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
   }
 
   Future<void> _invite(UserSummary user) async {
+    if (!_canInviteMembers) return;
     if (_busyInviteUserIds.contains(user.id)) return;
     if (_members.any((member) => member.user.id == user.id)) return;
     setState(() {
@@ -348,6 +354,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
             members: _members,
             busyUserIds: _busyInviteUserIds,
             error: _inviteError,
+            enabled: _canInviteMembers,
             onInvite: _invite,
           ),
           if (_canReviewRequests)

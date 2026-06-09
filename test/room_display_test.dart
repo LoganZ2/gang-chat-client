@@ -129,7 +129,7 @@ void main() {
       expect(roomRoleLabel(_user(isSuperuser: true)), '超级用户');
       expect(roomRoleLabel(_user(id: 'owner'), ownerUserId: 'owner'), '创建者');
       expect(roomRoleLabel(_user(roomRole: 'administrator')), '管理员');
-      expect(roomRoleLabel(_user(roomRole: 'member')), '普通成员');
+      expect(roomRoleLabel(_user(roomRole: 'member')), '成员');
     },
   );
 

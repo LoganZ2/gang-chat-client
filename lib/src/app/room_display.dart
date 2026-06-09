@@ -194,7 +194,7 @@ String roomRoleLabel(UserSummary user, {String? ownerUserId}) {
     return '创建者';
   }
   if (role == 'admin' || role == 'administrator') return '管理员';
-  return '普通成员';
+  return '成员';
 }
 
 String commonRoomTitle(UserCommonRoom room) {
@@ -304,7 +304,7 @@ String? roomRoleLabelFromValue(String? value) {
     'superuser' => '超级用户',
     'owner' || 'creator' => '创建者',
     'admin' || 'administrator' => '管理员',
-    'member' => '普通成员',
+    'member' => '成员',
     'pending' => '待审批',
     _ => null,
   };

@@ -72,6 +72,13 @@ bool isRejectedRoomInvite(RoomInvite invite) {
   return invite.status.toLowerCase() == 'rejected';
 }
 
+bool isInvalidPendingRoomInvite(RoomInvite invite) {
+  if (!isPendingRoomInvite(invite)) return false;
+  final reason = invite.invalidReason?.trim();
+  if (reason != null && reason.isNotEmpty) return true;
+  return !invite.roomExists || _isLeftRoomRole(invite.inviter.roomRole);
+}
+
 bool isPendingRoomApplication(RoomApplication application) {
   return application.status.toLowerCase() == 'pending';
 }
@@ -97,7 +104,9 @@ bool canReviewNotificationInvite({
   required RoomInvite invite,
   required String? busyInviteId,
 }) {
-  return isPendingRoomInvite(invite) && busyInviteId == null;
+  return isPendingRoomInvite(invite) &&
+      !isInvalidPendingRoomInvite(invite) &&
+      busyInviteId == null;
 }
 
 bool canWithdrawNotificationApplication({
@@ -108,7 +117,9 @@ bool canWithdrawNotificationApplication({
 }
 
 int pendingRoomInviteCount(Iterable<RoomInvite> invites) {
-  return invites.where(isPendingRoomInvite).length;
+  return invites.where((invite) {
+    return isPendingRoomInvite(invite) && !isInvalidPendingRoomInvite(invite);
+  }).length;
 }
 
 int pendingRoomNotificationCount({
@@ -120,6 +131,7 @@ int pendingRoomNotificationCount({
 }
 
 String roomInviteDecisionLabel(RoomInvite invite) {
+  if (isInvalidPendingRoomInvite(invite)) return '已失效';
   if (isAcceptedRoomInvite(invite)) return '已接受';
   if (isRejectedRoomInvite(invite)) return '已拒绝';
   return '';
@@ -141,10 +153,11 @@ String roomApplicationReviewActionLabel(RoomApplication application) {
 String roomInviteRoleLabel(UserSummary inviter) {
   final role = inviter.roomRole?.trim().toLowerCase();
   return switch (role) {
-    'owner' || 'creator' => '房主',
+    'owner' || 'creator' => '创建者',
     'admin' || 'administrator' => '管理员',
     'member' => '成员',
     'superuser' => '超级用户',
+    'left' || 'left_room' || 'departed' => '已离开',
     null || '' => '成员',
     _ => inviter.roomRole!.trim(),
   };
@@ -267,12 +280,23 @@ String _roomInviteSearchText(RoomInvite invite) {
   _addSearchValue(values, invite.status);
   _addSearchValue(values, invite.room.joined ? '已加入 joined' : '未加入 not joined');
   _addSearchValue(values, roomInviteRoleLabel(invite.inviter));
+  _addSearchValue(values, invite.invalidReason);
+  _addSearchValue(
+    values,
+    isInvalidPendingRoomInvite(invite) ? '已失效 invalid' : null,
+  );
+  _addSearchValue(values, invite.roomExists ? null : '房间已不存在 room missing');
   _addSearchValue(values, roomInviteTimestampLabel(invite.createdAt));
   if (invite.updatedAt != null) {
     _addSearchValue(values, roomInviteTimestampLabel(invite.updatedAt!));
   }
   _addSearchValue(values, roomInviteDecisionLabel(invite));
   return values.join('\n');
+}
+
+bool _isLeftRoomRole(String? value) {
+  final role = value?.trim().toLowerCase();
+  return role == 'left' || role == 'left_room' || role == 'departed';
 }
 
 String _roomApplicationSearchText(RoomApplication application) {

@@ -561,7 +561,14 @@ void main() {
 
         return http.Response(
           jsonEncode({
-            'invites': [_roomInviteJson(status: 'accepted')],
+            'invites': [
+              _roomInviteJson(
+                status: 'pending',
+                roomExists: false,
+                invalidReason: 'room_missing',
+                inviterRoomRole: 'left',
+              ),
+            ],
             'next_cursor': null,
           }),
           200,
@@ -571,8 +578,10 @@ void main() {
 
     final invites = await api.listRoomInvites(status: 'all');
 
-    expect(invites.single.status, 'accepted');
-    expect(invites.single.inviter.roomRole, 'owner');
+    expect(invites.single.status, 'pending');
+    expect(invites.single.roomExists, isFalse);
+    expect(invites.single.invalidReason, 'room_missing');
+    expect(invites.single.inviter.roomRole, 'left');
     api.close();
   });
 
@@ -1923,12 +1932,19 @@ void main() {
   });
 }
 
-Map<String, Object?> _roomInviteJson({String status = 'pending'}) {
+Map<String, Object?> _roomInviteJson({
+  String status = 'pending',
+  bool roomExists = true,
+  String? invalidReason,
+  String inviterRoomRole = 'owner',
+}) {
   return {
     'id': 'rinv_1',
     'status': status,
     'created_at': '2026-05-31T13:00:00Z',
     'updated_at': '2026-05-31T13:00:00Z',
+    'room_exists': roomExists,
+    'invalid_reason': invalidReason,
     'room': {
       'id': 'room_1',
       'rid': '900001',
@@ -1950,7 +1966,7 @@ Map<String, Object?> _roomInviteJson({String status = 'pending'}) {
       'avatar_url': null,
       'default_avatar_key': 'blue-3',
       'room_display_name': 'Alice in Invite Room',
-      'room_role': 'owner',
+      'room_role': inviterRoomRole,
     },
   };
 }

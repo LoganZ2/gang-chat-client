@@ -108,6 +108,12 @@ void main() {
 
   test('room invite notification display helpers format labels', () {
     final pending = _invite('pending', status: 'pending');
+    final invalid = _invite(
+      'invalid',
+      status: 'pending',
+      invalidReason: 'inviter_left',
+      inviter: _user('left_inviter', roomRole: 'left'),
+    );
     final accepted = _invite('accepted', status: 'accepted');
     final rejected = _invite('rejected', status: 'rejected');
 
@@ -123,11 +129,19 @@ void main() {
       canReviewNotificationInvite(invite: accepted, busyInviteId: null),
       isFalse,
     );
+    expect(
+      canReviewNotificationInvite(invite: invalid, busyInviteId: null),
+      isFalse,
+    );
+    expect(isInvalidPendingRoomInvite(invalid), isTrue);
+    expect(roomInviteDecisionLabel(invalid), '已失效');
     expect(roomInviteDecisionLabel(accepted), '已接受');
     expect(roomInviteDecisionLabel(rejected), '已拒绝');
-    expect(roomInviteRoleLabel(_user('owner', roomRole: 'owner')), '房主');
+    expect(roomInviteRoleLabel(_user('owner', roomRole: 'owner')), '创建者');
     expect(roomInviteRoleLabel(_user('admin', roomRole: 'admin')), '管理员');
     expect(roomInviteRoleLabel(_user('member', roomRole: 'member')), '成员');
+    expect(roomInviteRoleLabel(_user('left', roomRole: 'left')), '已离开');
+    expect(pendingRoomInviteCount([pending, invalid]), 1);
     expect(
       roomInviteTimestampLabel(DateTime(2026, 6, 9, 8, 5)),
       '2026/06/09 08:05',
@@ -268,6 +282,8 @@ RoomInvite _invite(
   String roomName = 'Invite Room',
   String roomRid = 'R-1',
   UserSummary? inviter,
+  bool roomExists = true,
+  String? invalidReason,
 }) {
   return RoomInvite(
     id: id,
@@ -288,6 +304,8 @@ RoomInvite _invite(
     ),
     inviter: inviter ?? _user('inviter_$id', roomRole: 'owner'),
     createdAt: createdAt ?? DateTime.utc(2026, 6, 5, 12),
+    roomExists: roomExists,
+    invalidReason: invalidReason,
   );
 }
 

@@ -99,6 +99,9 @@ void main() {
   test('canStartRoomInvite rejects existing pending and busy users', () {
     final members = [_member('existing')];
 
+    expect(roomInvitesEnabled('open'), isTrue);
+    expect(roomInvitesEnabled('approval_required'), isTrue);
+    expect(roomInvitesEnabled('closed'), isFalse);
     expect(canStartRoomInvite(userId: 'existing', members: members), isFalse);
     expect(
       canStartRoomInvite(
@@ -118,9 +121,30 @@ void main() {
     );
     expect(canStartRoomInvite(userId: 'new', members: members), isTrue);
     expect(
+      canStartRoomInvite(
+        userId: 'new',
+        members: members,
+        invitesEnabled: false,
+      ),
+      isFalse,
+    );
+    expect(
       canStartRoomInvite(userId: 'super', members: members, isSuperuser: true),
       isFalse,
     );
+  });
+
+  test('roomInviteCandidates disables invite actions when room is closed', () {
+    final candidates = roomInviteCandidates(
+      searchResults: [_user('new')],
+      members: const [],
+      query: 'user',
+      invitesEnabled: false,
+    );
+
+    expect(candidates.single.existing, isTrue);
+    expect(candidates.single.inviteActionEnabled, isFalse);
+    expect(candidates.single.canStartInvite, isFalse);
   });
 
   test('room member invite action reducers update pending and busy ids', () {

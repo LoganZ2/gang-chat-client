@@ -195,6 +195,7 @@ class _InviteSection extends StatelessWidget {
     required this.members,
     required this.busyUserIds,
     required this.error,
+    required this.enabled,
     required this.onInvite,
   });
 
@@ -205,6 +206,7 @@ class _InviteSection extends StatelessWidget {
   final List<RoomMember> members;
   final Set<String> busyUserIds;
   final String? error;
+  final bool enabled;
   final ValueChanged<UserSummary> onInvite;
 
   @override
@@ -220,6 +222,7 @@ class _InviteSection extends StatelessWidget {
               controller: controller,
               hintText: '按用户名、昵称或 UID 搜索',
               prefixIcon: Icons.person_add_alt_1,
+              enabled: enabled,
             ),
             if (error != null) ...[
               const SizedBox(height: 8),
@@ -232,7 +235,7 @@ class _InviteSection extends StatelessWidget {
                 color: UiColors.accent,
                 backgroundColor: UiColors.surfacePressed,
               ),
-            ] else if (query.length >= 2) ...[
+            ] else if (enabled && query.length >= 2) ...[
               const SizedBox(height: 8),
               if (results.isEmpty)
                 Text(
@@ -245,10 +248,10 @@ class _InviteSection extends StatelessWidget {
                     user: user,
                     alreadyMember: memberIds.contains(user.id),
                     busy: busyUserIds.contains(user.id),
+                    enabled: enabled,
                     onInvite: () => onInvite(user),
                   ),
-                  if (user != results.take(4).last)
-                    const SizedBox(height: 6),
+                  if (user != results.take(4).last) const SizedBox(height: 6),
                 ],
             ],
           ],
@@ -263,12 +266,14 @@ class _InviteUserRow extends StatelessWidget {
     required this.user,
     required this.alreadyMember,
     required this.busy,
+    required this.enabled,
     required this.onInvite,
   });
 
   final UserSummary user;
   final bool alreadyMember;
   final bool busy;
+  final bool enabled;
   final VoidCallback onInvite;
 
   @override
@@ -297,7 +302,7 @@ class _InviteUserRow extends StatelessWidget {
           Button(
             height: 34,
             loading: busy,
-            onPressed: alreadyMember ? null : onInvite,
+            onPressed: !enabled || alreadyMember ? null : onInvite,
             child: Text(alreadyMember ? '成员' : '邀请'),
           ),
         ],

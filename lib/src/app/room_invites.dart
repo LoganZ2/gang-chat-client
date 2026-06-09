@@ -50,6 +50,10 @@ class RoomInviteCandidate {
   bool get canStartInvite => inviteActionEnabled && !busy;
 }
 
+bool roomInvitesEnabled(String joinPolicy) {
+  return joinPolicy.trim().toLowerCase() != 'closed';
+}
+
 RoomInviteSearchBodyState roomInviteSearchBodyState({
   required bool searching,
   required String query,
@@ -89,6 +93,7 @@ List<RoomInviteCandidate> roomInviteCandidates({
   required String query,
   Iterable<String> pendingInviteUserIds = const [],
   Iterable<String> busyUserIds = const [],
+  bool invitesEnabled = true,
 }) {
   final normalizedQuery = query.trim().toLowerCase();
   final pendingSet = pendingInviteUserIds.toSet();
@@ -119,7 +124,7 @@ List<RoomInviteCandidate> roomInviteCandidates({
     for (final user in users)
       RoomInviteCandidate(
         user: user,
-        existing: membersByUserId.containsKey(user.id),
+        existing: !invitesEnabled || membersByUserId.containsKey(user.id),
         pending: pendingSet.contains(user.id),
         busy: busySet.contains(user.id),
       ),
@@ -132,7 +137,9 @@ bool canStartRoomInvite({
   Iterable<String> pendingInviteUserIds = const [],
   Iterable<String> busyUserIds = const [],
   bool isSuperuser = false,
+  bool invitesEnabled = true,
 }) {
+  if (!invitesEnabled) return false;
   if (isSuperuser) return false;
   for (final member in members) {
     if (member.user.id == userId) return false;

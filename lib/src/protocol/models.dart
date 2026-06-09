@@ -936,6 +936,8 @@ class RoomInvite {
     required this.room,
     required this.inviter,
     required this.createdAt,
+    this.roomExists = true,
+    this.invalidReason,
     this.updatedAt,
   });
 
@@ -944,6 +946,8 @@ class RoomInvite {
   final PublicRoom room;
   final UserSummary inviter;
   final DateTime createdAt;
+  final bool roomExists;
+  final String? invalidReason;
   final DateTime? updatedAt;
 
   factory RoomInvite.fromJson(Map<String, Object?> json) {
@@ -955,6 +959,8 @@ class RoomInvite {
       createdAt:
           _parseDateTime(json['created_at']) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      roomExists: json['room_exists'] as bool? ?? true,
+      invalidReason: _stringFromJson(json, const ['invalid_reason']),
       updatedAt: _parseDateTime(json['updated_at']),
     );
   }
