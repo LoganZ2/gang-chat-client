@@ -21,18 +21,11 @@ import 'package:client/src/protocol/api_client.dart';
 import 'package:client/src/protocol/models.dart';
 import 'package:client/src/settings/settings_page.dart';
 import 'package:client/src/ui/ui.dart' as ui;
-import 'package:client/src/v2/home_page.dart' as current_home;
-import 'package:client/src/v2/live_channel_pane.dart' as live_pane;
+import 'package:client/src/home/home_page.dart';
+import 'package:client/src/home/live_channel_pane.dart' as live_pane;
 import 'package:client/ui_showcase.dart' as showcase;
 
 void main() {
-  test('v2 startup argument is recognized', () {
-    expect(shouldUseV2(['v2']), isTrue);
-    expect(shouldUseV2(['--v2']), isTrue);
-    expect(shouldUseV2(['V2']), isTrue);
-    expect(shouldUseV2(['--other']), isFalse);
-  });
-
   test('live stage defaults collapsed except local screen share', () {
     final remoteCamera = _liveVideoTrack(
       identity: 'user-2',
@@ -80,11 +73,11 @@ void main() {
     );
   });
 
-  testWidgets('v2 app renders login entrypoint on real auth gate', (
+  testWidgets('app renders login entrypoint on real auth gate', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      GangApp(tokenStore: _MemoryTokenStore(), useV2: true),
+      GangApp(tokenStore: _MemoryTokenStore()),
     );
     await tester.pump();
 
@@ -137,11 +130,11 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('v2 register mode exposes full auth form', (
+  testWidgets('register mode exposes full auth form', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      GangApp(tokenStore: _MemoryTokenStore(), useV2: true),
+      GangApp(tokenStore: _MemoryTokenStore()),
     );
     await tester.pump();
 
@@ -196,7 +189,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: ui.uiTheme(),
-        home: current_home.HomePage(
+        home: HomePage(
           app: _homeTestAppContext(requestedPaths: requestedPaths),
           realtime: _NoopRealtimeService(),
         ),
@@ -277,7 +270,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: ui.uiTheme(),
-        home: current_home.HomePage(
+        home: HomePage(
           app: _homeTestAppContext(roomCreations: roomCreations),
           realtime: _NoopRealtimeService(),
         ),
@@ -324,7 +317,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: ui.uiTheme(),
-        home: current_home.HomePage(
+        home: HomePage(
           app: _homeTestAppContext(requestedPaths: requestedPaths),
           realtime: _NoopRealtimeService(),
         ),
@@ -361,7 +354,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: ui.uiTheme(),
-        home: current_home.HomePage(
+        home: HomePage(
           app: _homeTestAppContext(requestedPaths: requestedPaths),
           audioDeviceStore: const _FakeAudioDeviceStore(),
           liveSessionController: liveSessionController,
@@ -443,7 +436,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: ui.uiTheme(),
-        home: current_home.HomePage(
+        home: HomePage(
           app: _homeTestAppContext(requestedPaths: requestedPaths),
           realtime: _NoopRealtimeService(),
         ),
@@ -544,7 +537,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: ui.uiTheme(),
-        home: current_home.HomePage(
+        home: HomePage(
           app: _homeTestAppContext(),
           realtime: realtime,
         ),
@@ -627,7 +620,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: ui.uiTheme(),
-        home: current_home.HomePage(
+        home: HomePage(
           app: _homeTestAppContext(
             onLogout: () async => logoutCount++,
             accountUpdates: accountUpdates,
@@ -706,7 +699,7 @@ void main() {
           child: SizedBox(
             width: 420,
             height: 190,
-            child: current_home.HomePage(
+            child: HomePage(
               app: _homeTestAppContext(),
               realtime: _NoopRealtimeService(),
             ),
@@ -737,7 +730,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: ui.uiTheme().copyWith(platform: TargetPlatform.macOS),
-        home: current_home.HomePage(
+        home: HomePage(
           app: _homeTestAppContext(),
           realtime: _NoopRealtimeService(),
         ),
@@ -771,7 +764,7 @@ void main() {
             child: SizedBox(
               width: 420,
               height: 620,
-              child: current_home.HomePage(
+              child: HomePage(
                 app: _homeTestAppContext(),
                 realtime: _NoopRealtimeService(),
               ),
@@ -795,7 +788,7 @@ void main() {
     },
   );
 
-  testWidgets('auth login layout is identical with and without v2 flag', (
+  testWidgets('auth login layout is stable across rebuilds', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(GangApp(tokenStore: _MemoryTokenStore()));
@@ -816,7 +809,7 @@ void main() {
     ).textSelectionTheme.cursorColor;
 
     await tester.pumpWidget(
-      GangApp(tokenStore: _MemoryTokenStore(), useV2: true),
+      GangApp(tokenStore: _MemoryTokenStore()),
     );
     await tester.pump();
 

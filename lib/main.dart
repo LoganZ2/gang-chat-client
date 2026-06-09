@@ -3,18 +3,15 @@ import 'dart:io' show HttpClient, HttpOverrides, SecurityContext;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
-import 'src/app/app.dart';
 import 'src/auth/token_store.dart';
 import 'src/config/app_config.dart';
 import 'src/shell/desktop_window_controller.dart';
 import 'src/shell/gang_app.dart';
 
-export 'src/app/app.dart' show shouldUseV2;
 export 'src/shell/gang_app.dart' show GangApp;
 
 Future<void> main(List<String> args) async {
   final binding = WidgetsFlutterBinding.ensureInitialized();
-  final useV2 = shouldUseV2(args);
 
   final config = await AppConfig.load();
   _installConfiguredHostProxyBypass(config);
@@ -30,14 +27,12 @@ Future<void> main(List<String> args) async {
 
   await windowController.prepareForLaunch(
     authenticated: hasStoredSession,
-    useV2: useV2,
   );
   runApp(
     GangApp(
       config: config,
       tokenStore: tokenStore,
       startsAuthenticated: hasStoredSession,
-      useV2: useV2,
       windowController: windowController,
     ),
   );

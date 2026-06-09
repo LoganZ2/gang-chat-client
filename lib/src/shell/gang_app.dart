@@ -5,9 +5,8 @@ import 'package:flutter/material.dart';
 import '../auth/auth_client.dart';
 import '../auth/token_store.dart';
 import '../config/app_config.dart';
-import '../home/home_page.dart' as legacy_home;
 import '../ui/ui.dart';
-import '../v2/home_page.dart' as current_home;
+import '../home/home_page.dart';
 import '../app/auth_session_controller.dart';
 import '../app/authenticated_app_context.dart';
 import 'desktop_window_controller.dart';
@@ -19,14 +18,12 @@ class GangApp extends StatelessWidget {
     this.tokenStore = const TokenStore(),
     this.config = const AppConfig.defaults(),
     this.startsAuthenticated = false,
-    this.useV2 = false,
     DesktopWindowController? windowController,
   }) : windowController = windowController ?? DesktopWindowController();
 
   final TokenStore tokenStore;
   final AppConfig config;
   final bool startsAuthenticated;
-  final bool useV2;
   final DesktopWindowController windowController;
 
   @override
@@ -35,13 +32,12 @@ class GangApp extends StatelessWidget {
       config: config,
       child: MaterialApp(
         title: 'Gang Chat',
-        theme: useV2 ? uiTheme() : _buildTheme(),
+        theme: uiTheme(),
         home: SelectionArea(
           child: _AuthGate(
             tokenStore: tokenStore,
             config: config,
             startsAuthenticated: startsAuthenticated,
-            useV2: useV2,
             windowController: windowController,
           ),
         ),
@@ -50,88 +46,17 @@ class GangApp extends StatelessWidget {
   }
 }
 
-ThemeData _buildTheme() {
-  const appBackground = Color(0xFF14171D);
-  const fieldBackground = Color(0xFF1F232C);
-  const accent = Color(0xFF6FCFA6);
-  const warmAccent = Color(0xFFD4B675);
-  const fieldBorder = Color(0xFF2A2F38);
-  const fieldFocusedBorder = Color(0xFF3A4248);
-  const fieldDisabledBorder = Color(0xFF22262E);
-  const fieldErrorBorder = Color(0xFF553A3F);
-
-  final scheme = ColorScheme.fromSeed(
-    seedColor: accent,
-    brightness: Brightness.dark,
-    primary: accent,
-    secondary: warmAccent,
-    surface: appBackground,
-  );
-
-  return ThemeData(
-    useMaterial3: true,
-    brightness: Brightness.dark,
-    colorScheme: scheme,
-    scaffoldBackgroundColor: appBackground,
-    // Windows' default UI font (Segoe UI) has no CJK glyphs, so Chinese text
-    // falls back to whatever the engine picks. Pin a bundled fallback chain.
-    fontFamilyFallback: const [
-      'Segoe UI',
-      'Microsoft YaHei UI',
-      'Microsoft YaHei',
-    ],
-    splashFactory: NoSplash.splashFactory,
-    highlightColor: Colors.transparent,
-    hoverColor: Colors.transparent,
-    inputDecorationTheme: InputDecorationTheme(
-      filled: true,
-      fillColor: fieldBackground,
-      hoverColor: Colors.transparent,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-      hintStyle: const TextStyle(color: Color(0xFF6F7785)),
-      labelStyle: const TextStyle(color: Color(0xFF99A1AD)),
-      floatingLabelStyle: const TextStyle(color: Color(0xFFB0B8C0)),
-      border: const OutlineInputBorder(
-        borderRadius: BorderRadius.zero,
-        borderSide: BorderSide(color: fieldBorder),
-      ),
-      enabledBorder: const OutlineInputBorder(
-        borderRadius: BorderRadius.zero,
-        borderSide: BorderSide(color: fieldBorder),
-      ),
-      focusedBorder: const OutlineInputBorder(
-        borderRadius: BorderRadius.zero,
-        borderSide: BorderSide(color: fieldFocusedBorder),
-      ),
-      disabledBorder: const OutlineInputBorder(
-        borderRadius: BorderRadius.zero,
-        borderSide: BorderSide(color: fieldDisabledBorder),
-      ),
-      errorBorder: const OutlineInputBorder(
-        borderRadius: BorderRadius.zero,
-        borderSide: BorderSide(color: fieldErrorBorder),
-      ),
-      focusedErrorBorder: const OutlineInputBorder(
-        borderRadius: BorderRadius.zero,
-        borderSide: BorderSide(color: fieldErrorBorder),
-      ),
-    ),
-  );
-}
-
 class _AuthGate extends StatefulWidget {
   const _AuthGate({
     required this.tokenStore,
     required this.config,
     required this.startsAuthenticated,
-    required this.useV2,
     required this.windowController,
   });
 
   final TokenStore tokenStore;
   final AppConfig config;
   final bool startsAuthenticated;
-  final bool useV2;
   final DesktopWindowController windowController;
 
   @override
@@ -280,14 +205,10 @@ class _AuthGateState extends State<_AuthGate> {
       logout: _logout,
     );
 
-    if (widget.useV2) {
-      return current_home.HomePage(
-        app: app,
-        windowController: widget.windowController,
-      );
-    }
-
-    return legacy_home.HomePage(app: app);
+    return HomePage(
+      app: app,
+      windowController: widget.windowController,
+    );
   }
 }
 

@@ -9,6 +9,7 @@ class _MessageStage extends StatelessWidget {
     required this.messages,
     required this.fileTransfers,
     required this.onRetry,
+    this.onResolveSenderProfile,
   });
 
   final String currentUserId;
@@ -18,6 +19,8 @@ class _MessageStage extends StatelessWidget {
   final List<Message> messages;
   final Map<String, FileTransferState> fileTransfers;
   final VoidCallback onRetry;
+  final Future<UserSummary> Function(UserSummary sender)?
+  onResolveSenderProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -69,6 +72,7 @@ class _MessageStage extends StatelessWidget {
           message: message,
           outgoing: message.sender.id == currentUserId,
           transfer: fileTransfers[message.clientMessageId],
+          onResolveSenderProfile: onResolveSenderProfile,
         );
       },
     );
@@ -80,11 +84,14 @@ class _MessageRow extends StatelessWidget {
     required this.message,
     required this.outgoing,
     required this.transfer,
+    this.onResolveSenderProfile,
   });
 
   final Message message;
   final bool outgoing;
   final FileTransferState? transfer;
+  final Future<UserSummary> Function(UserSummary sender)?
+  onResolveSenderProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -99,6 +106,17 @@ class _MessageRow extends StatelessWidget {
       ),
     );
 
+    final avatar = Avatar(
+      label: _senderName(message.sender),
+      imageUrl: AppConfigScope.of(
+        context,
+      ).resolveAssetUrl(message.sender.avatarUrl),
+      defaultAvatarKey: message.sender.defaultAvatarKey,
+      size: 32,
+      active: message.sender.isOnline ?? false,
+      activeBorderWidth: 1,
+    );
+
     return Row(
       mainAxisAlignment: outgoing
           ? MainAxisAlignment.end
@@ -106,19 +124,15 @@ class _MessageRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (!outgoing) ...[
-          Avatar(
-            label: _senderName(message.sender),
-            imageUrl: AppConfigScope.of(
-              context,
-            ).resolveAssetUrl(message.sender.avatarUrl),
-            defaultAvatarKey: message.sender.defaultAvatarKey,
-            size: 32,
-            active: message.sender.isOnline ?? false,
-            activeBorderWidth: 1,
+          _AvatarHoverCard(
+            user: message.sender,
+            onResolveProfile: onResolveSenderProfile,
+            child: avatar,
           ),
           const SizedBox(width: 10),
         ],
         bubble,
+        if (outgoing) ...[const SizedBox(width: 10), avatar],
       ],
     );
   }

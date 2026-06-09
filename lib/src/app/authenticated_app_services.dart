@@ -9,6 +9,7 @@ import 'realtime_controller.dart';
 import 'rooms_controller.dart';
 import 'settings_controller.dart';
 import 'sticker_packs_controller.dart';
+import 'voice_recorder_controller.dart';
 
 class AuthenticatedAppServices {
   AuthenticatedAppServices._({
@@ -22,6 +23,7 @@ class AuthenticatedAppServices {
     required this.fileDownloads,
     required this.settings,
     required this.stickers,
+    required this.voiceRecorder,
     required this.ownsLiveSession,
     required this.ownsRealtime,
   });
@@ -63,6 +65,7 @@ class AuthenticatedAppServices {
         apiBaseUrl: context.apiBaseUrl,
         stickerPackStore: context.stickerPackStore,
       ),
+      voiceRecorder: VoiceRecorderController(),
       ownsLiveSession: liveSessionController == null,
       ownsRealtime: realtime == null,
     );
@@ -78,6 +81,7 @@ class AuthenticatedAppServices {
   final FileDownloadsController fileDownloads;
   final SettingsController settings;
   final StickerPacksController stickers;
+  final VoiceRecorderController voiceRecorder;
   final bool ownsLiveSession;
   final bool ownsRealtime;
 
@@ -93,6 +97,7 @@ class AuthenticatedAppServices {
   void close() {
     if (ownsRealtime) realtime.dispose();
     if (ownsLiveSession) liveSession.dispose();
+    voiceRecorder.dispose();
     api.close();
   }
 }

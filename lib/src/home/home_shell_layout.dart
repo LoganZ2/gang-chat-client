@@ -105,15 +105,20 @@ extension _HomeShellLayout on _HomeShellState {
       sendError: _sendError,
       composerController: _composerController,
       stickerPanel: _stickerPanelState,
+      voiceState: _voiceState,
       onSubmit: (value) => unawaited(_sendText(value)),
       onSendSticker: (sticker) => unawaited(_sendSticker(sticker)),
       onLoadStickers: () => unawaited(_loadStickerPacks(forceReload: true)),
       onRefreshStickers: () => unawaited(_loadStickerPacks(forceReload: true)),
       onStickerSourceChanged: _changeStickerSource,
+      onStartVoice: () => unawaited(_startVoiceRecording()),
+      onSendVoice: () => unawaited(_finishAndSendVoice()),
+      onCancelVoice: () => unawaited(_cancelVoiceRecording()),
       onRetry: () => unawaited(_retryOpenSelectedRoom()),
       onOpenLiveChannel: _openLiveChannel,
       onOpenRoomMembers: () => unawaited(_openRoomMembers()),
       onOpenRoomSettings: () => unawaited(_openRoomSettings()),
+      onResolveSenderProfile: _resolveSenderProfile,
     );
   }
 

@@ -9,7 +9,6 @@ import '../lifecycle/shutdown_hooks.dart';
 
 const appWindowBackground = Color(0xFF14171D);
 
-const _legacyAppWindowMinSize = Size(720, 480);
 const _responsiveAppWindowMinSize = Size(390, 480);
 const _appWindowSize = Size(1180, 760);
 const _unboundedWindowSize = Size(100000, 100000);
@@ -25,7 +24,6 @@ const _registerWindowSize = _registerWidgetSize;
 
 class DesktopWindowController {
   bool _skipNextAuthWindowLock = false;
-  bool _useResponsiveAppWindow = false;
 
   bool get supportsWindowManagement =>
       !kIsWeb &&
@@ -40,11 +38,9 @@ class DesktopWindowController {
 
   Future<void> prepareForLaunch({
     required bool authenticated,
-    bool useV2 = false,
   }) async {
     if (!supportsWindowManagement) return;
 
-    _useResponsiveAppWindow = useV2;
     await windowManager.ensureInitialized();
     _skipNextAuthWindowLock = false;
     await windowManager.waitUntilReadyToShow(
@@ -262,9 +258,7 @@ class DesktopWindowController {
   Size _authWindowSize(bool registering) =>
       registering ? _registerWindowSize : _loginWindowSize;
 
-  Size get _appWindowMinSize => _useResponsiveAppWindow
-      ? _responsiveAppWindowMinSize
-      : _legacyAppWindowMinSize;
+  Size get _appWindowMinSize => _responsiveAppWindowMinSize;
 
   Future<void> _configure(Future<void> Function() configure) async {
     if (!supportsWindowManagement) return;
@@ -291,7 +285,7 @@ class DesktopWindowController {
 
   Future<void> _setAppTitleBar() {
     return _setTitleBar(
-      windowButtonVisibility: !_useResponsiveAppWindow || Platform.isMacOS,
+      windowButtonVisibility: Platform.isMacOS,
     );
   }
 

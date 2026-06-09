@@ -15,9 +15,12 @@ import '../app/live_session_controller.dart';
 import '../app/message_display.dart' as message_display;
 import '../app/messages_controller.dart';
 import '../app/realtime_controller.dart';
+import '../app/room_display.dart' as room_display;
 import '../app/rooms_controller.dart';
 import '../app/sticker_display.dart' as sticker_display;
 import '../app/sticker_packs_controller.dart';
+import '../app/voice_message_display.dart' as voice_display;
+import '../app/voice_recorder_controller.dart';
 import '../live/live_session.dart';
 import '../protocol/models.dart';
 import '../settings/settings_page.dart';
@@ -87,6 +90,10 @@ class _HomeShellState extends State<HomeShell> {
   String? _sendError;
   sticker_display.StickerPanelLoadState _stickerPanelState =
       const sticker_display.StickerPanelLoadState();
+  voice_display.VoiceRecorderState _voiceState =
+      const voice_display.VoiceRecorderState();
+  Timer? _voiceTicker;
+  DateTime? _voiceStartedAt;
   bool _settingsOpen = false;
   bool _narrowContentOpen = false;
   _ContentMode _contentMode = _ContentMode.chat;
@@ -101,6 +108,7 @@ class _HomeShellState extends State<HomeShell> {
   RoomsController get _roomsController => _services.rooms;
   MessagesController get _messagesController => _services.messages;
   StickerPacksController get _stickerPacksController => _services.stickers;
+  VoiceRecorderController get _voiceRecorder => _services.voiceRecorder;
   LiveController get _liveController => _services.live;
   LiveSessionController get _liveSessionController => _services.liveSession;
 
@@ -163,6 +171,7 @@ class _HomeShellState extends State<HomeShell> {
     if (realtimeEvents != null) unawaited(realtimeEvents.cancel());
     unawaited(_setSystemFullScreen(false));
     _detachLiveSessionCallbacks();
+    _voiceTicker?.cancel();
     _composerController.dispose();
     _services.close();
     super.dispose();

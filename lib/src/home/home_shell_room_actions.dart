@@ -1,6 +1,38 @@
 part of 'home_shell.dart';
 
 extension _HomeShellRoomActions on _HomeShellState {
+  /// Fetches the full profile for a message sender so the hover card can show
+  /// fields the lightweight message summary omits (gender, common rooms). Falls
+  /// back to the summary we already have when the room context or request is
+  /// unavailable.
+  Future<UserSummary> _resolveSenderProfile(UserSummary sender) async {
+    final room = _selectedRoom;
+    if (room == null) return sender;
+    var resolved = sender;
+    try {
+      final profile = await _roomsController.getRoomMemberProfile(
+        roomId: room.id,
+        userId: sender.id,
+      );
+      resolved = profile.user.mergeMissing(sender);
+    } catch (_) {
+      // Legacy responses only carry the lightweight summary; keep what we have.
+    }
+    final withRole = room_display.roomUserInfoProfile(
+      user: resolved,
+      room: room,
+      currentUser: _currentUser,
+    );
+    return withRole.copyWith(
+      commonRooms: room_display.roomUserInfoCommonRooms(
+        user: withRole,
+        selectedRoom: room,
+        currentUser: _currentUser,
+        includeSelectedRoom: false,
+      ),
+    );
+  }
+
   Future<void> _loadServers() async {
     _setHomeState(() {
       _loadingServers = true;

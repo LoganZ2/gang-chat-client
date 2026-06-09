@@ -2,6 +2,7 @@ part of 'chat_pane.dart';
 
 const _stickerPanelHeight = 268.0;
 const _stickerTileSize = 56.0;
+const _voicePanelHeight = 150.0;
 
 class _ComposerDock extends StatelessWidget {
   const _ComposerDock({
@@ -9,22 +10,30 @@ class _ComposerDock extends StatelessWidget {
     required this.sending,
     required this.sendError,
     required this.stickerPanel,
+    required this.voiceState,
     required this.onSubmit,
     required this.onSendSticker,
     required this.onOpenStickers,
     required this.onRefreshStickers,
     required this.onStickerSourceChanged,
+    required this.onStartVoice,
+    required this.onSendVoice,
+    required this.onCancelVoice,
   });
 
   final TextEditingController controller;
   final bool sending;
   final String? sendError;
   final sticker_display.StickerPanelLoadState stickerPanel;
+  final voice_display.VoiceRecorderState voiceState;
   final ValueChanged<String> onSubmit;
   final ValueChanged<Sticker> onSendSticker;
   final VoidCallback onOpenStickers;
   final VoidCallback onRefreshStickers;
   final ValueChanged<sticker_display.StickerPanelSource> onStickerSourceChanged;
+  final VoidCallback onStartVoice;
+  final VoidCallback onSendVoice;
+  final VoidCallback onCancelVoice;
 
   @override
   Widget build(BuildContext context) {
@@ -70,11 +79,20 @@ class _ComposerDock extends StatelessWidget {
                     ),
                   ),
                 ),
-                const ComposerAction(
+                ComposerAction(
                   id: 'voice',
                   icon: Icons.mic_none,
                   label: '语音',
-                  panel: ComposerPanel.static(child: _VoicePanelPreview()),
+                  onPressed: onCancelVoice,
+                  panel: ComposerPanel.static(
+                    height: _voicePanelHeight,
+                    child: _VoicePanel(
+                      state: voiceState,
+                      onStart: onStartVoice,
+                      onSend: onSendVoice,
+                      onCancel: onCancelVoice,
+                    ),
+                  ),
                 ),
                 ComposerAction(
                   id: 'send',
@@ -327,92 +345,190 @@ class _StickerPanelMessage extends StatelessWidget {
   }
 }
 
-class _VoicePanelPreview extends StatelessWidget {
-  const _VoicePanelPreview();
+/// The composer's voice recorder. Click-to-start (not press-and-hold): the
+/// idle state shows a plain mic icon, recording shows a live timer with
+/// send/cancel actions, and review lets the user send or discard the clip.
+class _VoicePanel extends StatelessWidget {
+  const _VoicePanel({
+    required this.state,
+    required this.onStart,
+    required this.onSend,
+    required this.onCancel,
+  });
+
+  final voice_display.VoiceRecorderState state;
+  final VoidCallback onStart;
+  final VoidCallback onSend;
+  final VoidCallback onCancel;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        PressableSurface(
-          width: 86,
-          height: 76,
-          selected: true,
-          padding: EdgeInsets.zero,
-          child: const Center(
-            child: Icon(Icons.mic_none, color: UiColors.accent, size: 30),
-          ),
+    return Center(
+      child: switch (state.phase) {
+        voice_display.VoiceRecorderPhase.idle => _VoiceIdle(
+          error: state.error,
+          onStart: onStart,
         ),
-        const SizedBox(width: 12),
-        const Expanded(child: _VoiceMeter()),
-        const SizedBox(width: 12),
-        Button(
-          icon: const Icon(Icons.fiber_manual_record),
-          tone: ButtonTone.primary,
-          onPressed: () {},
-          child: const Text('录制'),
+        voice_display.VoiceRecorderPhase.recording => _VoiceActive(
+          elapsed: state.elapsed,
+          recording: true,
+          busy: false,
+          onSend: onSend,
+          onCancel: onCancel,
+        ),
+        voice_display.VoiceRecorderPhase.review => _VoiceActive(
+          elapsed: state.elapsed,
+          recording: false,
+          busy: false,
+          error: state.error,
+          onSend: onSend,
+          onCancel: onCancel,
+        ),
+        voice_display.VoiceRecorderPhase.sending => _VoiceActive(
+          elapsed: state.elapsed,
+          recording: false,
+          busy: true,
+          onSend: onSend,
+          onCancel: onCancel,
+        ),
+      },
+    );
+  }
+}
+
+class _VoiceIdle extends StatelessWidget {
+  const _VoiceIdle({required this.onStart, this.error});
+
+  final VoidCallback onStart;
+  final String? error;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 14),
+        // Plain icon trigger — no raised surface or circular background.
+        IconButton(
+          onPressed: onStart,
+          icon: const Icon(Icons.mic_none),
+          iconSize: 30,
+          color: UiColors.accent,
+          tooltip: '点击录音',
+          splashRadius: 24,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          error ?? '点击录音',
+          textAlign: TextAlign.center,
+          style: UiTypography.label.copyWith(
+            color: error != null ? UiColors.danger : UiColors.textMuted,
+          ),
         ),
       ],
     );
   }
 }
 
-class _VoiceMeter extends StatelessWidget {
-  const _VoiceMeter();
+class _VoiceActive extends StatelessWidget {
+  const _VoiceActive({
+    required this.elapsed,
+    required this.recording,
+    required this.busy,
+    required this.onSend,
+    required this.onCancel,
+    this.error,
+  });
 
-  static const _levels = [0.34, 0.58, 0.82, 0.46, 0.72, 0.38, 0.62, 0.9];
+  final Duration elapsed;
+  final bool recording;
+  final bool busy;
+  final VoidCallback onSend;
+  final VoidCallback onCancel;
+  final String? error;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 76,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: UiColors.surfaceLow,
-          borderRadius: BorderRadius.circular(UiRadii.md),
-          border: Border.all(color: UiColors.border),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 14),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              recording ? Icons.fiber_manual_record : Icons.mic_none,
+              size: 16,
+              color: recording ? UiColors.danger : UiColors.textSecondary,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              voice_display.formatVoiceDuration(elapsed),
+              style: UiTypography.body.copyWith(
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ],
         ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const Text(
-                '语音消息',
-                style: TextStyle(
-                  color: UiColors.textSecondary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(width: 18),
-              Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    for (final level in _levels)
-                      FractionallySizedBox(
-                        heightFactor: level,
-                        child: const SizedBox(
-                          width: 7,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: UiColors.accent,
-                              borderRadius: BorderRadius.all(
-                                Radius.circular(99),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
+        const SizedBox(height: 4),
+        Text(
+          error ?? (recording ? '正在录音…' : '点击发送或取消'),
+          textAlign: TextAlign.center,
+          style: UiTypography.label.copyWith(
+            color: error != null ? UiColors.danger : UiColors.textMuted,
           ),
         ),
-      ),
+        const SizedBox(height: 12),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ButtonIcon(
+              onPressed: busy ? null : onCancel,
+              icon: const Icon(Icons.delete_outline),
+              tooltip: '取消',
+              tone: ButtonTone.danger,
+              size: 34,
+            ),
+            const SizedBox(width: 10),
+            ButtonIcon(
+              onPressed: busy ? null : onSend,
+              icon: const Icon(Icons.send_rounded),
+              tooltip: recording ? '完成并发送' : '发送',
+              tone: ButtonTone.primary,
+              loading: busy,
+              size: 34,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Test-only entry point for the otherwise-private voice panel, so widget
+/// tests can pump it directly without standing up the whole composer dock.
+@visibleForTesting
+class VoicePanelForTest extends StatelessWidget {
+  const VoicePanelForTest({
+    super.key,
+    required this.state,
+    required this.onStart,
+    required this.onSend,
+    required this.onCancel,
+  });
+
+  final voice_display.VoiceRecorderState state;
+  final VoidCallback onStart;
+  final VoidCallback onSend;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    return _VoicePanel(
+      state: state,
+      onStart: onStart,
+      onSend: onSend,
+      onCancel: onCancel,
     );
   }
 }

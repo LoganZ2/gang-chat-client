@@ -22,6 +22,7 @@ dependencies:
   file_selector: ^1.1.0
   archive: ^4.0.9
   path_provider: ^2.1.5
+  record: ^7.0.0
 
 dev_dependencies:
   flutter_test:
