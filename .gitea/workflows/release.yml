@@ -191,9 +191,6 @@ jobs:
       # pub 解析出的实际版本可能和 pubspec.yaml 不同（transitive constraint 会拉高版本）
       - name: Setup libwebrtc
         shell: powershell
-        env:
-          HTTP_PROXY: http://127.0.0.1:7890
-          HTTPS_PROXY: http://127.0.0.1:7890
         run: |
           $pubCache = "$env:LOCALAPPDATA\Pub\Cache\hosted\pub.flutter-io.cn"
           $pkgDir = Get-ChildItem -Path $pubCache -Directory -Filter "flutter_webrtc-*" | Sort-Object Name -Descending | Select-Object -First 1
