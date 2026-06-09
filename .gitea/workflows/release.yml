@@ -188,21 +188,31 @@ jobs:
 
       # flutter pub get 会重置 pub cache 目录，每次 build 前重新下载解压 libwebrtc
       # cmake 的 ZIP 解压在 Windows 上有 bug，用 PowerShell Expand-Archive 更可靠
+      # pub 解析出的实际版本可能和 pubspec.yaml 不同（transitive constraint 会拉高版本）
       - name: Setup libwebrtc
         shell: powershell
         env:
           HTTP_PROXY: http://127.0.0.1:7890
           HTTPS_PROXY: http://127.0.0.1:7890
         run: |
-          $thirdParty = "$env:LOCALAPPDATA\Pub\Cache\hosted\pub.flutter-io.cn\flutter_webrtc-1.2.1\third_party"
+          $pubCache = "$env:LOCALAPPDATA\Pub\Cache\hosted\pub.flutter-io.cn"
+          $pkgDir = Get-ChildItem -Path $pubCache -Directory -Filter "flutter_webrtc-*" | Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $pkgDir) { Write-Error "flutter_webrtc not found in pub cache"; exit 1 }
+          $thirdParty = Join-Path $pkgDir.FullName "third_party"
+          $ver = $pkgDir.Name -replace "flutter_webrtc-", ""
+          Write-Host "Found flutter_webrtc version: $ver at $thirdParty"
+
           if (Test-Path "$thirdParty\libwebrtc\include\libwebrtc.h") {
             Write-Host "libwebrtc already cached, skip"
             exit 0
           }
-          Write-Host "Downloading libwebrtc.zip via proxy..."
+
+          Write-Host "Downloading libwebrtc.zip (v$ver) via proxy..."
           New-Item -ItemType Directory -Force -Path "$thirdParty\downloads" | Out-Null
-          curl.exe -L --connect-timeout 30 --retry 5 --retry-delay 10 -o "$thirdParty\downloads\libwebrtc.zip" "https://github.com/flutter-webrtc/flutter-webrtc/releases/download/v1.2.1/libwebrtc.zip"
-          if ($LASTEXITCODE -ne 0) { Write-Error "libwebrtc download failed"; exit 1 }
+          $url = "https://github.com/flutter-webrtc/flutter-webrtc/releases/download/v${ver}/libwebrtc.zip"
+          curl.exe -L --connect-timeout 30 --retry 5 --retry-delay 10 -o "$thirdParty\downloads\libwebrtc.zip" $url
+          if ($LASTEXITCODE -ne 0) { Write-Error "libwebrtc download failed: $url"; exit 1 }
+
           Write-Host "Extracting..."
           Expand-Archive -Path "$thirdParty\downloads\libwebrtc.zip" -DestinationPath $thirdParty -Force
           if (-not (Test-Path "$thirdParty\libwebrtc\include\libwebrtc.h")) {
