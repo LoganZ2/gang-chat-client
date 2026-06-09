@@ -398,6 +398,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
                 backend: _RoomStickerBackend(
                   controller: widget.controller,
                   roomId: _room.id,
+                  canManage: _canManageRoom,
                 ),
                 title: '房间表情包',
                 unavailableText: '房间表情包需要登录后从服务端读取',
@@ -542,16 +543,26 @@ RoomDetail _draftCreateRoom(CurrentUser currentUser) {
 /// 房间表情包的数据来源:把 [RoomsController] 的房间作用域接口适配到
 /// 通用的 [StickerManagerPanel]。
 class _RoomStickerBackend extends StickerManagerBackend {
-  _RoomStickerBackend({required this.controller, required this.roomId});
+  _RoomStickerBackend({
+    required this.controller,
+    required this.roomId,
+    required this.canManage,
+  });
 
   final RoomsController controller;
   final String roomId;
+  final bool canManage;
 
   @override
   StickerManagementScope get scope => StickerManagementScope.room;
 
   @override
   bool get hasApi => true;
+
+  @override
+  StickerManagementCapabilities get capabilities => canManage
+      ? const StickerManagementCapabilities()
+      : const StickerManagementCapabilities.readOnlyDownloads();
 
   @override
   Future<List<StickerPack>> loadPacks() {

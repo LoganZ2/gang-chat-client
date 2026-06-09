@@ -15,6 +15,44 @@ enum StickerPreviewActionKind {
   pin,
 }
 
+class StickerManagementCapabilities {
+  const StickerManagementCapabilities({
+    this.canUpload = true,
+    this.canBatchManage = true,
+    this.canFilter = true,
+    this.canDownload = true,
+    this.canSelectAll = true,
+    this.canDelete = true,
+    this.canPin = true,
+    this.canRename = true,
+    this.canMove = true,
+    this.canSetAvatar = true,
+  });
+
+  const StickerManagementCapabilities.readOnlyDownloads()
+    : canUpload = false,
+      canBatchManage = true,
+      canFilter = true,
+      canDownload = true,
+      canSelectAll = true,
+      canDelete = false,
+      canPin = false,
+      canRename = false,
+      canMove = false,
+      canSetAvatar = false;
+
+  final bool canUpload;
+  final bool canBatchManage;
+  final bool canFilter;
+  final bool canDownload;
+  final bool canSelectAll;
+  final bool canDelete;
+  final bool canPin;
+  final bool canRename;
+  final bool canMove;
+  final bool canSetAvatar;
+}
+
 const Object _stickerPreviewErrorUnchanged = Object();
 
 class ManagedSticker {
@@ -216,26 +254,44 @@ String stickerManagementCountText({
   return filterActive ? '$visibleCount / $totalCount 个' : '$totalCount 个';
 }
 
-bool canStartStickerPrimaryAction({required bool busy}) {
-  return !busy;
+bool canStartStickerPrimaryAction({required bool busy, bool allowed = true}) {
+  return allowed && !busy;
 }
 
 bool canStartStickerSelectionAction({
   required bool busy,
   required Iterable<String> selectedStickerIds,
+  bool allowed = true,
 }) {
-  return !busy && selectedStickerIds.isNotEmpty;
+  return allowed && !busy && selectedStickerIds.isNotEmpty;
 }
 
 bool canSelectVisibleStickers({
   required bool busy,
   required Iterable<ManagedSticker> visibleItems,
+  bool allowed = true,
 }) {
-  return !busy && visibleItems.isNotEmpty;
+  return allowed && !busy && visibleItems.isNotEmpty;
 }
 
-bool canUseStickerManagementControl({required bool busy}) {
-  return !busy;
+bool stickerAllVisibleSelected({
+  required Iterable<String> selectedStickerIds,
+  required List<ManagedSticker> visibleItems,
+}) {
+  if (visibleItems.isEmpty) return false;
+  final selectedSet = selectedStickerIds.toSet();
+  return visibleItems.every((item) => selectedSet.contains(item.sticker.id));
+}
+
+String stickerVisibleSelectionButtonText({
+  required Iterable<String> selectedStickerIds,
+  required List<ManagedSticker> visibleItems,
+}) {
+  return '全选';
+}
+
+bool canUseStickerManagementControl({required bool busy, bool allowed = true}) {
+  return allowed && !busy;
 }
 
 String? stickerRenameName(String value) {
@@ -243,8 +299,12 @@ String? stickerRenameName(String value) {
   return trimmed.isEmpty ? null : trimmed;
 }
 
-bool canStartStickerRename({required bool busy, required String name}) {
-  return !busy && stickerRenameName(name) != null;
+bool canStartStickerRename({
+  required bool busy,
+  required String name,
+  bool allowed = true,
+}) {
+  return allowed && !busy && stickerRenameName(name) != null;
 }
 
 bool canStartStickerPreviewAction({
@@ -685,11 +745,13 @@ List<String> stickerSelectionForVisibleItems(
   if (visibleItems.isEmpty) return selectedStickerIds;
   final visibleIds = visibleItems.map((item) => item.sticker.id).toList();
   final visibleSet = visibleIds.toSet();
-  final selectedSet = selectedStickerIds.toSet();
-  final allVisibleSelected =
-      selectedSet.length == visibleSet.length &&
-      selectedSet.containsAll(visibleSet);
-  return allVisibleSelected ? <String>[] : visibleIds.reversed.toList();
+  final allVisibleSelected = stickerAllVisibleSelected(
+    selectedStickerIds: selectedStickerIds,
+    visibleItems: visibleItems,
+  );
+  return allVisibleSelected
+      ? selectedStickerIds.where((id) => !visibleSet.contains(id)).toList()
+      : visibleIds.reversed.toList();
 }
 
 List<String> retainedStickerSelection(

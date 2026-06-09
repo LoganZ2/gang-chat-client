@@ -129,9 +129,6 @@ class _StickerPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final packs = state.source == sticker_display.StickerPanelSource.personal
-        ? state.personalPacks
-        : state.roomPacks;
     final stickers = sticker_display.stickerPanelStickers(
       source: state.source,
       personalPacks: state.personalPacks,
@@ -183,8 +180,8 @@ class _StickerPanel extends StatelessWidget {
               icon: Icons.emoji_emotions_outlined,
               text: sticker_display.stickerPanelEmptyText(state.source),
             ),
-            sticker_display.StickerPanelBodyState.results => _StickerPackList(
-              packs: packs,
+            sticker_display.StickerPanelBodyState.results => _StickerList(
+              stickers: stickers,
               onSendSticker: onSendSticker,
             ),
           },
@@ -194,59 +191,29 @@ class _StickerPanel extends StatelessWidget {
   }
 }
 
-class _StickerPackList extends StatelessWidget {
-  const _StickerPackList({required this.packs, required this.onSendSticker});
+class _StickerList extends StatelessWidget {
+  const _StickerList({required this.stickers, required this.onSendSticker});
 
-  final List<StickerPack> packs;
+  final List<Sticker> stickers;
   final ValueChanged<Sticker> onSendSticker;
 
   @override
   Widget build(BuildContext context) {
-    // Packs are the unit of layering: a personal pack groups the user's saved
-    // stickers, a room pack groups the room's shared ones. Multiple packs in a
-    // scope render as separate labelled sections so the grouping stays visible.
-    final visiblePacks = [
-      for (final pack in packs)
-        if (pack.stickers.isNotEmpty) pack,
-    ];
-    final showHeaders = visiblePacks.length > 1;
-
-    return ListView.builder(
+    return ListView(
       padding: EdgeInsets.zero,
-      itemCount: visiblePacks.length,
-      itemBuilder: (context, index) {
-        final pack = visiblePacks[index];
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: [
-            if (showHeaders) ...[
-              if (index > 0) const SizedBox(height: 10),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8, left: 2),
-                child: Text(
-                  pack.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: UiTypography.label.copyWith(
-                    color: UiColors.textMuted,
-                  ),
-                ),
+            for (final sticker in stickers)
+              _StickerTile(
+                sticker: sticker,
+                onPressed: () => onSendSticker(sticker),
               ),
-            ],
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final sticker in pack.stickers)
-                  _StickerTile(
-                    sticker: sticker,
-                    onPressed: () => onSendSticker(sticker),
-                  ),
-              ],
-            ),
           ],
-        );
-      },
+        ),
+      ],
     );
   }
 }
@@ -529,6 +496,33 @@ class VoicePanelForTest extends StatelessWidget {
       onStart: onStart,
       onSend: onSend,
       onCancel: onCancel,
+    );
+  }
+}
+
+/// Test-only entry point for the otherwise-private sticker panel.
+@visibleForTesting
+class StickerPanelForTest extends StatelessWidget {
+  const StickerPanelForTest({
+    super.key,
+    required this.state,
+    required this.onSendSticker,
+    required this.onRefresh,
+    required this.onSourceChanged,
+  });
+
+  final sticker_display.StickerPanelLoadState state;
+  final ValueChanged<Sticker> onSendSticker;
+  final VoidCallback onRefresh;
+  final ValueChanged<sticker_display.StickerPanelSource> onSourceChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return _StickerPanel(
+      state: state,
+      onSendSticker: onSendSticker,
+      onRefresh: onRefresh,
+      onSourceChanged: onSourceChanged,
     );
   }
 }

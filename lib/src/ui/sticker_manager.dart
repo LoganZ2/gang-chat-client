@@ -37,6 +37,10 @@ abstract class StickerManagerBackend {
   /// API 是否可用(未登录等情况下为 false)。
   bool get hasApi;
 
+  /// 当前数据源允许的操作能力。个人表情默认完整可管理。
+  StickerManagementCapabilities get capabilities =>
+      const StickerManagementCapabilities();
+
   /// 读取当前作用域下的全部表情包。
   Future<List<StickerPack>> loadPacks();
 
@@ -118,6 +122,8 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
   String? _notice;
 
   StickerManagementScope get _scope => widget.backend.scope;
+  StickerManagementCapabilities get _capabilities =>
+      widget.backend.capabilities;
 
   @override
   void initState() {
@@ -228,7 +234,7 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
   }
 
   Future<void> _upload() async {
-    if (!widget.backend.hasApi || _busy) return;
+    if (!widget.backend.hasApi || _busy || !_capabilities.canUpload) return;
     List<SelectedFile> files;
     try {
       files = await widget.fileSelectionService.openFiles(
@@ -342,12 +348,17 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
       assetIds,
     );
     if (nextOrder == null) return;
-    await widget.backend.reorderStickers(packId: pack.id, stickerIds: nextOrder);
+    await widget.backend.reorderStickers(
+      packId: pack.id,
+      stickerIds: nextOrder,
+    );
     await _load();
   }
 
   Future<bool> _deleteItem(ManagedSticker item) async {
-    if (!widget.backend.hasApi || _busy) return false;
+    if (!widget.backend.hasApi || _busy || !_capabilities.canDelete) {
+      return false;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => StickerConfirmDialog(
@@ -417,7 +428,9 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
 
   Future<String?> _renameItem(ManagedSticker item, String name) async {
     final trimmed = stickerRenameName(name);
-    if (!widget.backend.hasApi || trimmed == null) return null;
+    if (!widget.backend.hasApi || trimmed == null || !_capabilities.canRename) {
+      return null;
+    }
     try {
       final actual = await widget.backend.renameSticker(
         packId: item.pack.id,
@@ -451,7 +464,12 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
   ) async {
     final placement = _placement(item.sticker.id);
     if (_filterActive) return placement;
-    if (!widget.backend.hasApi || placement == null || _busy) return placement;
+    if (!widget.backend.hasApi ||
+        placement == null ||
+        _busy ||
+        !_capabilities.canMove) {
+      return placement;
+    }
     final ids = sticker_ordering.movedStickerOrder(
       placement.pack,
       item.sticker.id,
@@ -518,7 +536,8 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
     if (!widget.backend.hasApi ||
         placement == null ||
         placement.index == 0 ||
-        _busy) {
+        _busy ||
+        !_capabilities.canPin) {
       return placement;
     }
     final ids = sticker_ordering.pinnedStickerOrder(
@@ -583,6 +602,7 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
     if (!canStartStickerSelectionAction(
       busy: _busy,
       selectedStickerIds: stickerIds,
+      allowed: _capabilities.canDownload,
     )) {
       return;
     }
@@ -599,7 +619,9 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
       ),
     );
     try {
-      final file = await widget.backend.downloadStickers(stickerIds: stickerIds);
+      final file = await widget.backend.downloadStickers(
+        stickerIds: stickerIds,
+      );
       final location = await widget.fileSelectionService.getSaveLocation(
         suggestedName: file.filename,
         acceptedTypeGroups: _stickerFileTypeGroups,
@@ -668,6 +690,7 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
     if (!canStartStickerSelectionAction(
       busy: _busy,
       selectedStickerIds: selectedIds,
+      allowed: _capabilities.canDelete,
     )) {
       return;
     }
@@ -720,10 +743,7 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
             downloading: _downloading,
             selectedStickerIds: _selectedStickerIds,
             error: _error,
-            notice: stickerDeletedNotice(
-              scope: _scope,
-              count: deletedCount,
-            ),
+            notice: stickerDeletedNotice(scope: _scope, count: deletedCount),
             clearSelection: true,
           ),
         ),
@@ -751,6 +771,7 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
     if (!canStartStickerSelectionAction(
       busy: _busy,
       selectedStickerIds: selectedIds,
+      allowed: _capabilities.canPin,
     )) {
       return;
     }
@@ -839,12 +860,18 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
 
   Future<void> _setAvatar(ManagedSticker item) async {
     final onSetAvatar = widget.backend.onSetAvatar;
-    if (onSetAvatar == null) return;
+    if (onSetAvatar == null || !_capabilities.canSetAvatar) return;
     await onSetAvatar(item);
     if (mounted) await _load();
   }
 
   void _toggleManageMode() {
+    if (!canUseStickerManagementControl(
+      busy: _busy,
+      allowed: _capabilities.canBatchManage,
+    )) {
+      return;
+    }
     setState(
       () => _applySelectionPatch(
         stickerManagementModeToggled(
@@ -871,6 +898,13 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
   }
 
   void _selectAllVisible(List<ManagedSticker> items) {
+    if (!canSelectVisibleStickers(
+      busy: _busy,
+      visibleItems: items,
+      allowed: _capabilities.canSelectAll,
+    )) {
+      return;
+    }
     setState(
       () => _applySelectionPatch(
         stickerVisibleSelectionToggled(
@@ -886,6 +920,12 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
   }
 
   Future<void> _openFilter() async {
+    if (!canUseStickerManagementControl(
+      busy: _busy,
+      allowed: _capabilities.canFilter,
+    )) {
+      return;
+    }
     final value = await showDialog<StickerFilterDraft>(
       context: context,
       builder: (context) => StickerFilterDialog(
@@ -921,11 +961,21 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
         builder: (context) => StickerPreviewDialog(
           item: item,
           imageUrl: imageUrl,
-          canMoveUp: !_filterActive && (placement?.canMoveUp ?? false),
-          canMoveDown: !_filterActive && (placement?.canMoveDown ?? false),
-          canPin: placement?.canPin ?? false,
+          canMoveUp:
+              _capabilities.canMove &&
+              !_filterActive &&
+              (placement?.canMoveUp ?? false),
+          canMoveDown:
+              _capabilities.canMove &&
+              !_filterActive &&
+              (placement?.canMoveDown ?? false),
+          canPin: _capabilities.canPin && (placement?.canPin ?? false),
+          canRename: _capabilities.canRename,
+          canDownload: _capabilities.canDownload,
+          canDelete: _capabilities.canDelete,
           onRename: (name) => _renameItem(item, name),
-          onSetAvatar: widget.backend.onSetAvatar == null
+          onSetAvatar:
+              widget.backend.onSetAvatar == null || !_capabilities.canSetAvatar
               ? null
               : () => _setAvatar(item),
           onDownload: () => _downloadIds([item.sticker.id]),
@@ -944,6 +994,11 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
     final totalCount = _allItems.length;
     final selectionNumbers = _selectionNumbers();
     final busy = _busy;
+    final capabilities = _capabilities;
+    final allVisibleSelected = stickerAllVisibleSelected(
+      selectedStickerIds: _selectedStickerIds,
+      visibleItems: items,
+    );
 
     return SettingsList(
       children: [
@@ -971,7 +1026,13 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
               StickerActionRow(
                 children: [
                   Button(
-                    onPressed: canStartStickerPrimaryAction(busy: busy)
+                    onPressed:
+                        canStartStickerPrimaryAction(
+                          busy: busy,
+                          allowed: _managing
+                              ? capabilities.canDelete
+                              : capabilities.canUpload,
+                        )
                         ? _managing
                               ? _deleteSelected
                               : _upload
@@ -985,7 +1046,11 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
                     child: Text(_managing ? '删除' : '本地上传'),
                   ),
                   Button(
-                    onPressed: canUseStickerManagementControl(busy: busy)
+                    onPressed:
+                        canUseStickerManagementControl(
+                          busy: busy,
+                          allowed: capabilities.canBatchManage,
+                        )
                         ? _toggleManageMode
                         : null,
                     selected: _managing,
@@ -995,7 +1060,11 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
                     child: Text(_managing ? '取消管理' : '批量管理'),
                   ),
                   Button(
-                    onPressed: canUseStickerManagementControl(busy: busy)
+                    onPressed:
+                        canUseStickerManagementControl(
+                          busy: busy,
+                          allowed: capabilities.canFilter,
+                        )
                         ? _openFilter
                         : null,
                     selected: _filterActive,
@@ -1017,6 +1086,7 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
                           canStartStickerSelectionAction(
                             busy: busy,
                             selectedStickerIds: _selectedStickerIds,
+                            allowed: capabilities.canDownload,
                           )
                           ? () => _downloadIds(_selectedStickerIds)
                           : null,
@@ -1030,6 +1100,7 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
                           canStartStickerSelectionAction(
                             busy: busy,
                             selectedStickerIds: _selectedStickerIds,
+                            allowed: capabilities.canPin,
                           )
                           ? _pinSelected
                           : null,
@@ -1043,12 +1114,23 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
                           canSelectVisibleStickers(
                             busy: busy,
                             visibleItems: items,
+                            allowed: capabilities.canSelectAll,
                           )
                           ? () => _selectAllVisible(items)
                           : null,
-                      icon: const Icon(Icons.select_all),
+                      selected: allVisibleSelected,
+                      icon: Icon(
+                        allVisibleSelected
+                            ? Icons.check_box
+                            : Icons.check_box_outline_blank,
+                      ),
                       width: double.infinity,
-                      child: const Text('全选'),
+                      child: Text(
+                        stickerVisibleSelectionButtonText(
+                          selectedStickerIds: _selectedStickerIds,
+                          visibleItems: items,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -1471,7 +1553,7 @@ class _StickerFilterDialogState extends State<StickerFilterDialog> {
               Input(
                 controller: _keywordController,
                 focusNode: _keywordFocusNode,
-                hintText: '名称关键字',
+                hintText: '',
                 minLines: 1,
                 maxLines: 1,
               ),
@@ -1667,6 +1749,9 @@ class StickerPreviewDialog extends StatefulWidget {
     required this.canMoveUp,
     required this.canMoveDown,
     required this.canPin,
+    required this.canRename,
+    required this.canDownload,
+    required this.canDelete,
     required this.onRename,
     required this.onSetAvatar,
     required this.onDownload,
@@ -1681,6 +1766,9 @@ class StickerPreviewDialog extends StatefulWidget {
   final bool canMoveUp;
   final bool canMoveDown;
   final bool canPin;
+  final bool canRename;
+  final bool canDownload;
+  final bool canDelete;
   final Future<String?> Function(String name) onRename;
   final Future<void> Function()? onSetAvatar;
   final Future<void> Function() onDownload;
@@ -1730,7 +1818,7 @@ class _StickerPreviewDialogState extends State<StickerPreviewDialog> {
 
   Future<void> _saveName() async {
     final name = stickerRenameName(_nameController.text);
-    if (name == null) return;
+    if (name == null || !widget.canRename) return;
     await _runPreviewAction<String?>(
       actionKind: StickerPreviewActionKind.rename,
       name: _nameController.text,
@@ -1918,9 +2006,12 @@ class _StickerPreviewDialogState extends State<StickerPreviewDialog> {
               Input(
                 controller: _nameController,
                 hintText: '名称',
+                enabled: widget.canRename,
                 minLines: 1,
                 maxLines: 1,
-                onSubmitted: (_) => unawaited(_saveName()),
+                onSubmitted: widget.canRename
+                    ? (_) => unawaited(_saveName())
+                    : null,
               ),
               const SizedBox(height: 8),
               _StickerDimensionsLine(asset: asset, imageUrl: widget.imageUrl),
@@ -1932,7 +2023,7 @@ class _StickerPreviewDialogState extends State<StickerPreviewDialog> {
               _StickerPreviewActionRow(
                 children: [
                   Button(
-                    onPressed: _busy ? null : _download,
+                    onPressed: _busy || !widget.canDownload ? null : _download,
                     loading: _downloading,
                     icon: const Icon(Icons.download_outlined),
                     width: double.infinity,
@@ -1951,6 +2042,7 @@ class _StickerPreviewDialogState extends State<StickerPreviewDialog> {
                         canStartStickerRename(
                           busy: _busy,
                           name: _nameController.text,
+                          allowed: widget.canRename,
                         )
                         ? _saveName
                         : null,
@@ -2005,7 +2097,7 @@ class _StickerPreviewDialogState extends State<StickerPreviewDialog> {
               ),
               const SizedBox(height: 10),
               Button(
-                onPressed: _busy ? null : _delete,
+                onPressed: _busy || !widget.canDelete ? null : _delete,
                 loading: _deleting,
                 tone: ButtonTone.danger,
                 icon: const Icon(Icons.delete_outline),

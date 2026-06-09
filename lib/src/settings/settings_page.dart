@@ -1387,6 +1387,9 @@ class _SettingsPageState extends State<SettingsPage> {
           canMoveDown:
               !_stickerFilterActive && (placement?.canMoveDown ?? false),
           canPin: placement?.canPin ?? false,
+          canRename: true,
+          canDownload: true,
+          canDelete: true,
           onRename: (name) => _renameSticker(item, name),
           onSetAvatar: () => _setStickerAsAvatar(item),
           onDownload: () => _downloadStickerIds([item.sticker.id]),
@@ -2314,6 +2317,10 @@ class _SettingsPageState extends State<SettingsPage> {
     final totalCount = _allStickerItems().length;
     final selectionNumbers = _stickerSelectionNumbers();
     final busy = _stickerManagementBusy;
+    final allVisibleSelected = stickerAllVisibleSelected(
+      selectedStickerIds: _selectedStickerIds,
+      visibleItems: items,
+    );
 
     return SettingsList(
       children: [
@@ -2425,9 +2432,19 @@ class _SettingsPageState extends State<SettingsPage> {
                           )
                           ? () => _selectAllVisibleStickers(items)
                           : null,
-                      icon: const Icon(Icons.select_all),
+                      selected: allVisibleSelected,
+                      icon: Icon(
+                        allVisibleSelected
+                            ? Icons.check_box
+                            : Icons.check_box_outline_blank,
+                      ),
                       width: double.infinity,
-                      child: const Text('全选'),
+                      child: Text(
+                        stickerVisibleSelectionButtonText(
+                          selectedStickerIds: _selectedStickerIds,
+                          visibleItems: items,
+                        ),
+                      ),
                     ),
                   ],
                 ),

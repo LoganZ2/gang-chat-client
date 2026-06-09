@@ -61,8 +61,36 @@ void main() {
       'a',
     ]);
     expect(
+      stickerAllVisibleSelected(
+        selectedStickerIds: ['b', 'a'],
+        visibleItems: items.take(2).toList(),
+      ),
+      isTrue,
+    );
+    expect(
+      stickerVisibleSelectionButtonText(
+        selectedStickerIds: ['b', 'a'],
+        visibleItems: items.take(2).toList(),
+      ),
+      '全选',
+    );
+    expect(
       stickerSelectionForVisibleItems(['a', 'b'], items.take(2).toList()),
       <String>[],
+    );
+    expect(
+      stickerAllVisibleSelected(
+        selectedStickerIds: ['a'],
+        visibleItems: items.take(2).toList(),
+      ),
+      isFalse,
+    );
+    expect(
+      stickerVisibleSelectionButtonText(
+        selectedStickerIds: ['a'],
+        visibleItems: items.take(2).toList(),
+      ),
+      '全选',
     );
   });
 
@@ -107,9 +135,18 @@ void main() {
     );
     expect(canStartStickerPrimaryAction(busy: false), isTrue);
     expect(canStartStickerPrimaryAction(busy: true), isFalse);
+    expect(canStartStickerPrimaryAction(busy: false, allowed: false), isFalse);
     expect(
       canStartStickerSelectionAction(busy: false, selectedStickerIds: ['a']),
       isTrue,
+    );
+    expect(
+      canStartStickerSelectionAction(
+        busy: false,
+        selectedStickerIds: ['a'],
+        allowed: false,
+      ),
+      isFalse,
     );
     expect(
       canStartStickerSelectionAction(busy: false, selectedStickerIds: const []),
@@ -126,6 +163,20 @@ void main() {
     );
     expect(canUseStickerManagementControl(busy: false), isTrue);
     expect(canUseStickerManagementControl(busy: true), isFalse);
+    expect(
+      canUseStickerManagementControl(busy: false, allowed: false),
+      isFalse,
+    );
+    const roomReadOnly = StickerManagementCapabilities.readOnlyDownloads();
+    expect(roomReadOnly.canUpload, isFalse);
+    expect(roomReadOnly.canBatchManage, isTrue);
+    expect(roomReadOnly.canFilter, isTrue);
+    expect(roomReadOnly.canDownload, isTrue);
+    expect(roomReadOnly.canSelectAll, isTrue);
+    expect(roomReadOnly.canDelete, isFalse);
+    expect(roomReadOnly.canPin, isFalse);
+    expect(roomReadOnly.canRename, isFalse);
+    expect(roomReadOnly.canMove, isFalse);
   });
 
   test('sticker rename helpers normalize and gate empty names', () {
@@ -134,6 +185,10 @@ void main() {
     expect(canStartStickerRename(busy: false, name: ' wave '), isTrue);
     expect(canStartStickerRename(busy: false, name: '   '), isFalse);
     expect(canStartStickerRename(busy: true, name: 'wave'), isFalse);
+    expect(
+      canStartStickerRename(busy: false, name: 'wave', allowed: false),
+      isFalse,
+    );
   });
 
   test('sticker preview state gates actions and tracks busy flags', () {
