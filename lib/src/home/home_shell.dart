@@ -8,7 +8,9 @@ import 'package:window_manager/window_manager.dart';
 import '../app/audio_device_store.dart';
 import '../app/authenticated_app_services.dart';
 import '../app/authenticated_app_context.dart';
+import '../app/file_display.dart' as file_display;
 import '../app/file_transfer_state.dart';
+import '../app/global_search_controller.dart';
 import '../app/live_controller.dart';
 import '../app/live_display.dart' as live_display;
 import '../app/live_session_controller.dart';
@@ -18,6 +20,7 @@ import '../app/realtime_controller.dart';
 import '../app/room_display.dart' as room_display;
 import '../app/room_notifications.dart' as room_notifications;
 import '../app/rooms_controller.dart';
+import '../app/search_display.dart' as search_display;
 import '../app/sticker_display.dart' as sticker_display;
 import '../app/sticker_packs_controller.dart';
 import '../app/voice_message_display.dart' as voice_display;
@@ -41,6 +44,7 @@ part 'home_shell_room_actions.dart';
 part 'home_shell_live_actions.dart';
 part 'home_shell_messages.dart';
 part 'home_shell_notifications.dart';
+part 'home_shell_search.dart';
 part 'home_shell_layout.dart';
 part 'home_shell_title_bar.dart';
 
@@ -82,6 +86,7 @@ class _HomeShellState extends State<HomeShell> {
   late AuthenticatedAppServices _services;
   late CurrentUser _currentUser;
   final TextEditingController _composerController = TextEditingController();
+  final TextEditingController _titleSearchController = TextEditingController();
   StreamSubscription<RealtimeEvent>? _realtimeEvents;
 
   List<RoomCard> _servers = const [];
@@ -121,9 +126,17 @@ class _HomeShellState extends State<HomeShell> {
   bool _cameraOn = false;
   bool _screenSharing = false;
   bool _voiceBlocked = false;
+  Timer? _searchDebounce;
+  int _searchRequestSerial = 0;
+  String _searchQuery = '';
+  bool _searching = false;
+  String? _searchError;
+  GlobalSearchResults? _searchResults;
+  search_display.GlobalSearchCategory? _activeSearchCategory;
 
   RoomsController get _roomsController => _services.rooms;
   MessagesController get _messagesController => _services.messages;
+  GlobalSearchController get _globalSearchController => _services.search;
   StickerPacksController get _stickerPacksController => _services.stickers;
   VoiceRecorderController get _voiceRecorder => _services.voiceRecorder;
   LiveController get _liveController => _services.live;
@@ -133,6 +146,7 @@ class _HomeShellState extends State<HomeShell> {
   void initState() {
     super.initState();
     _currentUser = widget.app.currentUser;
+    _titleSearchController.addListener(_handleTitleSearchChanged);
     _installServices();
     _attachLiveSessionCallbacks();
     _startRealtime();
@@ -153,6 +167,11 @@ class _HomeShellState extends State<HomeShell> {
     _installServices();
     _attachLiveSessionCallbacks();
     _startRealtime();
+    _searchDebounce?.cancel();
+    _searchRequestSerial++;
+    _titleSearchController.removeListener(_handleTitleSearchChanged);
+    _titleSearchController.clear();
+    _titleSearchController.addListener(_handleTitleSearchChanged);
     setState(() {
       _currentUser = widget.app.currentUser;
       _servers = const [];
@@ -186,6 +205,11 @@ class _HomeShellState extends State<HomeShell> {
       _cameraOn = false;
       _screenSharing = false;
       _voiceBlocked = false;
+      _searchQuery = '';
+      _searching = false;
+      _searchError = null;
+      _searchResults = null;
+      _activeSearchCategory = null;
     });
     unawaited(_loadServers());
     unawaited(_refreshPendingRoomInviteBadge());
@@ -198,6 +222,9 @@ class _HomeShellState extends State<HomeShell> {
     unawaited(_setSystemFullScreen(false));
     _detachLiveSessionCallbacks();
     _voiceTicker?.cancel();
+    _searchDebounce?.cancel();
+    _titleSearchController.removeListener(_handleTitleSearchChanged);
+    _titleSearchController.dispose();
     _composerController.dispose();
     _services.close();
     super.dispose();
@@ -235,47 +262,80 @@ class _HomeShellState extends State<HomeShell> {
       backgroundColor: UiColors.background,
       body: DecoratedBox(
         decoration: BoxDecoration(border: Border.all(color: _windowEdgeBorder)),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            KeyedSubtree(
-              key: ValueKey(widget.app.currentUser.id),
-              child: Column(
-                children: [
-                  _HomeTitleBar(windowController: widget.windowController),
-                  Expanded(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final narrow = constraints.maxWidth < narrowBreakpoint;
-                        if (narrow) {
-                          return _buildNarrowLayout(constraints.maxWidth);
-                        }
+        child: LayoutBuilder(
+          builder: (context, shellConstraints) {
+            final searchOverlayWidth = _homeTitleBarSearchWidth(
+              context,
+              shellConstraints.maxWidth,
+            );
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                KeyedSubtree(
+                  key: ValueKey(widget.app.currentUser.id),
+                  child: Column(
+                    children: [
+                      _HomeTitleBar(
+                        windowController: widget.windowController,
+                        searchController: _titleSearchController,
+                        searchQuery: _searchQuery,
+                        activeSearchCategory: _activeSearchCategory,
+                        onClearSearchCategory: _clearSearchCategory,
+                        onClearSearchQuery: _clearSearchQuery,
+                      ),
+                      Expanded(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final narrow =
+                                constraints.maxWidth < narrowBreakpoint;
+                            if (narrow) {
+                              return _buildNarrowLayout(constraints.maxWidth);
+                            }
 
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _buildSidebar(
-                              width: sidebarWidth,
-                              openContentOnSelect: false,
-                            ),
-                            Expanded(child: _buildContentPane()),
-                          ],
-                        );
-                      },
+                            return Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _buildSidebar(
+                                  width: sidebarWidth,
+                                  openContentOnSelect: false,
+                                ),
+                                Expanded(child: _buildContentPane()),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (_hasSearchQuery && searchOverlayWidth >= 96)
+                  Positioned(
+                    top: _homeTitleBarHeight - 1,
+                    left: (shellConstraints.maxWidth - searchOverlayWidth) / 2,
+                    width: searchOverlayWidth,
+                    child: _TitleSearchResultsPanel(
+                      query: _searchQuery,
+                      results: _searchResults,
+                      loading: _searching,
+                      error: _searchError,
+                      activeCategory: _activeSearchCategory,
+                      onCategorySelected: _selectSearchCategory,
+                      onMyRoomSelected: _openSearchRoom,
+                      onMessageSelected: _openMessageSearchResult,
+                      onFileSelected: _openMessageSearchResult,
                     ),
                   ),
-                ],
-              ),
-            ),
-            if (fullScreenTrack != null)
-              Positioned.fill(
-                child: LiveFullScreenStage(
-                  track: fullScreenTrack,
-                  label: liveStageTrackLabel(_live, fullScreenTrack),
-                  onExit: _exitLiveFullScreen,
-                ),
-              ),
-          ],
+                if (fullScreenTrack != null)
+                  Positioned.fill(
+                    child: LiveFullScreenStage(
+                      track: fullScreenTrack,
+                      label: liveStageTrackLabel(_live, fullScreenTrack),
+                      onExit: _exitLiveFullScreen,
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );

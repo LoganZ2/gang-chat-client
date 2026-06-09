@@ -226,6 +226,8 @@ abstract interface class GangApi {
 
   Future<List<PublicRoom>> searchRooms({required String query, int limit = 20});
 
+  Future<GlobalSearchResults> search({required String query, int limit = 8});
+
   Future<JoinRoomResult> joinRoom(String roomId);
 
   Future<RoomMemberPage> listRoomMembers(
@@ -970,6 +972,20 @@ class GangApiClient implements GangApi {
         .cast<Map<String, Object?>>()
         .map(PublicRoom.fromJson)
         .toList();
+  }
+
+  @override
+  Future<GlobalSearchResults> search({
+    required String query,
+    int limit = 8,
+  }) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.get(
+        _uri('/search', {'q': query, 'limit': '$limit'}),
+        headers: _headers(token),
+      );
+    }, retryTransientFailures: true);
+    return GlobalSearchResults.fromJson(decoded);
   }
 
   @override

@@ -491,6 +491,68 @@ void main() {
     },
   );
 
+  test('search calls global search endpoint and parses categories', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/api/v1/search');
+        expect(request.url.queryParameters, {'q': 'alpha', 'limit': '8'});
+        expect(request.headers['authorization'], 'Bearer token');
+
+        return http.Response(
+          jsonEncode({
+            'my_rooms': [_roomCardSearchJson()],
+            'public_rooms': [_publicRoomSearchJson()],
+            'messages': [
+              {
+                'room': _searchRoomContextJson(),
+                'message': _messageSearchJson(body: 'alpha roadmap'),
+              },
+            ],
+            'files': [
+              {
+                'room': _searchRoomContextJson(),
+                'message': _messageSearchJson(
+                  type: 'file',
+                  body: 'alpha.pdf',
+                  attachments: [
+                    {
+                      'type': 'file',
+                      'name': 'alpha.pdf',
+                      'asset': {
+                        'id': 'asset_1',
+                        'url': '/assets/alpha.pdf',
+                        'thumbnail_url': null,
+                        'mime_type': 'application/pdf',
+                        'filename': 'alpha.pdf',
+                        'size_bytes': 2048,
+                      },
+                    },
+                  ],
+                ),
+              },
+            ],
+          }),
+          200,
+        );
+      }),
+    );
+
+    final results = await api.search(query: 'alpha');
+
+    expect(results.myRooms.single.name, 'Alpha Room');
+    expect(results.publicRooms.single.joined, isFalse);
+    expect(results.messages.single.room.name, 'Alpha Room');
+    expect(results.messages.single.message.body, 'alpha roadmap');
+    expect(
+      results.files.single.message.fileAttachments.single.asset?.filename,
+      'alpha.pdf',
+    );
+    api.close();
+  });
+
   test('inviteMember posts the target user id and parses the invite', () async {
     final api = GangApiClient(
       baseUrl: 'http://example.test/api/v1',
@@ -2019,6 +2081,76 @@ Map<String, Object?> _roomDetailJson() {
     },
     'created_at': '2026-05-31T13:00:00Z',
     'updated_at': '2026-05-31T14:00:00Z',
+  };
+}
+
+Map<String, Object?> _roomCardSearchJson() {
+  return {
+    'id': 'room_1',
+    'rid': '900001',
+    'name': 'Alpha Room',
+    'avatar_url': null,
+    'default_avatar_key': 'room-1',
+    'visibility': 'public',
+    'join_policy': 'open',
+    'description': 'Searchable room',
+    'notification_policy': 'all',
+    'member_count': 3,
+    'online_member_count': 1,
+    'live_participant_count': 0,
+    'live_avatar_preview': <Object?>[],
+    'last_message': null,
+    'unread_count': 0,
+    'updated_at': '2026-05-31T14:00:00Z',
+  };
+}
+
+Map<String, Object?> _publicRoomSearchJson() {
+  return {
+    'id': 'room_2',
+    'rid': '900002',
+    'name': 'Alpha Public',
+    'avatar_url': null,
+    'default_avatar_key': 'room-2',
+    'visibility': 'public',
+    'join_policy': 'open',
+    'member_count': 2,
+    'online_member_count': 0,
+    'live_participant_count': 0,
+    'joined': false,
+    'join_state': 'none',
+  };
+}
+
+Map<String, Object?> _searchRoomContextJson() {
+  return {
+    'id': 'room_1',
+    'rid': '900001',
+    'name': 'Alpha Room',
+    'avatar_url': null,
+    'default_avatar_key': 'room-1',
+  };
+}
+
+Map<String, Object?> _messageSearchJson({
+  String type = 'text',
+  String body = 'hello',
+  List<Map<String, Object?>> attachments = const [],
+}) {
+  return {
+    'id': 'msg_1',
+    'room_id': 'room_1',
+    'sender': {
+      'id': 'user_1',
+      'username': 'alice',
+      'display_name': 'Alice',
+      'default_avatar_key': 'blue-3',
+    },
+    'client_message_id': 'cmsg_1',
+    'type': type,
+    'body': body,
+    'attachments': attachments,
+    'created_at': '2026-05-31T14:00:00Z',
   };
 }
 

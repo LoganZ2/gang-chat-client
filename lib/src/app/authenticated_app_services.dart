@@ -2,6 +2,7 @@ import '../protocol/api_client.dart';
 import 'audio_device_store.dart';
 import 'authenticated_app_context.dart';
 import 'file_downloads_controller.dart';
+import 'global_search_controller.dart';
 import 'live_controller.dart';
 import 'live_session_controller.dart';
 import 'messages_controller.dart';
@@ -21,6 +22,7 @@ class AuthenticatedAppServices {
     required this.liveSession,
     required this.realtime,
     required this.fileDownloads,
+    required this.search,
     required this.settings,
     required this.stickers,
     required this.voiceRecorder,
@@ -55,6 +57,7 @@ class AuthenticatedAppServices {
             accessTokenProvider: context.accessTokenProvider,
           ),
       fileDownloads: FileDownloadsController(),
+      search: GlobalSearchController(api: api),
       settings: SettingsController(
         api: api,
         apiBaseUrl: context.apiBaseUrl,
@@ -79,6 +82,7 @@ class AuthenticatedAppServices {
   final LiveSessionController liveSession;
   final RealtimeService realtime;
   final FileDownloadsController fileDownloads;
+  final GlobalSearchController search;
   final SettingsController settings;
   final StickerPacksController stickers;
   final VoiceRecorderController voiceRecorder;

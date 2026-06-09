@@ -144,10 +144,10 @@ extension _HomeShellLayout on _HomeShellState {
     return HomeSidebar(
       width: width,
       currentUser: _currentUser,
-      servers: _servers,
+      servers: _sidebarServers,
       selectedServerId: _selectedServerId,
       joinedLiveRoomId: _joinedLiveRoomId,
-      loading: _loadingServers,
+      loading: _loadingServers || _loadingSidebarSearch,
       error: _serverLoadError,
       settingsActive: _settingsOpen,
       notificationsActive:

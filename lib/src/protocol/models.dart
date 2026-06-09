@@ -678,6 +678,75 @@ class PublicRoom {
   }
 }
 
+class SearchRoomContext {
+  const SearchRoomContext({
+    required this.id,
+    required this.rid,
+    required this.name,
+    required this.avatarUrl,
+    required this.defaultAvatarKey,
+  });
+
+  final String id;
+  final String rid;
+  final String name;
+  final String? avatarUrl;
+  final String defaultAvatarKey;
+
+  factory SearchRoomContext.fromJson(Map<String, Object?> json) {
+    return SearchRoomContext(
+      id: json['id']! as String,
+      rid: json['rid'] as String? ?? '',
+      name: json['name']! as String,
+      avatarUrl: json['avatar_url'] as String?,
+      defaultAvatarKey: json['default_avatar_key'] as String? ?? 'room-1',
+    );
+  }
+}
+
+class MessageSearchResult {
+  const MessageSearchResult({required this.room, required this.message});
+
+  final SearchRoomContext room;
+  final Message message;
+
+  factory MessageSearchResult.fromJson(Map<String, Object?> json) {
+    return MessageSearchResult(
+      room: SearchRoomContext.fromJson(json['room']! as Map<String, Object?>),
+      message: Message.fromJson(json['message']! as Map<String, Object?>),
+    );
+  }
+}
+
+class GlobalSearchResults {
+  const GlobalSearchResults({
+    required this.myRooms,
+    required this.publicRooms,
+    required this.messages,
+    required this.files,
+  });
+
+  final List<RoomCard> myRooms;
+  final List<PublicRoom> publicRooms;
+  final List<MessageSearchResult> messages;
+  final List<MessageSearchResult> files;
+
+  factory GlobalSearchResults.fromJson(Map<String, Object?> json) {
+    return GlobalSearchResults(
+      myRooms: _listOfMaps(json['my_rooms']).map(RoomCard.fromJson).toList(),
+      publicRooms: _listOfMaps(
+        json['public_rooms'],
+      ).map(PublicRoom.fromJson).toList(),
+      messages: _listOfMaps(
+        json['messages'],
+      ).map(MessageSearchResult.fromJson).toList(),
+      files: _listOfMaps(
+        json['files'],
+      ).map(MessageSearchResult.fromJson).toList(),
+    );
+  }
+}
+
 /// Result of POST /rooms/:id/join. Either we joined and got the full room
 /// detail back, or the room needs approval and we got a pending request.
 class JoinRoomResult {

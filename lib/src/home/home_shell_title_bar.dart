@@ -8,10 +8,44 @@ const _homeTitleBarControlWidth = 34.0;
 const _homeTitleBarControlHeight = 28.0;
 const _homeTitleBarControlGap = 6.0;
 
+double _homeTitleBarBrandWidth(BuildContext context, double maxWidth) {
+  final nativeMacControls = Theme.of(context).platform == TargetPlatform.macOS;
+  final wide = maxWidth >= narrowBreakpoint;
+  final compactBrandWidth =
+      (maxWidth -
+              (nativeMacControls ? 0 : _homeTitleBarControlsWidth) -
+              _homeTitleBarMinSearchWidth)
+          .clamp(118.0, 168.0)
+          .toDouble();
+  return wide ? sidebarWidth : compactBrandWidth;
+}
+
+double _homeTitleBarSearchWidth(BuildContext context, double maxWidth) {
+  final nativeMacControls = Theme.of(context).platform == TargetPlatform.macOS;
+  final brandWidth = _homeTitleBarBrandWidth(context, maxWidth);
+  final rightReserved = nativeMacControls ? 0.0 : _homeTitleBarControlsWidth;
+  final reserved = brandWidth > rightReserved ? brandWidth : rightReserved;
+  return (maxWidth - reserved * 2 - 24)
+      .clamp(0.0, _homeTitleBarSearchMaxWidth)
+      .toDouble();
+}
+
 class _HomeTitleBar extends StatefulWidget {
-  const _HomeTitleBar({required this.windowController});
+  const _HomeTitleBar({
+    required this.windowController,
+    required this.searchController,
+    required this.searchQuery,
+    required this.activeSearchCategory,
+    required this.onClearSearchCategory,
+    required this.onClearSearchQuery,
+  });
 
   final DesktopWindowController windowController;
+  final TextEditingController searchController;
+  final String searchQuery;
+  final search_display.GlobalSearchCategory? activeSearchCategory;
+  final VoidCallback onClearSearchCategory;
+  final VoidCallback onClearSearchQuery;
 
   @override
   State<_HomeTitleBar> createState() => _HomeTitleBarState();
@@ -69,27 +103,14 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
             // mac 使用系统原生红绿灯,其它平台用自定义窗口按钮。
             final nativeMacControls =
                 Theme.of(context).platform == TargetPlatform.macOS;
-            final wide = constraints.maxWidth >= narrowBreakpoint;
-            final compactBrandWidth =
-                (constraints.maxWidth -
-                        (nativeMacControls ? 0 : _homeTitleBarControlsWidth) -
-                        _homeTitleBarMinSearchWidth)
-                    .clamp(118.0, 168.0)
-                    .toDouble();
-            final brandWidth = wide ? sidebarWidth : compactBrandWidth;
-
-            // 搜索框相对整个标题栏居中。为了不压到左侧品牌区或右侧窗口控制,
-            // 用两侧较宽者来对称收窄可用宽度,再夹到上限。mac 右侧没有自定义
-            // 按钮,但左侧品牌区已包含红绿灯让位,仍按品牌区宽度对称即可。
-            final rightReserved = nativeMacControls
-                ? 0.0
-                : _homeTitleBarControlsWidth;
-            final reserved = brandWidth > rightReserved
-                ? brandWidth
-                : rightReserved;
-            final searchWidth = (constraints.maxWidth - reserved * 2 - 24)
-                .clamp(0.0, _homeTitleBarSearchMaxWidth)
-                .toDouble();
+            final brandWidth = _homeTitleBarBrandWidth(
+              context,
+              constraints.maxWidth,
+            );
+            final searchWidth = _homeTitleBarSearchWidth(
+              context,
+              constraints.maxWidth,
+            );
 
             return Stack(
               children: [
@@ -127,7 +148,13 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
                     child: SizedBox(
                       key: const ValueKey('home-title-search'),
                       width: searchWidth,
-                      child: const _TitleSearchField(),
+                      child: _TitleSearchField(
+                        controller: widget.searchController,
+                        query: widget.searchQuery,
+                        activeCategory: widget.activeSearchCategory,
+                        onClearCategory: widget.onClearSearchCategory,
+                        onClearQuery: widget.onClearSearchQuery,
+                      ),
                     ),
                   ),
               ],
@@ -142,7 +169,19 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
 /// 标题栏中央的搜索框。不复用通用 [Input] 封装,而是一个普通的圆角矩形,
 /// 获得焦点时会像按钮一样显示绿色边框与底色。
 class _TitleSearchField extends StatefulWidget {
-  const _TitleSearchField();
+  const _TitleSearchField({
+    required this.controller,
+    required this.query,
+    required this.activeCategory,
+    required this.onClearCategory,
+    required this.onClearQuery,
+  });
+
+  final TextEditingController controller;
+  final String query;
+  final search_display.GlobalSearchCategory? activeCategory;
+  final VoidCallback onClearCategory;
+  final VoidCallback onClearQuery;
 
   @override
   State<_TitleSearchField> createState() => _TitleSearchFieldState();
@@ -189,9 +228,19 @@ class _TitleSearchFieldState extends State<_TitleSearchField> {
       child: Row(
         children: [
           Icon(Icons.search, size: 16, color: accent),
+          if (widget.activeCategory != null) ...[
+            const SizedBox(width: 7),
+            _SearchFieldFilterChip(
+              label: search_display.globalSearchCategoryLabel(
+                widget.activeCategory!,
+              ),
+              onClear: widget.onClearCategory,
+            ),
+          ],
           const SizedBox(width: 8),
           Expanded(
             child: TextField(
+              controller: widget.controller,
               focusNode: _focusNode,
               maxLines: 1,
               cursorColor: UiColors.accent,
@@ -209,10 +258,631 @@ class _TitleSearchFieldState extends State<_TitleSearchField> {
               ),
             ),
           ),
+          if (widget.query.trim().isNotEmpty) ...[
+            const SizedBox(width: 6),
+            Tooltip(
+              message: '清空搜索',
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: widget.onClearQuery,
+                child: Icon(Icons.close, size: 15, color: UiColors.textMuted),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
+}
+
+class _SearchFieldFilterChip extends StatelessWidget {
+  const _SearchFieldFilterChip({required this.label, required this.onClear});
+
+  final String label;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: UiColors.selected,
+        borderRadius: BorderRadius.circular(UiRadii.sm),
+        border: Border.all(color: UiColors.selectedBorder),
+      ),
+      child: SizedBox(
+        height: 21,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 7, right: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: UiTypography.label.copyWith(
+                  color: UiColors.accent,
+                  fontSize: 11,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Tooltip(
+                message: '关闭筛选',
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onClear,
+                  child: Icon(Icons.close, size: 12, color: UiColors.accent),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TitleSearchResultsPanel extends StatelessWidget {
+  const _TitleSearchResultsPanel({
+    required this.query,
+    required this.results,
+    required this.loading,
+    required this.error,
+    required this.activeCategory,
+    required this.onCategorySelected,
+    required this.onMyRoomSelected,
+    required this.onMessageSelected,
+    required this.onFileSelected,
+  });
+
+  final String query;
+  final GlobalSearchResults? results;
+  final bool loading;
+  final String? error;
+  final search_display.GlobalSearchCategory? activeCategory;
+  final ValueChanged<search_display.GlobalSearchCategory> onCategorySelected;
+  final ValueChanged<RoomCard> onMyRoomSelected;
+  final ValueChanged<MessageSearchResult> onMessageSelected;
+  final ValueChanged<MessageSearchResult> onFileSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: UiColors.surfaceLow,
+        borderRadius: BorderRadius.circular(UiRadii.lg),
+        border: Border.all(color: UiColors.borderStrong),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.34),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(UiRadii.lg),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 440),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _SearchCategoryTabs(
+                results: results,
+                activeCategory: activeCategory,
+                onCategorySelected: onCategorySelected,
+              ),
+              const Divider(height: 1, color: UiColors.border),
+              Flexible(child: _buildBody(context)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
+    final failure = error;
+    if (failure != null) {
+      return _SearchPanelState(
+        icon: Icons.error_outline,
+        title: '搜索失败',
+        detail: failure,
+      );
+    }
+
+    final snapshot = results;
+    if (snapshot == null && loading) {
+      return const SizedBox(
+        height: 104,
+        child: Center(
+          child: SizedBox.square(
+            dimension: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.2,
+              color: UiColors.accent,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (!search_display.globalSearchHasResults(snapshot)) {
+      return _SearchPanelState(
+        icon: Icons.search,
+        title: '没有找到结果',
+        detail: query.trim(),
+      );
+    }
+
+    final visibleCategories = activeCategory == null
+        ? search_display.globalSearchCategories
+        : [activeCategory!];
+    final sections = <Widget>[];
+    for (final category in visibleCategories) {
+      final section = _sectionFor(context, snapshot!, category);
+      if (section != null) {
+        if (sections.isNotEmpty) sections.add(const SizedBox(height: 10));
+        sections.add(section);
+      }
+    }
+
+    if (sections.isEmpty) {
+      return _SearchPanelState(
+        icon: Icons.filter_alt_outlined,
+        title: '该分类没有结果',
+        detail: search_display.globalSearchCategoryLabel(activeCategory!),
+      );
+    }
+
+    return ListView(
+      shrinkWrap: true,
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+      children: sections,
+    );
+  }
+
+  Widget? _sectionFor(
+    BuildContext context,
+    GlobalSearchResults snapshot,
+    search_display.GlobalSearchCategory category,
+  ) {
+    final count = search_display.globalSearchCategoryCount(snapshot, category);
+    if (count == 0) return null;
+
+    final children = switch (category) {
+      search_display.GlobalSearchCategory.myRooms =>
+        snapshot.myRooms
+            .map(
+              (room) => _RoomSearchResultTile(
+                title: room.displayName,
+                subtitle: _roomSearchMeta(room.rid, room.memberCount),
+                avatarUrl: room.avatarUrl,
+                defaultAvatarKey: room.defaultAvatarKey,
+                onPressed: () => onMyRoomSelected(room),
+              ),
+            )
+            .toList(),
+      search_display.GlobalSearchCategory.publicRooms =>
+        snapshot.publicRooms
+            .map(
+              (room) => _RoomSearchResultTile(
+                title: room.name,
+                subtitle: _publicRoomSearchMeta(room),
+                avatarUrl: room.avatarUrl,
+                defaultAvatarKey: room.defaultAvatarKey,
+                onPressed: null,
+              ),
+            )
+            .toList(),
+      search_display.GlobalSearchCategory.messages =>
+        snapshot.messages
+            .map(
+              (result) => _MessageSearchResultTile(
+                result: result,
+                icon: Icons.chat_bubble_outline,
+                title: _messageSearchTitle(result),
+                subtitle: result.message.body,
+                onPressed: () => onMessageSelected(result),
+              ),
+            )
+            .toList(),
+      search_display.GlobalSearchCategory.files =>
+        snapshot.files
+            .map(
+              (result) => _MessageSearchResultTile(
+                result: result,
+                icon: fileIconForMime(
+                  _firstFileAttachment(result.message)?.asset?.mimeType,
+                ),
+                title: _fileSearchTitle(result.message),
+                subtitle: result.room.name,
+                onPressed: () => onFileSelected(result),
+              ),
+            )
+            .toList(),
+    };
+
+    return _SearchResultSection(
+      title: search_display.globalSearchCategoryLabel(category),
+      count: count,
+      children: children,
+    );
+  }
+}
+
+class _SearchCategoryTabs extends StatelessWidget {
+  const _SearchCategoryTabs({
+    required this.results,
+    required this.activeCategory,
+    required this.onCategorySelected,
+  });
+
+  final GlobalSearchResults? results;
+  final search_display.GlobalSearchCategory? activeCategory;
+  final ValueChanged<search_display.GlobalSearchCategory> onCategorySelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(8),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 380;
+          final columns = compact ? 2 : 4;
+          final itemWidth =
+              ((constraints.maxWidth - (columns - 1) * 6) / columns)
+                  .clamp(0.0, constraints.maxWidth)
+                  .toDouble();
+          return Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final category in search_display.globalSearchCategories)
+                SizedBox(
+                  width: itemWidth,
+                  child: _SearchCategoryButton(
+                    label: search_display.globalSearchCategoryLabel(category),
+                    count: search_display.globalSearchCategoryCount(
+                      results,
+                      category,
+                    ),
+                    selected: activeCategory == category,
+                    onPressed: () => onCategorySelected(category),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SearchCategoryButton extends StatefulWidget {
+  const _SearchCategoryButton({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final String label;
+  final int count;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  State<_SearchCategoryButton> createState() => _SearchCategoryButtonState();
+}
+
+class _SearchCategoryButtonState extends State<_SearchCategoryButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = widget.selected || _hovered;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onPressed,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 90),
+          height: 29,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: widget.selected
+                ? UiColors.selected
+                : active
+                ? UiColors.surface
+                : UiColors.surfaceLow,
+            borderRadius: BorderRadius.circular(UiRadii.sm),
+            border: Border.all(
+              color: widget.selected
+                  ? UiColors.selectedBorder
+                  : UiColors.border,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              '${widget.label} ${widget.count}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: UiTypography.label.copyWith(
+                color: widget.selected ? UiColors.accent : UiColors.text,
+                fontSize: 11,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SearchResultSection extends StatelessWidget {
+  const _SearchResultSection({
+    required this.title,
+    required this.count,
+    required this.children,
+  });
+
+  final String title;
+  final int count;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(2, 0, 2, 7),
+          child: Text(
+            '$title $count',
+            style: UiTypography.label.copyWith(color: UiColors.textMuted),
+          ),
+        ),
+        ...children,
+      ],
+    );
+  }
+}
+
+class _RoomSearchResultTile extends StatelessWidget {
+  const _RoomSearchResultTile({
+    required this.title,
+    required this.subtitle,
+    required this.avatarUrl,
+    required this.defaultAvatarKey,
+    required this.onPressed,
+  });
+
+  final String title;
+  final String subtitle;
+  final String? avatarUrl;
+  final String defaultAvatarKey;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SearchResultTile(
+      onPressed: onPressed,
+      leading: Avatar(
+        label: title,
+        imageUrl: AppConfigScope.of(context).resolveAssetUrl(avatarUrl),
+        defaultAvatarKey: defaultAvatarKey,
+        size: 30,
+      ),
+      title: title,
+      subtitle: subtitle,
+    );
+  }
+}
+
+class _MessageSearchResultTile extends StatelessWidget {
+  const _MessageSearchResultTile({
+    required this.result,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onPressed,
+  });
+
+  final MessageSearchResult result;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SearchResultTile(
+      onPressed: onPressed,
+      leading: Icon(icon, size: 18, color: UiColors.textSecondary),
+      title: title,
+      subtitle: subtitle,
+      trailing: Text(
+        result.room.name,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: UiTypography.label.copyWith(color: UiColors.textMuted),
+      ),
+    );
+  }
+}
+
+class _SearchResultTile extends StatefulWidget {
+  const _SearchResultTile({
+    required this.leading,
+    required this.title,
+    required this.subtitle,
+    this.trailing,
+    this.onPressed,
+  });
+
+  final Widget leading;
+  final String title;
+  final String subtitle;
+  final Widget? trailing;
+  final VoidCallback? onPressed;
+
+  @override
+  State<_SearchResultTile> createState() => _SearchResultTileState();
+}
+
+class _SearchResultTileState extends State<_SearchResultTile> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final interactive = widget.onPressed != null;
+    return MouseRegion(
+      cursor: interactive ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onPressed,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 90),
+          margin: const EdgeInsets.only(bottom: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          decoration: BoxDecoration(
+            color: _hovered && interactive
+                ? UiColors.surface
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(UiRadii.sm),
+          ),
+          child: Row(
+            children: [
+              SizedBox.square(
+                dimension: 30,
+                child: Center(child: widget.leading),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      widget.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: UiTypography.body.copyWith(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (widget.subtitle.trim().isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        widget.subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: UiTypography.label.copyWith(
+                          color: UiColors.textMuted,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (widget.trailing != null) ...[
+                const SizedBox(width: 8),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 126),
+                  child: widget.trailing!,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SearchPanelState extends StatelessWidget {
+  const _SearchPanelState({
+    required this.icon,
+    required this.title,
+    required this.detail,
+  });
+
+  final IconData icon;
+  final String title;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 118,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: UiColors.textMuted, size: 22),
+              const SizedBox(height: 8),
+              Text(title, style: UiTypography.body),
+              const SizedBox(height: 4),
+              Text(
+                detail,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: UiTypography.label.copyWith(color: UiColors.textMuted),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _roomSearchMeta(String rid, int memberCount) {
+  final parts = <String>[];
+  final trimmedRid = rid.trim();
+  if (trimmedRid.isNotEmpty) parts.add(trimmedRid);
+  parts.add('$memberCount 名成员');
+  return parts.join(' - ');
+}
+
+String _publicRoomSearchMeta(PublicRoom room) {
+  final parts = <String>[];
+  final trimmedRid = room.rid.trim();
+  if (trimmedRid.isNotEmpty) parts.add(trimmedRid);
+  parts.add('${room.memberCount} 名成员');
+  if (room.joinPolicy == 'approval_required') parts.add('需要审核');
+  if (room.joinPolicy == 'open') parts.add('可加入');
+  return parts.join(' - ');
+}
+
+String _messageSearchTitle(MessageSearchResult result) {
+  final sender = result.message.sender.roomDisplayName?.trim();
+  final displayName = sender != null && sender.isNotEmpty
+      ? sender
+      : result.message.sender.displayName;
+  return '$displayName - ${result.room.name}';
+}
+
+String _fileSearchTitle(Message message) {
+  final attachment = _firstFileAttachment(message);
+  if (attachment == null) return message.body;
+  return file_display.fileAttachmentTitle(attachment);
+}
+
+MessageAttachment? _firstFileAttachment(Message message) {
+  for (final attachment in message.fileAttachments) {
+    return attachment;
+  }
+  return null;
 }
 
 class _WindowDragRegion extends StatelessWidget {

@@ -259,6 +259,57 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('authenticated home shell search tag filters sidebar rooms', (
+    WidgetTester tester,
+  ) async {
+    final requestedPaths = <String>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(requestedPaths: requestedPaths),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final searchField = find.descendant(
+      of: find.byKey(const ValueKey('home-title-search')),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(searchField, 'Beta');
+    await tester.pump(const Duration(milliseconds: 320));
+    await tester.pumpAndSettle();
+
+    expect(requestedPaths, contains('/api/v1/search'));
+    expect(find.text('我的房间 1'), findsWidgets);
+    expect(find.text('公开房间 1'), findsWidgets);
+    expect(find.text('聊天记录 1'), findsWidgets);
+    expect(find.text('聊天文件 1'), findsWidgets);
+
+    await tester.tap(find.text('我的房间 1').first);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('home-title-search')),
+        matching: find.text('我的房间'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Beta Room'), findsWidgets);
+    expect(find.text('Alpha Room'), findsNothing);
+
+    await tester.tap(find.byTooltip('关闭筛选'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alpha Room'), findsOneWidget);
+    expect(find.text('Beta Room'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('authenticated home shell creates room from footer template', (
     WidgetTester tester,
   ) async {
@@ -2539,6 +2590,71 @@ GangApi _roomsApi({
           ],
         });
       }
+      if (request.url.path == '/api/v1/search') {
+        return _jsonResponse({
+          'my_rooms': [_roomCardJson(id: 'server-beta', name: 'Beta Room')],
+          'public_rooms': [
+            {
+              ..._roomCardJson(id: 'server-public', name: 'Beta Public'),
+              'visibility': 'public',
+              'join_policy': 'open',
+              'joined': false,
+              'join_state': 'none',
+            },
+          ],
+          'messages': [
+            {
+              'room': _searchRoomContextJson(
+                id: 'server-beta',
+                name: 'Beta Room',
+              ),
+              'message': _messageJson(
+                id: 'msg-beta',
+                roomId: 'server-beta',
+                sender: _userJson(
+                  id: 'user-2',
+                  username: 'morgan',
+                  displayName: 'Morgan',
+                ),
+                clientMessageId: 'client-msg-beta',
+                body: 'Beta release notes',
+              ),
+            },
+          ],
+          'files': [
+            {
+              'room': _searchRoomContextJson(
+                id: 'server-beta',
+                name: 'Beta Room',
+              ),
+              'message': {
+                ..._messageJson(
+                  id: 'msg-file-beta',
+                  roomId: 'server-beta',
+                  sender: _currentUserJson,
+                  clientMessageId: 'client-msg-file-beta',
+                  body: 'Beta brief.pdf',
+                ),
+                'type': 'file',
+                'attachments': [
+                  {
+                    'type': 'file',
+                    'name': 'Beta brief.pdf',
+                    'asset': {
+                      'id': 'asset-beta',
+                      'url': '/assets/beta.pdf',
+                      'thumbnail_url': null,
+                      'mime_type': 'application/pdf',
+                      'filename': 'Beta brief.pdf',
+                      'size_bytes': 1024,
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        });
+      }
       if (request.url.path == '/api/v1/users/me/account') {
         final body =
             jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>;
@@ -3003,6 +3119,19 @@ Map<String, Object?> _roomCardJson({
     'last_message': null,
     'unread_count': unreadCount,
     'updated_at': '2026-06-05T00:00:00Z',
+  };
+}
+
+Map<String, Object?> _searchRoomContextJson({
+  required String id,
+  required String name,
+}) {
+  return {
+    'id': id,
+    'rid': id,
+    'name': name,
+    'avatar_url': null,
+    'default_avatar_key': 'room-1',
   };
 }
 
