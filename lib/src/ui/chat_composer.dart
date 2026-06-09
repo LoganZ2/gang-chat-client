@@ -4,10 +4,6 @@ import 'button.dart';
 import 'input.dart';
 import 'tokens.dart';
 
-const double _composerControlHeight = Input.defaultHeight;
-const double _composerControlOuterHeight = _composerControlHeight + 8;
-const double _composerControlVerticalOffset = 2;
-
 enum ComposerPanelType { list, static }
 
 class ComposerAction {
@@ -19,6 +15,7 @@ class ComposerAction {
     this.panel,
     this.onPressed,
     this.tone = ButtonTone.neutral,
+    this.alignment = ComposerActionAlignment.leading,
   });
 
   final String id;
@@ -29,8 +26,14 @@ class ComposerAction {
   final VoidCallback? onPressed;
   final ButtonTone tone;
 
+  /// Where the action sits on the button row below the input. Trailing actions
+  /// (typically send) are pinned to the far right.
+  final ComposerActionAlignment alignment;
+
   bool get opensPanel => panel != null;
 }
+
+enum ComposerActionAlignment { leading, trailing }
 
 class ComposerPanel {
   const ComposerPanel.list({
@@ -132,26 +135,14 @@ class _ChatComposerState extends State<ChatComposer> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  AnimatedSize(
-                    duration: const Duration(milliseconds: 160),
-                    curve: Curves.easeOutCubic,
-                    alignment: Alignment.bottomCenter,
-                    child: openPanel == null
-                        ? const SizedBox(width: double.infinity)
-                        : _ComposerPanelFrame(
-                            key: ValueKey(openAction!.id),
-                            panel: openPanel,
-                          ),
-                  ),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                    child: Transform.translate(
-                      offset: const Offset(0, _composerControlVerticalOffset),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Expanded(
-                            child: Input(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                    child: AnimatedSize(
+                      duration: const Duration(milliseconds: 160),
+                      curve: Curves.easeOutCubic,
+                      alignment: Alignment.topCenter,
+                      child: openPanel == null
+                          ? Input(
                               controller: widget.controller,
                               focusNode: _inputFocusNode,
                               hintText: widget.hintText,
@@ -159,20 +150,21 @@ class _ChatComposerState extends State<ChatComposer> {
                               maxLines: widget.maxLines,
                               onSubmitted: widget.onSubmitted,
                               onChanged: widget.onChanged,
+                            )
+                          : _ComposerPanelFrame(
+                              key: ValueKey(openAction!.id),
+                              panel: openPanel,
                             ),
-                          ),
-                          if (widget.actions.isNotEmpty) ...[
-                            const SizedBox(width: 10),
-                            _ComposerActionRow(
-                              actions: widget.actions,
-                              openActionId: _openActionId,
-                              onAction: _handleAction,
-                            ),
-                          ],
-                        ],
-                      ),
                     ),
                   ),
+                  if (widget.actions.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+                      child: _ComposerActionRow(
+                        actions: widget.actions,
+                        onAction: _handleAction,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -189,33 +181,54 @@ class _ChatComposerState extends State<ChatComposer> {
 class _ComposerActionRow extends StatelessWidget {
   const _ComposerActionRow({
     required this.actions,
-    required this.openActionId,
     required this.onAction,
   });
 
   final List<ComposerAction> actions;
-  final String? openActionId;
   final ValueChanged<ComposerAction> onAction;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: _composerControlOuterHeight,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (var index = 0; index < actions.length; index++) ...[
-            if (index > 0) const SizedBox(width: 8),
-            ButtonIcon(
-              tooltip: actions[index].tooltip ?? actions[index].label,
-              icon: Icon(actions[index].icon),
-              tone: actions[index].tone,
-              selected: actions[index].id == openActionId,
-              onPressed: () => onAction(actions[index]),
-            ),
-          ],
+    // Trailing actions (typically send) are pinned to the far right; the rest
+    // stay grouped on the left.
+    final leading = [
+      for (final action in actions)
+        if (action.alignment == ComposerActionAlignment.leading) action,
+    ];
+    final trailing = [
+      for (final action in actions)
+        if (action.alignment == ComposerActionAlignment.trailing) action,
+    ];
+
+    return Row(
+      children: [
+        for (var index = 0; index < leading.length; index++) ...[
+          if (index > 0) const SizedBox(width: 8),
+          _ComposerActionButton(action: leading[index], onAction: onAction),
         ],
-      ),
+        const Spacer(),
+        for (var index = 0; index < trailing.length; index++) ...[
+          if (index > 0) const SizedBox(width: 8),
+          _ComposerActionButton(action: trailing[index], onAction: onAction),
+        ],
+      ],
+    );
+  }
+}
+
+class _ComposerActionButton extends StatelessWidget {
+  const _ComposerActionButton({required this.action, required this.onAction});
+
+  final ComposerAction action;
+  final ValueChanged<ComposerAction> onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return ButtonIcon(
+      tooltip: action.tooltip ?? action.label,
+      icon: Icon(action.icon),
+      tone: action.tone,
+      onPressed: () => onAction(action),
     );
   }
 }
@@ -228,9 +241,10 @@ class _ComposerPanelFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: UiColors.surface,
-        border: Border(bottom: BorderSide(color: UiColors.border)),
+        borderRadius: BorderRadius.circular(UiRadii.md),
+        border: Border.all(color: UiColors.border),
       ),
       child: SizedBox(
         width: double.infinity,

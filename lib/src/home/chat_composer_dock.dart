@@ -100,6 +100,7 @@ class _ComposerDock extends StatelessWidget {
                   label: '发送',
                   tooltip: sending ? '发送中' : '发送',
                   tone: ButtonTone.primary,
+                  alignment: ComposerActionAlignment.trailing,
                   onPressed: () => onSubmit(controller.text),
                 ),
               ],

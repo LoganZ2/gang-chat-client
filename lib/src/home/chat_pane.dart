@@ -145,20 +145,27 @@ class ChatPane extends StatelessWidget {
                   left: _composerHorizontalInset,
                   right: _composerHorizontalInset,
                   bottom: _composerBottomInset,
-                  child: _ComposerDock(
-                    controller: composerController,
-                    sending: sending,
-                    sendError: sendError,
-                    stickerPanel: stickerPanel,
-                    voiceState: voiceState,
-                    onSubmit: onSubmit,
-                    onSendSticker: onSendSticker,
-                    onOpenStickers: onLoadStickers,
-                    onRefreshStickers: onRefreshStickers,
-                    onStickerSourceChanged: onStickerSourceChanged,
-                    onStartVoice: onStartVoice,
-                    onSendVoice: onSendVoice,
-                    onCancelVoice: onCancelVoice,
+                  // The composer's text field drives its own selection and its
+                  // panels (sticker grid, voice) are scrollable but not meant
+                  // to be selectable. Detach it from the app-wide SelectionArea
+                  // so showing/hiding a panel mid-selection can't trip the
+                  // scrollable-selection assertion.
+                  child: SelectionContainer.disabled(
+                    child: _ComposerDock(
+                      controller: composerController,
+                      sending: sending,
+                      sendError: sendError,
+                      stickerPanel: stickerPanel,
+                      voiceState: voiceState,
+                      onSubmit: onSubmit,
+                      onSendSticker: onSendSticker,
+                      onOpenStickers: onLoadStickers,
+                      onRefreshStickers: onRefreshStickers,
+                      onStickerSourceChanged: onStickerSourceChanged,
+                      onStartVoice: onStartVoice,
+                      onSendVoice: onSendVoice,
+                      onCancelVoice: onCancelVoice,
+                    ),
                   ),
                 ),
               ],

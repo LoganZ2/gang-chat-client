@@ -1918,6 +1918,7 @@ void main() {
                         id: 'send',
                         icon: Icons.send_rounded,
                         label: 'Send',
+                        alignment: ui.ComposerActionAlignment.trailing,
                         onPressed: () => sends++,
                       ),
                     ],
@@ -1959,15 +1960,17 @@ void main() {
     final stickerRect = tester.getRect(stickerSurfaceFinder);
     final sendRect = tester.getRect(sendSurfaceFinder);
     expect(composerRect.width, closeTo(560, 0.01));
+    // Input spans the full composer width on its own row.
+    expect(initialInputRect.left, closeTo(composerRect.left + 12, 0.01));
+    expect(initialInputRect.right, closeTo(composerRect.right - 12, 0.01));
+    // Actions sit on a row below the input: stickers pinned left, send right.
+    expect(stickerRect.top, greaterThan(initialInputRect.bottom));
+    expect(sendRect.top, greaterThan(initialInputRect.bottom));
+    expect(stickerRect.left, closeTo(composerRect.left + 12, 0.01));
     expect(sendRect.right, closeTo(composerRect.right - 12, 0.01));
-    expect(stickerRect.left, closeTo(initialInputRect.right + 10, 0.01));
     expect(
       ui.Input.defaultHeight,
       tester.widget<ui.PressableSurface>(sendSurfaceFinder).height,
-    );
-    expect(
-      tester.getSize(inputFinder).height,
-      tester.getSize(sendSurfaceFinder).height,
     );
     expect(
       tester.widget<TextField>(find.byType(TextField)).textAlignVertical,
@@ -2012,9 +2015,9 @@ void main() {
 
     final multilineInputRect = tester.getRect(inputFinder);
     final multilineSendRect = tester.getRect(sendSurfaceFinder);
+    // The input grows taller while the action row (with send) stays below it.
     expect(multilineInputRect.height, greaterThan(multilineSendRect.height));
-    expect(multilineInputRect.bottom, closeTo(multilineSendRect.bottom, 0.01));
-    expect(multilineInputRect.top, lessThan(multilineSendRect.top));
+    expect(multilineSendRect.top, greaterThan(multilineInputRect.bottom));
 
     await tester.enterText(find.byType(TextField), '');
     await tester.pumpAndSettle();
