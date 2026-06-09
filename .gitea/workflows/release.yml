@@ -26,6 +26,16 @@ jobs:
       - name: Resolve version
         id: version
         run: |
+          # --- 调试：确认 Gitea 注入的地址与 runner 到 Gitea 的连通性 ---
+          # GITHUB_SERVER_URL / GITHUB_API_URL 都来自 Gitea 的 ROOT_URL（对外地址），
+          # 若 runner 解析不到该 host，下方 curl 会在建连阶段失败（runner 报 exit 69）。
+          echo "GITHUB_SERVER_URL=$GITHUB_SERVER_URL"
+          echo "GITHUB_API_URL=$GITHUB_API_URL"
+          echo -n "server $GITHUB_SERVER_URL/api/v1/version -> "
+          curl -sS -m 10 -o /dev/null -w "%{http_code}\n" "$GITHUB_SERVER_URL/api/v1/version" || echo "FAILED (curl exit $?)"
+          echo -n "api    $GITHUB_API_URL/version -> "
+          curl -sS -m 10 -o /dev/null -w "%{http_code}\n" "$GITHUB_API_URL/version" || echo "FAILED (curl exit $?)"
+          # --- 原有内容 ---
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
             VERSION="${{ github.event.inputs.version }}"
           else
