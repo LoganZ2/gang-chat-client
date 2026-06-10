@@ -10,6 +10,7 @@ import '../app/authenticated_app_services.dart';
 import '../app/authenticated_app_context.dart';
 import '../app/file_display.dart' as file_display;
 import '../app/file_transfer_state.dart';
+import '../app/composer_attachment_display.dart' as composer_attachment;
 import '../app/global_search_controller.dart';
 import '../app/live_controller.dart';
 import '../app/live_display.dart' as live_display;
@@ -27,9 +28,12 @@ import '../app/sticker_packs_controller.dart';
 import '../app/voice_message_display.dart' as voice_display;
 import '../app/voice_recorder_controller.dart';
 import '../live/live_session.dart';
+import '../protocol/api_client.dart'
+    show UploadCancelledException, UploadTransferController;
 import '../protocol/models.dart';
 import '../settings/settings_page.dart';
 import '../shell/desktop_window_controller.dart';
+import '../shell/file_selection_service.dart';
 import '../ui/ui.dart';
 import 'chat_pane.dart';
 import 'home_content.dart';
@@ -111,6 +115,11 @@ class _HomeShellState extends State<HomeShell> {
       const voice_display.VoiceRecorderState();
   Timer? _voiceTicker;
   DateTime? _voiceStartedAt;
+  // Files picked for the next message, kept in pick order. Each uploads as
+  // soon as it is picked; the message send later just collects the finished
+  // assets. See [_StagedAttachment].
+  final List<_StagedAttachment> _stagedAttachments = [];
+  final FileSelectionService _fileSelectionService = const FileSelectionService();
   bool _settingsOpen = false;
   bool _narrowContentOpen = false;
   _ContentMode _contentMode = _ContentMode.chat;
@@ -367,4 +376,25 @@ String _roomTitle(RoomDetail? room, RoomCard? card) {
   final cardTitle = card?.displayName.trim();
   if (cardTitle != null && cardTitle.isNotEmpty) return cardTitle;
   return '聊天';
+}
+
+/// A file staged in the composer. Uploading starts the moment the file is
+/// picked, so the entry tracks the in-flight upload (progress + cancellation)
+/// and caches the resulting [asset] once it lands, ready for the next send.
+class _StagedAttachment {
+  _StagedAttachment({required this.id, required this.file})
+    : status = composer_attachment.ComposerAttachmentStatus.uploading;
+
+  final String id;
+  final SelectedFile file;
+  final UploadTransferController uploadController = UploadTransferController();
+
+  composer_attachment.ComposerAttachmentStatus status;
+  UploadedAsset? asset;
+  int? sizeBytes;
+  double? progress;
+  Object? error;
+
+  bool get isUploaded =>
+      status == composer_attachment.ComposerAttachmentStatus.uploaded;
 }

@@ -76,6 +76,10 @@ extension _HomeShellRoomActions on _HomeShellState {
   Future<void> _openRoom(RoomCard server, {required bool openContent}) async {
     if (_loadingRoom && _selectedServerId == server.id) return;
 
+    // Abort any in-flight attachment uploads before dropping their chips.
+    for (final entry in _stagedAttachments) {
+      entry.uploadController.cancel();
+    }
     _setHomeState(() {
       _selectedServerId = server.id;
       _settingsOpen = false;
@@ -85,6 +89,7 @@ extension _HomeShellRoomActions on _HomeShellState {
       _live = null;
       _messages = const [];
       _fileTransfers = const {};
+      _stagedAttachments.clear();
       _roomError = null;
       _sendError = null;
       _stickerPanelState = sticker_display.stickerPanelReset(

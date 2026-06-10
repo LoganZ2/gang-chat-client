@@ -3,6 +3,12 @@ part of 'home_shell.dart';
 extension _HomeShellMessages on _HomeShellState {
   Future<void> _sendText(String value) async {
     final body = value.trimRight();
+    // When files are staged, the message goes out as a file message carrying
+    // them as attachments (the body rides along). Otherwise it's plain text.
+    if (_stagedAttachments.isNotEmpty) {
+      await _sendStagedAttachments(body);
+      return;
+    }
     await _sendComposed(
       body: body,
       type: 'text',
@@ -400,5 +406,193 @@ extension _HomeShellMessages on _HomeShellState {
   void _applyFileMessageStatePatch(FileMessageStatePatch patch) {
     _messages = patch.messages;
     _fileTransfers = patch.fileTransfers;
+  }
+
+  // --- Composer attachments ---------------------------------------------
+  //
+  // Files picked here upload immediately (eagerly), so by send time the assets
+  // are usually already in hand and the message goes out in one round trip. The
+  // message itself still rides the shared composed-send path as a `file` message
+  // carrying the assets as attachments — a workaround until the backend offers a
+  // single multipart "send message with files" call. Eager upload can leave an
+  // orphan asset behind if the user removes a chip or never sends; that cleanup
+  // is the backend's responsibility (asset TTL / unreferenced sweep).
+
+  /// View models for the chips shown above the composer input.
+  List<composer_attachment.ComposerAttachmentView> get _stagedAttachmentViews {
+    return [
+      for (final entry in _stagedAttachments)
+        composer_attachment.ComposerAttachmentView(
+          id: entry.id,
+          filename: entry.file.name,
+          status: entry.status,
+          sizeBytes: entry.sizeBytes,
+          mimeType: entry.file.mimeType,
+          progress: entry.progress,
+        ),
+    ];
+  }
+
+  /// Open the system file picker (multi-select), stage the chosen files on the
+  /// composer, and start uploading each one right away. Does not send anything;
+  /// the finished assets go out with the next message.
+  Future<void> _pickAttachments() async {
+    if (_selectedRoom == null) return;
+    List<SelectedFile> files;
+    try {
+      files = await _fileSelectionService.openFiles();
+    } catch (error) {
+      if (!mounted) return;
+      _setHomeState(() => _sendError = error.toString());
+      return;
+    }
+    if (!mounted || files.isEmpty) return;
+
+    final fresh = <_StagedAttachment>[];
+    _setHomeState(() {
+      for (final file in files) {
+        final entry = _StagedAttachment(
+          id: _messagesController.mintClientId('att'),
+          file: file,
+        );
+        _stagedAttachments.add(entry);
+        fresh.add(entry);
+      }
+      _sendError = null;
+    });
+
+    for (final entry in fresh) {
+      unawaited(_uploadStagedAttachment(entry));
+    }
+  }
+
+  /// Upload (or re-upload) a single staged file, streaming progress into its
+  /// chip. Safe to call again after a failure to retry.
+  Future<void> _uploadStagedAttachment(_StagedAttachment entry) async {
+    if (!_stagedAttachments.contains(entry)) return;
+    _setHomeState(() {
+      entry.status = composer_attachment.ComposerAttachmentStatus.uploading;
+      entry.progress = null;
+      entry.error = null;
+    });
+
+    try {
+      final bytes = await entry.file.readAsBytes();
+      // Drop out if the chip was removed (or the room switched) while reading.
+      if (!_stagedAttachments.contains(entry)) return;
+      final asset = await _messagesController.uploadFileAsset(
+        bytes: bytes,
+        filename: entry.file.name,
+        controller: entry.uploadController,
+        onProgress: ({required sentBytes, required totalBytes}) {
+          if (!mounted || !_stagedAttachments.contains(entry)) return;
+          _setHomeState(() {
+            entry.sizeBytes = totalBytes;
+            entry.progress = totalBytes > 0 ? sentBytes / totalBytes : null;
+          });
+        },
+      );
+      if (!_stagedAttachments.contains(entry)) return;
+      _setHomeState(() {
+        entry.asset = asset;
+        entry.sizeBytes = asset.sizeBytes;
+        entry.progress = 1;
+        entry.status = composer_attachment.ComposerAttachmentStatus.uploaded;
+      });
+    } on UploadCancelledException {
+      // Cancellation means the chip was removed; nothing left to update.
+    } catch (error) {
+      if (!mounted || !_stagedAttachments.contains(entry)) return;
+      _setHomeState(() {
+        entry.error = error;
+        entry.status = composer_attachment.ComposerAttachmentStatus.failed;
+      });
+    }
+  }
+
+  /// Retry a staged upload that previously failed.
+  void _retryAttachment(String id) {
+    final entry = _stagedAttachmentById(id);
+    if (entry == null || entry.isUploaded) return;
+    unawaited(_uploadStagedAttachment(entry));
+  }
+
+  /// Drop a single staged file, cancelling its upload if still in flight.
+  void _removeAttachment(String id) {
+    final index = _stagedAttachments.indexWhere((entry) => entry.id == id);
+    if (index < 0) return;
+    final entry = _stagedAttachments[index];
+    entry.uploadController.cancel();
+    _setHomeState(() => _stagedAttachments.removeAt(index));
+  }
+
+  _StagedAttachment? _stagedAttachmentById(String id) {
+    for (final entry in _stagedAttachments) {
+      if (entry.id == id) return entry;
+    }
+    return null;
+  }
+
+  /// Send the staged files as one composed message alongside any typed [body].
+  /// Uploads were kicked off at pick time, so this waits for any still in
+  /// flight, refuses to send while uploads are failed, then collects the
+  /// finished assets.
+  Future<void> _sendStagedAttachments(String body) async {
+    final room = _selectedRoom;
+    if (room == null || _stagedAttachments.isEmpty || _sending) return;
+
+    // Wait for any uploads still in flight before deciding what to send.
+    final pending = _stagedAttachments
+        .where((entry) => entry.status ==
+            composer_attachment.ComposerAttachmentStatus.uploading)
+        .toList();
+    if (pending.isNotEmpty) {
+      _setHomeState(() {
+        _sending = true;
+        _sendError = null;
+      });
+      await Future.wait(pending.map(_awaitUpload));
+      if (!mounted || _selectedServerId != room.id) {
+        if (mounted) _setHomeState(() => _sending = false);
+        return;
+      }
+      _setHomeState(() => _sending = false);
+    }
+
+    // Refuse to send a partial batch; surface the failures for retry/removal.
+    if (_stagedAttachments.any((entry) => entry.status ==
+        composer_attachment.ComposerAttachmentStatus.failed)) {
+      _setHomeState(() => _sendError = '部分文件上传失败，请重试或移除后再发送');
+      return;
+    }
+
+    final attachments = [
+      for (final entry in _stagedAttachments)
+        if (entry.asset != null)
+          _messagesController.fileAttachment(
+            name: entry.file.name,
+            asset: entry.asset!,
+          ),
+    ];
+    if (attachments.isEmpty) return;
+
+    // Hand off to the shared composed send (which owns the pending/sent/failed
+    // bubble and the _sending flag).
+    _setHomeState(() => _stagedAttachments.clear());
+    await _sendComposed(
+      body: body,
+      type: 'file',
+      attachments: attachments,
+      clearComposer: true,
+    );
+  }
+
+  /// Block until [entry]'s in-flight upload settles (success or failure).
+  Future<void> _awaitUpload(_StagedAttachment entry) async {
+    while (mounted &&
+        _stagedAttachments.contains(entry) &&
+        entry.status == composer_attachment.ComposerAttachmentStatus.uploading) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
   }
 }

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../app/file_display.dart' as file_display;
 import '../app/file_transfer_state.dart';
+import '../app/composer_attachment_display.dart' as composer_attachment;
 import '../app/message_display.dart' as message_display;
 import '../app/room_display.dart' as room_display;
 import '../app/sticker_display.dart' as sticker_display;
@@ -51,6 +52,7 @@ class ChatPane extends StatelessWidget {
     required this.composerController,
     required this.stickerPanel,
     required this.voiceState,
+    required this.composerAttachments,
     required this.onSubmit,
     required this.onSendSticker,
     required this.onLoadStickers,
@@ -59,6 +61,9 @@ class ChatPane extends StatelessWidget {
     required this.onStartVoice,
     required this.onSendVoice,
     required this.onCancelVoice,
+    required this.onPickFile,
+    required this.onRemoveAttachment,
+    required this.onRetryAttachment,
     required this.onRetry,
     required this.onOpenLiveChannel,
     required this.onOpenRoomMembers,
@@ -79,6 +84,7 @@ class ChatPane extends StatelessWidget {
   final TextEditingController composerController;
   final sticker_display.StickerPanelLoadState stickerPanel;
   final voice_display.VoiceRecorderState voiceState;
+  final List<composer_attachment.ComposerAttachmentView> composerAttachments;
   final ValueChanged<String> onSubmit;
   final ValueChanged<Sticker> onSendSticker;
   final VoidCallback onLoadStickers;
@@ -87,6 +93,9 @@ class ChatPane extends StatelessWidget {
   final VoidCallback onStartVoice;
   final VoidCallback onSendVoice;
   final VoidCallback onCancelVoice;
+  final VoidCallback onPickFile;
+  final ValueChanged<String> onRemoveAttachment;
+  final ValueChanged<String> onRetryAttachment;
   final VoidCallback onRetry;
   final VoidCallback onOpenLiveChannel;
   final VoidCallback onOpenRoomMembers;
@@ -127,53 +136,123 @@ class ChatPane extends StatelessWidget {
             onSettingsPressed: onOpenRoomSettings,
           ),
           Expanded(
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: _MessageStage(
-                    currentUserId: currentUser.id,
-                    roomReady: room != null,
-                    loading: loading,
-                    error: error,
-                    messages: messages,
-                    fileTransfers: fileTransfers,
-                    onRetry: onRetry,
-                    onResolveSenderProfile: onResolveSenderProfile,
-                  ),
+            child: _ChatBody(
+              messageStage: (bottomInset) => _MessageStage(
+                currentUserId: currentUser.id,
+                roomReady: room != null,
+                loading: loading,
+                error: error,
+                messages: messages,
+                fileTransfers: fileTransfers,
+                onRetry: onRetry,
+                bottomInset: bottomInset,
+                onResolveSenderProfile: onResolveSenderProfile,
+              ),
+              composer: SelectionContainer.disabled(
+                // The composer's text field drives its own selection and its
+                // panels (sticker grid, voice) are scrollable but not meant to
+                // be selectable. Detach it from the app-wide SelectionArea so
+                // showing/hiding a panel mid-selection can't trip the
+                // scrollable-selection assertion.
+                child: _ComposerDock(
+                  controller: composerController,
+                  sending: sending,
+                  sendError: sendError,
+                  stickerPanel: stickerPanel,
+                  voiceState: voiceState,
+                  attachments: composerAttachments,
+                  onSubmit: onSubmit,
+                  onSendSticker: onSendSticker,
+                  onOpenStickers: onLoadStickers,
+                  onRefreshStickers: onRefreshStickers,
+                  onStickerSourceChanged: onStickerSourceChanged,
+                  onStartVoice: onStartVoice,
+                  onSendVoice: onSendVoice,
+                  onCancelVoice: onCancelVoice,
+                  onPickFile: onPickFile,
+                  onRemoveAttachment: onRemoveAttachment,
+                  onRetryAttachment: onRetryAttachment,
                 ),
-                Positioned(
-                  left: _composerHorizontalInset,
-                  right: _composerHorizontalInset,
-                  bottom: _composerBottomInset,
-                  // The composer's text field drives its own selection and its
-                  // panels (sticker grid, voice) are scrollable but not meant
-                  // to be selectable. Detach it from the app-wide SelectionArea
-                  // so showing/hiding a panel mid-selection can't trip the
-                  // scrollable-selection assertion.
-                  child: SelectionContainer.disabled(
-                    child: _ComposerDock(
-                      controller: composerController,
-                      sending: sending,
-                      sendError: sendError,
-                      stickerPanel: stickerPanel,
-                      voiceState: voiceState,
-                      onSubmit: onSubmit,
-                      onSendSticker: onSendSticker,
-                      onOpenStickers: onLoadStickers,
-                      onRefreshStickers: onRefreshStickers,
-                      onStickerSourceChanged: onStickerSourceChanged,
-                      onStartVoice: onStartVoice,
-                      onSendVoice: onSendVoice,
-                      onCancelVoice: onCancelVoice,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ],
       ),
     );
+  }
+}
+
+/// Lays the message list under the floating composer and keeps the list's
+/// bottom padding in sync with the composer's measured height, so the last
+/// messages can always scroll clear of it even as the composer grows (staged
+/// attachments, open panels).
+class _ChatBody extends StatefulWidget {
+  const _ChatBody({required this.messageStage, required this.composer});
+
+  final Widget Function(double bottomInset) messageStage;
+  final Widget composer;
+
+  @override
+  State<_ChatBody> createState() => _ChatBodyState();
+}
+
+class _ChatBodyState extends State<_ChatBody> {
+  // Falls back to the legacy fixed inset until the first measurement lands.
+  double _composerHeight = _composerOverlayInset;
+
+  void _onComposerHeight(double height) {
+    if (!mounted || height == _composerHeight) return;
+    // Defer to after layout: the size arrives mid-build of the Stack.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || height == _composerHeight) return;
+      setState(() => _composerHeight = height);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = _composerHeight + _composerBottomInset + 12;
+    return Stack(
+      children: [
+        Positioned.fill(child: widget.messageStage(bottomInset)),
+        Positioned(
+          left: _composerHorizontalInset,
+          right: _composerHorizontalInset,
+          bottom: _composerBottomInset,
+          child: _MeasureHeight(
+            onChange: _onComposerHeight,
+            child: widget.composer,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Reports its child's rendered height after each layout. Used to feed the
+/// composer's height back into the message list's bottom padding.
+class _MeasureHeight extends StatefulWidget {
+  const _MeasureHeight({required this.onChange, required this.child});
+
+  final ValueChanged<double> onChange;
+  final Widget child;
+
+  @override
+  State<_MeasureHeight> createState() => _MeasureHeightState();
+}
+
+class _MeasureHeightState extends State<_MeasureHeight> {
+  final GlobalKey _key = GlobalKey();
+
+  void _report() {
+    final box = _key.currentContext?.findRenderObject() as RenderBox?;
+    if (box != null && box.hasSize) widget.onChange(box.size.height);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _report());
+    return KeyedSubtree(key: _key, child: widget.child);
   }
 }
 
