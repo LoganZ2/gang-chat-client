@@ -12,17 +12,19 @@ class RoomMemberPermissionState {
     required this.isOwner,
     required this.isAdmin,
     required this.canRoleEdit,
+    required this.canRemoveMember,
   });
 
   final bool isSuperuser;
   final bool isOwner;
   final bool isAdmin;
   final bool canRoleEdit;
+  final bool canRemoveMember;
 
   bool get canSetAdmin => canRoleEdit && !isAdmin;
   bool get canUnsetAdmin => canRoleEdit && isAdmin;
   bool get canTransferCreator => canRoleEdit;
-  String get adminActionLabel => isAdmin ? '撤回管理员' : '设为管理员';
+  String get adminActionLabel => isAdmin ? '移除管理员' : '设为管理员';
 }
 
 class RoomMemberManagementPatch {
@@ -94,7 +96,20 @@ bool roomMemberActionBusy({
 }
 
 String roomMemberRoleUpdateNotice(String role) {
-  return role == 'admin' ? '管理员已设置' : '管理员权限已撤回';
+  return role == 'admin' ? '已授予管理员身份' : '已移除管理员身份';
+}
+
+String roomMemberRoleUpdateConfirmTitle(String role) {
+  return role == 'admin' ? '设为管理员' : '移除管理员';
+}
+
+String roomMemberRoleUpdateConfirmBody(RoomMember member, String role) {
+  final name = roomMemberDisplayName(member);
+  return role == 'admin' ? '确定要将 $name 设为管理员吗？' : '确定要移除 $name 的管理员身份吗？';
+}
+
+String roomMemberRoleUpdateConfirmLabel(String role) {
+  return role == 'admin' ? '设为管理员' : '移除';
 }
 
 String transferCreatorDialogTitle() {
@@ -111,6 +126,22 @@ String transferCreatorConfirmLabel() {
 
 String transferCreatorSuccessNotice() {
   return '创建者已转让';
+}
+
+String removeRoomMemberConfirmTitle() {
+  return '踢出此用户';
+}
+
+String removeRoomMemberConfirmBody(RoomMember member) {
+  return '确定要将 ${roomMemberDisplayName(member)} 从房间中移除吗？';
+}
+
+String removeRoomMemberConfirmLabel() {
+  return '踢出';
+}
+
+String removeRoomMemberSuccessNotice(RoomMember member) {
+  return '已踢出 ${roomMemberDisplayName(member)}';
 }
 
 RoomMemberLoadPatch roomMembersLoadStarted({
@@ -218,6 +249,49 @@ RoomMemberManagementPatch roomMemberRoleUpdateSucceeded({
 }
 
 RoomMemberManagementPatch roomMemberRoleUpdateFailed({
+  required RoomDetail room,
+  required Iterable<RoomMember> members,
+  required bool changed,
+  required String userId,
+  required Iterable<String> busyMemberIds,
+  required Object failure,
+}) {
+  return RoomMemberManagementPatch(
+    room: room,
+    members: members.toList(),
+    busyMemberIds: {
+      for (final item in busyMemberIds)
+        if (item != userId) item,
+    },
+    changed: changed,
+    error: failure.toString(),
+    notice: null,
+  );
+}
+
+RoomMemberManagementPatch roomMemberRemovedSucceeded({
+  required RoomDetail room,
+  required Iterable<RoomMember> members,
+  required RoomMember removed,
+  required Iterable<String> busyMemberIds,
+}) {
+  return RoomMemberManagementPatch(
+    room: room,
+    members: [
+      for (final member in members)
+        if (member.user.id != removed.user.id) member,
+    ],
+    busyMemberIds: {
+      for (final item in busyMemberIds)
+        if (item != removed.user.id) item,
+    },
+    changed: true,
+    error: null,
+    notice: removeRoomMemberSuccessNotice(removed),
+  );
+}
+
+RoomMemberManagementPatch roomMemberRemoveFailed({
   required RoomDetail room,
   required Iterable<RoomMember> members,
   required bool changed,
@@ -409,6 +483,7 @@ RoomMemberPermissionState roomMemberPermissionState({
   required RoomMember member,
   required CurrentUser currentUser,
   required bool canEditCreatorOnly,
+  bool canManageMembers = false,
   String? ownerUserId,
 }) {
   final isSuperuser = isSuperuserRoomMember(member);
@@ -419,11 +494,17 @@ RoomMemberPermissionState roomMemberPermissionState({
       !isSuperuser &&
       !isOwner &&
       member.user.id != currentUser.id;
+  final canRemoveMember =
+      canManageMembers &&
+      !isSuperuser &&
+      !isOwner &&
+      member.user.id != currentUser.id;
   return RoomMemberPermissionState(
     isSuperuser: isSuperuser,
     isOwner: isOwner,
     isAdmin: isAdmin,
     canRoleEdit: canRoleEdit,
+    canRemoveMember: canRemoveMember,
   );
 }
 

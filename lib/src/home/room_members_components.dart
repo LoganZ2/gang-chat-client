@@ -86,6 +86,7 @@ class _MemberRow extends StatelessWidget {
     required this.busy,
     required this.onSetAdmin,
     required this.onUnsetAdmin,
+    required this.onRemoveMember,
     required this.onTransferCreator,
   });
 
@@ -96,6 +97,7 @@ class _MemberRow extends StatelessWidget {
   final bool busy;
   final VoidCallback onSetAdmin;
   final VoidCallback onUnsetAdmin;
+  final VoidCallback onRemoveMember;
   final VoidCallback onTransferCreator;
 
   @override
@@ -158,27 +160,40 @@ class _MemberRow extends StatelessWidget {
                 strokeWidth: 2,
               ),
             ),
-          ] else if (permission.canRoleEdit) ...[
+          ] else if (permission.canRoleEdit || permission.canRemoveMember) ...[
             const SizedBox(width: 8),
-            ButtonIcon(
-              tooltip: permission.isAdmin ? '移除管理员' : '设为管理员',
-              icon: Icon(
-                permission.isAdmin
-                    ? Icons.admin_panel_settings_outlined
-                    : Icons.admin_panel_settings,
+            if (permission.canRoleEdit) ...[
+              ButtonIcon(
+                tooltip: permission.isAdmin ? '移除管理员' : '设为管理员',
+                icon: Icon(
+                  permission.isAdmin
+                      ? Icons.admin_panel_settings_outlined
+                      : Icons.admin_panel_settings,
+                ),
+                selected: permission.isAdmin,
+                onPressed: permission.isAdmin ? onUnsetAdmin : onSetAdmin,
+                size: 34,
               ),
-              selected: permission.isAdmin,
-              onPressed: permission.isAdmin ? onUnsetAdmin : onSetAdmin,
-              size: 34,
-            ),
-            const SizedBox(width: 6),
-            ButtonIcon(
-              tooltip: '转让群主',
-              icon: const Icon(Icons.swap_horiz),
-              tone: ButtonTone.danger,
-              onPressed: onTransferCreator,
-              size: 34,
-            ),
+              const SizedBox(width: 6),
+            ],
+            if (permission.canRemoveMember) ...[
+              ButtonIcon(
+                tooltip: '踢出此用户',
+                icon: const Icon(Icons.person_remove_outlined),
+                tone: ButtonTone.danger,
+                onPressed: onRemoveMember,
+                size: 34,
+              ),
+              const SizedBox(width: 6),
+            ],
+            if (permission.canRoleEdit)
+              ButtonIcon(
+                tooltip: '转让创建者',
+                icon: const Icon(Icons.swap_horiz),
+                tone: ButtonTone.danger,
+                onPressed: onTransferCreator,
+                size: 34,
+              ),
           ],
         ],
       ),
@@ -291,7 +306,7 @@ class _InviteUserRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final actionLabel = alreadyMember ? '成员' : (pending ? '已邀请' : '邀请');
+    final actionLabel = alreadyMember ? '在房间内' : (pending ? '已邀请' : '邀请');
     return _RowSurface(
       compact: true,
       child: Row(

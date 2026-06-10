@@ -23,7 +23,7 @@ class RoomNotificationItem {
       type: RoomNotificationItemType.invite,
       id: 'invite:${invite.id}',
       time: invite.createdAt,
-      pending: isPendingRoomInvite(invite),
+      pending: isActionablePendingRoomInvite(invite),
       invite: invite,
     );
   }
@@ -77,6 +77,10 @@ bool isInvalidPendingRoomInvite(RoomInvite invite) {
   final reason = invite.invalidReason?.trim();
   if (reason != null && reason.isNotEmpty) return true;
   return !invite.roomExists || _isLeftRoomRole(invite.inviter.roomRole);
+}
+
+bool isActionablePendingRoomInvite(RoomInvite invite) {
+  return isPendingRoomInvite(invite) && !isInvalidPendingRoomInvite(invite);
 }
 
 bool isPendingRoomApplication(RoomApplication application) {
@@ -143,9 +147,7 @@ bool _isPrivilegedInviter(UserSummary inviter) {
 }
 
 int pendingRoomInviteCount(Iterable<RoomInvite> invites) {
-  return invites.where((invite) {
-    return isPendingRoomInvite(invite) && !isInvalidPendingRoomInvite(invite);
-  }).length;
+  return invites.where(isActionablePendingRoomInvite).length;
 }
 
 int pendingRoomNotificationCount({
@@ -295,7 +297,7 @@ int _itemPendingRank(RoomNotificationItem item) {
 }
 
 int _invitePendingRank(RoomInvite invite) {
-  return isPendingRoomInvite(invite) ? 0 : 1;
+  return isActionablePendingRoomInvite(invite) ? 0 : 1;
 }
 
 String _roomInviteSearchText(RoomInvite invite) {

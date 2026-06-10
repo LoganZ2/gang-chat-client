@@ -1929,6 +1929,10 @@ void main() {
               200,
             );
           case 6:
+            expect(request.method, 'DELETE');
+            expect(request.url.path, '/api/v1/rooms/room_1/members/user_2');
+            return http.Response('{}', 200);
+          case 7:
             expect(request.method, 'PATCH');
             expect(request.url.path, '/api/v1/rooms/room_1/creator');
             expect(jsonDecode(utf8.decode(request.bodyBytes)), {
@@ -1978,6 +1982,7 @@ void main() {
       userId: 'user_2',
       role: 'admin',
     );
+    await api.removeRoomMember(roomId: 'room_1', userId: 'user_2');
     final transferred = await api.transferRoomCreator(
       roomId: 'room_1',
       userId: 'user_2',
@@ -1987,7 +1992,7 @@ void main() {
     expect(myRoom.remarkName, 'Ops');
     expect(member.role, 'admin');
     expect(transferred.createdBy?.id, 'user_2');
-    expect(requests, 6);
+    expect(requests, 7);
     api.close();
   });
 

@@ -20,6 +20,13 @@ void main() {
       status: 'rejected',
       createdAt: DateTime.utc(2026, 6, 3, 8),
     );
+    final invalidNew = _invite(
+      'invalid_new',
+      status: 'pending',
+      createdAt: DateTime.utc(2026, 6, 5, 8),
+      invalidReason: 'inviter_left',
+      inviter: _user('left_inviter', roomRole: 'left'),
+    );
     final pendingNew = _invite(
       'pending_new',
       status: 'pending',
@@ -27,7 +34,7 @@ void main() {
     );
 
     final visible = roomInviteNotificationsForView(
-      invites: [accepted, pendingOld, rejectedNew, pendingNew],
+      invites: [accepted, pendingOld, rejectedNew, invalidNew, pendingNew],
       query: '',
       filter: RoomNotificationFilter.all,
     );
@@ -35,6 +42,7 @@ void main() {
     expect(visible.map((invite) => invite.id), [
       'pending_new',
       'pending_old',
+      'invalid_new',
       'rejected_new',
       'accepted_old',
     ]);
@@ -134,6 +142,8 @@ void main() {
       isFalse,
     );
     expect(isInvalidPendingRoomInvite(invalid), isTrue);
+    expect(isActionablePendingRoomInvite(pending), isTrue);
+    expect(isActionablePendingRoomInvite(invalid), isFalse);
     expect(roomInviteDecisionLabel(invalid), '已失效');
     expect(roomInviteDecisionLabel(accepted), '已接受');
     expect(roomInviteDecisionLabel(rejected), '已拒绝');

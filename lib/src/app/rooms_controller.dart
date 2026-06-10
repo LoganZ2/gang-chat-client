@@ -699,6 +699,13 @@ class RoomsController {
     return api.updateRoomMemberRole(roomId: roomId, userId: userId, role: role);
   }
 
+  Future<void> removeRoomMember({
+    required String roomId,
+    required String userId,
+  }) {
+    return api.removeRoomMember(roomId: roomId, userId: userId);
+  }
+
   Future<RoomDetail> transferRoomCreator({
     required String roomId,
     required String userId,

@@ -69,6 +69,10 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
   bool get _canInviteMembers =>
       room_invites.roomInvitesEnabled(_room.joinPolicy);
 
+  bool get _canManageMembers => room_display
+      .roomAccessState(room: _room, currentUser: widget.currentUser)
+      .canManageRoom;
+
   @override
   void initState() {
     super.initState();
@@ -239,6 +243,17 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
 
   Future<void> _setMemberRole(RoomMember member, String role) async {
     if (_busyMemberIds.contains(member.user.id)) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => _ConfirmDialog(
+        title: member_filter.roomMemberRoleUpdateConfirmTitle(role),
+        message: member_filter.roomMemberRoleUpdateConfirmBody(member, role),
+        confirmLabel: member_filter.roomMemberRoleUpdateConfirmLabel(role),
+        danger: role != 'admin',
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
     setState(() {
       _busyMemberIds.add(member.user.id);
       _error = null;
@@ -255,7 +270,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
         _busyMemberIds.remove(member.user.id);
         _members = member_filter.replaceRoomMember(_members, updated);
         _changed = true;
-        _notice = role == 'admin' ? '已授予管理员身份' : '已移除管理员身份';
+        _notice = member_filter.roomMemberRoleUpdateNotice(role);
       });
     } catch (error) {
       if (!mounted) return;
@@ -271,10 +286,9 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => _ConfirmDialog(
-        title: '转让群主',
-        message:
-            '群主将转让给 ${member_filter.roomMemberDisplayName(member)}。你将成为管理员。',
-        confirmLabel: '转让',
+        title: member_filter.transferCreatorDialogTitle(),
+        message: member_filter.transferCreatorConfirmBody(member),
+        confirmLabel: member_filter.transferCreatorConfirmLabel(),
         danger: true,
       ),
     );
@@ -295,7 +309,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
         _busyMemberIds.remove(member.user.id);
         _room = updated;
         _changed = true;
-        _notice = '群主已转让';
+        _notice = member_filter.transferCreatorSuccessNotice();
       });
       unawaited(_load());
     } catch (error) {
@@ -303,6 +317,65 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       setState(() {
         _busyMemberIds.remove(member.user.id);
         _error = error.toString();
+      });
+    }
+  }
+
+  Future<void> _removeMember(RoomMember member) async {
+    if (_busyMemberIds.contains(member.user.id)) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => _ConfirmDialog(
+        title: member_filter.removeRoomMemberConfirmTitle(),
+        message: member_filter.removeRoomMemberConfirmBody(member),
+        confirmLabel: member_filter.removeRoomMemberConfirmLabel(),
+        danger: true,
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _busyMemberIds.add(member.user.id);
+      _error = null;
+      _notice = null;
+    });
+    try {
+      await widget.controller.removeRoomMember(
+        roomId: _room.id,
+        userId: member.user.id,
+      );
+      if (!mounted) return;
+      final patch = member_filter.roomMemberRemovedSucceeded(
+        room: _room,
+        members: _members,
+        removed: member,
+        busyMemberIds: _busyMemberIds,
+      );
+      setState(() {
+        _busyMemberIds
+          ..clear()
+          ..addAll(patch.busyMemberIds);
+        _members = patch.members;
+        _changed = patch.changed;
+        _error = patch.error;
+        _notice = patch.notice;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      final patch = member_filter.roomMemberRemoveFailed(
+        room: _room,
+        members: _members,
+        changed: _changed,
+        userId: member.user.id,
+        busyMemberIds: _busyMemberIds,
+        failure: error,
+      );
+      setState(() {
+        _busyMemberIds
+          ..clear()
+          ..addAll(patch.busyMemberIds);
+        _error = patch.error;
+        _notice = patch.notice;
       });
     }
   }
@@ -404,6 +477,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
           member: member,
           currentUser: widget.currentUser,
           canEditCreatorOnly: _canEditCreatorOnly,
+          canManageMembers: _canManageMembers,
           ownerUserId: _room.createdBy?.id,
         );
         return _MemberRow(
@@ -414,6 +488,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
           busy: _busyMemberIds.contains(member.user.id),
           onSetAdmin: () => _setMemberRole(member, 'admin'),
           onUnsetAdmin: () => _setMemberRole(member, 'member'),
+          onRemoveMember: () => _removeMember(member),
           onTransferCreator: () => _transferCreator(member),
         );
       },

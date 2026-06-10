@@ -210,8 +210,20 @@ void main() {
   test('room member action helpers provide role and transfer copy', () {
     final member = _member('target', roomDisplayName: 'Room Target');
 
-    expect(roomMemberRoleUpdateNotice('admin'), '管理员已设置');
-    expect(roomMemberRoleUpdateNotice('member'), '管理员权限已撤回');
+    expect(roomMemberRoleUpdateNotice('admin'), '已授予管理员身份');
+    expect(roomMemberRoleUpdateNotice('member'), '已移除管理员身份');
+    expect(roomMemberRoleUpdateConfirmTitle('admin'), '设为管理员');
+    expect(roomMemberRoleUpdateConfirmTitle('member'), '移除管理员');
+    expect(
+      roomMemberRoleUpdateConfirmBody(member, 'admin'),
+      '确定要将 Room Target 设为管理员吗？',
+    );
+    expect(
+      roomMemberRoleUpdateConfirmBody(member, 'member'),
+      '确定要移除 Room Target 的管理员身份吗？',
+    );
+    expect(roomMemberRoleUpdateConfirmLabel('admin'), '设为管理员');
+    expect(roomMemberRoleUpdateConfirmLabel('member'), '移除');
     expect(transferCreatorDialogTitle(), '转让创建者');
     expect(
       transferCreatorConfirmBody(member),
@@ -219,6 +231,10 @@ void main() {
     );
     expect(transferCreatorConfirmLabel(), '转让');
     expect(transferCreatorSuccessNotice(), '创建者已转让');
+    expect(removeRoomMemberConfirmTitle(), '踢出此用户');
+    expect(removeRoomMemberConfirmBody(member), '确定要将 Room Target 从房间中移除吗？');
+    expect(removeRoomMemberConfirmLabel(), '踢出');
+    expect(removeRoomMemberSuccessNotice(member), '已踢出 Room Target');
   });
 
   test('roomMemberPermissionState gates creator-only member role actions', () {
@@ -228,22 +244,36 @@ void main() {
       member: _member('member'),
       currentUser: currentUser,
       canEditCreatorOnly: true,
+      canManageMembers: true,
       ownerUserId: 'owner',
     );
     expect(member.canSetAdmin, isTrue);
     expect(member.canUnsetAdmin, isFalse);
     expect(member.canTransferCreator, isTrue);
+    expect(member.canRemoveMember, isTrue);
     expect(member.adminActionLabel, '设为管理员');
 
     final admin = roomMemberPermissionState(
       member: _member('admin', role: 'admin'),
       currentUser: currentUser,
       canEditCreatorOnly: true,
+      canManageMembers: true,
       ownerUserId: 'owner',
     );
     expect(admin.canSetAdmin, isFalse);
     expect(admin.canUnsetAdmin, isTrue);
-    expect(admin.adminActionLabel, '撤回管理员');
+    expect(admin.canRemoveMember, isTrue);
+    expect(admin.adminActionLabel, '移除管理员');
+
+    final managedByAdmin = roomMemberPermissionState(
+      member: _member('managed'),
+      currentUser: currentUser,
+      canEditCreatorOnly: false,
+      canManageMembers: true,
+      ownerUserId: 'owner',
+    );
+    expect(managedByAdmin.canRoleEdit, isFalse);
+    expect(managedByAdmin.canRemoveMember, isTrue);
   });
 
   test('roomMemberPermissionState blocks self owner and superuser edits', () {
@@ -254,6 +284,26 @@ void main() {
         member: _member('current'),
         currentUser: currentUser,
         canEditCreatorOnly: true,
+        canManageMembers: true,
+      ).canRoleEdit,
+      isFalse,
+    );
+    expect(
+      roomMemberPermissionState(
+        member: _member('current'),
+        currentUser: currentUser,
+        canEditCreatorOnly: true,
+        canManageMembers: true,
+      ).canRemoveMember,
+      isFalse,
+    );
+    expect(
+      roomMemberPermissionState(
+        member: _member('owner'),
+        currentUser: currentUser,
+        canEditCreatorOnly: true,
+        canManageMembers: true,
+        ownerUserId: 'owner',
       ).canRoleEdit,
       isFalse,
     );
@@ -262,7 +312,17 @@ void main() {
         member: _member('owner'),
         currentUser: currentUser,
         canEditCreatorOnly: true,
+        canManageMembers: true,
         ownerUserId: 'owner',
+      ).canRemoveMember,
+      isFalse,
+    );
+    expect(
+      roomMemberPermissionState(
+        member: _member('superuser', isSuperuser: true),
+        currentUser: currentUser,
+        canEditCreatorOnly: true,
+        canManageMembers: true,
       ).canRoleEdit,
       isFalse,
     );
@@ -271,7 +331,8 @@ void main() {
         member: _member('superuser', isSuperuser: true),
         currentUser: currentUser,
         canEditCreatorOnly: true,
-      ).canRoleEdit,
+        canManageMembers: true,
+      ).canRemoveMember,
       isFalse,
     );
     expect(
@@ -345,7 +406,7 @@ void main() {
     expect(succeeded.busyMemberIds, {'other'});
     expect(succeeded.changed, isTrue);
     expect(succeeded.error, isNull);
-    expect(succeeded.notice, '管理员已设置');
+    expect(succeeded.notice, '已授予管理员身份');
 
     final failed = roomMemberRoleUpdateFailed(
       room: room,
@@ -360,6 +421,40 @@ void main() {
     expect(failed.busyMemberIds, {'other'});
     expect(failed.changed, isFalse);
     expect(failed.error, contains('role failed'));
+    expect(failed.notice, isNull);
+  });
+
+  test('room member remove patches members busy ids and notice', () {
+    final room = _room('room_1');
+    final removed = _member('b', roomDisplayName: 'Removed Target');
+    final members = [_member('a'), removed, _member('c')];
+
+    final succeeded = roomMemberRemovedSucceeded(
+      room: room,
+      members: members,
+      removed: removed,
+      busyMemberIds: const {'b', 'other'},
+    );
+    expect(succeeded.room, same(room));
+    expect(succeeded.members.map((member) => member.user.id), ['a', 'c']);
+    expect(succeeded.busyMemberIds, {'other'});
+    expect(succeeded.changed, isTrue);
+    expect(succeeded.error, isNull);
+    expect(succeeded.notice, '已踢出 Removed Target');
+
+    final failed = roomMemberRemoveFailed(
+      room: room,
+      members: members,
+      changed: true,
+      userId: 'b',
+      busyMemberIds: const {'b', 'other'},
+      failure: Exception('remove failed'),
+    );
+    expect(failed.room, same(room));
+    expect(failed.members, members);
+    expect(failed.busyMemberIds, {'other'});
+    expect(failed.changed, isTrue);
+    expect(failed.error, contains('remove failed'));
     expect(failed.notice, isNull);
   });
 

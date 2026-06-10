@@ -2,6 +2,10 @@ part of 'home_shell.dart';
 
 extension _HomeShellNotifications on _HomeShellState {
   void _openNotifications({required bool openContent}) {
+    if (!_settingsOpen && _contentMode == _ContentMode.notifications) {
+      _closeNotifications();
+      return;
+    }
     _setHomeState(() {
       _settingsOpen = false;
       _contentMode = _ContentMode.notifications;

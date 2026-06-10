@@ -124,6 +124,10 @@ extension _HomeShellRoomActions on _HomeShellState {
   }
 
   void _openCreateRoom({required bool openContent}) {
+    if (!_settingsOpen && _contentMode == _ContentMode.createRoom) {
+      _closeCreateRoom();
+      return;
+    }
     _setHomeState(() {
       _settingsOpen = false;
       _contentMode = _ContentMode.createRoom;

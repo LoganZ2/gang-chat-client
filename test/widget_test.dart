@@ -394,6 +394,23 @@ void main() {
       isTrue,
     );
     expect(find.text('创建房间'), findsOneWidget);
+    await tester.tap(find.byTooltip('创建房间'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('创建房间'), findsNothing);
+    expect(
+      tester
+          .widget<ui.ButtonIcon>(
+            find.byKey(const ValueKey('home-sidebar-create-room-button')),
+          )
+          .selected,
+      isFalse,
+    );
+
+    await tester.tap(find.byTooltip('创建房间'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('创建房间'), findsOneWidget);
     expect(find.text('房间信息'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '确定'), findsOneWidget);
     expect(find.text('保存房间设置'), findsNothing);
@@ -448,6 +465,23 @@ void main() {
             .selected,
         isTrue,
       );
+      expect(find.text('通知'), findsOneWidget);
+      await tester.tap(find.byTooltip('通知'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('通知'), findsNothing);
+      expect(
+        tester
+            .widget<ui.ButtonIcon>(
+              find.byKey(const ValueKey('home-sidebar-notifications-button')),
+            )
+            .selected,
+        isFalse,
+      );
+
+      await tester.tap(find.byTooltip('通知'));
+      await tester.pumpAndSettle();
+
       expect(find.text('通知'), findsOneWidget);
       expect(find.text('全部'), findsOneWidget);
       expect(find.text('邀请'), findsOneWidget);
@@ -722,6 +756,51 @@ void main() {
       requestedPaths,
       contains('/api/v1/rooms/server-alpha/join-requests'),
     );
+
+    await tester.ensureVisible(_textFieldWithHint('按用户名、昵称或 UID 搜索'));
+    await tester.pumpAndSettle();
+    await tester.enterText(_textFieldWithHint('按用户名、昵称或 UID 搜索'), 'mo');
+    await tester.pump(const Duration(milliseconds: 320));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Morgan'), findsAtLeastNWidgets(1));
+    expect(find.widgetWithText(ui.Button, '在房间内'), findsOneWidget);
+
+    await tester.enterText(_textFieldWithHint('按用户名、昵称或 UID 搜索'), '');
+    await tester.pump(const Duration(milliseconds: 320));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.byTooltip('设为管理员'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('设为管理员'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('设为管理员'), findsWidgets);
+    expect(find.textContaining('Morgan'), findsAtLeastNWidgets(1));
+    await tester.tap(find.widgetWithText(ui.Button, '设为管理员'));
+    await tester.pumpAndSettle();
+
+    expect(
+      requestedPaths,
+      contains('/api/v1/rooms/server-alpha/members/user-2'),
+    );
+
+    await tester.ensureVisible(find.byTooltip('踢出此用户'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('踢出此用户'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('踢出此用户'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ui.Button, '踢出'));
+    await tester.pumpAndSettle();
+
+    expect(
+      requestedPaths
+          .where((path) => path == '/api/v1/rooms/server-alpha/members/user-2')
+          .length,
+      2,
+    );
+    expect(find.text('Morgan'), findsNothing);
 
     await tester.ensureVisible(_textFieldWithHint('按用户名、昵称或 UID 搜索'));
     await tester.pumpAndSettle();
@@ -2824,6 +2903,24 @@ GangApi _roomsApi({
           ],
           'next_cursor': null,
         });
+      }
+      if (request.url.path == '/api/v1/rooms/server-alpha/members/user-2') {
+        if (request.method == 'PATCH') {
+          return _jsonResponse({
+            'member': _roomMemberJson(
+              user: _userJson(
+                id: 'user-2',
+                username: 'morgan',
+                displayName: 'Morgan',
+                isOnline: true,
+              ),
+              role: 'admin',
+            ),
+          });
+        }
+        if (request.method == 'DELETE') {
+          return _jsonResponse({'ok': true});
+        }
       }
       if (request.url.path == '/api/v1/rooms/server-alpha/join-requests') {
         return _jsonResponse({
