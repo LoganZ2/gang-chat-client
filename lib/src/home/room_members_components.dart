@@ -108,94 +108,100 @@ class _MemberRow extends StatelessWidget {
       ownerUserId: ownerUserId,
     );
     return _RowSurface(
-      child: Row(
-        children: [
-          Avatar(
-            label: member_filter.roomMemberDisplayName(member),
-            imageUrl: AppConfigScope.of(
-              context,
-            ).resolveAssetUrl(member.user.avatarUrl),
-            defaultAvatarKey: member.user.defaultAvatarKey,
-            active: presence != member_filter.RoomMemberPresence.offline,
-            activeBorderWidth: 1.1,
-            size: 38,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  member_filter.roomMemberDisplayName(member),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: UiTypography.body.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  member_filter.roomMemberMeta(member),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: UiTypography.label.copyWith(color: UiColors.textMuted),
-                ),
-              ],
+      child: SizedBox(
+        height: 40,
+        child: Row(
+          children: [
+            Avatar(
+              label: member_filter.roomMemberDisplayName(member),
+              imageUrl: AppConfigScope.of(
+                context,
+              ).resolveAssetUrl(member.user.avatarUrl),
+              defaultAvatarKey: member.user.defaultAvatarKey,
+              active: presence != member_filter.RoomMemberPresence.offline,
+              activeBorderWidth: 1.1,
+              size: 38,
             ),
-          ),
-          const SizedBox(width: 10),
-          _Pill(
-            label: member_filter.roomMemberPresenceLabel(presence),
-            active: presence == member_filter.RoomMemberPresence.live,
-          ),
-          const SizedBox(width: 6),
-          _Pill(label: role),
-          if (busy) ...[
             const SizedBox(width: 10),
-            const SizedBox.square(
-              dimension: 18,
-              child: CircularProgressIndicator(
-                color: UiColors.accent,
-                strokeWidth: 2,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    member_filter.roomMemberDisplayName(member),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: UiTypography.body.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    member_filter.roomMemberMeta(member),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: UiTypography.label.copyWith(
+                      color: UiColors.textMuted,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ] else if (permission.canRoleEdit || permission.canRemoveMember) ...[
-            const SizedBox(width: 8),
-            if (permission.canRoleEdit) ...[
-              ButtonIcon(
-                tooltip: permission.isAdmin ? '移除管理员' : '设为管理员',
-                icon: Icon(
-                  permission.isAdmin
-                      ? Icons.admin_panel_settings_outlined
-                      : Icons.admin_panel_settings,
+            const SizedBox(width: 10),
+            _Pill(
+              label: member_filter.roomMemberPresenceLabel(presence),
+              active: presence == member_filter.RoomMemberPresence.live,
+            ),
+            const SizedBox(width: 6),
+            _Pill(label: role),
+            if (busy) ...[
+              const SizedBox(width: 10),
+              const SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(
+                  color: UiColors.accent,
+                  strokeWidth: 2,
                 ),
-                selected: permission.isAdmin,
-                onPressed: permission.isAdmin ? onUnsetAdmin : onSetAdmin,
-                size: 34,
               ),
-              const SizedBox(width: 6),
+            ] else if (permission.canRoleEdit ||
+                permission.canRemoveMember) ...[
+              const SizedBox(width: 8),
+              if (permission.canRoleEdit) ...[
+                ButtonIcon(
+                  tooltip: permission.isAdmin ? '移除管理员' : '设为管理员',
+                  icon: Icon(
+                    permission.isAdmin
+                        ? Icons.admin_panel_settings_outlined
+                        : Icons.admin_panel_settings,
+                  ),
+                  selected: permission.isAdmin,
+                  onPressed: permission.isAdmin ? onUnsetAdmin : onSetAdmin,
+                  size: 34,
+                ),
+                const SizedBox(width: 6),
+              ],
+              if (permission.canRemoveMember) ...[
+                ButtonIcon(
+                  tooltip: '踢出此用户',
+                  icon: const Icon(Icons.person_remove_outlined),
+                  tone: ButtonTone.danger,
+                  onPressed: onRemoveMember,
+                  size: 34,
+                ),
+                const SizedBox(width: 6),
+              ],
+              if (permission.canRoleEdit)
+                ButtonIcon(
+                  tooltip: '转让创建者',
+                  icon: const Icon(Icons.swap_horiz),
+                  tone: ButtonTone.danger,
+                  onPressed: onTransferCreator,
+                  size: 34,
+                ),
             ],
-            if (permission.canRemoveMember) ...[
-              ButtonIcon(
-                tooltip: '踢出此用户',
-                icon: const Icon(Icons.person_remove_outlined),
-                tone: ButtonTone.danger,
-                onPressed: onRemoveMember,
-                size: 34,
-              ),
-              const SizedBox(width: 6),
-            ],
-            if (permission.canRoleEdit)
-              ButtonIcon(
-                tooltip: '转让创建者',
-                icon: const Icon(Icons.swap_horiz),
-                tone: ButtonTone.danger,
-                onPressed: onTransferCreator,
-                size: 34,
-              ),
           ],
-        ],
+        ),
       ),
     );
   }

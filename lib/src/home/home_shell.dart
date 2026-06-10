@@ -9,6 +9,7 @@ import '../app/audio_device_store.dart';
 import '../app/authenticated_app_services.dart';
 import '../app/authenticated_app_context.dart';
 import '../app/file_display.dart' as file_display;
+import '../app/file_downloads_controller.dart';
 import '../app/file_transfer_state.dart';
 import '../app/composer_attachment_display.dart' as composer_attachment;
 import '../app/global_search_controller.dart';
@@ -48,6 +49,7 @@ part 'home_shell_realtime.dart';
 part 'home_shell_room_actions.dart';
 part 'home_shell_live_actions.dart';
 part 'home_shell_messages.dart';
+part 'home_shell_downloads.dart';
 part 'home_shell_notifications.dart';
 part 'home_shell_search.dart';
 part 'home_shell_layout.dart';
@@ -104,6 +106,10 @@ class _HomeShellState extends State<HomeShell> {
   LiveState? _live;
   List<Message> _messages = const [];
   Map<String, FileTransferState> _fileTransfers = const {};
+  // Active file downloads, keyed by [file_display.fileDownloadKey]. Kept apart
+  // from [_fileTransfers] (outgoing uploads) so the two never collide on a
+  // message id and each tile can pick the transfer that applies to it.
+  Map<String, FileTransferState> _fileDownloads = const {};
   final Map<String, LiveStageSelection?> _liveStageSelections = {};
   LiveVideoTrack? _fullScreenLiveTrack;
   bool _loadingRoom = false;
@@ -156,6 +162,8 @@ class _HomeShellState extends State<HomeShell> {
   VoiceRecorderController get _voiceRecorder => _services.voiceRecorder;
   LiveController get _liveController => _services.live;
   LiveSessionController get _liveSessionController => _services.liveSession;
+  FileDownloadsController get _fileDownloadsController =>
+      _services.fileDownloads;
 
   @override
   void initState() {
@@ -196,6 +204,7 @@ class _HomeShellState extends State<HomeShell> {
       _live = null;
       _messages = const [];
       _fileTransfers = const {};
+      _fileDownloads = const {};
       _liveStageSelections.clear();
       _fullScreenLiveTrack = null;
       _loadingRoom = false;
@@ -244,6 +253,7 @@ class _HomeShellState extends State<HomeShell> {
     _titleSearchController.removeListener(_handleTitleSearchChanged);
     _titleSearchController.dispose();
     _composerController.dispose();
+    _cancelActiveDownloads();
     _services.close();
     super.dispose();
   }

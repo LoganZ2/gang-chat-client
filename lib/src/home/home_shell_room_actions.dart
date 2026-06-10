@@ -53,6 +53,7 @@ extension _HomeShellRoomActions on _HomeShellState {
           _live = null;
           _messages = const [];
           _fileTransfers = const {};
+          _fileDownloads = const {};
           _contentMode = _ContentMode.chat;
           if (shouldDisconnectLive) {
             _joinedLiveRoomId = null;
@@ -89,6 +90,7 @@ extension _HomeShellRoomActions on _HomeShellState {
       _live = null;
       _messages = const [];
       _fileTransfers = const {};
+      _fileDownloads = const {};
       _stagedAttachments.clear();
       _roomError = null;
       _sendError = null;
@@ -239,6 +241,7 @@ extension _HomeShellRoomActions on _HomeShellState {
       _live = room.live;
       _messages = const [];
       _fileTransfers = const {};
+      _fileDownloads = const {};
       _settingsOpen = false;
       _contentMode = _ContentMode.chat;
       _roomError = null;
@@ -271,6 +274,7 @@ extension _HomeShellRoomActions on _HomeShellState {
         _live = null;
         _messages = const [];
         _fileTransfers = const {};
+        _fileDownloads = const {};
         _contentMode = _ContentMode.chat;
         _settingsOpen = false;
         _roomError = null;

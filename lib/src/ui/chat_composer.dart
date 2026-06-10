@@ -172,6 +172,7 @@ class _ChatComposerState extends State<ChatComposer> {
                       padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
                       child: _ComposerActionRow(
                         actions: widget.actions,
+                        openActionId: _openActionId,
                         onAction: _handleAction,
                       ),
                     ),
@@ -191,10 +192,12 @@ class _ChatComposerState extends State<ChatComposer> {
 class _ComposerActionRow extends StatelessWidget {
   const _ComposerActionRow({
     required this.actions,
+    required this.openActionId,
     required this.onAction,
   });
 
   final List<ComposerAction> actions;
+  final String? openActionId;
   final ValueChanged<ComposerAction> onAction;
 
   @override
@@ -214,12 +217,20 @@ class _ComposerActionRow extends StatelessWidget {
       children: [
         for (var index = 0; index < leading.length; index++) ...[
           if (index > 0) const SizedBox(width: 8),
-          _ComposerActionButton(action: leading[index], onAction: onAction),
+          _ComposerActionButton(
+            action: leading[index],
+            selected: leading[index].id == openActionId,
+            onAction: onAction,
+          ),
         ],
         const Spacer(),
         for (var index = 0; index < trailing.length; index++) ...[
           if (index > 0) const SizedBox(width: 8),
-          _ComposerActionButton(action: trailing[index], onAction: onAction),
+          _ComposerActionButton(
+            action: trailing[index],
+            selected: trailing[index].id == openActionId,
+            onAction: onAction,
+          ),
         ],
       ],
     );
@@ -227,9 +238,14 @@ class _ComposerActionRow extends StatelessWidget {
 }
 
 class _ComposerActionButton extends StatelessWidget {
-  const _ComposerActionButton({required this.action, required this.onAction});
+  const _ComposerActionButton({
+    required this.action,
+    required this.selected,
+    required this.onAction,
+  });
 
   final ComposerAction action;
+  final bool selected;
   final ValueChanged<ComposerAction> onAction;
 
   @override
@@ -238,6 +254,7 @@ class _ComposerActionButton extends StatelessWidget {
       tooltip: action.tooltip ?? action.label,
       icon: Icon(action.icon),
       tone: action.tone,
+      selected: selected,
       onPressed: () => onAction(action),
     );
   }

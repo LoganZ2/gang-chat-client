@@ -45,6 +45,8 @@ class ChatPane extends StatelessWidget {
     required this.live,
     required this.messages,
     required this.fileTransfers,
+    required this.fileDownloads,
+    required this.downloadActions,
     required this.loading,
     required this.error,
     required this.sending,
@@ -77,6 +79,8 @@ class ChatPane extends StatelessWidget {
   final LiveState? live;
   final List<Message> messages;
   final Map<String, FileTransferState> fileTransfers;
+  final Map<String, FileTransferState> fileDownloads;
+  final ChatFileDownloadActions downloadActions;
   final bool loading;
   final String? error;
   final bool sending;
@@ -144,6 +148,8 @@ class ChatPane extends StatelessWidget {
                 error: error,
                 messages: messages,
                 fileTransfers: fileTransfers,
+                fileDownloads: fileDownloads,
+                downloadActions: downloadActions,
                 onRetry: onRetry,
                 bottomInset: bottomInset,
                 onResolveSenderProfile: onResolveSenderProfile,

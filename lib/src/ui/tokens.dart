@@ -45,6 +45,7 @@ abstract final class UiTypography {
     color: UiColors.textSecondary,
     fontSize: 12,
     fontWeight: FontWeight.w700,
+    height: 1.35,
   );
 
   static const body = TextStyle(

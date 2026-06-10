@@ -114,6 +114,21 @@ extension _HomeShellLayout on _HomeShellState {
       live: _live,
       messages: _messages,
       fileTransfers: _fileTransfers,
+      fileDownloads: _fileDownloads,
+      downloadActions: ChatFileDownloadActions(
+        onDownload: (message, attachment, index, resolvedUrl) => unawaited(
+          _downloadAttachment(
+            message: message,
+            attachment: attachment,
+            index: index,
+            resolvedUrl: resolvedUrl,
+          ),
+        ),
+        onPause: _pauseDownload,
+        onResume: _resumeDownload,
+        onCancel: _cancelDownload,
+        onDismiss: _dismissDownload,
+      ),
       loading: _loadingRoom,
       error: _roomError,
       sending: _sending,

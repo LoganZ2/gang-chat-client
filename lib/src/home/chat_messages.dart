@@ -1,5 +1,33 @@
 part of 'chat_pane.dart';
 
+/// Callbacks for file-attachment downloads, bundled so they can travel from
+/// [ChatPane] down to each [_FileAttachmentTile] without threading five
+/// separate parameters through every intermediate widget.
+class ChatFileDownloadActions {
+  const ChatFileDownloadActions({
+    required this.onDownload,
+    required this.onPause,
+    required this.onResume,
+    required this.onCancel,
+    required this.onDismiss,
+  });
+
+  /// Start downloading [attachment] (the [index]th attachment of [message]).
+  /// [resolvedUrl] is the absolute asset URL, already resolved by the widget
+  /// layer against [AppConfig].
+  final void Function(
+    Message message,
+    MessageAttachment attachment,
+    int index,
+    String resolvedUrl,
+  )
+  onDownload;
+  final ValueChanged<String> onPause;
+  final ValueChanged<String> onResume;
+  final ValueChanged<String> onCancel;
+  final ValueChanged<String> onDismiss;
+}
+
 class _MessageStage extends StatelessWidget {
   const _MessageStage({
     required this.currentUserId,
@@ -8,6 +36,8 @@ class _MessageStage extends StatelessWidget {
     required this.error,
     required this.messages,
     required this.fileTransfers,
+    required this.fileDownloads,
+    required this.downloadActions,
     required this.onRetry,
     required this.bottomInset,
     this.onResolveSenderProfile,
@@ -19,6 +49,8 @@ class _MessageStage extends StatelessWidget {
   final String? error;
   final List<Message> messages;
   final Map<String, FileTransferState> fileTransfers;
+  final Map<String, FileTransferState> fileDownloads;
+  final ChatFileDownloadActions downloadActions;
   final VoidCallback onRetry;
   // Space reserved at the bottom of the list so the floating composer (which
   // grows with staged files and open panels) never traps the last messages.
@@ -76,6 +108,8 @@ class _MessageStage extends StatelessWidget {
           message: message,
           outgoing: message.sender.id == currentUserId,
           transfer: fileTransfers[message.clientMessageId],
+          fileDownloads: fileDownloads,
+          downloadActions: downloadActions,
           onResolveSenderProfile: onResolveSenderProfile,
         );
       },
@@ -88,12 +122,16 @@ class _MessageRow extends StatelessWidget {
     required this.message,
     required this.outgoing,
     required this.transfer,
+    required this.fileDownloads,
+    required this.downloadActions,
     this.onResolveSenderProfile,
   });
 
   final Message message;
   final bool outgoing;
   final FileTransferState? transfer;
+  final Map<String, FileTransferState> fileDownloads;
+  final ChatFileDownloadActions downloadActions;
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
 
@@ -106,6 +144,8 @@ class _MessageRow extends StatelessWidget {
           message: message,
           outgoing: outgoing,
           transfer: transfer,
+          fileDownloads: fileDownloads,
+          downloadActions: downloadActions,
         ),
       ),
     );
@@ -147,11 +187,15 @@ class _MessageBubble extends StatelessWidget {
     required this.message,
     required this.outgoing,
     required this.transfer,
+    required this.fileDownloads,
+    required this.downloadActions,
   });
 
   final Message message;
   final bool outgoing;
   final FileTransferState? transfer;
+  final Map<String, FileTransferState> fileDownloads;
+  final ChatFileDownloadActions downloadActions;
 
   @override
   Widget build(BuildContext context) {
@@ -202,7 +246,10 @@ class _MessageBubble extends StatelessWidget {
               ),
               message_display.MessageContentKind.files => _FileBody(
                 message: message,
+                outgoing: outgoing,
                 transfer: transfer,
+                fileDownloads: fileDownloads,
+                downloadActions: downloadActions,
               ),
               message_display.MessageContentKind.text => _TextBody(
                 body: message.body,
@@ -305,10 +352,19 @@ class _StickerFallback extends StatelessWidget {
 }
 
 class _FileBody extends StatelessWidget {
-  const _FileBody({required this.message, required this.transfer});
+  const _FileBody({
+    required this.message,
+    required this.outgoing,
+    required this.transfer,
+    required this.fileDownloads,
+    required this.downloadActions,
+  });
 
   final Message message;
+  final bool outgoing;
   final FileTransferState? transfer;
+  final Map<String, FileTransferState> fileDownloads;
+  final ChatFileDownloadActions downloadActions;
 
   @override
   Widget build(BuildContext context) {
@@ -324,8 +380,20 @@ class _FileBody extends StatelessWidget {
         for (var index = 0; index < attachments.length; index++) ...[
           if (index > 0) const SizedBox(height: 8),
           _FileAttachmentTile(
+            message: message,
+            outgoing: outgoing,
             attachment: attachments[index],
-            transfer: index == 0 ? transfer : null,
+            index: index,
+            // The outgoing upload transfer only ever applies to the first
+            // attachment; the slot helper resolves upload vs. download for us.
+            slot: file_display.fileAttachmentTransferSlot(
+              message: message,
+              attachment: attachments[index],
+              index: index,
+              uploadTransfer: transfer,
+              downloads: fileDownloads,
+            ),
+            downloadActions: downloadActions,
           ),
         ],
         if (showBody) ...[
@@ -338,30 +406,64 @@ class _FileBody extends StatelessWidget {
 }
 
 class _FileAttachmentTile extends StatelessWidget {
-  const _FileAttachmentTile({required this.attachment, required this.transfer});
+  const _FileAttachmentTile({
+    required this.message,
+    required this.outgoing,
+    required this.attachment,
+    required this.index,
+    required this.slot,
+    required this.downloadActions,
+  });
 
+  final Message message;
+  final bool outgoing;
   final MessageAttachment attachment;
-  final FileTransferState? transfer;
+  final int index;
+  final file_display.FileAttachmentTransferSlot slot;
+  final ChatFileDownloadActions downloadActions;
 
   @override
   Widget build(BuildContext context) {
     final asset = attachment.asset;
+    final transfer = slot.transfer;
     final title = file_display.fileAttachmentTitle(attachment);
     final meta = transfer == null
         ? file_display.fileAttachmentMeta(asset)
-        : file_display.fileTransferProgressState(transfer!).label;
+        : file_display.fileTransferProgressState(transfer).label;
     final progress = transfer == null
         ? null
-        : file_display.fileTransferProgressState(transfer!);
+        : file_display.fileTransferProgressState(transfer);
 
-    return DecoratedBox(
+    // Resolve the asset URL here, at the widget layer, so the download
+    // orchestration stays free of [AppConfig].
+    final resolvedUrl = AppConfigScope.of(context).resolveAssetUrl(asset?.url);
+    final interaction = file_display.fileAttachmentInteractionState(
+      title: title,
+      url: resolvedUrl,
+      transfer: transfer,
+    );
+    final trailing = file_display.fileAttachmentTrailingState(
+      transfer: transfer,
+      canDownload: interaction.canDownload,
+    );
+
+    void startDownload() {
+      final url = resolvedUrl;
+      if (url == null) return;
+      downloadActions.onDownload(message, attachment, index, url);
+    }
+
+    final tile = DecoratedBox(
       decoration: BoxDecoration(
-        color: UiColors.surfaceLow,
         borderRadius: BorderRadius.circular(UiRadii.md),
-        border: Border.all(color: UiColors.border),
+        // No fill; the outline matches the surrounding bubble so it reads on
+        // both the green outgoing bubble and the darker incoming one.
+        border: Border.all(
+          color: outgoing ? UiColors.accentBorder : UiColors.borderStrong,
+        ),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.fromLTRB(10, 10, 16, 10),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -414,10 +516,104 @@ class _FileAttachmentTile extends StatelessWidget {
                 ],
               ),
             ),
+            _FileAttachmentTrailing(
+              state: trailing,
+              downloadKey: slot.downloadKey,
+              actions: downloadActions,
+            ),
           ],
         ),
       ),
     );
+
+    // Tapping an idle, downloadable tile starts the download. While a transfer
+    // is in flight the trailing controls own the interaction instead.
+    if (trailing.kind != file_display.FileAttachmentTrailingKind.download) {
+      return tile;
+    }
+    return Tooltip(
+      message: interaction.tooltip,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: startDownload,
+          child: tile,
+        ),
+      ),
+    );
+  }
+}
+
+/// Trailing controls for a file tile. Renders purely from
+/// [file_display.FileAttachmentTrailingState]; the decision of which controls
+/// to show lives in `file_display.dart`, so this widget only paints them.
+class _FileAttachmentTrailing extends StatelessWidget {
+  const _FileAttachmentTrailing({
+    required this.state,
+    required this.downloadKey,
+    required this.actions,
+  });
+
+  final file_display.FileAttachmentTrailingState state;
+  final String downloadKey;
+  final ChatFileDownloadActions actions;
+
+  @override
+  Widget build(BuildContext context) {
+    switch (state.kind) {
+      // Idle/downloadable tiles carry no trailing control: tapping the tile
+      // itself starts the download.
+      case file_display.FileAttachmentTrailingKind.download:
+        return const SizedBox.shrink();
+      case file_display.FileAttachmentTrailingKind.activeTransfer:
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ButtonIcon(
+              icon: Icon(
+                state.pauseResumeIsResume
+                    ? Icons.play_arrow_rounded
+                    : Icons.pause_rounded,
+              ),
+              tooltip: state.pauseResumeTooltip ?? '',
+              size: 32,
+              onPressed: () => state.pauseResumeIsResume
+                  ? actions.onResume(downloadKey)
+                  : actions.onPause(downloadKey),
+            ),
+            const SizedBox(width: 4),
+            ButtonIcon(
+              icon: const Icon(Icons.close_rounded),
+              tooltip: state.cancelTooltip ?? '',
+              size: 32,
+              onPressed: () => actions.onCancel(downloadKey),
+            ),
+          ],
+        );
+      case file_display.FileAttachmentTrailingKind.failed:
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (state.showDismiss)
+              ButtonIcon(
+                icon: const Icon(Icons.close_rounded),
+                tooltip: '清除',
+                size: 32,
+                onPressed: () => actions.onDismiss(downloadKey),
+              ),
+          ],
+        );
+      case file_display.FileAttachmentTrailingKind.sending:
+        return const SizedBox.square(
+          dimension: 18,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: UiColors.accent,
+          ),
+        );
+      case file_display.FileAttachmentTrailingKind.placeholder:
+        return const SizedBox.shrink();
+    }
   }
 }
 
