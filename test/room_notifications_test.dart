@@ -273,6 +273,62 @@ void main() {
     expect(roomApplicationReviewActionLabel(approved), '批准了您的申请');
     expect(roomApplicationReviewActionLabel(rejected), '拒绝了您的申请');
   });
+
+  test('room invite application gate follows inviter role', () {
+    expect(
+      roomInviteAcceptRequiresApplication(
+        _invite(
+          'member',
+          joinPolicy: 'approval_required',
+          inviter: _user('member', roomRole: 'member'),
+        ),
+      ),
+      isTrue,
+    );
+    expect(
+      roomInviteAcceptRequiresApplication(
+        _invite(
+          'admin',
+          joinPolicy: 'approval_required',
+          inviter: _user('admin', roomRole: 'admin'),
+        ),
+      ),
+      isFalse,
+    );
+    final memberInvite = _invite(
+      'member-related',
+      roomId: 'room_shared',
+      joinPolicy: 'approval_required',
+      inviter: _user('member', roomRole: 'member'),
+    );
+    final adminInvite = _invite(
+      'admin-related',
+      roomId: 'room_shared',
+      joinPolicy: 'approval_required',
+      inviter: _user('admin', roomRole: 'admin'),
+    );
+    expect(
+      roomInviteAcceptRequiresApplication(
+        memberInvite,
+        roomInvites: [memberInvite, adminInvite],
+      ),
+      isFalse,
+    );
+    expect(
+      roomInviteAcceptRequiresApplication(
+        _invite(
+          'super',
+          joinPolicy: 'approval_required',
+          inviter: _user('super', roomRole: 'superuser', isSuperuser: true),
+        ),
+      ),
+      isFalse,
+    );
+    expect(
+      roomInviteAcceptRequiresApplication(_invite('open', joinPolicy: 'open')),
+      isFalse,
+    );
+  });
 }
 
 RoomInvite _invite(
@@ -281,6 +337,8 @@ RoomInvite _invite(
   DateTime? createdAt,
   String roomName = 'Invite Room',
   String roomRid = 'R-1',
+  String? roomId,
+  String joinPolicy = 'closed',
   UserSummary? inviter,
   bool roomExists = true,
   String? invalidReason,
@@ -289,13 +347,13 @@ RoomInvite _invite(
     id: id,
     status: status,
     room: PublicRoom(
-      id: 'room_$id',
+      id: roomId ?? 'room_$id',
       rid: roomRid,
       name: roomName,
       avatarUrl: null,
       defaultAvatarKey: 'room-1',
       visibility: 'private',
-      joinPolicy: 'closed',
+      joinPolicy: joinPolicy,
       memberCount: 3,
       onlineMemberCount: 1,
       liveParticipantCount: 0,
@@ -350,6 +408,7 @@ UserSummary _user(
   String? displayName,
   String? roomRole,
   String? roomDisplayName,
+  bool isSuperuser = false,
   List<UserCommonRoom> commonRooms = const [],
 }) {
   return UserSummary(
@@ -361,6 +420,7 @@ UserSummary _user(
     defaultAvatarKey: 'blue-3',
     roomRole: roomRole,
     roomDisplayName: roomDisplayName,
+    isSuperuser: isSuperuser,
     commonRooms: commonRooms,
   );
 }

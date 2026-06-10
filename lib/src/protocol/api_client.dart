@@ -228,7 +228,7 @@ abstract interface class GangApi {
 
   Future<GlobalSearchResults> search({required String query, int limit = 8});
 
-  Future<JoinRoomResult> joinRoom(String roomId);
+  Future<JoinRoomResult> joinRoom(String roomId, {String? reason});
 
   Future<RoomMemberPage> listRoomMembers(
     String roomId, {
@@ -251,6 +251,7 @@ abstract interface class GangApi {
   Future<JoinRoomResult> reviewRoomInvite({
     required String inviteId,
     required bool accept,
+    String? reason,
   });
 
   Future<List<RoomApplication>> listRoomApplications({
@@ -989,11 +990,17 @@ class GangApiClient implements GangApi {
   }
 
   @override
-  Future<JoinRoomResult> joinRoom(String roomId) async {
+  Future<JoinRoomResult> joinRoom(String roomId, {String? reason}) async {
+    final body = <String, Object?>{};
+    final trimmedReason = reason?.trim();
+    if (trimmedReason != null && trimmedReason.isNotEmpty) {
+      body['reason'] = trimmedReason;
+    }
     final decoded = await _sendJson((token) {
       return _httpClient.post(
         _uri('/rooms/$roomId/join'),
         headers: _headers(token, idempotencyKey: newUuid()),
+        body: body.isEmpty ? null : encodeJsonBody(body),
       );
     });
     final roomJson = decoded['room'] as Map<String, Object?>?;
@@ -1070,12 +1077,18 @@ class GangApiClient implements GangApi {
   Future<JoinRoomResult> reviewRoomInvite({
     required String inviteId,
     required bool accept,
+    String? reason,
   }) async {
+    final body = <String, Object?>{'decision': accept ? 'accept' : 'reject'};
+    final trimmedReason = reason?.trim();
+    if (trimmedReason != null && trimmedReason.isNotEmpty) {
+      body['reason'] = trimmedReason;
+    }
     final decoded = await _sendJson((token) {
       return _httpClient.patch(
         _uri('/room-invites/$inviteId'),
         headers: _headers(token),
-        body: encodeJsonBody({'decision': accept ? 'accept' : 'reject'}),
+        body: encodeJsonBody(body),
       );
     });
     final roomJson = decoded['room'] as Map<String, Object?>?;

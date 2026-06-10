@@ -581,6 +581,41 @@ void main() {
     api.close();
   });
 
+  test('joinRoom posts an optional application reason', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/v1/rooms/room_1/join');
+        expect(request.headers['authorization'], 'Bearer token');
+        expect(request.headers['idempotency-key'], isNotEmpty);
+        expect(
+          jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>,
+          {'reason': 'Let me in'},
+        );
+
+        return http.Response(
+          jsonEncode({
+            'join_request': {
+              'id': 'jrq_1',
+              'room_id': 'room_1',
+              'status': 'pending',
+              'reason': 'Let me in',
+              'created_at': '2026-01-01T00:00:00Z',
+            },
+          }),
+          202,
+        );
+      }),
+    );
+
+    final result = await api.joinRoom('room_1', reason: '  Let me in  ');
+
+    expect(result.pending, isTrue);
+    api.close();
+  });
+
   test(
     'listRoomInvites requests pending invites for the current user',
     () async {
@@ -693,6 +728,10 @@ void main() {
         httpClient: MockClient((request) async {
           expect(request.method, 'PATCH');
           expect(request.url.path, '/api/v1/room-invites/rinv_1');
+          expect(
+            jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>,
+            {'decision': 'accept', 'reason': 'Let me in'},
+          );
 
           return http.Response(
             jsonEncode({
@@ -713,6 +752,7 @@ void main() {
       final result = await api.reviewRoomInvite(
         inviteId: 'rinv_1',
         accept: true,
+        reason: '  Let me in  ',
       );
 
       expect(result.joined, isFalse);
@@ -735,7 +775,9 @@ void main() {
 
           return http.Response(
             jsonEncode({
-              'applications': [_roomApplicationJson(status: 'approved')],
+              'applications': [
+                _roomApplicationJson(status: 'approved', reason: 'Hi team'),
+              ],
               'next_cursor': null,
             }),
             200,
@@ -750,6 +792,7 @@ void main() {
       expect(applications.single.room.name, 'Invite Room');
       expect(applications.single.reviewer?.roomRole, 'owner');
       expect(applications.single.reviewedAt, isNotNull);
+      expect(applications.single.reason, 'Hi team');
       api.close();
     },
   );
@@ -2033,11 +2076,15 @@ Map<String, Object?> _roomInviteJson({
   };
 }
 
-Map<String, Object?> _roomApplicationJson({String status = 'pending'}) {
+Map<String, Object?> _roomApplicationJson({
+  String status = 'pending',
+  String reason = '',
+}) {
   final reviewed = status == 'approved' || status == 'rejected';
   return {
     'id': 'jrq_1',
     'status': status,
+    'reason': reason,
     'created_at': '2026-05-30T13:00:00Z',
     'updated_at': '2026-05-31T13:00:00Z',
     'reviewed_at': reviewed ? '2026-05-31T13:00:00Z' : null,

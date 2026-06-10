@@ -288,6 +288,17 @@ void main() {
     expect(find.text('公开房间 1'), findsWidgets);
     expect(find.text('聊天记录 1'), findsWidgets);
     expect(find.text('聊天文件 1'), findsWidgets);
+    expect(
+      find.byKey(const ValueKey('public-room-action-server-public')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('public-room-action-server-public')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(requestedPaths, contains('/api/v1/rooms/server-public/join'));
 
     await tester.tap(find.text('我的房间 1').first);
     await tester.pumpAndSettle();
@@ -376,6 +387,14 @@ void main() {
       await tester.tap(find.byTooltip('通知'));
       await tester.pumpAndSettle();
 
+      expect(
+        tester
+            .widget<ui.ButtonIcon>(
+              find.byKey(const ValueKey('home-sidebar-notifications-button')),
+            )
+            .selected,
+        isTrue,
+      );
       expect(find.text('通知'), findsOneWidget);
       expect(find.text('全部'), findsOneWidget);
       expect(find.text('邀请'), findsOneWidget);
@@ -392,8 +411,8 @@ void main() {
       expect(find.text('已失效'), findsOneWidget);
       expect(find.text('您已申请加入'), findsAtLeastNWidgets(1));
       expect(find.text('批准了您的申请'), findsOneWidget);
-      expect(find.textContaining('Morgan Admin'), findsOneWidget);
-      expect(find.textContaining('管理员'), findsOneWidget);
+      expect(find.textContaining('Morgan Member'), findsOneWidget);
+      expect(find.textContaining('成员'), findsWidgets);
       expect(
         find.byKey(const ValueKey('notification-inviter-avatar-invite-alpha')),
         findsOneWidget,
@@ -462,6 +481,12 @@ void main() {
       );
 
       await tester.tap(find.byTooltip('接受邀请'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('申请加入'), findsOneWidget);
+      expect(find.text('您需要等待'), findsOneWidget);
+      await tester.enterText(_textFieldWithHint('申请说明'), 'I was invited');
+      await tester.tap(find.widgetWithText(ui.Button, '发送申请'));
       await tester.pumpAndSettle();
 
       expect(
@@ -617,6 +642,7 @@ void main() {
 
     expect(find.text('成员'), findsAtLeastNWidgets(1));
     expect(find.text('邀请成员'), findsOneWidget);
+    expect(find.text('申请说明：Please approve my request'), findsOneWidget);
     expect(find.text('Kai'), findsWidgets);
     expect(find.text('Morgan'), findsWidgets);
     expect(requestedPaths, contains('/api/v1/rooms/server-alpha/members'));
@@ -638,6 +664,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(requestedPaths, contains('/api/v1/rooms/server-alpha/invites'));
+    expect(find.widgetWithText(ui.Button, '已邀请'), findsOneWidget);
 
     await tester.tap(find.byTooltip('返回').last);
     await tester.pumpAndSettle();
@@ -2658,6 +2685,20 @@ GangApi _roomsApi({
           ],
         });
       }
+      if (request.url.path == '/api/v1/rooms/server-public/join') {
+        return _jsonResponse({
+          'room': _roomDetailJson(
+            id: 'server-public',
+            name: 'Beta Public',
+            memberCount: 3,
+            onlineMemberCount: 1,
+            liveParticipantCount: 0,
+            visibility: 'public',
+            joinPolicy: 'open',
+            role: 'member',
+          ),
+        });
+      }
       if (request.url.path == '/api/v1/users/me/account') {
         final body =
             jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>;
@@ -2717,6 +2758,7 @@ GangApi _roomsApi({
           'requests': [
             _joinRequestJson(
               id: 'join-request-riley',
+              reason: 'Please approve my request',
               user: _userJson(
                 id: 'user-3',
                 username: 'riley',
@@ -2750,11 +2792,14 @@ GangApi _roomsApi({
         return _jsonResponse({
           'invites': [
             _roomInviteJson(
+              joinPolicy: 'approval_required',
               inviter: _userJson(
                 id: 'user-2',
                 username: 'morgan',
                 displayName: 'Morgan',
               ),
+              inviterRoomRole: 'member',
+              inviterRoomDisplayName: 'Morgan Member',
             ),
             _roomInviteJson(
               id: 'invite-invalid',
@@ -2804,14 +2849,13 @@ GangApi _roomsApi({
         return _jsonResponse({
           'ok': true,
           'invite': _roomInviteJson(status: 'accepted'),
-          'room': _roomDetailJson(
-            id: 'server-alpha',
-            name: 'Alpha Room',
-            memberCount: 2,
-            onlineMemberCount: 1,
-            liveParticipantCount: 1,
-            role: 'member',
-          ),
+          'join_request': {
+            'id': 'join-request-alpha',
+            'room_id': 'server-alpha',
+            'status': 'pending',
+            'reason': 'I was invited',
+            'created_at': '2026-06-05T08:00:00Z',
+          },
         });
       }
       if (request.url.path == '/api/v1/rooms/server-alpha/messages') {
@@ -3074,13 +3118,16 @@ Map<String, Object?> _roomMemberJson({
 Map<String, Object?> _joinRequestJson({
   required String id,
   required Map<String, Object?> user,
+  String? reason,
 }) {
-  return {
+  final json = <String, Object?>{
     'id': id,
     'status': 'pending',
     'user': user,
     'created_at': '2026-06-05T08:00:00Z',
   };
+  if (reason != null) json['reason'] = reason;
+  return json;
 }
 
 Map<String, Object?> _userJson({
@@ -3144,6 +3191,7 @@ Map<String, Object?> _roomInviteJson({
   Map<String, Object?>? inviter,
   String inviterRoomRole = 'admin',
   String inviterRoomDisplayName = 'Morgan Admin',
+  String joinPolicy = 'closed',
   bool roomExists = true,
   String? invalidReason,
 }) {
@@ -3159,7 +3207,7 @@ Map<String, Object?> _roomInviteJson({
         memberCount: 2,
         liveParticipantCount: 1,
       ),
-      'join_policy': 'closed',
+      'join_policy': joinPolicy,
       'joined': false,
       'join_state': 'none',
     },

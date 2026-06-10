@@ -193,6 +193,7 @@ class _InviteSection extends StatelessWidget {
     required this.searching,
     required this.results,
     required this.members,
+    required this.pendingInviteUserIds,
     required this.busyUserIds,
     required this.error,
     required this.enabled,
@@ -204,6 +205,7 @@ class _InviteSection extends StatelessWidget {
   final bool searching;
   final List<UserSummary> results;
   final List<RoomMember> members;
+  final Set<String> pendingInviteUserIds;
   final Set<String> busyUserIds;
   final String? error;
   final bool enabled;
@@ -211,7 +213,14 @@ class _InviteSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final memberIds = members.map((member) => member.user.id).toSet();
+    final candidates = room_invites.roomInviteCandidates(
+      searchResults: results,
+      members: members,
+      query: query,
+      pendingInviteUserIds: pendingInviteUserIds,
+      busyUserIds: busyUserIds,
+      invitesEnabled: enabled,
+    );
     return SettingsCard(
       title: '邀请成员',
       children: [
@@ -237,21 +246,23 @@ class _InviteSection extends StatelessWidget {
               ),
             ] else if (enabled && query.length >= 2) ...[
               const SizedBox(height: 8),
-              if (results.isEmpty)
+              if (candidates.isEmpty)
                 Text(
                   '未找到用户',
                   style: UiTypography.label.copyWith(color: UiColors.textMuted),
                 )
               else
-                for (final user in results.take(4)) ...[
+                for (final candidate in candidates.take(4)) ...[
                   _InviteUserRow(
-                    user: user,
-                    alreadyMember: memberIds.contains(user.id),
-                    busy: busyUserIds.contains(user.id),
+                    user: candidate.user,
+                    alreadyMember: candidate.existing,
+                    pending: candidate.pending,
+                    busy: candidate.busy,
                     enabled: enabled,
-                    onInvite: () => onInvite(user),
+                    onInvite: () => onInvite(candidate.user),
                   ),
-                  if (user != results.take(4).last) const SizedBox(height: 6),
+                  if (candidate != candidates.take(4).last)
+                    const SizedBox(height: 6),
                 ],
             ],
           ],
@@ -265,6 +276,7 @@ class _InviteUserRow extends StatelessWidget {
   const _InviteUserRow({
     required this.user,
     required this.alreadyMember,
+    required this.pending,
     required this.busy,
     required this.enabled,
     required this.onInvite,
@@ -272,12 +284,14 @@ class _InviteUserRow extends StatelessWidget {
 
   final UserSummary user;
   final bool alreadyMember;
+  final bool pending;
   final bool busy;
   final bool enabled;
   final VoidCallback onInvite;
 
   @override
   Widget build(BuildContext context) {
+    final actionLabel = alreadyMember ? '成员' : (pending ? '已邀请' : '邀请');
     return _RowSurface(
       compact: true,
       child: Row(
@@ -302,8 +316,8 @@ class _InviteUserRow extends StatelessWidget {
           Button(
             height: 34,
             loading: busy,
-            onPressed: !enabled || alreadyMember ? null : onInvite,
-            child: Text(alreadyMember ? '成员' : '邀请'),
+            onPressed: !enabled || alreadyMember || pending ? null : onInvite,
+            child: Text(actionLabel),
           ),
         ],
       ),
@@ -394,11 +408,34 @@ class _JoinRequestRow extends StatelessWidget {
           ),
           const SizedBox(width: 9),
           Expanded(
-            child: Text(
-              '${room_display.userPrimaryName(request.user)} · @${request.user.username}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: UiTypography.label.copyWith(fontWeight: FontWeight.w900),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${room_display.userPrimaryName(request.user)} · @${request.user.username}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: UiTypography.label.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                if (room_join_requests.joinRequestReasonText(request)
+                    case final reason?) ...[
+                  const SizedBox(height: 3),
+                  Tooltip(
+                    message: reason,
+                    child: Text(
+                      '申请说明：$reason',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: UiTypography.label.copyWith(
+                        color: UiColors.textMuted,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
           if (busy)

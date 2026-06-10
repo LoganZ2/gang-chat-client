@@ -228,6 +228,7 @@ class _NotificationFooterButton extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           ButtonIcon(
+            key: const ValueKey('home-sidebar-notifications-button'),
             tooltip: '通知',
             icon: const Icon(Icons.notifications_none),
             selected: selected,

@@ -116,6 +116,32 @@ bool canWithdrawNotificationApplication({
   return isPendingRoomApplication(application) && busyApplicationId == null;
 }
 
+bool roomInviteAcceptRequiresApplication(
+  RoomInvite invite, {
+  Iterable<RoomInvite> roomInvites = const [],
+}) {
+  if (invite.room.joinPolicy != 'approval_required') return false;
+  final relatedInvites = [
+    invite,
+    for (final other in roomInvites)
+      if (other.id != invite.id &&
+          other.room.id == invite.room.id &&
+          isPendingRoomInvite(other) &&
+          !isInvalidPendingRoomInvite(other))
+        other,
+  ];
+  return !relatedInvites.any((item) => _isPrivilegedInviter(item.inviter));
+}
+
+bool _isPrivilegedInviter(UserSummary inviter) {
+  if (inviter.isSuperuser) return true;
+  final role = inviter.roomRole?.trim().toLowerCase();
+  return switch (role) {
+    'owner' || 'creator' || 'admin' || 'administrator' || 'superuser' => true,
+    _ => false,
+  };
+}
+
 int pendingRoomInviteCount(Iterable<RoomInvite> invites) {
   return invites.where((invite) {
     return isPendingRoomInvite(invite) && !isInvalidPendingRoomInvite(invite);
@@ -304,6 +330,7 @@ String _roomApplicationSearchText(RoomApplication application) {
   _addRoomSearchValues(values, application.room);
   _addSearchValue(values, application.id);
   _addSearchValue(values, application.status);
+  _addSearchValue(values, application.reason);
   _addSearchValue(values, roomApplicationStatusLabel(application));
   _addSearchValue(values, roomApplicationReviewActionLabel(application));
   _addSearchValue(values, roomInviteTimestampLabel(application.createdAt));

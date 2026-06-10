@@ -302,10 +302,30 @@ void main() {
         _publicRoom(joinPolicy: 'approval_required'),
         pending: false,
       ),
-      '申请',
+      '加入',
+    );
+    expect(
+      publicRoomJoinActionLabel(
+        _publicRoom(joinPolicy: 'closed'),
+        pending: false,
+      ),
+      '不可加入',
     );
     expect(publicRoomJoinActionLabel(_publicRoom(), pending: false), '加入');
     expect(publicRoomJoinActionable(_publicRoom(), pending: true), isFalse);
+    expect(
+      publicRoomJoinActionable(
+        _publicRoom(joinPolicy: 'closed'),
+        pending: false,
+      ),
+      isFalse,
+    );
+    expect(
+      publicRoomJoinRequiresApplication(
+        _publicRoom(joinPolicy: 'approval_required'),
+      ),
+      isTrue,
+    );
     expect(
       publicRoomJoinActionable(_publicRoom(joined: true), pending: true),
       isTrue,

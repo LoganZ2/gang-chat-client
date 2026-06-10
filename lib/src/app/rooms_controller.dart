@@ -782,8 +782,8 @@ class RoomsController {
     return api.searchRooms(query: query);
   }
 
-  Future<JoinRoomResult> joinRoom(String roomId) {
-    return api.joinRoom(roomId);
+  Future<JoinRoomResult> joinRoom(String roomId, {String? reason}) {
+    return api.joinRoom(roomId, reason: reason);
   }
 
   Future<List<RoomInvite>> listRoomInvites({String status = 'pending'}) {
@@ -886,8 +886,13 @@ class RoomsController {
   Future<JoinRoomResult> reviewRoomInvite({
     required String inviteId,
     required bool accept,
+    String? reason,
   }) {
-    return api.reviewRoomInvite(inviteId: inviteId, accept: accept);
+    return api.reviewRoomInvite(
+      inviteId: inviteId,
+      accept: accept,
+      reason: reason,
+    );
   }
 
   Future<RoomApplication> withdrawRoomApplication({required String requestId}) {

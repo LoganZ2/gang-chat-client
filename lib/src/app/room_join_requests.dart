@@ -55,6 +55,12 @@ String joinRequestUserMeta(JoinRequest request) {
   return userIdentityMeta(request.user);
 }
 
+String? joinRequestReasonText(JoinRequest request) {
+  final reason = request.reason.trim();
+  if (reason.isEmpty) return null;
+  return reason;
+}
+
 bool canStartJoinRequestReview({
   required String requestId,
   Iterable<String> busyRequestIds = const [],

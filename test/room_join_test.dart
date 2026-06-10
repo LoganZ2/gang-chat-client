@@ -60,6 +60,11 @@ void main() {
     );
   });
 
+  test('joinRequestReasonValue trims optional application text', () {
+    expect(joinRequestReasonValue('  hello team  '), 'hello team');
+    expect(joinRequestReasonValue('   '), isNull);
+  });
+
   test(
     'join dialog search and invite list patches preserve state semantics',
     () {

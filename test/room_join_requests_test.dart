@@ -29,6 +29,17 @@ void main() {
     expect(canStartJoinRequestReview(requestId: 'idle'), isTrue);
   });
 
+  test('joinRequestReasonText returns trimmed reason only when present', () {
+    expect(
+      joinRequestReasonText(_request('with_reason', reason: '  hello  ')),
+      'hello',
+    );
+    expect(
+      joinRequestReasonText(_request('blank_reason', reason: '  ')),
+      isNull,
+    );
+  });
+
   test('join request badge refresh gate follows room and permission', () {
     expect(
       shouldRefreshJoinRequestBadgeForEvent(
@@ -169,10 +180,11 @@ void main() {
   });
 }
 
-JoinRequest _request(String id, {UserSummary? user}) {
+JoinRequest _request(String id, {UserSummary? user, String reason = ''}) {
   return JoinRequest(
     id: id,
     status: 'pending',
+    reason: reason,
     user: user ?? _user('user_$id'),
     createdAt: DateTime.utc(2026, 6, 5),
   );

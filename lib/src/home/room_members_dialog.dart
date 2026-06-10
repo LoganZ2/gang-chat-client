@@ -30,6 +30,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
   final _busyRequestIds = <String>{};
   final _busyMemberIds = <String>{};
   final _busyInviteUserIds = <String>{};
+  final _pendingInviteUserIds = <String>{};
 
   Timer? _inviteSearchDebounce;
   int _inviteSearchSeq = 0;
@@ -178,6 +179,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
   Future<void> _invite(UserSummary user) async {
     if (!_canInviteMembers) return;
     if (_busyInviteUserIds.contains(user.id)) return;
+    if (_pendingInviteUserIds.contains(user.id)) return;
     if (_members.any((member) => member.user.id == user.id)) return;
     setState(() {
       _busyInviteUserIds.add(user.id);
@@ -189,6 +191,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       if (!mounted) return;
       setState(() {
         _busyInviteUserIds.remove(user.id);
+        _pendingInviteUserIds.add(user.id);
         _changed = true;
         _notice = '邀请已发送';
       });
@@ -352,6 +355,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
             searching: _searchingInvites,
             results: _inviteResults,
             members: _members,
+            pendingInviteUserIds: _pendingInviteUserIds,
             busyUserIds: _busyInviteUserIds,
             error: _inviteError,
             enabled: _canInviteMembers,

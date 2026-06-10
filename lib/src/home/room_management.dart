@@ -7,6 +7,7 @@ import '../app/account_display.dart' as account_display;
 import '../app/room_display.dart' as room_display;
 import '../app/room_forms.dart' as room_forms;
 import '../app/room_invites.dart' as room_invites;
+import '../app/room_join_requests.dart' as room_join_requests;
 import '../app/room_members_filter.dart' as member_filter;
 import '../app/rooms_controller.dart';
 import '../app/sticker_management.dart';

@@ -80,6 +80,17 @@ extension _HomeShellNotifications on _HomeShellState {
       return;
     }
 
+    String? reason;
+    if (accept &&
+        room_notifications.roomInviteAcceptRequiresApplication(
+          invite,
+          roomInvites: _notificationInvites,
+        )) {
+      final rawReason = await _showJoinApplicationDialog(invite.room);
+      if (rawReason == null || !mounted) return;
+      reason = room_join.joinRequestReasonValue(rawReason);
+    }
+
     _setHomeState(() {
       _busyNotificationInviteId = invite.id;
       _notificationError = null;
@@ -89,6 +100,7 @@ extension _HomeShellNotifications on _HomeShellState {
       final result = await _roomsController.reviewRoomInvite(
         inviteId: invite.id,
         accept: accept,
+        reason: reason,
       );
       if (!mounted) return;
       _setHomeState(() {

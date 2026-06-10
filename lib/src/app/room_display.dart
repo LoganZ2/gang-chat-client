@@ -313,12 +313,18 @@ String? roomRoleLabelFromValue(String? value) {
 String publicRoomJoinActionLabel(PublicRoom room, {required bool pending}) {
   if (room.joined) return '进入';
   if (pending) return '待审批';
-  if (room.joinPolicy == 'approval_required') return '申请';
+  if (room.joinPolicy == 'closed') return '不可加入';
   return '加入';
 }
 
 bool publicRoomJoinActionable(PublicRoom room, {required bool pending}) {
-  return room.joined || !pending;
+  if (room.joined) return true;
+  if (pending) return false;
+  return room.joinPolicy != 'closed';
+}
+
+bool publicRoomJoinRequiresApplication(PublicRoom room) {
+  return !room.joined && room.joinPolicy == 'approval_required';
 }
 
 RoomAccessState roomAccessState({

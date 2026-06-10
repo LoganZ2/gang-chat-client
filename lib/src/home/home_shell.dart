@@ -18,6 +18,7 @@ import '../app/message_display.dart' as message_display;
 import '../app/messages_controller.dart';
 import '../app/realtime_controller.dart';
 import '../app/room_display.dart' as room_display;
+import '../app/room_join.dart' as room_join;
 import '../app/room_notifications.dart' as room_notifications;
 import '../app/rooms_controller.dart';
 import '../app/search_display.dart' as search_display;
@@ -47,6 +48,7 @@ part 'home_shell_notifications.dart';
 part 'home_shell_search.dart';
 part 'home_shell_layout.dart';
 part 'home_shell_title_bar.dart';
+part 'home_shell_join_dialog.dart';
 
 const _windowEdgeBorder = Color(0xFF303842);
 
@@ -133,6 +135,8 @@ class _HomeShellState extends State<HomeShell> {
   String? _searchError;
   GlobalSearchResults? _searchResults;
   search_display.GlobalSearchCategory? _activeSearchCategory;
+  String? _busySearchPublicRoomId;
+  Set<String> _searchPendingPublicRoomIds = const {};
 
   RoomsController get _roomsController => _services.rooms;
   MessagesController get _messagesController => _services.messages;
@@ -210,6 +214,8 @@ class _HomeShellState extends State<HomeShell> {
       _searchError = null;
       _searchResults = null;
       _activeSearchCategory = null;
+      _busySearchPublicRoomId = null;
+      _searchPendingPublicRoomIds = const {};
     });
     unawaited(_loadServers());
     unawaited(_refreshPendingRoomInviteBadge());
@@ -319,8 +325,12 @@ class _HomeShellState extends State<HomeShell> {
                       loading: _searching,
                       error: _searchError,
                       activeCategory: _activeSearchCategory,
+                      busyPublicRoomId: _busySearchPublicRoomId,
+                      pendingPublicRoomIds: _searchPendingPublicRoomIds,
                       onCategorySelected: _selectSearchCategory,
                       onMyRoomSelected: _openSearchRoom,
+                      onPublicRoomAction: (room) =>
+                          unawaited(_handlePublicRoomSearchAction(room)),
                       onMessageSelected: _openMessageSearchResult,
                       onFileSelected: _openMessageSearchResult,
                     ),

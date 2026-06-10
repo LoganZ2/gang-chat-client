@@ -329,8 +329,11 @@ class _TitleSearchResultsPanel extends StatelessWidget {
     required this.loading,
     required this.error,
     required this.activeCategory,
+    required this.busyPublicRoomId,
+    required this.pendingPublicRoomIds,
     required this.onCategorySelected,
     required this.onMyRoomSelected,
+    required this.onPublicRoomAction,
     required this.onMessageSelected,
     required this.onFileSelected,
   });
@@ -340,8 +343,11 @@ class _TitleSearchResultsPanel extends StatelessWidget {
   final bool loading;
   final String? error;
   final search_display.GlobalSearchCategory? activeCategory;
+  final String? busyPublicRoomId;
+  final Set<String> pendingPublicRoomIds;
   final ValueChanged<search_display.GlobalSearchCategory> onCategorySelected;
   final ValueChanged<RoomCard> onMyRoomSelected;
+  final ValueChanged<PublicRoom> onPublicRoomAction;
   final ValueChanged<MessageSearchResult> onMessageSelected;
   final ValueChanged<MessageSearchResult> onFileSelected;
 
@@ -464,14 +470,25 @@ class _TitleSearchResultsPanel extends StatelessWidget {
             )
             .toList(),
       search_display.GlobalSearchCategory.publicRooms =>
-        snapshot.publicRooms
+        room_join
+            .publicRoomJoinCandidates(
+              rooms: snapshot.publicRooms,
+              pendingRoomIds: pendingPublicRoomIds,
+              busyRoomId: busyPublicRoomId,
+            )
             .map(
-              (room) => _RoomSearchResultTile(
-                title: room.name,
-                subtitle: _publicRoomSearchMeta(room),
-                avatarUrl: room.avatarUrl,
-                defaultAvatarKey: room.defaultAvatarKey,
-                onPressed: null,
+              (candidate) => _RoomSearchResultTile(
+                title: candidate.room.name,
+                subtitle: _publicRoomSearchMeta(candidate.room),
+                avatarUrl: candidate.room.avatarUrl,
+                defaultAvatarKey: candidate.room.defaultAvatarKey,
+                onPressed: candidate.actionEnabled
+                    ? () => onPublicRoomAction(candidate.room)
+                    : null,
+                trailing: _PublicRoomJoinActivity(
+                  candidate: candidate,
+                  onPressed: onPublicRoomAction,
+                ),
               ),
             )
             .toList(),
@@ -659,6 +676,7 @@ class _RoomSearchResultTile extends StatelessWidget {
     required this.avatarUrl,
     required this.defaultAvatarKey,
     required this.onPressed,
+    this.trailing,
   });
 
   final String title;
@@ -666,6 +684,7 @@ class _RoomSearchResultTile extends StatelessWidget {
   final String? avatarUrl;
   final String defaultAvatarKey;
   final VoidCallback? onPressed;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -679,6 +698,36 @@ class _RoomSearchResultTile extends StatelessWidget {
       ),
       title: title,
       subtitle: subtitle,
+      trailing: trailing,
+    );
+  }
+}
+
+class _PublicRoomJoinActivity extends StatelessWidget {
+  const _PublicRoomJoinActivity({
+    required this.candidate,
+    required this.onPressed,
+  });
+
+  final room_join.PublicRoomJoinCandidate candidate;
+  final ValueChanged<PublicRoom> onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final room = candidate.room;
+    return Button(
+      key: ValueKey('public-room-action-${room.id}'),
+      height: 30,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      tone: candidate.actionable ? ButtonTone.primary : ButtonTone.neutral,
+      loading: candidate.busy,
+      onPressed: candidate.actionEnabled ? () => onPressed(room) : null,
+      child: Text(
+        room_display.publicRoomJoinActionLabel(
+          room,
+          pending: candidate.pending,
+        ),
+      ),
     );
   }
 }
@@ -859,8 +908,6 @@ String _publicRoomSearchMeta(PublicRoom room) {
   final trimmedRid = room.rid.trim();
   if (trimmedRid.isNotEmpty) parts.add(trimmedRid);
   parts.add('${room.memberCount} 名成员');
-  if (room.joinPolicy == 'approval_required') parts.add('需要审核');
-  if (room.joinPolicy == 'open') parts.add('可加入');
   return parts.join(' - ');
 }
 

@@ -88,6 +88,12 @@ bool canStartRoomInviteDecision({
   return busyInviteId == null && busyRoomId == null;
 }
 
+String? joinRequestReasonValue(String rawReason) {
+  final reason = rawReason.trim();
+  if (reason.isEmpty) return null;
+  return reason;
+}
+
 String publicRoomJoinSubtitle(PublicRoom room) {
   final rid = room.rid.trim();
   if (rid.isEmpty) return '${room.memberCount} 名成员';

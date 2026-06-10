@@ -676,6 +676,29 @@ class PublicRoom {
       joinState: json['join_state'] as String? ?? 'none',
     );
   }
+
+  PublicRoom copyWith({
+    bool? joined,
+    String? joinState,
+    int? memberCount,
+    int? onlineMemberCount,
+    int? liveParticipantCount,
+  }) {
+    return PublicRoom(
+      id: id,
+      rid: rid,
+      name: name,
+      avatarUrl: avatarUrl,
+      defaultAvatarKey: defaultAvatarKey,
+      visibility: visibility,
+      joinPolicy: joinPolicy,
+      memberCount: memberCount ?? this.memberCount,
+      onlineMemberCount: onlineMemberCount ?? this.onlineMemberCount,
+      liveParticipantCount: liveParticipantCount ?? this.liveParticipantCount,
+      joined: joined ?? this.joined,
+      joinState: joinState ?? this.joinState,
+    );
+  }
 }
 
 class SearchRoomContext {
@@ -811,10 +834,12 @@ class JoinRequest {
     required this.status,
     required this.user,
     required this.createdAt,
+    this.reason = '',
   });
 
   final String id;
   final String status;
+  final String reason;
   final UserSummary user;
   final DateTime createdAt;
 
@@ -822,6 +847,7 @@ class JoinRequest {
     return JoinRequest(
       id: json['id']! as String,
       status: json['status'] as String? ?? 'pending',
+      reason: _stringFromJson(json, const ['reason', 'description']) ?? '',
       user: UserSummary.fromJson(json['user']! as Map<String, Object?>),
       createdAt: DateTime.parse(json['created_at']! as String),
     );
@@ -1042,12 +1068,14 @@ class RoomApplication {
     required this.room,
     required this.createdAt,
     required this.updatedAt,
+    this.reason = '',
     this.reviewedAt,
     this.reviewer,
   });
 
   final String id;
   final String status;
+  final String reason;
   final PublicRoom room;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -1058,6 +1086,7 @@ class RoomApplication {
     return RoomApplication(
       id: json['id']! as String,
       status: json['status'] as String? ?? 'pending',
+      reason: _stringFromJson(json, const ['reason', 'description']) ?? '',
       room: PublicRoom.fromJson(json['room']! as Map<String, Object?>),
       createdAt:
           _parseDateTime(json['created_at']) ??

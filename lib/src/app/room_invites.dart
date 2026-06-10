@@ -349,10 +349,12 @@ RoomInviteReviewState reviewedRoomInvites({
   if (accept && result.pending) {
     nextPendingRoomIds.add(invite.room.id);
   }
+  final acceptedRoomId = accept ? invite.room.id : null;
   return RoomInviteReviewState(
     invites: [
       for (final item in invites)
-        if (item.id != invite.id) item,
+        if (accept ? item.room.id != acceptedRoomId : item.id != invite.id)
+          item,
     ],
     pendingRoomIds: nextPendingRoomIds,
   );

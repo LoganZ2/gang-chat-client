@@ -297,10 +297,12 @@ void main() {
 
   test('reviewedRoomInvites removes invite and tracks pending room ids', () {
     final invite = _invite('invite_1', roomId: 'room_1');
+    final relatedInvite = _invite('invite_3', roomId: 'room_1');
     final state = reviewedRoomInvites(
       invites: [
         invite,
         _invite('invite_2', roomId: 'room_2'),
+        relatedInvite,
       ],
       pendingRoomIds: const ['existing_room'],
       invite: invite,
@@ -313,16 +315,16 @@ void main() {
     expect(state.hasPendingInvites, isTrue);
 
     final rejected = reviewedRoomInvites(
-      invites: [invite],
+      invites: [invite, relatedInvite],
       pendingRoomIds: const [],
       invite: invite,
       accept: false,
       result: const JoinRoomResult(),
     );
 
-    expect(rejected.invites, isEmpty);
+    expect(rejected.invites.map((item) => item.id), ['invite_3']);
     expect(rejected.pendingRoomIds, isEmpty);
-    expect(rejected.hasPendingInvites, isFalse);
+    expect(rejected.hasPendingInvites, isTrue);
   });
 }
 
