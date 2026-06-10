@@ -80,6 +80,10 @@ class MessagesController {
     return client;
   }
 
+  /// Mint a client-side id with the given [prefix]. Exposed so callers can tag
+  /// staged composer attachments before any message exists.
+  String mintClientId(String prefix) => newClientId(prefix);
+
   PendingMessage createPendingMessage({
     required String roomId,
     required UserSummary sender,

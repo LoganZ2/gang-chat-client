@@ -11,6 +11,7 @@ class _ComposerDock extends StatelessWidget {
     required this.sendError,
     required this.stickerPanel,
     required this.voiceState,
+    required this.attachments,
     required this.onSubmit,
     required this.onSendSticker,
     required this.onOpenStickers,
@@ -19,6 +20,9 @@ class _ComposerDock extends StatelessWidget {
     required this.onStartVoice,
     required this.onSendVoice,
     required this.onCancelVoice,
+    required this.onPickFile,
+    required this.onRemoveAttachment,
+    required this.onRetryAttachment,
   });
 
   final TextEditingController controller;
@@ -26,6 +30,7 @@ class _ComposerDock extends StatelessWidget {
   final String? sendError;
   final sticker_display.StickerPanelLoadState stickerPanel;
   final voice_display.VoiceRecorderState voiceState;
+  final List<composer_attachment.ComposerAttachmentView> attachments;
   final ValueChanged<String> onSubmit;
   final ValueChanged<Sticker> onSendSticker;
   final VoidCallback onOpenStickers;
@@ -34,6 +39,9 @@ class _ComposerDock extends StatelessWidget {
   final VoidCallback onStartVoice;
   final VoidCallback onSendVoice;
   final VoidCallback onCancelVoice;
+  final VoidCallback onPickFile;
+  final ValueChanged<String> onRemoveAttachment;
+  final ValueChanged<String> onRetryAttachment;
 
   @override
   Widget build(BuildContext context) {
@@ -62,6 +70,13 @@ class _ComposerDock extends StatelessWidget {
               hintText: '写点什么…',
               maxLines: 5,
               onSubmitted: onSubmit,
+              attachments: attachments.isEmpty
+                  ? null
+                  : _ComposerAttachmentStrip(
+                      attachments: attachments,
+                      onRemove: onRemoveAttachment,
+                      onRetry: onRetryAttachment,
+                    ),
               actions: [
                 ComposerAction(
                   id: 'stickers',
@@ -93,6 +108,12 @@ class _ComposerDock extends StatelessWidget {
                       onCancel: onCancelVoice,
                     ),
                   ),
+                ),
+                ComposerAction(
+                  id: 'file',
+                  icon: Icons.attach_file,
+                  label: '文件',
+                  onPressed: onPickFile,
                 ),
                 ComposerAction(
                   id: 'send',
@@ -313,9 +334,164 @@ class _StickerPanelMessage extends StatelessWidget {
   }
 }
 
-/// The composer's voice recorder. Click-to-start (not press-and-hold): the
-/// idle state shows a plain mic icon, recording shows a live timer with
-/// send/cancel actions, and review lets the user send or discard the clip.
+/// The strip of staged-file chips shown above the composer input. Each chip
+/// names a file queued for the next message and offers a remove button. The
+/// files ride out as attachments when the message is sent.
+class _ComposerAttachmentStrip extends StatelessWidget {
+  const _ComposerAttachmentStrip({
+    required this.attachments,
+    required this.onRemove,
+    required this.onRetry,
+  });
+
+  final List<composer_attachment.ComposerAttachmentView> attachments;
+  final ValueChanged<String> onRemove;
+  final ValueChanged<String> onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final attachment in attachments)
+            _ComposerAttachmentChip(
+              attachment: attachment,
+              onRemove: () => onRemove(attachment.id),
+              onRetry: () => onRetry(attachment.id),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ComposerAttachmentChip extends StatelessWidget {
+  const _ComposerAttachmentChip({
+    required this.attachment,
+    required this.onRemove,
+    required this.onRetry,
+  });
+
+  final composer_attachment.ComposerAttachmentView attachment;
+  final VoidCallback onRemove;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = attachment.sizeLabel;
+    final failed = attachment.hasFailed;
+    final subtitle = switch (attachment.status) {
+      composer_attachment.ComposerAttachmentStatus.failed => '上传失败，点击重试',
+      composer_attachment.ComposerAttachmentStatus.uploading =>
+        attachment.progress == null
+            ? '上传中…'
+            : '上传中 ${(attachment.progress! * 100).round()}%',
+      composer_attachment.ComposerAttachmentStatus.uploaded => size,
+    };
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: UiColors.surface,
+        borderRadius: BorderRadius.circular(UiRadii.md),
+        border: Border.all(color: failed ? UiColors.danger : UiColors.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _ComposerAttachmentLeading(attachment: attachment, onRetry: onRetry),
+            const SizedBox(width: 8),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 180),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    attachment.filename,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: UiTypography.label.copyWith(
+                      color: UiColors.text,
+                    ),
+                  ),
+                  if (subtitle != null)
+                    Text(
+                      subtitle,
+                      style: UiTypography.label.copyWith(
+                        color: failed ? UiColors.danger : UiColors.textMuted,
+                        fontSize: 11,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            IconButton(
+              onPressed: onRemove,
+              icon: const Icon(Icons.close),
+              iconSize: 16,
+              color: UiColors.textMuted,
+              splashRadius: 16,
+              tooltip: '移除',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The chip's leading slot: a spinner while uploading, a tappable retry icon
+/// when the upload failed, and the file-type glyph once it has landed.
+class _ComposerAttachmentLeading extends StatelessWidget {
+  const _ComposerAttachmentLeading({
+    required this.attachment,
+    required this.onRetry,
+  });
+
+  final composer_attachment.ComposerAttachmentView attachment;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    switch (attachment.status) {
+      case composer_attachment.ComposerAttachmentStatus.uploading:
+        return SizedBox.square(
+          dimension: 18,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            value: attachment.progress,
+            color: UiColors.accent,
+          ),
+        );
+      case composer_attachment.ComposerAttachmentStatus.failed:
+        return InkResponse(
+          onTap: onRetry,
+          radius: 16,
+          child: const Icon(
+            Icons.refresh,
+            size: 18,
+            color: UiColors.danger,
+          ),
+        );
+      case composer_attachment.ComposerAttachmentStatus.uploaded:
+        return Icon(
+          composer_attachment.composerAttachmentGlyph(
+            mimeType: attachment.mimeType,
+            filename: attachment.filename,
+          ),
+          size: 18,
+          color: UiColors.textSecondary,
+        );
+    }
+  }
+}
+
 class _VoicePanel extends StatelessWidget {
   const _VoicePanel({
     required this.state,
@@ -469,6 +645,31 @@ class _VoiceActive extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// Test-only entry point for the otherwise-private composer attachment strip,
+/// so widget tests can pump it directly without standing up the whole dock.
+@visibleForTesting
+class ComposerAttachmentStripForTest extends StatelessWidget {
+  const ComposerAttachmentStripForTest({
+    super.key,
+    required this.attachments,
+    required this.onRemove,
+    this.onRetry,
+  });
+
+  final List<composer_attachment.ComposerAttachmentView> attachments;
+  final ValueChanged<String> onRemove;
+  final ValueChanged<String>? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ComposerAttachmentStrip(
+      attachments: attachments,
+      onRemove: onRemove,
+      onRetry: onRetry ?? (_) {},
     );
   }
 }

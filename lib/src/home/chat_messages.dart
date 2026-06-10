@@ -9,6 +9,7 @@ class _MessageStage extends StatelessWidget {
     required this.messages,
     required this.fileTransfers,
     required this.onRetry,
+    required this.bottomInset,
     this.onResolveSenderProfile,
   });
 
@@ -19,6 +20,9 @@ class _MessageStage extends StatelessWidget {
   final List<Message> messages;
   final Map<String, FileTransferState> fileTransfers;
   final VoidCallback onRetry;
+  // Space reserved at the bottom of the list so the floating composer (which
+  // grows with staged files and open panels) never traps the last messages.
+  final double bottomInset;
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
 
@@ -58,11 +62,11 @@ class _MessageStage extends StatelessWidget {
     }
 
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         _chatHorizontalPadding,
         18,
         _chatHorizontalPadding,
-        _composerOverlayInset,
+        bottomInset,
       ),
       itemCount: messages.length,
       separatorBuilder: (context, index) => const SizedBox(height: 12),

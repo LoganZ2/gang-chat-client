@@ -70,6 +70,7 @@ class ChatComposer extends StatefulWidget {
     this.maxLines = 5,
     this.onSubmitted,
     this.onChanged,
+    this.attachments,
   });
 
   final List<ComposerAction> actions;
@@ -79,6 +80,10 @@ class ChatComposer extends StatefulWidget {
   final int maxLines;
   final ValueChanged<String>? onSubmitted;
   final ValueChanged<String>? onChanged;
+
+  /// Optional strip rendered above the input, used to show files staged for
+  /// the next message. Null (or empty) leaves the composer unchanged.
+  final Widget? attachments;
 
   @override
   State<ChatComposer> createState() => _ChatComposerState();
@@ -157,6 +162,11 @@ class _ChatComposerState extends State<ChatComposer> {
                             ),
                     ),
                   ),
+                  if (widget.attachments != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                      child: widget.attachments,
+                    ),
                   if (widget.actions.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
