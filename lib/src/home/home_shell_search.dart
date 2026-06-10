@@ -28,7 +28,7 @@ extension _HomeShellSearch on _HomeShellState {
 
     _setHomeState(() {
       _searchQuery = query;
-      _activeSearchCategory = null;
+      _searchExpanded = hasQuery;
       _searchError = null;
       if (hasQuery) {
         _searching = true;
@@ -67,8 +67,22 @@ extension _HomeShellSearch on _HomeShellState {
     }
   }
 
+  void _activateSearch() {
+    if (_searchExpanded) return;
+    _setHomeState(() => _searchExpanded = true);
+  }
+
+  void _collapseSearch() {
+    if (!_searchExpanded) return;
+    _setHomeState(() => _searchExpanded = false);
+  }
+
   void _selectSearchCategory(search_display.GlobalSearchCategory category) {
-    _setHomeState(() => _activeSearchCategory = category);
+    _setHomeState(() {
+      _activeSearchCategory = _activeSearchCategory == category
+          ? null
+          : category;
+    });
   }
 
   void _clearSearchCategory() {

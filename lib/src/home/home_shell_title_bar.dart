@@ -34,16 +34,22 @@ class _HomeTitleBar extends StatefulWidget {
   const _HomeTitleBar({
     required this.windowController,
     required this.searchController,
+    required this.searchTapRegionGroup,
     required this.searchQuery,
     required this.activeSearchCategory,
+    required this.onActivateSearch,
+    required this.onSearchTapOutside,
     required this.onClearSearchCategory,
     required this.onClearSearchQuery,
   });
 
   final DesktopWindowController windowController;
   final TextEditingController searchController;
+  final Object searchTapRegionGroup;
   final String searchQuery;
   final search_display.GlobalSearchCategory? activeSearchCategory;
+  final VoidCallback onActivateSearch;
+  final VoidCallback onSearchTapOutside;
   final VoidCallback onClearSearchCategory;
   final VoidCallback onClearSearchQuery;
 
@@ -145,15 +151,20 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
                 if (searchWidth >= 96)
                   Align(
                     alignment: Alignment.center,
-                    child: SizedBox(
-                      key: const ValueKey('home-title-search'),
-                      width: searchWidth,
-                      child: _TitleSearchField(
-                        controller: widget.searchController,
-                        query: widget.searchQuery,
-                        activeCategory: widget.activeSearchCategory,
-                        onClearCategory: widget.onClearSearchCategory,
-                        onClearQuery: widget.onClearSearchQuery,
+                    child: TapRegion(
+                      groupId: widget.searchTapRegionGroup,
+                      onTapOutside: (_) => widget.onSearchTapOutside(),
+                      child: SizedBox(
+                        key: const ValueKey('home-title-search'),
+                        width: searchWidth,
+                        child: _TitleSearchField(
+                          controller: widget.searchController,
+                          query: widget.searchQuery,
+                          activeCategory: widget.activeSearchCategory,
+                          onActivated: widget.onActivateSearch,
+                          onClearCategory: widget.onClearSearchCategory,
+                          onClearQuery: widget.onClearSearchQuery,
+                        ),
                       ),
                     ),
                   ),
@@ -173,6 +184,7 @@ class _TitleSearchField extends StatefulWidget {
     required this.controller,
     required this.query,
     required this.activeCategory,
+    required this.onActivated,
     required this.onClearCategory,
     required this.onClearQuery,
   });
@@ -180,6 +192,7 @@ class _TitleSearchField extends StatefulWidget {
   final TextEditingController controller;
   final String query;
   final search_display.GlobalSearchCategory? activeCategory;
+  final VoidCallback onActivated;
   final VoidCallback onClearCategory;
   final VoidCallback onClearQuery;
 
@@ -205,6 +218,7 @@ class _TitleSearchFieldState extends State<_TitleSearchField> {
   }
 
   void _handleFocusChange() {
+    if (_focusNode.hasFocus) widget.onActivated();
     if (_focused != _focusNode.hasFocus) {
       setState(() => _focused = _focusNode.hasFocus);
     }
@@ -231,6 +245,9 @@ class _TitleSearchFieldState extends State<_TitleSearchField> {
           if (widget.activeCategory != null) ...[
             const SizedBox(width: 7),
             _SearchFieldFilterChip(
+              key: ValueKey(
+                'search-field-filter-${widget.activeCategory!.name}',
+              ),
               label: search_display.globalSearchCategoryLabel(
                 widget.activeCategory!,
               ),
@@ -243,6 +260,7 @@ class _TitleSearchFieldState extends State<_TitleSearchField> {
               controller: widget.controller,
               focusNode: _focusNode,
               maxLines: 1,
+              onTap: widget.onActivated,
               cursorColor: UiColors.accent,
               cursorWidth: 1.5,
               style: UiTypography.body.copyWith(fontSize: 13, height: 1.2),
@@ -276,7 +294,11 @@ class _TitleSearchFieldState extends State<_TitleSearchField> {
 }
 
 class _SearchFieldFilterChip extends StatelessWidget {
-  const _SearchFieldFilterChip({required this.label, required this.onClear});
+  const _SearchFieldFilterChip({
+    super.key,
+    required this.label,
+    required this.onClear,
+  });
 
   final String label;
   final VoidCallback onClear;
@@ -559,6 +581,7 @@ class _SearchCategoryTabs extends StatelessWidget {
                 SizedBox(
                   width: itemWidth,
                   child: _SearchCategoryButton(
+                    key: ValueKey('search-category-${category.name}'),
                     label: search_display.globalSearchCategoryLabel(category),
                     count: search_display.globalSearchCategoryCount(
                       results,
@@ -578,6 +601,7 @@ class _SearchCategoryTabs extends StatelessWidget {
 
 class _SearchCategoryButton extends StatefulWidget {
   const _SearchCategoryButton({
+    super.key,
     required this.label,
     required this.count,
     required this.selected,

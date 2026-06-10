@@ -89,6 +89,7 @@ class _HomeShellState extends State<HomeShell> {
   late CurrentUser _currentUser;
   final TextEditingController _composerController = TextEditingController();
   final TextEditingController _titleSearchController = TextEditingController();
+  final Object _searchTapRegionGroup = Object();
   StreamSubscription<RealtimeEvent>? _realtimeEvents;
 
   List<RoomCard> _servers = const [];
@@ -131,6 +132,7 @@ class _HomeShellState extends State<HomeShell> {
   Timer? _searchDebounce;
   int _searchRequestSerial = 0;
   String _searchQuery = '';
+  bool _searchExpanded = false;
   bool _searching = false;
   String? _searchError;
   GlobalSearchResults? _searchResults;
@@ -210,6 +212,7 @@ class _HomeShellState extends State<HomeShell> {
       _screenSharing = false;
       _voiceBlocked = false;
       _searchQuery = '';
+      _searchExpanded = false;
       _searching = false;
       _searchError = null;
       _searchResults = null;
@@ -284,8 +287,11 @@ class _HomeShellState extends State<HomeShell> {
                       _HomeTitleBar(
                         windowController: widget.windowController,
                         searchController: _titleSearchController,
+                        searchTapRegionGroup: _searchTapRegionGroup,
                         searchQuery: _searchQuery,
                         activeSearchCategory: _activeSearchCategory,
+                        onActivateSearch: _activateSearch,
+                        onSearchTapOutside: _collapseSearch,
                         onClearSearchCategory: _clearSearchCategory,
                         onClearSearchQuery: _clearSearchQuery,
                       ),
@@ -314,25 +320,31 @@ class _HomeShellState extends State<HomeShell> {
                     ],
                   ),
                 ),
-                if (_hasSearchQuery && searchOverlayWidth >= 96)
+                if (_hasSearchQuery &&
+                    _searchExpanded &&
+                    searchOverlayWidth >= 96)
                   Positioned(
                     top: _homeTitleBarHeight - 1,
                     left: (shellConstraints.maxWidth - searchOverlayWidth) / 2,
                     width: searchOverlayWidth,
-                    child: _TitleSearchResultsPanel(
-                      query: _searchQuery,
-                      results: _searchResults,
-                      loading: _searching,
-                      error: _searchError,
-                      activeCategory: _activeSearchCategory,
-                      busyPublicRoomId: _busySearchPublicRoomId,
-                      pendingPublicRoomIds: _searchPendingPublicRoomIds,
-                      onCategorySelected: _selectSearchCategory,
-                      onMyRoomSelected: _openSearchRoom,
-                      onPublicRoomAction: (room) =>
-                          unawaited(_handlePublicRoomSearchAction(room)),
-                      onMessageSelected: _openMessageSearchResult,
-                      onFileSelected: _openMessageSearchResult,
+                    child: TapRegion(
+                      key: const ValueKey('home-title-search-results'),
+                      groupId: _searchTapRegionGroup,
+                      child: _TitleSearchResultsPanel(
+                        query: _searchQuery,
+                        results: _searchResults,
+                        loading: _searching,
+                        error: _searchError,
+                        activeCategory: _activeSearchCategory,
+                        busyPublicRoomId: _busySearchPublicRoomId,
+                        pendingPublicRoomIds: _searchPendingPublicRoomIds,
+                        onCategorySelected: _selectSearchCategory,
+                        onMyRoomSelected: _openSearchRoom,
+                        onPublicRoomAction: (room) =>
+                            unawaited(_handlePublicRoomSearchAction(room)),
+                        onMessageSelected: _openMessageSearchResult,
+                        onFileSelected: _openMessageSearchResult,
+                      ),
                     ),
                   ),
                 if (fullScreenTrack != null)

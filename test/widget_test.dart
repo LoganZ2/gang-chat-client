@@ -329,6 +329,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(requestedPaths, contains('/api/v1/search'));
+    expect(
+      find.byKey(const ValueKey('home-title-search-results')),
+      findsOneWidget,
+    );
     expect(find.text('我的房间 1'), findsWidgets);
     expect(find.text('公开房间 1'), findsWidgets);
     expect(find.text('聊天记录 1'), findsWidgets);
@@ -357,6 +361,49 @@ void main() {
     );
     expect(find.text('Beta Room'), findsWidgets);
     expect(find.text('Alpha Room'), findsNothing);
+
+    await tester.enterText(searchField, 'Beta update');
+    await tester.pump(const Duration(milliseconds: 320));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('search-field-filter-myRooms')),
+      findsOneWidget,
+    );
+    expect(find.text('Beta Room'), findsWidgets);
+    expect(find.text('Alpha Room'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('search-category-myRooms')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('search-field-filter-myRooms')),
+      findsNothing,
+    );
+    expect(find.text('Alpha Room'), findsOneWidget);
+    expect(find.text('Beta Room'), findsWidgets);
+
+    await tester.tap(find.byKey(const ValueKey('search-category-myRooms')));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(740, 100));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('home-title-search-results')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('search-field-filter-myRooms')),
+      findsOneWidget,
+    );
+
+    await tester.tap(searchField);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('home-title-search-results')),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byTooltip('关闭筛选'));
     await tester.pumpAndSettle();
