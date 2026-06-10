@@ -318,6 +318,37 @@ abstract interface class GangApi {
     String? connectionState,
   });
 
+  Future<MusicBoxState> getMusicBoxState(String roomId);
+
+  Future<List<MusicBoxSearchResult>> searchMusicBox({
+    required String roomId,
+    required String keyword,
+    String? source,
+    int? count,
+    int? page,
+  });
+
+  Future<MusicBoxState> queueMusicBoxTrack({
+    required String roomId,
+    required String trackId,
+    required String title,
+    String? source,
+    String? artist,
+    String? picId,
+    int? durationMs,
+    String? idempotencyKey,
+  });
+
+  Future<MusicBoxState> removeMusicBoxItem({
+    required String roomId,
+    required String itemId,
+  });
+
+  Future<MusicBoxState> controlMusicBox({
+    required String roomId,
+    required String action,
+  });
+
   void close();
 }
 
@@ -1316,6 +1347,97 @@ class GangApiClient implements GangApi {
     return LiveParticipant.fromJson(
       decoded['participant']! as Map<String, Object?>,
     );
+  }
+
+  @override
+  Future<MusicBoxState> getMusicBoxState(String roomId) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.get(
+        _uri('/rooms/$roomId/music-box/state'),
+        headers: _headers(token),
+      );
+    }, retryTransientFailures: true);
+    return MusicBoxState.fromJson(decoded);
+  }
+
+  @override
+  Future<List<MusicBoxSearchResult>> searchMusicBox({
+    required String roomId,
+    required String keyword,
+    String? source,
+    int? count,
+    int? page,
+  }) async {
+    final query = <String, String>{'keyword': keyword};
+    if (source != null && source.isNotEmpty) query['source'] = source;
+    if (count != null) query['count'] = '$count';
+    if (page != null) query['page'] = '$page';
+    final decoded = await _sendJson((token) {
+      return _httpClient.get(
+        _uri('/rooms/$roomId/music-box/search', query),
+        headers: _headers(token),
+      );
+    }, retryTransientFailures: true);
+    return (decoded['results'] as List<Object?>? ?? const [])
+        .cast<Map<String, Object?>>()
+        .map(MusicBoxSearchResult.fromJson)
+        .toList();
+  }
+
+  @override
+  Future<MusicBoxState> queueMusicBoxTrack({
+    required String roomId,
+    required String trackId,
+    required String title,
+    String? source,
+    String? artist,
+    String? picId,
+    int? durationMs,
+    String? idempotencyKey,
+  }) async {
+    final body = <String, Object?>{'track_id': trackId, 'title': title};
+    if (source != null && source.isNotEmpty) body['source'] = source;
+    if (artist != null && artist.isNotEmpty) body['artist'] = artist;
+    if (picId != null && picId.isNotEmpty) body['pic_id'] = picId;
+    if (durationMs != null) body['duration_ms'] = durationMs;
+    final requestIdempotencyKey = idempotencyKey ?? newUuid();
+    final decoded = await _sendJson((token) {
+      return _httpClient.post(
+        _uri('/rooms/$roomId/music-box/queue'),
+        headers: _headers(token, idempotencyKey: requestIdempotencyKey),
+        body: encodeJsonBody(body),
+      );
+    });
+    return MusicBoxState.fromJson(decoded);
+  }
+
+  @override
+  Future<MusicBoxState> removeMusicBoxItem({
+    required String roomId,
+    required String itemId,
+  }) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.delete(
+        _uri('/rooms/$roomId/music-box/queue/$itemId'),
+        headers: _headers(token),
+      );
+    });
+    return MusicBoxState.fromJson(decoded);
+  }
+
+  @override
+  Future<MusicBoxState> controlMusicBox({
+    required String roomId,
+    required String action,
+  }) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.post(
+        _uri('/rooms/$roomId/music-box/control'),
+        headers: _headers(token),
+        body: encodeJsonBody({'action': action}),
+      );
+    });
+    return MusicBoxState.fromJson(decoded);
   }
 
   Future<Map<String, Object?>> _sendJson(

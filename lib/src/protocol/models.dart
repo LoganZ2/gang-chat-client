@@ -1502,6 +1502,214 @@ class LiveJoinResult {
   }
 }
 
+/// The fixed LiveKit identity of the server-side music box bot. It joins the
+/// room's voice session and publishes a single audio track; filter it out of
+/// participant lists so it isn't rendered as a real member.
+const musicBoxBotIdentity = '__musicbox__';
+
+enum MusicBoxPlaybackState { stopped, playing, paused }
+
+MusicBoxPlaybackState _musicBoxPlaybackStateFrom(String? value) {
+  return switch (value?.trim().toLowerCase()) {
+    'playing' => MusicBoxPlaybackState.playing,
+    'paused' => MusicBoxPlaybackState.paused,
+    _ => MusicBoxPlaybackState.stopped,
+  };
+}
+
+enum MusicBoxQueueItemStatus { pending, downloading, ready, failed }
+
+MusicBoxQueueItemStatus _musicBoxQueueItemStatusFrom(String? value) {
+  return switch (value?.trim().toLowerCase()) {
+    'downloading' => MusicBoxQueueItemStatus.downloading,
+    'ready' => MusicBoxQueueItemStatus.ready,
+    'failed' => MusicBoxQueueItemStatus.failed,
+    _ => MusicBoxQueueItemStatus.pending,
+  };
+}
+
+/// The room music box's current playback head. [positionMs] is the value the
+/// server recorded at the last state change — it is *not* pushed per second, so
+/// a live progress bar must advance it locally while [state] is playing and
+/// recalibrate from each fresh snapshot. See `music_box_display.dart`.
+class MusicBoxPlayback {
+  const MusicBoxPlayback({
+    required this.state,
+    required this.currentItemId,
+    required this.positionMs,
+    required this.volume,
+    required this.updatedAt,
+  });
+
+  final MusicBoxPlaybackState state;
+
+  /// The `id` of the playing queue item, matching [MusicBoxQueueItem.id].
+  /// Empty when nothing is current.
+  final String currentItemId;
+  final int positionMs;
+  final int volume;
+  final DateTime? updatedAt;
+
+  bool get hasCurrent => currentItemId.isNotEmpty;
+
+  factory MusicBoxPlayback.fromJson(Map<String, Object?> json) {
+    return MusicBoxPlayback(
+      state: _musicBoxPlaybackStateFrom(json['state'] as String?),
+      currentItemId: _stringFromJson(json, const ['current_item_id']) ?? '',
+      positionMs: _intFromJson(json, const ['position_ms']) ?? 0,
+      volume: _intFromJson(json, const ['volume']) ?? 100,
+      updatedAt: _parseDateTime(json['updated_at']),
+    );
+  }
+}
+
+/// One track in the room music box queue. [status] tracks the server-side
+/// download/transcode lifecycle; the track is only playable once it is
+/// [MusicBoxQueueItemStatus.ready].
+class MusicBoxQueueItem {
+  const MusicBoxQueueItem({
+    required this.id,
+    required this.source,
+    required this.trackId,
+    required this.title,
+    required this.artist,
+    required this.picId,
+    required this.durationMs,
+    required this.status,
+    required this.fileSizeBytes,
+    required this.error,
+    required this.addedByUserId,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String source;
+  final String trackId;
+  final String title;
+  final String artist;
+  final String picId;
+  final int durationMs;
+  final MusicBoxQueueItemStatus status;
+  final int fileSizeBytes;
+
+  /// Failure reason, populated only when [status] is
+  /// [MusicBoxQueueItemStatus.failed]. Empty otherwise.
+  final String error;
+  final String addedByUserId;
+  final DateTime? createdAt;
+
+  factory MusicBoxQueueItem.fromJson(Map<String, Object?> json) {
+    return MusicBoxQueueItem(
+      id: _stringFromJson(json, const ['id', 'item_id']) ?? '',
+      source: _stringFromJson(json, const ['source']) ?? '',
+      trackId: _stringFromJson(json, const ['track_id']) ?? '',
+      title: _stringFromJson(json, const ['title', 'name']) ?? '',
+      artist: _stringFromJson(json, const ['artist']) ?? '',
+      picId: _stringFromJson(json, const ['pic_id']) ?? '',
+      durationMs: _intFromJson(json, const ['duration_ms']) ?? 0,
+      status: _musicBoxQueueItemStatusFrom(json['status'] as String?),
+      fileSizeBytes: _intFromJson(json, const ['file_size_bytes']) ?? 0,
+      error: _stringFromJson(json, const ['error']) ?? '',
+      addedByUserId: _stringFromJson(json, const ['added_by_user_id']) ?? '',
+      createdAt: _parseDateTime(json['created_at']),
+    );
+  }
+}
+
+/// The room music box's disk usage against its per-room limit. Useful for
+/// warning the user as the room approaches its storage cap; over the limit,
+/// new songs queue as `pending` rather than being rejected.
+class MusicBoxUsage {
+  const MusicBoxUsage({required this.usedBytes, required this.limitBytes});
+
+  final int usedBytes;
+  final int limitBytes;
+
+  factory MusicBoxUsage.fromJson(Map<String, Object?>? json) {
+    return MusicBoxUsage(
+      usedBytes: _intFromJson(json, const ['used_bytes']) ?? 0,
+      limitBytes: _intFromJson(json, const ['limit_bytes']) ?? 0,
+    );
+  }
+}
+
+/// The authoritative music box snapshot. Every write (queue/control/remove) and
+/// the `music_box_changed` SSE event return this same shape; clients overwrite
+/// local state wholesale rather than merging field by field.
+class MusicBoxState {
+  const MusicBoxState({
+    required this.enabled,
+    required this.playback,
+    required this.queue,
+    required this.usage,
+  });
+
+  final bool enabled;
+  final MusicBoxPlayback playback;
+  final List<MusicBoxQueueItem> queue;
+  final MusicBoxUsage usage;
+
+  /// The queue item currently playing, or null when nothing is current.
+  MusicBoxQueueItem? get currentItem {
+    if (!playback.hasCurrent) return null;
+    for (final item in queue) {
+      if (item.id == playback.currentItemId) return item;
+    }
+    return null;
+  }
+
+  factory MusicBoxState.fromJson(Map<String, Object?> json) {
+    final playbackJson = _nullableMap(json['playback']);
+    return MusicBoxState(
+      enabled: _boolFromJson(json, const ['enabled']) ?? false,
+      playback: playbackJson == null
+          ? const MusicBoxPlayback(
+              state: MusicBoxPlaybackState.stopped,
+              currentItemId: '',
+              positionMs: 0,
+              volume: 100,
+              updatedAt: null,
+            )
+          : MusicBoxPlayback.fromJson(playbackJson),
+      queue: _listOfMaps(json['queue']).map(MusicBoxQueueItem.fromJson).toList(),
+      usage: MusicBoxUsage.fromJson(_nullableMap(json['usage'])),
+    );
+  }
+}
+
+/// A single hit from the music box search endpoint. [artists] is an array
+/// because a track may credit multiple performers; join it for display and map
+/// it onto the queue request's single `artist` string when adding.
+class MusicBoxSearchResult {
+  const MusicBoxSearchResult({
+    required this.trackId,
+    required this.name,
+    required this.artists,
+    required this.picId,
+    required this.source,
+  });
+
+  final String trackId;
+  final String name;
+  final List<String> artists;
+  final String picId;
+  final String source;
+
+  factory MusicBoxSearchResult.fromJson(Map<String, Object?> json) {
+    final artists = (json['artists'] as List<Object?>? ?? const [])
+        .map((value) => value?.toString().trim() ?? '')
+        .where((value) => value.isNotEmpty)
+        .toList();
+    return MusicBoxSearchResult(
+      trackId: _stringFromJson(json, const ['track_id', 'id']) ?? '',
+      name: _stringFromJson(json, const ['name', 'title']) ?? '',
+      artists: artists,
+      picId: _stringFromJson(json, const ['pic_id']) ?? '',
+      source: _stringFromJson(json, const ['source']) ?? '',
+    );
+  }
+}
+
 List<Map<String, Object?>> _listOfMaps(Object? value) {
   return (value as List<Object?>? ?? const [])
       .cast<Map<String, Object?>>()

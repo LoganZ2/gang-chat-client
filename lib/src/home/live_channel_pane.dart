@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app/live_display.dart' as live_display;
+import '../app/music_box_display.dart' as music_box_display;
 import '../live/live_session.dart';
 import '../live/live_video_track_view.dart';
 import '../protocol/models.dart';
@@ -9,6 +10,7 @@ import '../ui/ui.dart';
 part 'live_channel_members.dart';
 part 'live_channel_media.dart';
 part 'live_channel_controls.dart';
+part 'live_channel_music_box.dart';
 
 const _paneEdgeInset = 14.0;
 const _paneTopInset = _paneEdgeInset;
@@ -74,6 +76,18 @@ class LiveChannelPane extends StatefulWidget {
     required this.onToggleHeadphones,
     required this.onToggleCamera,
     required this.onToggleShare,
+    required this.musicBox,
+    required this.musicBoxOpen,
+    required this.musicBoxSearchController,
+    required this.musicBoxSearchResults,
+    required this.musicBoxSearching,
+    required this.musicBoxSearchError,
+    required this.onToggleMusicBox,
+    required this.onMusicBoxTogglePlayback,
+    required this.onMusicBoxSkip,
+    required this.onMusicBoxStop,
+    required this.onMusicBoxQueueResult,
+    required this.onMusicBoxRemoveItem,
   });
 
   final String title;
@@ -100,6 +114,18 @@ class LiveChannelPane extends StatefulWidget {
   final VoidCallback onToggleHeadphones;
   final VoidCallback onToggleCamera;
   final VoidCallback onToggleShare;
+  final MusicBoxState? musicBox;
+  final bool musicBoxOpen;
+  final TextEditingController musicBoxSearchController;
+  final List<MusicBoxSearchResult> musicBoxSearchResults;
+  final bool musicBoxSearching;
+  final String? musicBoxSearchError;
+  final VoidCallback onToggleMusicBox;
+  final VoidCallback onMusicBoxTogglePlayback;
+  final VoidCallback onMusicBoxSkip;
+  final VoidCallback onMusicBoxStop;
+  final ValueChanged<MusicBoxSearchResult> onMusicBoxQueueResult;
+  final ValueChanged<MusicBoxQueueItem> onMusicBoxRemoveItem;
 
   @override
   State<LiveChannelPane> createState() => _LiveChannelPaneState();
@@ -123,8 +149,13 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
 
   @override
   Widget build(BuildContext context) {
-    final participants = widget.live?.participants ?? const <LiveParticipant>[];
+    final participants = (widget.live?.participants ?? const <LiveParticipant>[])
+        .where((p) => p.user.id != musicBoxBotIdentity)
+        .toList();
     final stageTrack = _resolveStageTrack();
+    final musicBox = widget.musicBox;
+    final musicBoxEnabled = musicBox?.enabled ?? false;
+    final musicBoxOpen = widget.joined && musicBoxEnabled && widget.musicBoxOpen;
 
     return ColoredBox(
       color: UiColors.background,
@@ -156,32 +187,56 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                 _LiveRoomHeader(title: widget.title),
                 const SizedBox(height: 16),
                 Expanded(
-                  child: Column(
+                  child: Stack(
                     children: [
-                      if (stageTrack != null) ...[
-                        Expanded(
-                          flex: 3,
-                          child: _LiveMediaStage(
-                            track: stageTrack,
-                            label: liveStageTrackLabel(widget.live, stageTrack),
-                            onExit: _exitStage,
-                            onFullScreen: () =>
-                                widget.onEnterFullScreen(stageTrack),
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                      ],
-                      Expanded(
-                        flex: stageTrack == null ? 1 : 2,
-                        child: _LiveMemberStage(
-                          participants: participants,
-                          currentUser: widget.currentUser,
-                          speakingUserIds: widget.speakingUserIds,
-                          videoTracks: widget.videoTracks,
-                          stageTrack: stageTrack,
-                          onSelectStage: _selectStage,
+                      Positioned.fill(
+                        child: Column(
+                          children: [
+                            if (stageTrack != null) ...[
+                              Expanded(
+                                flex: 3,
+                                child: _LiveMediaStage(
+                                  track: stageTrack,
+                                  label: liveStageTrackLabel(
+                                    widget.live,
+                                    stageTrack,
+                                  ),
+                                  onExit: _exitStage,
+                                  onFullScreen: () =>
+                                      widget.onEnterFullScreen(stageTrack),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                            ],
+                            Expanded(
+                              flex: stageTrack == null ? 1 : 2,
+                              child: _LiveMemberStage(
+                                participants: participants,
+                                currentUser: widget.currentUser,
+                                speakingUserIds: widget.speakingUserIds,
+                                videoTracks: widget.videoTracks,
+                                stageTrack: stageTrack,
+                                onSelectStage: _selectStage,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
+                      if (musicBoxOpen && musicBox != null)
+                        Positioned.fill(
+                          child: LiveMusicBoxPanel(
+                            state: musicBox,
+                            searchController: widget.musicBoxSearchController,
+                            searchResults: widget.musicBoxSearchResults,
+                            searching: widget.musicBoxSearching,
+                            searchError: widget.musicBoxSearchError,
+                            onTogglePlayback: widget.onMusicBoxTogglePlayback,
+                            onSkip: widget.onMusicBoxSkip,
+                            onStop: widget.onMusicBoxStop,
+                            onQueueResult: widget.onMusicBoxQueueResult,
+                            onRemoveItem: widget.onMusicBoxRemoveItem,
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -194,12 +249,15 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                   voiceBlocked: widget.voiceBlocked,
                   cameraOn: widget.cameraOn,
                   screenSharing: widget.screenSharing,
+                  musicBoxEnabled: musicBoxEnabled,
+                  musicBoxOpen: musicBoxOpen,
                   onJoin: widget.onJoin,
                   onLeave: widget.onLeave,
                   onToggleMic: widget.onToggleMic,
                   onToggleHeadphones: widget.onToggleHeadphones,
                   onToggleCamera: widget.onToggleCamera,
                   onToggleShare: widget.onToggleShare,
+                  onToggleMusicBox: widget.onToggleMusicBox,
                   onCollapse: widget.onBackToChat,
                 ),
               ],

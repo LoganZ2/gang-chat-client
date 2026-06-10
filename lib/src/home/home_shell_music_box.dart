@@ -1,0 +1,234 @@
+part of 'home_shell.dart';
+
+/// Music box orchestration: loading the per-room snapshot, search/queue/control
+/// writes, the local progress ticker, and SSE-driven refreshes. Audio itself is
+/// not handled here — once the user has joined the room's LiveKit session the
+/// music box bot's track arrives as an ordinary remote audio track.
+extension _HomeShellMusicBox on _HomeShellState {
+  /// Resets all music box state. Called on room switch and account change so a
+  /// stale snapshot never bleeds across rooms.
+  void _resetMusicBox() {
+    _musicBoxTicker?.cancel();
+    _musicBoxTicker = null;
+    _musicBoxSearchDebounce?.cancel();
+    _musicBoxSearchDebounce = null;
+    _musicBoxSearchSerial++;
+    _musicBox = null;
+    _musicBoxOpen = false;
+    _musicBoxSearchResults = const [];
+    _musicBoxSearching = false;
+    _musicBoxSearchError = null;
+    if (_musicBoxSearchController.text.isNotEmpty) {
+      _musicBoxSearchController.clear();
+    }
+  }
+
+  /// Fetches the snapshot for [roomId]. Failures are swallowed (the entry stays
+  /// hidden) since the music box is optional; a `503` simply means it's off.
+  Future<void> _loadMusicBox(String roomId) async {
+    try {
+      final state = await _musicBoxController.getState(roomId);
+      if (!mounted || _selectedServerId != roomId) return;
+      _setHomeState(() {
+        _musicBox = state;
+        _syncMusicBoxTicker();
+      });
+    } catch (_) {
+      if (!mounted || _selectedServerId != roomId) return;
+      _setHomeState(() => _musicBox = null);
+    }
+  }
+
+  void _toggleMusicBoxPanel() {
+    _setHomeState(() => _musicBoxOpen = !_musicBoxOpen);
+  }
+
+  /// Applies an authoritative snapshot from a write response or SSE event,
+  /// overwriting local state wholesale per the server contract.
+  void _applyMusicBoxSnapshot(MusicBoxState state) {
+    if (!mounted) return;
+    _setHomeState(() {
+      _musicBox = state;
+      _syncMusicBoxTicker();
+    });
+  }
+
+  void _onMusicBoxChanged(Map<String, dynamic> event) {
+    final roomId = event['room_id'] as String?;
+    if (roomId == null || roomId != _selectedServerId) return;
+    final snapshot = event['data'];
+    if (snapshot is! Map) return;
+    _applyMusicBoxSnapshot(
+      MusicBoxState.fromJson(snapshot.cast<String, Object?>()),
+    );
+  }
+
+  // --- Progress ticker --------------------------------------------------
+
+  /// Starts or stops the 1s ticker that advances the progress bar locally while
+  /// a track plays, matching [music_box_display.musicBoxShouldTick].
+  void _syncMusicBoxTicker() {
+    final state = _musicBox;
+    final shouldTick =
+        state != null && music_box_display.musicBoxShouldTick(state);
+    if (shouldTick) {
+      _musicBoxTicker ??= Timer.periodic(
+        const Duration(seconds: 1),
+        (_) => _onMusicBoxTick(),
+      );
+    } else {
+      _musicBoxTicker?.cancel();
+      _musicBoxTicker = null;
+    }
+  }
+
+  void _onMusicBoxTick() {
+    if (!mounted || _musicBox == null) {
+      _musicBoxTicker?.cancel();
+      _musicBoxTicker = null;
+      return;
+    }
+    // The widget reads the position from a wall-clock based helper, so a bare
+    // rebuild advances the bar without mutating snapshot state.
+    _setHomeState(() {});
+  }
+
+  // --- Writes -----------------------------------------------------------
+
+  Future<void> _searchMusicBox(String keyword) async {
+    final roomId = _selectedServerId;
+    final trimmed = keyword.trim();
+    if (roomId == null) return;
+    if (trimmed.isEmpty) {
+      _setHomeState(() {
+        _musicBoxSearchResults = const [];
+        _musicBoxSearching = false;
+        _musicBoxSearchError = null;
+      });
+      return;
+    }
+    final serial = ++_musicBoxSearchSerial;
+    _setHomeState(() {
+      _musicBoxSearching = true;
+      _musicBoxSearchError = null;
+    });
+    try {
+      final results = await _musicBoxController.search(
+        roomId: roomId,
+        keyword: trimmed,
+      );
+      if (!mounted || serial != _musicBoxSearchSerial) return;
+      _setHomeState(() {
+        _musicBoxSearchResults = results;
+        _musicBoxSearching = false;
+      });
+    } catch (error) {
+      if (!mounted || serial != _musicBoxSearchSerial) return;
+      _setHomeState(() {
+        _musicBoxSearching = false;
+        _musicBoxSearchError = _musicBoxSearchErrorMessage(error);
+      });
+    }
+  }
+
+  /// Debounced search driven by the search field's controller listener.
+  ///
+  /// Flips the searching state immediately so the panel swaps to the results
+  /// view (and shows a spinner) on the first keystroke, then debounces the
+  /// actual network call.
+  void _handleMusicBoxSearchChanged() {
+    _musicBoxSearchDebounce?.cancel();
+    final keyword = _musicBoxSearchController.text.trim();
+    if (keyword.isEmpty) {
+      unawaited(_searchMusicBox(''));
+      return;
+    }
+    _setHomeState(() {
+      _musicBoxSearching = true;
+      _musicBoxSearchError = null;
+    });
+    _musicBoxSearchDebounce = Timer(
+      const Duration(milliseconds: 350),
+      () => unawaited(_searchMusicBox(keyword)),
+    );
+  }
+
+  Future<void> _queueMusicBoxTrack(MusicBoxSearchResult result) async {
+    final roomId = _selectedServerId;
+    if (roomId == null) return;
+    try {
+      final state = await _musicBoxController.queueSearchResult(
+        roomId: roomId,
+        result: result,
+      );
+      _applyMusicBoxSnapshot(state);
+      _showMusicBoxNotice('已加入队列：${result.name}');
+    } catch (error) {
+      _showMusicBoxNotice(_musicBoxWriteErrorMessage(error));
+    }
+  }
+
+  Future<void> _removeMusicBoxItem(MusicBoxQueueItem item) async {
+    final roomId = _selectedServerId;
+    if (roomId == null) return;
+    try {
+      final state = await _musicBoxController.removeItem(
+        roomId: roomId,
+        itemId: item.id,
+      );
+      _applyMusicBoxSnapshot(state);
+    } catch (error) {
+      _showMusicBoxNotice(_musicBoxWriteErrorMessage(error));
+    }
+  }
+
+  Future<void> _controlMusicBox(String action) async {
+    final roomId = _selectedServerId;
+    if (roomId == null) return;
+    try {
+      final state = await _musicBoxController.control(
+        roomId: roomId,
+        action: action,
+      );
+      _applyMusicBoxSnapshot(state);
+    } catch (error) {
+      _showMusicBoxNotice(_musicBoxWriteErrorMessage(error));
+    }
+  }
+
+  void _toggleMusicBoxPlayback() {
+    final state = _musicBox;
+    if (state == null) return;
+    final action = music_box_display.musicBoxPrimaryTransport(state);
+    unawaited(
+      _controlMusicBox(music_box_display.musicBoxTransportApiAction(action)),
+    );
+  }
+
+  // --- Error mapping ----------------------------------------------------
+
+  String _musicBoxSearchErrorMessage(Object error) {
+    if (error is ApiException && error.statusCode == 502) {
+      return '搜索服务暂时不可用，请稍后重试';
+    }
+    return '搜索失败，请重试';
+  }
+
+  String _musicBoxWriteErrorMessage(Object error) {
+    if (error is ApiException) {
+      switch (error.code) {
+        case 'music_box_unavailable':
+          return '音乐盒当前不可用';
+      }
+    }
+    return '操作失败，请重试';
+  }
+
+  void _showMusicBoxNotice(String message) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger
+      ?..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+}

@@ -6,6 +6,7 @@ import 'global_search_controller.dart';
 import 'live_controller.dart';
 import 'live_session_controller.dart';
 import 'messages_controller.dart';
+import 'music_box_controller.dart';
 import 'realtime_controller.dart';
 import 'rooms_controller.dart';
 import 'settings_controller.dart';
@@ -21,6 +22,7 @@ class AuthenticatedAppServices {
     required this.live,
     required this.liveSession,
     required this.realtime,
+    required this.musicBox,
     required this.fileDownloads,
     required this.search,
     required this.settings,
@@ -56,6 +58,7 @@ class AuthenticatedAppServices {
             apiBaseUrl: context.apiBaseUrl,
             accessTokenProvider: context.accessTokenProvider,
           ),
+      musicBox: MusicBoxController(api: api),
       fileDownloads: FileDownloadsController(),
       search: GlobalSearchController(api: api),
       settings: SettingsController(
@@ -81,6 +84,7 @@ class AuthenticatedAppServices {
   final LiveController live;
   final LiveSessionController liveSession;
   final RealtimeService realtime;
+  final MusicBoxController musicBox;
   final FileDownloadsController fileDownloads;
   final GlobalSearchController search;
   final SettingsController settings;

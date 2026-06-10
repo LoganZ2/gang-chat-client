@@ -2040,6 +2040,170 @@ void main() {
     expect(user.avatarUrl, '/assets/asset_1/avatar.png');
     api.close();
   });
+
+  test('getMusicBoxState parses the room snapshot', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/api/v1/rooms/room_1/music-box/state');
+        expect(request.headers['authorization'], 'Bearer token');
+        return http.Response(
+          jsonEncode({
+            'enabled': true,
+            'playback': {
+              'state': 'playing',
+              'current_item_id': 'item_1',
+              'position_ms': 4200,
+              'volume': 70,
+              'updated_at': '2026-06-01T10:00:00Z',
+            },
+            'queue': [
+              {
+                'id': 'item_1',
+                'source': 'netease',
+                'track_id': 't1',
+                'title': 'Song A',
+                'artist': 'Artist A',
+                'duration_ms': 200000,
+                'status': 'ready',
+                'added_by_user_id': 'user_2',
+              },
+            ],
+            'usage': {'used_bytes': 1024, 'limit_bytes': 10240},
+          }),
+          200,
+        );
+      }),
+    );
+
+    final state = await api.getMusicBoxState('room_1');
+
+    expect(state.enabled, isTrue);
+    expect(state.playback.state, MusicBoxPlaybackState.playing);
+    expect(state.currentItem?.title, 'Song A');
+    expect(state.usage.limitBytes, 10240);
+    api.close();
+  });
+
+  test('searchMusicBox sends keyword and parses results', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/api/v1/rooms/room_1/music-box/search');
+        expect(request.url.queryParameters['keyword'], '晴天');
+        return http.Response(
+          jsonEncode({
+            'results': [
+              {
+                'source': 'netease',
+                'track_id': 't9',
+                'name': '晴天',
+                'artists': ['周杰伦'],
+                'pic_id': 'p9',
+              },
+            ],
+          }),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }),
+    );
+
+    final results = await api.searchMusicBox(roomId: 'room_1', keyword: '晴天');
+
+    expect(results, hasLength(1));
+    expect(results.single.name, '晴天');
+    expect(results.single.artists, ['周杰伦']);
+    api.close();
+  });
+
+  test('queueMusicBoxTrack posts the track body and returns the snapshot',
+      () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/v1/rooms/room_1/music-box/queue');
+        expect(jsonDecode(request.body) as Map<String, Object?>, {
+          'source': 'netease',
+          'track_id': 't9',
+          'title': '晴天',
+          'artist': '周杰伦',
+          'pic_id': 'p9',
+        });
+        return http.Response(
+          jsonEncode({'enabled': true, 'queue': [], 'usage': {}}),
+          200,
+        );
+      }),
+    );
+
+    final state = await api.queueMusicBoxTrack(
+      roomId: 'room_1',
+      trackId: 't9',
+      title: '晴天',
+      source: 'netease',
+      artist: '周杰伦',
+      picId: 'p9',
+    );
+
+    expect(state.enabled, isTrue);
+    api.close();
+  });
+
+  test('controlMusicBox posts the action', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/v1/rooms/room_1/music-box/control');
+        expect(jsonDecode(request.body) as Map<String, Object?>, {
+          'action': 'skip',
+        });
+        return http.Response(
+          jsonEncode({'enabled': true, 'queue': [], 'usage': {}}),
+          200,
+        );
+      }),
+    );
+
+    final state = await api.controlMusicBox(roomId: 'room_1', action: 'skip');
+
+    expect(state.enabled, isTrue);
+    api.close();
+  });
+
+  test('removeMusicBoxItem deletes the queue item', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'DELETE');
+        expect(
+          request.url.path,
+          '/api/v1/rooms/room_1/music-box/queue/item_1',
+        );
+        return http.Response(
+          jsonEncode({'enabled': true, 'queue': [], 'usage': {}}),
+          200,
+        );
+      }),
+    );
+
+    final state = await api.removeMusicBoxItem(
+      roomId: 'room_1',
+      itemId: 'item_1',
+    );
+
+    expect(state.enabled, isTrue);
+    api.close();
+  });
 }
 
 Map<String, Object?> _roomInviteJson({

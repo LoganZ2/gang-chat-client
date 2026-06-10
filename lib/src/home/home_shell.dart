@@ -18,6 +18,8 @@ import '../app/live_display.dart' as live_display;
 import '../app/live_session_controller.dart';
 import '../app/message_display.dart' as message_display;
 import '../app/messages_controller.dart';
+import '../app/music_box_controller.dart';
+import '../app/music_box_display.dart' as music_box_display;
 import '../app/realtime_controller.dart';
 import '../app/room_display.dart' as room_display;
 import '../app/room_join.dart' as room_join;
@@ -30,7 +32,7 @@ import '../app/voice_message_display.dart' as voice_display;
 import '../app/voice_recorder_controller.dart';
 import '../live/live_session.dart';
 import '../protocol/api_client.dart'
-    show UploadCancelledException, UploadTransferController;
+    show ApiException, UploadCancelledException, UploadTransferController;
 import '../protocol/models.dart';
 import '../settings/settings_page.dart';
 import '../shell/desktop_window_controller.dart';
@@ -48,6 +50,7 @@ import 'room_management.dart';
 part 'home_shell_realtime.dart';
 part 'home_shell_room_actions.dart';
 part 'home_shell_live_actions.dart';
+part 'home_shell_music_box.dart';
 part 'home_shell_messages.dart';
 part 'home_shell_downloads.dart';
 part 'home_shell_notifications.dart';
@@ -144,6 +147,22 @@ class _HomeShellState extends State<HomeShell> {
   bool _cameraOn = false;
   bool _screenSharing = false;
   bool _voiceBlocked = false;
+  // The selected room's music box snapshot, or null when not loaded / disabled.
+  // Overwritten wholesale from state fetches, write responses, and the
+  // `music_box_changed` SSE event; never merged field by field.
+  MusicBoxState? _musicBox;
+  // Whether the in-pane music box panel is expanded over the live channel.
+  bool _musicBoxOpen = false;
+  // Advances the progress bar locally while a track plays, since the server
+  // only sends position_ms at state changes. Recalibrated on each snapshot.
+  Timer? _musicBoxTicker;
+  // Drives the music box search field; results are fetched debounced.
+  final TextEditingController _musicBoxSearchController = TextEditingController();
+  List<MusicBoxSearchResult> _musicBoxSearchResults = const [];
+  bool _musicBoxSearching = false;
+  String? _musicBoxSearchError;
+  int _musicBoxSearchSerial = 0;
+  Timer? _musicBoxSearchDebounce;
   Timer? _searchDebounce;
   int _searchRequestSerial = 0;
   String _searchQuery = '';
@@ -162,6 +181,7 @@ class _HomeShellState extends State<HomeShell> {
   VoiceRecorderController get _voiceRecorder => _services.voiceRecorder;
   LiveController get _liveController => _services.live;
   LiveSessionController get _liveSessionController => _services.liveSession;
+  MusicBoxController get _musicBoxController => _services.musicBox;
   FileDownloadsController get _fileDownloadsController =>
       _services.fileDownloads;
 
@@ -170,6 +190,7 @@ class _HomeShellState extends State<HomeShell> {
     super.initState();
     _currentUser = widget.app.currentUser;
     _titleSearchController.addListener(_handleTitleSearchChanged);
+    _musicBoxSearchController.addListener(_handleMusicBoxSearchChanged);
     _installServices();
     _attachLiveSessionCallbacks();
     _startRealtime();
@@ -229,6 +250,7 @@ class _HomeShellState extends State<HomeShell> {
       _cameraOn = false;
       _screenSharing = false;
       _voiceBlocked = false;
+      _resetMusicBox();
       _searchQuery = '';
       _searchExpanded = false;
       _searching = false;
@@ -249,6 +271,9 @@ class _HomeShellState extends State<HomeShell> {
     unawaited(_setSystemFullScreen(false));
     _detachLiveSessionCallbacks();
     _voiceTicker?.cancel();
+    _musicBoxTicker?.cancel();
+    _musicBoxSearchDebounce?.cancel();
+    _musicBoxSearchController.dispose();
     _searchDebounce?.cancel();
     _titleSearchController.removeListener(_handleTitleSearchChanged);
     _titleSearchController.dispose();

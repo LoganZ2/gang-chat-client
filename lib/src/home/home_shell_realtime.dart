@@ -67,6 +67,9 @@ extension _HomeShellRealtime on _HomeShellState {
       case 'room_applications_updated':
         _applyRoomApplicationsUpdated();
         break;
+      case 'music_box_changed':
+        _onMusicBoxChanged(event.data);
+        break;
       default:
         break;
     }
@@ -138,6 +141,7 @@ extension _HomeShellRealtime on _HomeShellState {
         _roomError = null;
         _sendError = null;
         _narrowContentOpen = false;
+        _resetMusicBox();
       }
     });
     if (patch.shouldDisconnectLive) {

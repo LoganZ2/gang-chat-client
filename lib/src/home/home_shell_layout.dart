@@ -104,6 +104,19 @@ extension _HomeShellLayout on _HomeShellState {
         onToggleHeadphones: _toggleHeadphonesMute,
         onToggleCamera: () => unawaited(_toggleCamera()),
         onToggleShare: () => unawaited(_toggleScreenShare()),
+        musicBox: _musicBox,
+        musicBoxOpen: _musicBoxOpen,
+        musicBoxSearchController: _musicBoxSearchController,
+        musicBoxSearchResults: _musicBoxSearchResults,
+        musicBoxSearching: _musicBoxSearching,
+        musicBoxSearchError: _musicBoxSearchError,
+        onToggleMusicBox: _toggleMusicBoxPanel,
+        onMusicBoxTogglePlayback: _toggleMusicBoxPlayback,
+        onMusicBoxSkip: () => unawaited(_controlMusicBox('skip')),
+        onMusicBoxStop: () => unawaited(_controlMusicBox('stop')),
+        onMusicBoxQueueResult: (result) =>
+            unawaited(_queueMusicBoxTrack(result)),
+        onMusicBoxRemoveItem: (item) => unawaited(_removeMusicBoxItem(item)),
       );
     }
 

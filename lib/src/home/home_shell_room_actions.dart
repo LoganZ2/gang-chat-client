@@ -54,6 +54,7 @@ extension _HomeShellRoomActions on _HomeShellState {
           _messages = const [];
           _fileTransfers = const {};
           _fileDownloads = const {};
+          _resetMusicBox();
           _contentMode = _ContentMode.chat;
           if (shouldDisconnectLive) {
             _joinedLiveRoomId = null;
@@ -94,6 +95,7 @@ extension _HomeShellRoomActions on _HomeShellState {
       _stagedAttachments.clear();
       _roomError = null;
       _sendError = null;
+      _resetMusicBox();
       _stickerPanelState = sticker_display.stickerPanelReset(
         source: _stickerPanelState.source,
       );
@@ -110,6 +112,7 @@ extension _HomeShellRoomActions on _HomeShellState {
         _loadingRoom = false;
         _roomError = null;
       });
+      unawaited(_loadMusicBox(server.id));
     } catch (error) {
       if (!mounted || _selectedServerId != server.id) return;
       _setHomeState(() {

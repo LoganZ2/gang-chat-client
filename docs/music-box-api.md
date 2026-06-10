@@ -41,10 +41,10 @@
 | GET | `/rooms/:room_id/music-box/state` | 拉取音乐盒完整状态快照 | 房间可访问者 |
 | GET | `/rooms/:room_id/music-box/search` | 搜索歌曲 | 房间成员 |
 | POST | `/rooms/:room_id/music-box/queue` | 点歌（加入队列） | 房间成员 |
-| DELETE | `/rooms/:room_id/music-box/queue/:item_id` | 移除队列里的某首 | 点歌人本人或房管 |
+| DELETE | `/rooms/:room_id/music-box/queue/:item_id` | 移除队列里的某首 | 房间成员 |
 | POST | `/rooms/:room_id/music-box/control` | 播放控制 | 房间成员 |
 
-> 权限说明：搜索、点歌、播放控制目前对**任意房间成员**开放。移除队列项只允许**点这首歌的人本人**或**房管**操作，否则返回 `403 forbidden`。
+> 权限说明：搜索、点歌、播放控制、移除队列项目前都对**任意房间成员**开放。移除不再限制点歌人本人/房管，也不会再返回 `403 forbidden`。
 
 ---
 
@@ -97,13 +97,14 @@ GET /api/v1/rooms/:room_id/music-box/state
 - `queue[].status`：队列项的音频处理生命周期，枚举见下。
 - `queue[].error`：当 `status == "failed"` 时这里有失败原因，可展示给用户。
 - `queue[].file_size_bytes`：转码后的 Opus 文件大小，`ready` 前为 0。
-- `usage`：该房间音乐盒占用的磁盘字节 / 上限。点歌前可用它给用户提示「队列已接近上限」。
+- `usage`：该房间音乐盒占用的磁盘字节 / 上限。点歌前可用它给用户提示「空间已接近上限」。注意**超过上限不会拒绝点歌**——新歌照常入队，只是会长时间停在 `pending`，等前面的歌播放完释放空间后才轮到下载。
+- 播完的歌会从 `queue[]` 中**移除**（播完即删），不会以 `ready` 状态残留。如果要做「已播放/历史」列表，不能靠队列残留项渲染，需要客户端自行记录。正常的「待播队列」展示不受影响。
 
 队列项状态机 `queue[].status`：
 
 | 值 | 含义 | UI 建议 |
 |----|------|---------|
-| `pending` | 已入队，等待下载转码 | 显示「准备中」 |
+| `pending` | 已入队，等待下载转码（空间不足时会在此长时间停留） | 显示「排队中，等待下载」 |
 | `downloading` | 正在下载/转码 | 显示「下载中」转圈 |
 | `ready` | 转码完成，可播放 | 正常显示，可播放/可作为当前曲目 |
 | `failed` | 下载或转码失败 | 显示错误态，附 `error` 文案，提供「移除」 |
@@ -173,8 +174,9 @@ Content-Type: application/json
 
 错误：
 
-- `409 queue_full`：该房间音乐盒磁盘占用已达上限，提示用户稍后再点或先清理队列。
 - `503 music_box_unavailable`：音乐盒未启用。
+
+> 队列**不会因为空间满而拒绝点歌**（不再返回 `409 queue_full`）。磁盘占用超过上限时，新歌仍然入队，但会在 `pending` 状态长时间等待，直到前面的歌播完释放空间后才开始下载。UI 上对 `pending` 给个「排队中，等待下载」的提示，别让用户以为卡住了。
 
 > 点歌后不要本地乐观插入就完事——以响应快照（以及随后的 SSE 推送）为准刷新队列，因为 `status` 会从 `pending → downloading → ready` 变化。
 
@@ -190,9 +192,7 @@ DELETE /api/v1/rooms/:room_id/music-box/queue/:item_id
 
 响应 `200`：返回完整状态快照。
 
-错误：
-
-- `403 forbidden`：当前用户既不是这首歌的点歌人、也不是房管。客户端可据此只对「自己点的」或「房管」展示删除按钮。
+> 移除对**任意房间成员**开放，不再校验点歌人/房管，也不会返回 `403 forbidden`。客户端可以对队列里的每一首都展示删除按钮。
 
 ---
 
@@ -255,12 +255,12 @@ Content-Type: application/json
 
 - [ ] 进房后调一次 `GET /music-box/state`，根据 `enabled` 决定是否展示音乐盒入口。
 - [ ] 搜索 → 点歌：把搜索结果字段正确映射到点歌请求体（`name→title`、`artists→artist`）。
-- [ ] 队列 UI 按 `status` 渲染（准备中/下载中/可播放/失败）。
+- [ ] 队列 UI 按 `status` 渲染（排队中/下载中/可播放/失败）；`pending` 可能长时间停留，给「排队中，等待下载」提示。
 - [ ] 接入 SSE `music_box_changed`，整体覆盖本地状态。
 - [ ] 进度条用 `position_ms + 本地计时` 推进，收到快照时校准。
-- [ ] 删除按钮按「本人/房管」展示，并兜底处理 `403`。
+- [ ] 删除按钮可对队列里每一首展示（移除已对所有成员开放）。
 - [ ] 音频本身依赖已加入 LiveKit 语音会话；未入会时给用户「加入语音才能听」的提示。
-- [ ] 处理 `503 music_box_unavailable`、`409 queue_full`、`502 upstream_error` 几种态。
+- [ ] 处理 `503 music_box_unavailable`、`502 upstream_error` 两种态（点歌不再有 `409 queue_full`，删除不再有 `403 forbidden`）。
 - [ ] 在房间成员列表里按 identity `__musicbox__` 过滤掉机器人参与者（如不想把它当成真人显示）。
 
 ## 待服务端确认 / 尚未就绪的点
