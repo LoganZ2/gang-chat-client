@@ -150,6 +150,8 @@ extension _HomeShellLayout on _HomeShellState {
       loading: _loadingServers || _loadingSidebarSearch,
       error: _serverLoadError,
       settingsActive: _settingsOpen,
+      createRoomActive:
+          !_settingsOpen && _contentMode == _ContentMode.createRoom,
       notificationsActive:
           !_settingsOpen && _contentMode == _ContentMode.notifications,
       hasPendingNotifications: _hasPendingRoomInvites,

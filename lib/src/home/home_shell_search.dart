@@ -98,21 +98,39 @@ extension _HomeShellSearch on _HomeShellState {
     }
 
     String? reason;
+    var startedBeforeDialog = false;
     if (room_display.publicRoomJoinRequiresApplication(room)) {
+      final started = room_join.roomJoinPublicActionStarted(
+        roomId: room.id,
+        pendingRoomIds: _searchPendingPublicRoomIds,
+      );
+      _setHomeState(() {
+        _busySearchPublicRoomId = started.busyRoomId;
+        _searchError = started.error;
+        _searchPendingPublicRoomIds = started.pendingRoomIds;
+      });
+      startedBeforeDialog = true;
       final rawReason = await _showJoinApplicationDialog(room);
-      if (rawReason == null || !mounted) return;
+      if (rawReason == null || !mounted) {
+        if (mounted) {
+          _setHomeState(() => _busySearchPublicRoomId = null);
+        }
+        return;
+      }
       reason = room_join.joinRequestReasonValue(rawReason);
     }
 
-    final started = room_join.roomJoinPublicActionStarted(
-      roomId: room.id,
-      pendingRoomIds: _searchPendingPublicRoomIds,
-    );
-    _setHomeState(() {
-      _busySearchPublicRoomId = started.busyRoomId;
-      _searchError = started.error;
-      _searchPendingPublicRoomIds = started.pendingRoomIds;
-    });
+    if (!startedBeforeDialog) {
+      final started = room_join.roomJoinPublicActionStarted(
+        roomId: room.id,
+        pendingRoomIds: _searchPendingPublicRoomIds,
+      );
+      _setHomeState(() {
+        _busySearchPublicRoomId = started.busyRoomId;
+        _searchError = started.error;
+        _searchPendingPublicRoomIds = started.pendingRoomIds;
+      });
+    }
 
     try {
       final result = await _roomsController.joinRoom(room.id, reason: reason);

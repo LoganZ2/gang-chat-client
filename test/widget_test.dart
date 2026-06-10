@@ -20,6 +20,7 @@ import 'package:client/src/live/live_session.dart';
 import 'package:client/src/protocol/api_client.dart';
 import 'package:client/src/protocol/models.dart';
 import 'package:client/src/settings/settings_page.dart';
+import 'package:client/src/shell/login_page.dart';
 import 'package:client/src/ui/ui.dart' as ui;
 import 'package:client/src/home/home_page.dart';
 import 'package:client/src/home/live_channel_pane.dart' as live_pane;
@@ -125,6 +126,50 @@ void main() {
       _submitBottomGap(tester, submitLabel: '登录'),
       closeTo(normalBottomGap, 0.01),
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('auth login error layout stays scrollable across retries', (
+    WidgetTester tester,
+  ) async {
+    var attempts = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: LoginPage(
+          sizeForMode: (_, {showingError = false}) => const Size(416, 250),
+          consumeInitialWindowLock: () => true,
+          lockAuthWindow:
+              ({
+                bool registering = false,
+                bool moveWindow = false,
+                bool centerWindow = false,
+                Size? size,
+              }) async {},
+          onSubmit: (_) async {
+            attempts += 1;
+            throw Exception('登录失败');
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.enterText(_textFieldWithHint('用户名或邮箱地址'), 'kai');
+    await tester.enterText(_textFieldWithHint('密码'), 'secret123');
+    await tester.tap(find.widgetWithText(ui.Button, '登录'));
+    await tester.pumpAndSettle();
+
+    expect(attempts, 1);
+    expect(tester.takeException(), isNull);
+
+    await tester.ensureVisible(find.widgetWithText(ui.Button, '登录'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ui.Button, '登录'));
+    await tester.pumpAndSettle();
+
+    expect(attempts, 2);
     expect(tester.takeException(), isNull);
   });
 
@@ -340,6 +385,14 @@ void main() {
     await tester.tap(find.byTooltip('创建房间'));
     await tester.pumpAndSettle();
 
+    expect(
+      tester
+          .widget<ui.ButtonIcon>(
+            find.byKey(const ValueKey('home-sidebar-create-room-button')),
+          )
+          .selected,
+      isTrue,
+    );
     expect(find.text('创建房间'), findsOneWidget);
     expect(find.text('房间信息'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '确定'), findsOneWidget);
@@ -481,10 +534,29 @@ void main() {
       );
 
       await tester.tap(find.byTooltip('接受邀请'));
+      await tester.tap(find.byTooltip('接受邀请'), warnIfMissed: false);
       await tester.pumpAndSettle();
 
       expect(find.text('申请加入'), findsOneWidget);
       expect(find.text('您需要等待'), findsOneWidget);
+      await tester.tap(find.byTooltip('关闭').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('申请加入'), findsNothing);
+
+      await tester.tap(find.byTooltip('接受邀请'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('申请加入'), findsOneWidget);
+      await tester.tap(find.widgetWithText(ui.Button, '取消'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('申请加入'), findsNothing);
+
+      await tester.tap(find.byTooltip('接受邀请'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('申请加入'), findsOneWidget);
       await tester.enterText(_textFieldWithHint('申请说明'), 'I was invited');
       await tester.tap(find.widgetWithText(ui.Button, '发送申请'));
       await tester.pumpAndSettle();

@@ -81,20 +81,33 @@ extension _HomeShellNotifications on _HomeShellState {
     }
 
     String? reason;
+    var startedBeforeDialog = false;
     if (accept &&
         room_notifications.roomInviteAcceptRequiresApplication(
           invite,
           roomInvites: _notificationInvites,
         )) {
+      _setHomeState(() {
+        _busyNotificationInviteId = invite.id;
+        _notificationError = null;
+      });
+      startedBeforeDialog = true;
       final rawReason = await _showJoinApplicationDialog(invite.room);
-      if (rawReason == null || !mounted) return;
+      if (rawReason == null || !mounted) {
+        if (mounted) {
+          _setHomeState(() => _busyNotificationInviteId = null);
+        }
+        return;
+      }
       reason = room_join.joinRequestReasonValue(rawReason);
     }
 
-    _setHomeState(() {
-      _busyNotificationInviteId = invite.id;
-      _notificationError = null;
-    });
+    if (!startedBeforeDialog) {
+      _setHomeState(() {
+        _busyNotificationInviteId = invite.id;
+        _notificationError = null;
+      });
+    }
 
     try {
       final result = await _roomsController.reviewRoomInvite(

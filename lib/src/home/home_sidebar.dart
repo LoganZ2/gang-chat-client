@@ -27,6 +27,7 @@ class HomeSidebar extends StatelessWidget {
     required this.loading,
     required this.error,
     required this.settingsActive,
+    required this.createRoomActive,
     required this.notificationsActive,
     required this.hasPendingNotifications,
     required this.onServerSelected,
@@ -45,6 +46,7 @@ class HomeSidebar extends StatelessWidget {
   final bool loading;
   final String? error;
   final bool settingsActive;
+  final bool createRoomActive;
   final bool notificationsActive;
   final bool hasPendingNotifications;
   final bool includeWindowChromeOffset;
@@ -91,6 +93,7 @@ class HomeSidebar extends StatelessWidget {
                     const SizedBox(height: 12),
                     _SidebarFooter(
                       settingsActive: settingsActive,
+                      createRoomActive: createRoomActive,
                       notificationsActive: notificationsActive,
                       hasPendingNotifications: hasPendingNotifications,
                       onCreateRoom: onCreateRoom,
@@ -148,6 +151,7 @@ class HomeSidebar extends StatelessWidget {
 class _SidebarFooter extends StatelessWidget {
   const _SidebarFooter({
     required this.settingsActive,
+    required this.createRoomActive,
     required this.notificationsActive,
     required this.hasPendingNotifications,
     required this.onCreateRoom,
@@ -157,6 +161,7 @@ class _SidebarFooter extends StatelessWidget {
   });
 
   final bool settingsActive;
+  final bool createRoomActive;
   final bool notificationsActive;
   final bool hasPendingNotifications;
   final VoidCallback onCreateRoom;
@@ -171,8 +176,10 @@ class _SidebarFooter extends StatelessWidget {
       child: Row(
         children: [
           ButtonIcon(
+            key: const ValueKey('home-sidebar-create-room-button'),
             tooltip: '创建房间',
             icon: const Icon(Icons.add_circle_outline),
+            selected: createRoomActive,
             onPressed: onCreateRoom,
             size: _footerButtonSize,
           ),
