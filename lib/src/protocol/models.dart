@@ -948,7 +948,8 @@ class RoomMember {
                 'status',
                 'connection_state',
               ]),
-        );
+        ) ??
+        baseUser.isOnline;
     final user = baseUser.copyWith(
       roomDisplayName: roomDisplayName,
       roomRole: role,

@@ -342,6 +342,23 @@ void main() {
     );
   });
 
+  test('RoomMember parses online state from nested user payload', () {
+    final member = RoomMember.fromJson({
+      'user': {
+        'id': 'user_1',
+        'uid': '1000001',
+        'username': 'alice',
+        'display_name': 'Alice',
+        'is_online': true,
+      },
+      'role': 'member',
+      'joined_at': '2026-05-31T14:00:00Z',
+    });
+
+    expect(member.isOnline, isTrue);
+    expect(member.user.isOnline, isTrue);
+  });
+
   test('listRoomMembers requests room members with pagination', () async {
     final api = GangApiClient(
       baseUrl: 'http://example.test/api/v1',

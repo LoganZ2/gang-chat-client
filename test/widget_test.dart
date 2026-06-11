@@ -819,6 +819,9 @@ void main() {
     );
     expect(find.text('Kai'), findsWidgets);
     expect(find.text('Morgan'), findsWidgets);
+    expect(find.text('uid-1 · @kai'), findsNothing);
+    expect(find.text('user-2 · @morgan'), findsNothing);
+    expect(find.text('创建者'), findsNothing);
     expect(requestedPaths, contains('/api/v1/rooms/server-alpha/members'));
     expect(
       requestedPaths,

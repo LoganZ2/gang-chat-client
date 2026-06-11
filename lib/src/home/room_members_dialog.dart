@@ -422,7 +422,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
 
   List<RoomMember> _visibleMembers() {
     return member_filter.visibleRoomMembers(
-      members: _members,
+      members: _effectiveMembers,
       live: _live,
       presenceFilter: _presenceFilter,
       roleFilter: _roleFilter,
@@ -430,6 +430,12 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       ownerUserId: _room.createdBy?.id,
     );
   }
+
+  List<RoomMember> get _effectiveMembers =>
+      member_filter.roomMembersWithCurrentUserPresence(
+        _members,
+        currentUserId: widget.currentUser.id,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -467,7 +473,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
             query: _inviteQuery,
             searching: _searchingInvites,
             results: _inviteResults,
-            members: _members,
+            members: _effectiveMembers,
             pendingInviteUserIds: _pendingInviteUserIds,
             busyUserIds: _busyInviteUserIds,
             error: _inviteError,
@@ -524,9 +530,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
         );
         return _MemberRow(
           member: member,
-          live: _live,
           permission: permission,
-          ownerUserId: _room.createdBy?.id,
           busy: _busyMemberIds.contains(member.user.id),
           onSetAdmin: () => _setMemberRole(member, 'admin'),
           onUnsetAdmin: () => _setMemberRole(member, 'member'),

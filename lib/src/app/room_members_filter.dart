@@ -417,6 +417,37 @@ List<RoomMemberPresenceGroup> roomMemberPresenceGroups({
   ];
 }
 
+List<RoomMember> roomMembersWithCurrentUserPresence(
+  Iterable<RoomMember> members, {
+  required String currentUserId,
+}) {
+  return [
+    for (final member in members)
+      roomMemberWithCurrentUserPresence(member, currentUserId: currentUserId),
+  ];
+}
+
+RoomMember roomMemberWithCurrentUserPresence(
+  RoomMember member, {
+  required String currentUserId,
+}) {
+  if (currentUserId.isEmpty || member.user.id != currentUserId) {
+    return member;
+  }
+  if (member.isOnline == true && member.user.isOnline == true) {
+    return member;
+  }
+  return RoomMember(
+    user: member.user.copyWith(isOnline: true),
+    role: member.role,
+    joinedAt: member.joinedAt,
+    roomDisplayName: member.roomDisplayName,
+    remarkName: member.remarkName,
+    textMutedUntil: member.textMutedUntil,
+    isOnline: true,
+  );
+}
+
 RoomMemberPresence roomMemberPresence(
   RoomMember member, {
   required LiveState live,

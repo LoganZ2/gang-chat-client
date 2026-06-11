@@ -116,6 +116,34 @@ void main() {
     expect(groups[2].members.single.user.id, 'offline');
   });
 
+  test('current user presence fallback keeps the signed-in member online', () {
+    final self = _member('self', isOnline: false);
+    final other = _member('other', isOnline: false);
+
+    final members = roomMembersWithCurrentUserPresence([
+      self,
+      other,
+    ], currentUserId: 'self');
+
+    expect(members.first.user.id, 'self');
+    expect(members.first.isOnline, isTrue);
+    expect(members.first.user.isOnline, isTrue);
+    expect(members.last, same(other));
+    expect(
+      roomMemberPresence(members.first, live: _live()),
+      RoomMemberPresence.online,
+    );
+
+    final online = visibleRoomMembers(
+      members: members,
+      live: _live(),
+      presenceFilter: RoomMemberPresenceFilter.online,
+      roleFilter: RoomMemberRoleFilter.all,
+      query: '',
+    );
+    expect(online.map((member) => member.user.id), ['self']);
+  });
+
   test('visibleRoomMembers filters presence and role consistently', () {
     final members = [
       _member('live_admin', role: 'admin', isOnline: false),

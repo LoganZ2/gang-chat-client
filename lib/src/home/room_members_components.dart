@@ -80,9 +80,7 @@ class _MemberFilters extends StatelessWidget {
 class _MemberRow extends StatelessWidget {
   const _MemberRow({
     required this.member,
-    required this.live,
     required this.permission,
-    required this.ownerUserId,
     required this.busy,
     required this.onSetAdmin,
     required this.onUnsetAdmin,
@@ -91,9 +89,7 @@ class _MemberRow extends StatelessWidget {
   });
 
   final RoomMember member;
-  final LiveState live;
   final member_filter.RoomMemberPermissionState permission;
-  final String? ownerUserId;
   final bool busy;
   final VoidCallback onSetAdmin;
   final VoidCallback onUnsetAdmin;
@@ -102,11 +98,6 @@ class _MemberRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final presence = member_filter.roomMemberPresence(member, live: live);
-    final role = room_display.roomRoleLabel(
-      member.user,
-      ownerUserId: ownerUserId,
-    );
     return _RowSurface(
       child: SizedBox(
         height: 40,
@@ -118,43 +109,17 @@ class _MemberRow extends StatelessWidget {
                 context,
               ).resolveAssetUrl(member.user.avatarUrl),
               defaultAvatarKey: member.user.defaultAvatarKey,
-              active: presence != member_filter.RoomMemberPresence.offline,
-              activeBorderWidth: 1.1,
               size: 38,
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    member_filter.roomMemberDisplayName(member),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: UiTypography.body.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    member_filter.roomMemberMeta(member),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: UiTypography.label.copyWith(
-                      color: UiColors.textMuted,
-                    ),
-                  ),
-                ],
+              child: Text(
+                member_filter.roomMemberDisplayName(member),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: UiTypography.body.copyWith(fontWeight: FontWeight.w600),
               ),
             ),
-            const SizedBox(width: 10),
-            _Pill(
-              label: member_filter.roomMemberPresenceLabel(presence),
-              active: presence == member_filter.RoomMemberPresence.live,
-            ),
-            const SizedBox(width: 6),
-            _Pill(label: role),
             if (busy) ...[
               const SizedBox(width: 10),
               const SizedBox.square(
