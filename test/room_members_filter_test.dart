@@ -371,6 +371,14 @@ void main() {
       ).canRoleEdit,
       isFalse,
     );
+    expect(
+      roomMemberPermissionState(
+        member: _member('member'),
+        currentUser: currentUser,
+        canEditCreatorOnly: false,
+      ).canRemoveMember,
+      isFalse,
+    );
   });
 
   test('room member management action patches busy state', () {

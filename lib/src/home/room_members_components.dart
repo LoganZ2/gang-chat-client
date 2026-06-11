@@ -80,7 +80,9 @@ class _MemberFilters extends StatelessWidget {
 class _MemberRow extends StatelessWidget {
   const _MemberRow({
     required this.member,
+    required this.live,
     required this.permission,
+    required this.ownerUserId,
     required this.busy,
     required this.onSetAdmin,
     required this.onUnsetAdmin,
@@ -89,7 +91,9 @@ class _MemberRow extends StatelessWidget {
   });
 
   final RoomMember member;
+  final LiveState live;
   final member_filter.RoomMemberPermissionState permission;
+  final String? ownerUserId;
   final bool busy;
   final VoidCallback onSetAdmin;
   final VoidCallback onUnsetAdmin;
@@ -98,6 +102,11 @@ class _MemberRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final presence = member_filter.roomMemberPresence(member, live: live);
+    final role = room_display.roomRoleLabel(
+      member.user,
+      ownerUserId: ownerUserId,
+    );
     return _RowSurface(
       child: SizedBox(
         height: 40,
@@ -120,6 +129,13 @@ class _MemberRow extends StatelessWidget {
                 style: UiTypography.body.copyWith(fontWeight: FontWeight.w600),
               ),
             ),
+            const SizedBox(width: 10),
+            _Pill(
+              label: member_filter.roomMemberPresenceLabel(presence),
+              active: presence == member_filter.RoomMemberPresence.live,
+            ),
+            const SizedBox(width: 6),
+            _Pill(label: role),
             if (busy) ...[
               const SizedBox(width: 10),
               const SizedBox.square(

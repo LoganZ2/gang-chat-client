@@ -821,7 +821,7 @@ void main() {
     expect(find.text('Morgan'), findsWidgets);
     expect(find.text('uid-1 · @kai'), findsNothing);
     expect(find.text('user-2 · @morgan'), findsNothing);
-    expect(find.text('创建者'), findsNothing);
+    expect(find.text('创建者'), findsOneWidget);
     expect(requestedPaths, contains('/api/v1/rooms/server-alpha/members'));
     expect(
       requestedPaths,
@@ -942,6 +942,40 @@ void main() {
     expect(find.textContaining('Alpha Renamed'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'authenticated home shell hides member removal for regular users',
+    (WidgetTester tester) async {
+      final requestedPaths = <String>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: HomePage(
+            app: _homeTestAppContext(
+              requestedPaths: requestedPaths,
+              currentRoomRole: 'member',
+            ),
+            realtime: _NoopRealtimeService(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Alpha Room'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('房间成员'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('成员'), findsAtLeastNWidgets(1));
+      expect(find.text('Morgan'), findsWidgets);
+      expect(find.byTooltip('踢出此用户'), findsNothing);
+      expect(find.byTooltip('设为管理员'), findsNothing);
+      expect(find.byTooltip('转让创建者'), findsNothing);
+      expect(requestedPaths, contains('/api/v1/rooms/server-alpha/members'));
+    },
+  );
 
   testWidgets('authenticated home shell applies realtime live snapshots', (
     WidgetTester tester,
@@ -2762,6 +2796,7 @@ AuthenticatedAppContext _homeTestAppContext({
   List<Uri>? requestedUris,
   List<Map<String, Object?>>? accountUpdates,
   List<Map<String, Object?>>? roomCreations,
+  String currentRoomRole = 'owner',
 }) {
   final user = CurrentUser(
     id: 'user-1',
@@ -2795,6 +2830,7 @@ AuthenticatedAppContext _homeTestAppContext({
       requestedUris: requestedUris,
       accountUpdates: accountUpdates,
       roomCreations: roomCreations,
+      currentRoomRole: currentRoomRole,
     ),
   );
 }
@@ -2804,6 +2840,7 @@ GangApi _roomsApi({
   List<Uri>? requestedUris,
   List<Map<String, Object?>>? accountUpdates,
   List<Map<String, Object?>>? roomCreations,
+  String currentRoomRole = 'owner',
 }) {
   return GangApiClient(
     baseUrl: 'http://example.test/api/v1',
@@ -2962,13 +2999,14 @@ GangApi _roomsApi({
             memberCount: 2,
             onlineMemberCount: 1,
             liveParticipantCount: 1,
+            role: currentRoomRole,
           ),
         });
       }
       if (request.url.path == '/api/v1/rooms/server-alpha/members') {
         return _jsonResponse({
           'members': [
-            _roomMemberJson(user: _currentUserJson, role: 'owner'),
+            _roomMemberJson(user: _currentUserJson, role: currentRoomRole),
             _roomMemberJson(
               user: _userJson(
                 id: 'user-2',
