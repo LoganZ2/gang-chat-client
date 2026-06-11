@@ -56,6 +56,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
   String? _requestError;
   String? _inviteError;
   String? _notice;
+  String? _activeJoinRequestDetailId;
   member_filter.RoomMemberPresenceFilter _presenceFilter =
       member_filter.RoomMemberPresenceFilter.all;
   member_filter.RoomMemberRoleFilter _roleFilter =
@@ -269,10 +270,15 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
   }
 
   Future<void> _showJoinRequestDetails(JoinRequest request) async {
-    await showDialog<void>(
-      context: context,
-      builder: (context) => _JoinRequestDetailsDialog(request: request),
-    );
+    setState(() => _activeJoinRequestDetailId = request.id);
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => _JoinRequestDetailsDialog(request: request),
+      );
+    } finally {
+      if (mounted) setState(() => _activeJoinRequestDetailId = null);
+    }
   }
 
   Future<void> _setMemberRole(RoomMember member, String role) async {
@@ -472,6 +478,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
             _JoinRequestsSection(
               requests: _requests,
               busyRequestIds: _busyRequestIds,
+              activeDetailRequestId: _activeJoinRequestDetailId,
               error: _requestError,
               onDetail: _showJoinRequestDetails,
               onApprove: (request) => _reviewRequest(request, true),

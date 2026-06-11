@@ -182,23 +182,6 @@ void main() {
       JoinRequestListBodyState.results,
     );
   });
-
-  test(
-    'joinRequestUserMeta prefers uid and falls back to user id without username',
-    () {
-      expect(
-        joinRequestUserMeta(
-          _request('with_uid', user: _user('user_1', uid: '1001')),
-        ),
-        '1001',
-      );
-
-      expect(
-        joinRequestUserMeta(_request('without_uid', user: _user('user_2'))),
-        'user_2',
-      );
-    },
-  );
 }
 
 JoinRequest _request(
@@ -219,14 +202,13 @@ JoinRequest _request(
   );
 }
 
-UserSummary _user(String id, {String? uid, String? displayName}) {
+UserSummary _user(String id, {String? displayName}) {
   return UserSummary(
     id: id,
     username: id,
     displayName: displayName ?? 'User $id',
     avatarUrl: null,
     defaultAvatarKey: 'blue-3',
-    uid: uid,
   );
 }
 

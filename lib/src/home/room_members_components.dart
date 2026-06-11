@@ -350,6 +350,7 @@ class _JoinRequestsSection extends StatelessWidget {
   const _JoinRequestsSection({
     required this.requests,
     required this.busyRequestIds,
+    required this.activeDetailRequestId,
     required this.error,
     required this.onDetail,
     required this.onApprove,
@@ -358,6 +359,7 @@ class _JoinRequestsSection extends StatelessWidget {
 
   final List<JoinRequest> requests;
   final Set<String> busyRequestIds;
+  final String? activeDetailRequestId;
   final String? error;
   final ValueChanged<JoinRequest> onDetail;
   final ValueChanged<JoinRequest> onApprove;
@@ -389,6 +391,7 @@ class _JoinRequestsSection extends StatelessWidget {
                   _JoinRequestRow(
                     request: request,
                     busy: busyRequestIds.contains(request.id),
+                    detailActive: activeDetailRequestId == request.id,
                     onDetail: () => onDetail(request),
                     onApprove: () => onApprove(request),
                     onReject: () => onReject(request),
@@ -407,6 +410,7 @@ class _JoinRequestRow extends StatelessWidget {
   const _JoinRequestRow({
     required this.request,
     required this.busy,
+    required this.detailActive,
     required this.onDetail,
     required this.onApprove,
     required this.onReject,
@@ -414,6 +418,7 @@ class _JoinRequestRow extends StatelessWidget {
 
   final JoinRequest request;
   final bool busy;
+  final bool detailActive;
   final VoidCallback onDetail;
   final VoidCallback onApprove;
   final VoidCallback onReject;
@@ -434,26 +439,11 @@ class _JoinRequestRow extends StatelessWidget {
           ),
           const SizedBox(width: 9),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  room_display.userPrimaryName(request.user),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: UiTypography.label.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  room_join_requests.joinRequestUserMeta(request),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: UiTypography.label.copyWith(color: UiColors.textMuted),
-                ),
-              ],
+            child: Text(
+              room_display.userPrimaryName(request.user),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: UiTypography.label.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
           if (busy)
@@ -468,6 +458,7 @@ class _JoinRequestRow extends StatelessWidget {
             ButtonIcon(
               tooltip: '详情',
               icon: const Icon(Icons.info_outline),
+              selected: detailActive,
               onPressed: onDetail,
               size: 32,
             ),
@@ -516,26 +507,7 @@ class _JoinRequestDetailsDialog extends StatelessWidget {
         children: [
           _JoinRequestDetailBlock(
             label: '来源',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  room_join_requests.joinRequestSourceText(request),
-                  style: UiTypography.body.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                if (room_join_requests.joinRequestFromInvitation(request) &&
-                    request.inviters.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  for (final inviter in request.inviters) ...[
-                    _JoinRequestInviterRow(user: inviter),
-                    if (inviter != request.inviters.last)
-                      const SizedBox(height: 6),
-                  ],
-                ],
-              ],
-            ),
+            child: _JoinRequestSourceContent(request: request),
           ),
           const SizedBox(height: 14),
           _JoinRequestDetailBlock(
@@ -576,36 +548,58 @@ class _JoinRequestDetailBlock extends StatelessWidget {
   }
 }
 
-class _JoinRequestInviterRow extends StatelessWidget {
-  const _JoinRequestInviterRow({required this.user});
+class _JoinRequestSourceContent extends StatelessWidget {
+  const _JoinRequestSourceContent({required this.request});
+
+  final JoinRequest request;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!room_join_requests.joinRequestFromInvitation(request) ||
+        request.inviters.isEmpty) {
+      return Text(
+        room_join_requests.joinRequestSourceText(request),
+        style: UiTypography.body.copyWith(fontWeight: FontWeight.w600),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final inviter in request.inviters) ...[
+          _JoinRequestInviterSourceLine(user: inviter),
+          if (inviter != request.inviters.last) const SizedBox(height: 6),
+        ],
+      ],
+    );
+  }
+}
+
+class _JoinRequestInviterSourceLine extends StatelessWidget {
+  const _JoinRequestInviterSourceLine({required this.user});
 
   final UserSummary user;
 
   @override
   Widget build(BuildContext context) {
-    return _RowSurface(
-      compact: true,
-      child: Row(
-        children: [
-          Avatar(
-            label: room_display.userPrimaryName(user),
-            imageUrl: AppConfigScope.of(
-              context,
-            ).resolveAssetUrl(user.avatarUrl),
-            defaultAvatarKey: user.defaultAvatarKey,
-            size: 32,
+    return Row(
+      children: [
+        Avatar(
+          label: room_display.userPrimaryName(user),
+          imageUrl: AppConfigScope.of(context).resolveAssetUrl(user.avatarUrl),
+          defaultAvatarKey: user.defaultAvatarKey,
+          size: 28,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            '${room_display.userPrimaryName(user)} 的邀请',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: UiTypography.body.copyWith(fontWeight: FontWeight.w600),
           ),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Text(
-              user.username,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: UiTypography.label.copyWith(fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

@@ -796,11 +796,16 @@ void main() {
     expect(find.text('成员'), findsAtLeastNWidgets(1));
     expect(find.text('邀请成员'), findsOneWidget);
     expect(find.text('@riley'), findsNothing);
+    expect(find.text('10000001'), findsNothing);
     expect(find.byTooltip('详情'), findsOneWidget);
     await tester.ensureVisible(find.byTooltip('详情'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('详情'));
     await tester.pumpAndSettle();
+    expect(
+      tester.widget<ui.ButtonIcon>(_buttonIconWithTooltip('详情')).selected,
+      isTrue,
+    );
     expect(find.text('申请详情'), findsOneWidget);
     expect(find.text('来源'), findsOneWidget);
     expect(find.text('公开房间搜索'), findsOneWidget);
@@ -808,6 +813,10 @@ void main() {
     expect(find.text('Please approve my request'), findsOneWidget);
     await tester.tap(find.widgetWithText(ui.Button, '关闭'));
     await tester.pumpAndSettle();
+    expect(
+      tester.widget<ui.ButtonIcon>(_buttonIconWithTooltip('详情')).selected,
+      isFalse,
+    );
     expect(find.text('Kai'), findsWidgets);
     expect(find.text('Morgan'), findsWidgets);
     expect(requestedPaths, contains('/api/v1/rooms/server-alpha/members'));
@@ -2701,6 +2710,12 @@ Finder _textFieldWithHint(String hintText) {
   );
 }
 
+Finder _buttonIconWithTooltip(String tooltip) {
+  return find.byWidgetPredicate(
+    (widget) => widget is ui.ButtonIcon && widget.tooltip == tooltip,
+  );
+}
+
 void _expectRectCloseTo(Rect actual, Rect expected) {
   expect(actual.left, closeTo(expected.left, 0.01));
   expect(actual.top, closeTo(expected.top, 0.01));
@@ -2991,6 +3006,7 @@ GangApi _roomsApi({
                 id: 'user-3',
                 username: 'riley',
                 displayName: 'Riley',
+                uid: '10000001',
                 isOnline: true,
               ),
             ),
@@ -3362,6 +3378,7 @@ Map<String, Object?> _userJson({
   required String id,
   required String username,
   required String displayName,
+  String? uid,
   bool? isOnline,
 }) {
   final json = <String, Object?>{
@@ -3371,6 +3388,7 @@ Map<String, Object?> _userJson({
     'avatar_url': null,
     'default_avatar_key': 'blue-3',
   };
+  if (uid != null) json['uid'] = uid;
   if (isOnline != null) json['is_online'] = isOnline;
   return json;
 }

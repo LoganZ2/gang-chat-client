@@ -51,12 +51,6 @@ JoinRequestListBodyState joinRequestListBodyState(
   return JoinRequestListBodyState.results;
 }
 
-String joinRequestUserMeta(JoinRequest request) {
-  final uid = request.user.uid?.trim();
-  if (uid != null && uid.isNotEmpty) return uid;
-  return request.user.id;
-}
-
 String? joinRequestReasonText(JoinRequest request) {
   final reason = request.reason.trim();
   if (reason.isEmpty) return null;
