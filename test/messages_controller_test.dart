@@ -142,6 +142,94 @@ void main() {
     expect(sent.attachments.single.asset?.id, 'asset_1');
   });
 
+  test('sendVoiceMessage uploads audio and sends duration metadata', () async {
+    String? pendingClientId;
+    final requests = <String>[];
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        requests.add(request.url.path);
+        if (request.url.path == '/api/v1/uploads/files') {
+          final multipartBody = utf8.decode(
+            request.bodyBytes,
+            allowMalformed: true,
+          );
+          expect(multipartBody, contains('voice_1.m4a'));
+          return http.Response(
+            jsonEncode({
+              'asset': _assetJson(
+                id: 'asset_voice',
+                filename: 'voice_1.m4a',
+                sizeBytes: 4,
+                mimeType: 'audio/mp4',
+              ),
+            }),
+            201,
+          );
+        }
+
+        expect(request.url.path, '/api/v1/rooms/room_1/messages');
+        final body = jsonDecode(utf8.decode(request.bodyBytes));
+        expect(body['client_message_id'], pendingClientId);
+        expect(body['body'], 'voice_1.m4a');
+        expect(body['type'], 'audio');
+        final attachments = body['attachments']! as List<Object?>;
+        final attachment = attachments.single! as Map<String, Object?>;
+        expect(attachment['type'], 'audio');
+        expect(attachment['name'], 'voice_1.m4a');
+        expect(attachment['duration_ms'], 15000);
+        expect(
+          (attachment['asset']! as Map<String, Object?>)['id'],
+          'asset_voice',
+        );
+        return http.Response(
+          jsonEncode({
+            'message': _messageJson(
+              clientMessageId: body['client_message_id']! as String,
+              body: 'voice_1.m4a',
+              type: 'audio',
+              attachments: attachments,
+            ),
+          }),
+          201,
+        );
+      }),
+    );
+    addTearDown(api.close);
+
+    final events = <String>[];
+    final sent = await MessagesController(api: api).sendVoiceMessage(
+      roomId: 'room_1',
+      sender: _sender,
+      filename: 'voice_1.m4a',
+      sizeBytes: 4,
+      mimeType: 'audio/mp4',
+      duration: const Duration(seconds: 15),
+      readBytes: () async => Uint8List.fromList([1, 2, 3, 4]),
+      onPending: (pending) {
+        pendingClientId = pending.clientMessageId;
+        events.add('pending');
+        expect(pending.local.type, 'audio');
+        expect(pending.local.attachments.single.durationMs, 15000);
+      },
+      onUploaded: (_, attachment) {
+        events.add('uploaded');
+        expect(attachment.type, 'audio');
+        expect(attachment.durationMs, 15000);
+      },
+    );
+
+    expect(requests, [
+      '/api/v1/uploads/files',
+      '/api/v1/rooms/room_1/messages',
+    ]);
+    expect(events, ['pending', 'uploaded']);
+    expect(sent.type, 'audio');
+    expect(sent.attachments.single.durationMs, 15000);
+    expect(sent.attachments.single.asset?.mimeType, 'audio/mp4');
+  });
+
   test('message list reducers append replace remove and mark failed', () {
     const controller = MessagesController();
     final local = Message.local(
@@ -523,6 +611,7 @@ Map<String, Object?> _assetJson({
   required String id,
   required String filename,
   required int sizeBytes,
+  String mimeType = 'application/pdf',
 }) {
   return {
     'id': id,
@@ -530,7 +619,7 @@ Map<String, Object?> _assetJson({
     'size_bytes': sizeBytes,
     'url': '/assets/$id/$filename',
     'thumbnail_url': null,
-    'mime_type': 'application/pdf',
+    'mime_type': mimeType,
   };
 }
 

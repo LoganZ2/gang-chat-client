@@ -1,7 +1,8 @@
 import '../protocol/models.dart';
 import 'file_display.dart';
+import 'voice_message_display.dart' as voice_display;
 
-enum MessageContentKind { sticker, files, text }
+enum MessageContentKind { sticker, voice, files, text }
 
 class MessageTextEdit {
   const MessageTextEdit({required this.text, required this.cursorOffset});
@@ -58,6 +59,9 @@ String formatMessageTime(DateTime value) {
 
 MessageContentKind messageContentKind(Message message) {
   if (message.stickerAttachment != null) return MessageContentKind.sticker;
+  if (voice_display.voiceMessageAttachment(message) != null) {
+    return MessageContentKind.voice;
+  }
   if (message.fileAttachments.isNotEmpty) return MessageContentKind.files;
   return MessageContentKind.text;
 }

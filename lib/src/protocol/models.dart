@@ -478,12 +478,14 @@ class MessageAttachment {
     this.stickerId,
     this.name,
     this.asset,
+    this.durationMs,
   });
 
   final String type;
   final String? stickerId;
   final String? name;
   final UploadedAsset? asset;
+  final int? durationMs;
 
   factory MessageAttachment.fromJson(Map<String, Object?> json) {
     final assetJson = _nullableMap(json['asset']);
@@ -492,6 +494,7 @@ class MessageAttachment {
       stickerId: json['sticker_id'] as String?,
       name: json['name'] as String?,
       asset: assetJson == null ? null : UploadedAsset.fromJson(assetJson),
+      durationMs: _nullableInt(json['duration_ms']),
     );
   }
 
@@ -501,6 +504,7 @@ class MessageAttachment {
       if (stickerId != null) 'sticker_id': stickerId,
       if (name != null) 'name': name,
       if (asset != null) 'asset': asset!.toJson(),
+      if (durationMs != null) 'duration_ms': durationMs,
     };
   }
 }
@@ -1836,7 +1840,9 @@ class MusicBoxState {
               updatedAt: null,
             )
           : MusicBoxPlayback.fromJson(playbackJson),
-      queue: _listOfMaps(json['queue']).map(MusicBoxQueueItem.fromJson).toList(),
+      queue: _listOfMaps(
+        json['queue'],
+      ).map(MusicBoxQueueItem.fromJson).toList(),
       usage: MusicBoxUsage.fromJson(_nullableMap(json['usage'])),
     );
   }

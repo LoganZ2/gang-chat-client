@@ -143,6 +143,14 @@ extension _HomeShellLayout on _HomeShellState {
         onCancel: _cancelDownload,
         onDismiss: _dismissDownload,
       ),
+      voicePlaybackActions: ChatVoicePlaybackActions(
+        activeMessageId: _voicePlayback.playing
+            ? _voicePlayback.activeMessageId
+            : null,
+        onToggle: (messageId, resolvedUrl) => unawaited(
+          _toggleVoicePlayback(messageId: messageId, resolvedUrl: resolvedUrl),
+        ),
+      ),
       loading: _loadingRoom,
       error: _roomError,
       sending: _sending,

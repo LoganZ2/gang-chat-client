@@ -157,6 +157,7 @@ String mimeTypeFromFilename(String filename) {
     'txt' => 'text/plain',
     'json' => 'application/json',
     'zip' => 'application/zip',
+    'm4a' => 'audio/mp4',
     'mp3' => 'audio/mpeg',
     'wav' => 'audio/wav',
     'mp4' => 'video/mp4',
@@ -208,6 +209,10 @@ String fileAttachmentMeta(UploadedAsset? asset) {
 
 bool isImageMimeType(String? mimeType) {
   return (mimeType ?? '').toLowerCase().startsWith('image/');
+}
+
+bool isAudioMimeType(String? mimeType) {
+  return (mimeType ?? '').toLowerCase().startsWith('audio/');
 }
 
 bool canPauseFileTransfer(FileTransferState? transfer) {

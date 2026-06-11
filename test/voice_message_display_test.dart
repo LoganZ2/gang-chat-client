@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:client/src/app/voice_message_display.dart';
+import 'package:client/src/protocol/models.dart';
 
 void main() {
   test('start moves from idle to recording with a zeroed timer', () {
@@ -13,10 +14,7 @@ void main() {
 
   test('ticks advance the timer only while recording', () {
     final recording = voiceRecordingStarted();
-    final ticked = voiceRecordingTicked(
-      recording,
-      const Duration(seconds: 3),
-    );
+    final ticked = voiceRecordingTicked(recording, const Duration(seconds: 3));
     expect(ticked.elapsed, const Duration(seconds: 3));
 
     // A stray tick after reset must not resurrect the timer.
@@ -104,16 +102,94 @@ void main() {
     expect(formatVoiceDuration(Duration.zero), '0:00');
     expect(formatVoiceDuration(const Duration(seconds: 4)), '0:04');
     expect(formatVoiceDuration(const Duration(seconds: 65)), '1:05');
-    expect(formatVoiceDuration(const Duration(minutes: 12, seconds: 9)), '12:09');
+    expect(
+      formatVoiceDuration(const Duration(minutes: 12, seconds: 9)),
+      '12:09',
+    );
     expect(formatVoiceDuration(const Duration(seconds: -3)), '0:00');
   });
 
   test('voice filename carries an audio extension and timestamp', () {
-    final name = voiceMessageFilename(
-      DateTime.utc(2026, 6, 1, 12, 0, 0),
-    );
+    final name = voiceMessageFilename(DateTime.utc(2026, 6, 1, 12, 0, 0));
     expect(name, startsWith('voice_'));
     expect(name, endsWith('.m4a'));
     expect(kVoiceMessageMimeType, 'audio/mp4');
   });
+
+  test('bubble duration uses compact seconds and minute labels', () {
+    expect(formatVoiceBubbleDuration(null), '');
+    expect(formatVoiceBubbleDuration(Duration.zero), '0s');
+    expect(formatVoiceBubbleDuration(const Duration(milliseconds: 1200)), '2s');
+    expect(formatVoiceBubbleDuration(const Duration(seconds: 15)), '15s');
+    expect(formatVoiceBubbleDuration(const Duration(seconds: 65)), '1:05');
+  });
+
+  test(
+    'voice attachment detection handles audio messages and legacy files',
+    () {
+      final audio = _message(
+        type: 'audio',
+        attachments: const [
+          MessageAttachment(
+            type: 'audio',
+            name: 'voice_1.m4a',
+            durationMs: 15000,
+            asset: _voiceAsset,
+          ),
+        ],
+      );
+      expect(voiceMessageAttachment(audio)?.durationMs, 15000);
+
+      final legacyFile = _message(
+        type: 'file',
+        attachments: const [
+          MessageAttachment(
+            type: 'file',
+            name: 'voice_2.m4a',
+            asset: _voiceAsset,
+          ),
+        ],
+      );
+      expect(voiceMessageAttachment(legacyFile)?.name, 'voice_2.m4a');
+
+      final normalFile = _message(
+        type: 'file',
+        attachments: const [
+          MessageAttachment(type: 'file', name: 'song.m4a', asset: _voiceAsset),
+        ],
+      );
+      expect(voiceMessageAttachment(normalFile), isNull);
+    },
+  );
+}
+
+const _sender = UserSummary(
+  id: 'user_1',
+  username: 'alice',
+  displayName: 'Alice',
+  avatarUrl: null,
+  defaultAvatarKey: 'blue-3',
+);
+
+const _voiceAsset = UploadedAsset(
+  id: 'asset_voice',
+  url: '/uploads/voice_1.m4a',
+  thumbnailUrl: null,
+  mimeType: 'audio/mp4',
+);
+
+Message _message({
+  required String type,
+  required List<MessageAttachment> attachments,
+}) {
+  return Message(
+    id: 'message_1',
+    roomId: 'room_1',
+    sender: _sender,
+    clientMessageId: 'client_1',
+    type: type,
+    body: 'voice_1.m4a',
+    createdAt: DateTime.utc(2026, 6, 11),
+    attachments: attachments,
+  );
 }

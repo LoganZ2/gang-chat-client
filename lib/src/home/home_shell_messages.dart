@@ -273,8 +273,8 @@ extension _HomeShellMessages on _HomeShellState {
     }
   }
 
-  /// Upload and send the reviewed voice clip as an audio file attachment,
-  /// reusing the shared file message pipeline (pending bubble + transfer).
+  /// Upload and send the reviewed voice clip as a playable audio message,
+  /// reusing the shared file transfer pipeline (pending bubble + transfer).
   Future<void> _sendVoiceMessage() async {
     final room = _selectedRoom;
     final path = _voiceState.recordingPath;
@@ -301,12 +301,13 @@ extension _HomeShellMessages on _HomeShellState {
     final filename = voice_display.voiceMessageFilename(DateTime.now());
     String? clientMessageId;
     try {
-      final sent = await _messagesController.sendFileMessage(
+      final sent = await _messagesController.sendVoiceMessage(
         roomId: room.id,
         sender: _currentUser.toSummary(),
         filename: filename,
         sizeBytes: bytes.length,
         mimeType: voice_display.kVoiceMessageMimeType,
+        duration: _voiceState.elapsed,
         readBytes: () async => bytes,
         onPending: (pending) {
           clientMessageId = pending.clientMessageId;

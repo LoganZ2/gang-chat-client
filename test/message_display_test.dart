@@ -31,24 +31,48 @@ void main() {
     expect(formatMessageTime(DateTime(2026, 6, 4, 23, 59)), '23:59');
   });
 
-  test('messageContentKind prioritizes stickers then files then text', () {
-    expect(messageContentKind(_message()), MessageContentKind.text);
-    expect(
-      messageContentKind(
-        _message(
-          type: 'file',
-          attachments: const [MessageAttachment(type: 'file', name: 'a.pdf')],
+  test(
+    'messageContentKind prioritizes stickers then voice then files then text',
+    () {
+      expect(messageContentKind(_message()), MessageContentKind.text);
+      expect(
+        messageContentKind(
+          _message(
+            type: 'audio',
+            attachments: const [
+              MessageAttachment(
+                type: 'audio',
+                name: 'voice_1.m4a',
+                durationMs: 15000,
+                asset: UploadedAsset(
+                  id: 'asset_voice',
+                  url: '/uploads/voice_1.m4a',
+                  thumbnailUrl: null,
+                  mimeType: 'audio/mp4',
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
-      MessageContentKind.files,
-    );
-    expect(
-      messageContentKind(
-        _message(type: 'sticker', attachments: [_stickerAttachment()]),
-      ),
-      MessageContentKind.sticker,
-    );
-  });
+        MessageContentKind.voice,
+      );
+      expect(
+        messageContentKind(
+          _message(
+            type: 'file',
+            attachments: const [MessageAttachment(type: 'file', name: 'a.pdf')],
+          ),
+        ),
+        MessageContentKind.files,
+      );
+      expect(
+        messageContentKind(
+          _message(type: 'sticker', attachments: [_stickerAttachment()]),
+        ),
+        MessageContentKind.sticker,
+      );
+    },
+  );
 
   test('shouldShowFileAttachmentBody hides duplicate single-file body', () {
     const attachment = MessageAttachment(type: 'file', name: 'report.pdf');

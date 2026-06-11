@@ -1,3 +1,6 @@
+import '../protocol/models.dart';
+import 'file_display.dart' as file_display;
+
 /// Pure logic for the voice-message recorder shown in the chat composer.
 ///
 /// The widget layer drives an [AudioRecorder] and a ticking timer; this module
@@ -137,8 +140,51 @@ String formatVoiceDuration(Duration duration) {
 /// renderer can recognise.
 const String kVoiceMessageMimeType = 'audio/mp4';
 const String kVoiceMessageExtension = 'm4a';
+const String kVoiceMessageAttachmentType = 'audio';
 
 String voiceMessageFilename(DateTime timestamp) {
   final stamp = timestamp.toUtc().millisecondsSinceEpoch;
   return 'voice_$stamp.$kVoiceMessageExtension';
+}
+
+MessageAttachment? voiceMessageAttachment(Message message) {
+  final messageIsAudio = message.type == kVoiceMessageAttachmentType;
+  for (final attachment in message.attachments) {
+    if (_isVoiceAttachment(attachment, messageIsAudio: messageIsAudio)) {
+      return attachment;
+    }
+  }
+  return null;
+}
+
+bool _isVoiceAttachment(
+  MessageAttachment attachment, {
+  required bool messageIsAudio,
+}) {
+  final asset = attachment.asset;
+  final typeIsAudio = attachment.type == kVoiceMessageAttachmentType;
+  final mimeIsAudio = file_display.isAudioMimeType(asset?.mimeType);
+  final title = file_display.fileAttachmentTitle(attachment).toLowerCase();
+  final legacyVoiceFile =
+      attachment.type == 'file' &&
+      mimeIsAudio &&
+      file_display.basename(title).startsWith('voice_');
+  return (messageIsAudio || typeIsAudio || legacyVoiceFile) &&
+      (asset != null || attachment.durationMs != null);
+}
+
+Duration? voiceAttachmentDuration(MessageAttachment attachment) {
+  final durationMs = attachment.durationMs;
+  if (durationMs == null || durationMs <= 0) return null;
+  return Duration(milliseconds: durationMs);
+}
+
+String formatVoiceBubbleDuration(Duration? duration) {
+  if (duration == null) return '';
+  final clamped = duration.isNegative ? Duration.zero : duration;
+  final totalSeconds = ((clamped.inMilliseconds + 999) ~/ 1000).clamp(0, 9999);
+  if (totalSeconds < 60) return '${totalSeconds}s';
+  final minutes = totalSeconds ~/ 60;
+  final seconds = totalSeconds % 60;
+  return '$minutes:${seconds.toString().padLeft(2, '0')}';
 }

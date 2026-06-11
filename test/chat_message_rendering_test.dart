@@ -113,6 +113,71 @@ void main() {
     expect(find.byIcon(Icons.picture_as_pdf_outlined), findsOneWidget);
     expect(find.byTooltip('report.pdf'), findsOneWidget);
   });
+
+  testWidgets('voice attachment renders a playable waveform bubble', (
+    tester,
+  ) async {
+    final toggles = <String>[];
+    final message = _message(
+      type: 'audio',
+      body: 'voice_1.m4a',
+      attachments: const [
+        MessageAttachment(
+          type: 'audio',
+          name: 'voice_1.m4a',
+          durationMs: 15000,
+          asset: UploadedAsset(
+            id: 'asset_voice',
+            url: '/uploads/voice_1.m4a',
+            thumbnailUrl: null,
+            mimeType: 'audio/mp4',
+            filename: 'voice_1.m4a',
+            sizeBytes: 4096,
+          ),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      _host(
+        MessageBubbleForTest(
+          message: message,
+          downloadActions: _downloadActions(),
+          voicePlaybackActions: ChatVoicePlaybackActions(
+            activeMessageId: null,
+            onToggle: (messageId, resolvedUrl) {
+              toggles.add('$messageId|$resolvedUrl');
+            },
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('15s'), findsOneWidget);
+    expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.audio_file_outlined), findsNothing);
+    expect(find.byTooltip('voice_1.m4a'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.play_arrow_rounded));
+    expect(toggles, ['client_1|https://assets.test/uploads/voice_1.m4a']);
+
+    await tester.pumpWidget(
+      _host(
+        MessageBubbleForTest(
+          message: message,
+          downloadActions: _downloadActions(),
+          voicePlaybackActions: ChatVoicePlaybackActions(
+            activeMessageId: 'client_1',
+            onToggle: (messageId, resolvedUrl) {
+              toggles.add('$messageId|$resolvedUrl');
+            },
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byIcon(Icons.stop_rounded), findsOneWidget);
+  });
 }
 
 Widget _host(Widget child) {

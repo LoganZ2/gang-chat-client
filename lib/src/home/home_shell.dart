@@ -39,6 +39,7 @@ import '../shell/clipboard_service.dart';
 import '../shell/desktop_window_controller.dart';
 import '../shell/file_drop_service.dart';
 import '../shell/file_selection_service.dart';
+import '../shell/voice_playback_service.dart';
 import '../ui/ui.dart';
 import 'chat_pane.dart';
 import 'home_content.dart';
@@ -127,6 +128,8 @@ class _HomeShellState extends State<HomeShell> {
       const sticker_display.StickerPanelLoadState();
   voice_display.VoiceRecorderState _voiceState =
       const voice_display.VoiceRecorderState();
+  final VoicePlaybackService _voicePlaybackService = VoicePlaybackService();
+  VoicePlaybackSnapshot _voicePlayback = const VoicePlaybackSnapshot();
   Timer? _voiceTicker;
   DateTime? _voiceStartedAt;
   // Files picked for the next message, kept in pick order. Each uploads as
@@ -206,6 +209,7 @@ class _HomeShellState extends State<HomeShell> {
     _currentUser = widget.app.currentUser;
     _titleSearchController.addListener(_handleTitleSearchChanged);
     _musicBoxSearchController.addListener(_handleMusicBoxSearchChanged);
+    _voicePlaybackService.state.addListener(_handleVoicePlaybackChanged);
     _installServices();
     _attachLiveSessionCallbacks();
     _fileDropEvents = _fileDropService.drops.listen(_handleDroppedFiles);
@@ -275,7 +279,9 @@ class _HomeShellState extends State<HomeShell> {
       _activeSearchCategory = null;
       _busySearchPublicRoomId = null;
       _searchPendingPublicRoomIds = const {};
+      _voicePlayback = const VoicePlaybackSnapshot();
     });
+    unawaited(_voicePlaybackService.stop());
     unawaited(_loadServers());
     unawaited(_refreshPendingRoomInviteBadge());
   }
@@ -296,6 +302,8 @@ class _HomeShellState extends State<HomeShell> {
     _titleSearchController.removeListener(_handleTitleSearchChanged);
     _titleSearchController.dispose();
     _composerController.dispose();
+    _voicePlaybackService.state.removeListener(_handleVoicePlaybackChanged);
+    unawaited(_voicePlaybackService.dispose());
     _cancelActiveDownloads();
     _services.close();
     super.dispose();
@@ -311,6 +319,26 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   void _setHomeState(VoidCallback update) => setState(update);
+
+  void _handleVoicePlaybackChanged() {
+    if (!mounted) return;
+    _setHomeState(() => _voicePlayback = _voicePlaybackService.state.value);
+  }
+
+  Future<void> _toggleVoicePlayback({
+    required String messageId,
+    required String resolvedUrl,
+  }) async {
+    try {
+      await _voicePlaybackService.toggle(
+        messageId: messageId,
+        resolvedUrl: resolvedUrl,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      _setHomeState(() => _sendError = error.toString());
+    }
+  }
 
   void _attachLiveSessionCallbacks() {
     _liveSessionController.attachSessionCallbacks(

@@ -28,6 +28,24 @@ class ChatFileDownloadActions {
   final ValueChanged<String> onDismiss;
 }
 
+class ChatVoicePlaybackActions {
+  const ChatVoicePlaybackActions({
+    required this.activeMessageId,
+    required this.onToggle,
+  });
+
+  const ChatVoicePlaybackActions.disabled()
+    : activeMessageId = null,
+      onToggle = null;
+
+  final String? activeMessageId;
+  final void Function(String messageId, String resolvedUrl)? onToggle;
+
+  bool isPlaying(String messageId) {
+    return activeMessageId == messageId;
+  }
+}
+
 class _MessageStage extends StatelessWidget {
   const _MessageStage({
     required this.currentUserId,
@@ -38,6 +56,7 @@ class _MessageStage extends StatelessWidget {
     required this.fileTransfers,
     required this.fileDownloads,
     required this.downloadActions,
+    required this.voicePlaybackActions,
     required this.onRetry,
     required this.bottomInset,
     this.onResolveSenderProfile,
@@ -51,6 +70,7 @@ class _MessageStage extends StatelessWidget {
   final Map<String, FileTransferState> fileTransfers;
   final Map<String, FileTransferState> fileDownloads;
   final ChatFileDownloadActions downloadActions;
+  final ChatVoicePlaybackActions voicePlaybackActions;
   final VoidCallback onRetry;
   // Space reserved at the bottom of the list so the floating composer (which
   // grows with staged files and open panels) never traps the last messages.
@@ -110,6 +130,7 @@ class _MessageStage extends StatelessWidget {
           transfer: fileTransfers[message.clientMessageId],
           fileDownloads: fileDownloads,
           downloadActions: downloadActions,
+          voicePlaybackActions: voicePlaybackActions,
           onResolveSenderProfile: onResolveSenderProfile,
         );
       },
@@ -124,6 +145,7 @@ class _MessageRow extends StatelessWidget {
     required this.transfer,
     required this.fileDownloads,
     required this.downloadActions,
+    required this.voicePlaybackActions,
     this.onResolveSenderProfile,
   });
 
@@ -132,6 +154,7 @@ class _MessageRow extends StatelessWidget {
   final FileTransferState? transfer;
   final Map<String, FileTransferState> fileDownloads;
   final ChatFileDownloadActions downloadActions;
+  final ChatVoicePlaybackActions voicePlaybackActions;
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
 
@@ -146,6 +169,7 @@ class _MessageRow extends StatelessWidget {
           transfer: transfer,
           fileDownloads: fileDownloads,
           downloadActions: downloadActions,
+          voicePlaybackActions: voicePlaybackActions,
         ),
       ),
     );
@@ -189,6 +213,7 @@ class _MessageBubble extends StatelessWidget {
     required this.transfer,
     required this.fileDownloads,
     required this.downloadActions,
+    required this.voicePlaybackActions,
   });
 
   final Message message;
@@ -196,6 +221,7 @@ class _MessageBubble extends StatelessWidget {
   final FileTransferState? transfer;
   final Map<String, FileTransferState> fileDownloads;
   final ChatFileDownloadActions downloadActions;
+  final ChatVoicePlaybackActions voicePlaybackActions;
 
   @override
   Widget build(BuildContext context) {
@@ -243,6 +269,11 @@ class _MessageBubble extends StatelessWidget {
             switch (contentKind) {
               message_display.MessageContentKind.sticker => _StickerBody(
                 attachment: message.stickerAttachment!,
+              ),
+              message_display.MessageContentKind.voice => _VoiceBody(
+                message: message,
+                attachment: voice_display.voiceMessageAttachment(message)!,
+                playbackActions: voicePlaybackActions,
               ),
               message_display.MessageContentKind.files => _FileBody(
                 message: message,
@@ -343,6 +374,132 @@ class _StickerFallback extends StatelessWidget {
             style: UiTypography.label,
           ),
         ),
+      ),
+    );
+  }
+}
+
+const _voiceAccent = Color(0xFF2EA7F2);
+
+class _VoiceBody extends StatelessWidget {
+  const _VoiceBody({
+    required this.message,
+    required this.attachment,
+    required this.playbackActions,
+  });
+
+  final Message message;
+  final MessageAttachment attachment;
+  final ChatVoicePlaybackActions playbackActions;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = file_display.fileAttachmentTitle(attachment);
+    final resolvedUrl = AppConfigScope.of(
+      context,
+    ).resolveAssetUrl(attachment.asset?.url);
+    final playbackKey = message.clientMessageId;
+    final playing = playbackActions.isPlaying(playbackKey);
+    final canPlay =
+        resolvedUrl != null &&
+        resolvedUrl.isNotEmpty &&
+        playbackActions.onToggle != null;
+    final durationText = voice_display.formatVoiceBubbleDuration(
+      voice_display.voiceAttachmentDuration(attachment),
+    );
+
+    void togglePlayback() {
+      final url = resolvedUrl;
+      final onToggle = playbackActions.onToggle;
+      if (url == null || url.isEmpty || onToggle == null) return;
+      onToggle(playbackKey, url);
+    }
+
+    return Tooltip(
+      message: title,
+      waitDuration: const Duration(milliseconds: 350),
+      child: Semantics(
+        button: canPlay,
+        label: playing ? '停止播放录音' : '播放录音',
+        child: MouseRegion(
+          cursor: canPlay ? SystemMouseCursors.click : MouseCursor.defer,
+          child: GestureDetector(
+            onTap: canPlay ? togglePlayback : null,
+            behavior: HitTestBehavior.opaque,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 150, maxWidth: 190),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox.square(
+                    dimension: 22,
+                    child: Icon(
+                      playing ? Icons.stop_rounded : Icons.play_arrow_rounded,
+                      color: canPlay ? _voiceAccent : UiColors.textMuted,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const _VoiceWaveform(),
+                  if (durationText.isNotEmpty) ...[
+                    const SizedBox(width: 12),
+                    Text(
+                      durationText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: UiTypography.body.copyWith(
+                        color: _voiceAccent,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _VoiceWaveform extends StatelessWidget {
+  const _VoiceWaveform();
+
+  static const _heights = <double>[
+    8,
+    16,
+    22,
+    13,
+    18,
+    10,
+    24,
+    15,
+    9,
+    19,
+    12,
+    21,
+    7,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 72,
+      height: 28,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          for (final height in _heights)
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: _voiceAccent,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: SizedBox(width: 3, height: height),
+            ),
+        ],
       ),
     );
   }
@@ -692,6 +849,7 @@ class MessageBubbleForTest extends StatelessWidget {
     this.outgoing = false,
     this.transfer,
     this.fileDownloads = const {},
+    this.voicePlaybackActions = const ChatVoicePlaybackActions.disabled(),
   });
 
   final Message message;
@@ -699,6 +857,7 @@ class MessageBubbleForTest extends StatelessWidget {
   final bool outgoing;
   final FileTransferState? transfer;
   final Map<String, FileTransferState> fileDownloads;
+  final ChatVoicePlaybackActions voicePlaybackActions;
 
   @override
   Widget build(BuildContext context) {
@@ -710,6 +869,7 @@ class MessageBubbleForTest extends StatelessWidget {
         transfer: transfer,
         fileDownloads: fileDownloads,
         downloadActions: downloadActions,
+        voicePlaybackActions: voicePlaybackActions,
       ),
     );
   }

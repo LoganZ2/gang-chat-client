@@ -143,11 +143,62 @@ class MessagesController {
     );
   }
 
+  PendingFileMessage createPendingVoiceMessage({
+    required String roomId,
+    required UserSummary sender,
+    required String filename,
+    required int sizeBytes,
+    required String mimeType,
+    required Duration duration,
+  }) {
+    final clientMessageId = newClientId('cmsg');
+    final transfer = FileTransferState.upload(
+      controller: UploadTransferController(),
+      totalBytes: sizeBytes,
+    );
+    final localAttachment = fileAttachment(
+      type: 'audio',
+      name: filename,
+      asset: UploadedAsset(
+        id: 'local_$clientMessageId',
+        url: '',
+        thumbnailUrl: null,
+        mimeType: mimeType,
+        filename: filename,
+        sizeBytes: sizeBytes,
+      ),
+      duration: duration,
+    );
+    return PendingFileMessage(
+      clientMessageId: clientMessageId,
+      transfer: transfer,
+      localAttachment: localAttachment,
+      local: Message.local(
+        roomId: roomId,
+        sender: sender,
+        clientMessageId: clientMessageId,
+        body: filename,
+        type: 'audio',
+        attachments: [localAttachment],
+      ),
+    );
+  }
+
   MessageAttachment fileAttachment({
+    String type = 'file',
     required String name,
     required UploadedAsset asset,
+    Duration? duration,
   }) {
-    return MessageAttachment(type: 'file', name: name, asset: asset);
+    final durationMs = duration == null || duration <= Duration.zero
+        ? null
+        : duration.inMilliseconds;
+    return MessageAttachment(
+      type: type,
+      name: name,
+      asset: asset,
+      durationMs: durationMs,
+    );
   }
 
   Future<UploadedAsset> uploadFileAsset({
@@ -251,6 +302,62 @@ class MessagesController {
       clientMessageId: pending.clientMessageId,
       body: filename,
       type: 'file',
+      attachments: [attachment],
+    );
+  }
+
+  Future<Message> sendVoiceMessage({
+    required String roomId,
+    required UserSummary sender,
+    required String filename,
+    required int sizeBytes,
+    required String mimeType,
+    required Duration duration,
+    required Future<Uint8List> Function() readBytes,
+    PendingFileMessageHandler? onPending,
+    FileMessageProgressHandler? onProgress,
+    FileMessageUploadedHandler? onUploaded,
+  }) async {
+    final pending = createPendingVoiceMessage(
+      roomId: roomId,
+      sender: sender,
+      filename: filename,
+      sizeBytes: sizeBytes,
+      mimeType: mimeType,
+      duration: duration,
+    );
+    onPending?.call(pending);
+
+    final transfer = pending.transfer;
+    final bytes = await readBytes();
+    if (bytes.isEmpty) throw StateError('鏂囦欢涓虹┖');
+    if (transfer.cancelled) throw const UploadCancelledException();
+
+    final asset = await uploadFileAsset(
+      bytes: bytes,
+      filename: filename,
+      controller: transfer.controller,
+      onProgress: onProgress == null
+          ? null
+          : ({required sentBytes, required totalBytes}) {
+              onProgress(pending, sentBytes: sentBytes, totalBytes: totalBytes);
+            },
+    );
+    if (transfer.cancelled) throw const UploadCancelledException();
+
+    final attachment = fileAttachment(
+      type: 'audio',
+      name: filename,
+      asset: asset,
+      duration: duration,
+    );
+    onUploaded?.call(pending, attachment);
+
+    return sendMessage(
+      roomId: roomId,
+      clientMessageId: pending.clientMessageId,
+      body: filename,
+      type: 'audio',
       attachments: [attachment],
     );
   }
