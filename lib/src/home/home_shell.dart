@@ -169,9 +169,6 @@ class _HomeShellState extends State<HomeShell> {
   MusicBoxState? _musicBox;
   // Whether the in-pane music box panel is expanded over the live channel.
   bool _musicBoxOpen = false;
-  // Advances the progress bar locally while a track plays, since the server
-  // only sends position_ms at state changes. Recalibrated on each snapshot.
-  Timer? _musicBoxTicker;
   // Drives the music box search field; results are fetched debounced.
   final TextEditingController _musicBoxSearchController =
       TextEditingController();
@@ -295,7 +292,6 @@ class _HomeShellState extends State<HomeShell> {
     unawaited(_setSystemFullScreen(false));
     _detachLiveSessionCallbacks();
     _voiceTicker?.cancel();
-    _musicBoxTicker?.cancel();
     _musicBoxSearchDebounce?.cancel();
     _musicBoxSearchController.dispose();
     _searchDebounce?.cancel();

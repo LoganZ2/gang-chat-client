@@ -310,16 +310,91 @@ class _VinylPainter extends CustomPainter {
   bool shouldRepaint(_VinylPainter oldDelegate) => false;
 }
 
-class _MusicBoxProgressBar extends StatelessWidget {
+/// Client-authoritative progress bar. The server snapshot only supplies the
+/// *base* position (`position_ms`); from the moment a snapshot is applied this
+/// widget steps the position forward on its own [Stopwatch], one second at a
+/// time, and re-anchors only when the base changes (track switch, play/pause
+/// flip, or the server pushing a corrected position). This removes any reliance
+/// on the server's wall clock, so client/server clock skew can't make the bar
+/// jump.
+class _MusicBoxProgressBar extends StatefulWidget {
   const _MusicBoxProgressBar({required this.state});
 
   final MusicBoxState state;
 
   @override
+  State<_MusicBoxProgressBar> createState() => _MusicBoxProgressBarState();
+}
+
+class _MusicBoxProgressBarState extends State<_MusicBoxProgressBar> {
+  // Measures elapsed time since the current snapshot was anchored. Used instead
+  // of DateTime.now() so the stepping is immune to wall-clock adjustments.
+  final Stopwatch _stopwatch = Stopwatch();
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _anchor();
+    _syncTicker();
+  }
+
+  @override
+  void didUpdateWidget(_MusicBoxProgressBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_baseChanged(oldWidget.state, widget.state)) {
+      _anchor();
+    }
+    _syncTicker();
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  /// Whether the playback base — what we step forward from — moved. A change in
+  /// the current track, the play/pause state, or the server-reported position
+  /// means we must reset the stopwatch and start stepping from the new base.
+  bool _baseChanged(MusicBoxState a, MusicBoxState b) {
+    return a.playback.currentItemId != b.playback.currentItemId ||
+        a.playback.state != b.playback.state ||
+        a.playback.positionMs != b.playback.positionMs;
+  }
+
+  /// Resets the stopwatch so stepping starts fresh from the snapshot's base
+  /// position, running it only while actually playing.
+  void _anchor() {
+    _stopwatch
+      ..reset()
+      ..stop();
+    if (widget.state.playback.state == MusicBoxPlaybackState.playing) {
+      _stopwatch.start();
+    }
+  }
+
+  /// Runs a 1s repaint ticker only while playing; the bar is static otherwise.
+  void _syncTicker() {
+    final shouldTick = music_box_display.musicBoxShouldTick(widget.state);
+    if (shouldTick) {
+      _ticker ??= Timer.periodic(
+        const Duration(seconds: 1),
+        (_) {
+          if (mounted) setState(() {});
+        },
+      );
+    } else {
+      _ticker?.cancel();
+      _ticker = null;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final progress = music_box_display.musicBoxProgress(
-      state,
-      now: DateTime.now(),
+      widget.state,
+      elapsed: _stopwatch.elapsed,
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -8,8 +8,6 @@ extension _HomeShellMusicBox on _HomeShellState {
   /// Resets all music box state. Called on room switch and account change so a
   /// stale snapshot never bleeds across rooms.
   void _resetMusicBox() {
-    _musicBoxTicker?.cancel();
-    _musicBoxTicker = null;
     _musicBoxSearchDebounce?.cancel();
     _musicBoxSearchDebounce = null;
     _musicBoxSearchSerial++;
@@ -29,10 +27,7 @@ extension _HomeShellMusicBox on _HomeShellState {
     try {
       final state = await _musicBoxController.getState(roomId);
       if (!mounted || _selectedServerId != roomId) return;
-      _setHomeState(() {
-        _musicBox = state;
-        _syncMusicBoxTicker();
-      });
+      _setHomeState(() => _musicBox = state);
     } catch (_) {
       if (!mounted || _selectedServerId != roomId) return;
       _setHomeState(() => _musicBox = null);
@@ -47,50 +42,16 @@ extension _HomeShellMusicBox on _HomeShellState {
   /// overwriting local state wholesale per the server contract.
   void _applyMusicBoxSnapshot(MusicBoxState state) {
     if (!mounted) return;
-    _setHomeState(() {
-      _musicBox = state;
-      _syncMusicBoxTicker();
-    });
+    _setHomeState(() => _musicBox = state);
   }
 
   void _onMusicBoxChanged(Map<String, dynamic> event) {
     final roomId = event['room_id'] as String?;
     if (roomId == null || roomId != _selectedServerId) return;
-    final snapshot = event['data'];
-    if (snapshot is! Map) return;
-    _applyMusicBoxSnapshot(
-      MusicBoxState.fromJson(snapshot.cast<String, Object?>()),
-    );
-  }
-
-  // --- Progress ticker --------------------------------------------------
-
-  /// Starts or stops the 1s ticker that advances the progress bar locally while
-  /// a track plays, matching [music_box_display.musicBoxShouldTick].
-  void _syncMusicBoxTicker() {
-    final state = _musicBox;
-    final shouldTick =
-        state != null && music_box_display.musicBoxShouldTick(state);
-    if (shouldTick) {
-      _musicBoxTicker ??= Timer.periodic(
-        const Duration(seconds: 1),
-        (_) => _onMusicBoxTick(),
-      );
-    } else {
-      _musicBoxTicker?.cancel();
-      _musicBoxTicker = null;
-    }
-  }
-
-  void _onMusicBoxTick() {
-    if (!mounted || _musicBox == null) {
-      _musicBoxTicker?.cancel();
-      _musicBoxTicker = null;
-      return;
-    }
-    // The widget reads the position from a wall-clock based helper, so a bare
-    // rebuild advances the bar without mutating snapshot state.
-    _setHomeState(() {});
+    // The realtime client flattens the event envelope, merging the payload's
+    // fields up alongside `room_id` (see LiveStreamClient._emit). The snapshot
+    // therefore lives at the top level of [event], not under a `data` key.
+    _applyMusicBoxSnapshot(MusicBoxState.fromJson(event.cast<String, Object?>()));
   }
 
   // --- Writes -----------------------------------------------------------

@@ -5,10 +5,12 @@ import '../protocol/models.dart';
 /// lives here so it can be unit-tested without a widget tree, mirroring
 /// `live_display.dart`.
 
-/// The live playback position. The server records [MusicBoxPlayback.positionMs]
-/// only at state changes and never pushes it per second, so while playing we
-/// advance it locally from the snapshot's [MusicBoxPlayback.updatedAt] and
-/// recalibrate whenever a fresh snapshot arrives.
+/// The live playback position. The position is client-authoritative: the server
+/// snapshot's [MusicBoxPlayback.positionMs] is only the *base*, captured the
+/// moment a track starts/resumes/recalibrates. From there the client steps the
+/// position forward on its own clock (see [musicBoxProgress]'s [elapsed]),
+/// deliberately ignoring the server's `updated_at` so client/server clock skew
+/// can never make the bar jump.
 class MusicBoxProgress {
   const MusicBoxProgress({required this.positionMs, required this.durationMs});
 
@@ -24,26 +26,27 @@ class MusicBoxProgress {
   }
 }
 
-/// Computes the playback position to render at wall-clock [now]. While playing,
-/// adds the elapsed time since the snapshot was recorded; paused/stopped hold at
-/// the recorded position. The result is clamped to the track duration so it
-/// never overruns the end while waiting for the next snapshot.
+/// Computes the position to render. [elapsed] is the client-measured time since
+/// the caller anchored on the current snapshot's [MusicBoxPlayback.positionMs];
+/// while playing it's added to that base, while paused/stopped it's ignored and
+/// the base holds. The result is floored to whole seconds for a steady
+/// per-second step, and clamped to the track duration so it never overruns the
+/// end while the client owns the stepping.
 MusicBoxProgress musicBoxProgress(
   MusicBoxState state, {
-  required DateTime now,
+  required Duration elapsed,
 }) {
   final current = state.currentItem;
   final durationMs = current?.durationMs ?? 0;
   final playback = state.playback;
   var positionMs = playback.positionMs;
-  if (playback.state == MusicBoxPlaybackState.playing) {
-    final updatedAt = playback.updatedAt;
-    if (updatedAt != null) {
-      final elapsed = now.difference(updatedAt).inMilliseconds;
-      if (elapsed > 0) positionMs += elapsed;
-    }
+  if (playback.state == MusicBoxPlaybackState.playing &&
+      elapsed > Duration.zero) {
+    positionMs += elapsed.inMilliseconds;
   }
   if (positionMs < 0) positionMs = 0;
+  // Floor to whole seconds so the bar and the time label step once per second.
+  positionMs -= positionMs % 1000;
   if (durationMs > 0 && positionMs > durationMs) positionMs = durationMs;
   return MusicBoxProgress(positionMs: positionMs, durationMs: durationMs);
 }

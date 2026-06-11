@@ -6,18 +6,16 @@ import 'package:client/src/protocol/models.dart';
 void main() {
   group('musicBoxProgress', () {
     test('advances position locally while playing', () {
-      final updatedAt = DateTime.utc(2026, 1, 1, 12, 0, 0);
       final state = _state(
         playbackState: MusicBoxPlaybackState.playing,
         currentItemId: 'item-1',
         positionMs: 5000,
-        updatedAt: updatedAt,
         queue: [_item(id: 'item-1', durationMs: 200000)],
       );
 
       final progress = musicBoxProgress(
         state,
-        now: updatedAt.add(const Duration(seconds: 3)),
+        elapsed: const Duration(seconds: 3),
       );
 
       expect(progress.positionMs, 8000);
@@ -26,36 +24,49 @@ void main() {
     });
 
     test('holds at recorded position while paused', () {
-      final updatedAt = DateTime.utc(2026, 1, 1, 12, 0, 0);
       final state = _state(
         playbackState: MusicBoxPlaybackState.paused,
         currentItemId: 'item-1',
         positionMs: 5000,
-        updatedAt: updatedAt,
         queue: [_item(id: 'item-1', durationMs: 200000)],
       );
 
       final progress = musicBoxProgress(
         state,
-        now: updatedAt.add(const Duration(seconds: 30)),
+        elapsed: const Duration(seconds: 30),
       );
 
       expect(progress.positionMs, 5000);
     });
 
+    test('floors the advanced position to whole seconds', () {
+      final state = _state(
+        playbackState: MusicBoxPlaybackState.playing,
+        currentItemId: 'item-1',
+        positionMs: 5200,
+        queue: [_item(id: 'item-1', durationMs: 200000)],
+      );
+
+      final progress = musicBoxProgress(
+        state,
+        elapsed: const Duration(milliseconds: 1700),
+      );
+
+      // 5200 + 1700 = 6900, floored to 6000.
+      expect(progress.positionMs, 6000);
+    });
+
     test('clamps advanced position to the track duration', () {
-      final updatedAt = DateTime.utc(2026, 1, 1, 12, 0, 0);
       final state = _state(
         playbackState: MusicBoxPlaybackState.playing,
         currentItemId: 'item-1',
         positionMs: 9000,
-        updatedAt: updatedAt,
         queue: [_item(id: 'item-1', durationMs: 10000)],
       );
 
       final progress = musicBoxProgress(
         state,
-        now: updatedAt.add(const Duration(seconds: 30)),
+        elapsed: const Duration(seconds: 30),
       );
 
       expect(progress.positionMs, 10000);
@@ -67,11 +78,10 @@ void main() {
         playbackState: MusicBoxPlaybackState.playing,
         currentItemId: 'item-1',
         positionMs: 5000,
-        updatedAt: DateTime.utc(2026, 1, 1),
         queue: [_item(id: 'item-1', durationMs: 0)],
       );
 
-      final progress = musicBoxProgress(state, now: DateTime.utc(2026, 1, 1));
+      final progress = musicBoxProgress(state, elapsed: Duration.zero);
 
       expect(progress.fraction, 0);
     });
