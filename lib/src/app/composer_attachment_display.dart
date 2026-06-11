@@ -19,6 +19,7 @@ class ComposerAttachmentView {
     this.sizeBytes,
     this.mimeType,
     this.progress,
+    this.errorMessage,
   });
 
   final String id;
@@ -26,6 +27,7 @@ class ComposerAttachmentView {
   final ComposerAttachmentStatus status;
   final int? sizeBytes;
   final String? mimeType;
+  final String? errorMessage;
 
   /// Upload progress in the range 0..1, or null when the total size is not yet
   /// known (the chip then shows an indeterminate spinner).

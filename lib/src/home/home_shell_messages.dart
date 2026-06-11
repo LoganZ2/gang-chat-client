@@ -429,6 +429,7 @@ extension _HomeShellMessages on _HomeShellState {
           sizeBytes: entry.sizeBytes,
           mimeType: entry.file.mimeType,
           progress: entry.progress,
+          errorMessage: entry.errorMessage,
         ),
     ];
   }
@@ -437,14 +438,20 @@ extension _HomeShellMessages on _HomeShellState {
   /// composer, and start uploading each one right away. Does not send anything;
   /// the finished assets go out with the next message.
   Future<void> _pickAttachments() async {
-    if (_selectedRoom == null) return;
+    if (_selectedRoom == null || _pickingAttachments) return;
     List<SelectedFile> files;
+    _setHomeState(() {
+      _pickingAttachments = true;
+      _sendError = null;
+    });
     try {
       files = await _fileSelectionService.openFiles();
     } catch (error) {
       if (!mounted) return;
       _setHomeState(() => _sendError = error.toString());
       return;
+    } finally {
+      if (mounted) _setHomeState(() => _pickingAttachments = false);
     }
     if (!mounted || files.isEmpty) return;
 
@@ -474,12 +481,14 @@ extension _HomeShellMessages on _HomeShellState {
       entry.status = composer_attachment.ComposerAttachmentStatus.uploading;
       entry.progress = null;
       entry.error = null;
+      entry.errorMessage = null;
     });
 
     try {
       final bytes = await entry.file.readAsBytes();
       // Drop out if the chip was removed (or the room switched) while reading.
       if (!_stagedAttachments.contains(entry)) return;
+      if (bytes.isEmpty) throw StateError(file_display.fileEmptyMessage());
       final asset = await _messagesController.uploadFileAsset(
         bytes: bytes,
         filename: entry.file.name,
@@ -505,6 +514,7 @@ extension _HomeShellMessages on _HomeShellState {
       if (!mounted || !_stagedAttachments.contains(entry)) return;
       _setHomeState(() {
         entry.error = error;
+        entry.errorMessage = _stagedAttachmentErrorMessage(error);
         entry.status = composer_attachment.ComposerAttachmentStatus.failed;
       });
     }
@@ -543,8 +553,11 @@ extension _HomeShellMessages on _HomeShellState {
 
     // Wait for any uploads still in flight before deciding what to send.
     final pending = _stagedAttachments
-        .where((entry) => entry.status ==
-            composer_attachment.ComposerAttachmentStatus.uploading)
+        .where(
+          (entry) =>
+              entry.status ==
+              composer_attachment.ComposerAttachmentStatus.uploading,
+        )
         .toList();
     if (pending.isNotEmpty) {
       _setHomeState(() {
@@ -560,8 +573,10 @@ extension _HomeShellMessages on _HomeShellState {
     }
 
     // Refuse to send a partial batch; surface the failures for retry/removal.
-    if (_stagedAttachments.any((entry) => entry.status ==
-        composer_attachment.ComposerAttachmentStatus.failed)) {
+    if (_stagedAttachments.any(
+      (entry) =>
+          entry.status == composer_attachment.ComposerAttachmentStatus.failed,
+    )) {
       _setHomeState(() => _sendError = '部分文件上传失败，请重试或移除后再发送');
       return;
     }
@@ -591,8 +606,14 @@ extension _HomeShellMessages on _HomeShellState {
   Future<void> _awaitUpload(_StagedAttachment entry) async {
     while (mounted &&
         _stagedAttachments.contains(entry) &&
-        entry.status == composer_attachment.ComposerAttachmentStatus.uploading) {
+        entry.status ==
+            composer_attachment.ComposerAttachmentStatus.uploading) {
       await Future<void>.delayed(const Duration(milliseconds: 50));
     }
+  }
+
+  String _stagedAttachmentErrorMessage(Object error) {
+    if (error is StateError) return error.message;
+    return error.toString();
   }
 }

@@ -151,6 +151,8 @@ extension _HomeShellLayout on _HomeShellState {
       stickerPanel: _stickerPanelState,
       voiceState: _voiceState,
       composerAttachments: _stagedAttachmentViews,
+      fileActionHighlighted:
+          _pickingAttachments || _stagedAttachments.isNotEmpty,
       onSubmit: (value) => unawaited(_sendText(value)),
       onSendSticker: (sticker) => unawaited(_sendSticker(sticker)),
       onLoadStickers: () => unawaited(_loadStickerPacks(forceReload: true)),

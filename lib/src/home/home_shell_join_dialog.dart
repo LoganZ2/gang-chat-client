@@ -18,12 +18,16 @@ class _JoinApplicationDialogState extends State<_JoinApplicationDialog> {
     super.dispose();
   }
 
+  void _close([String? result]) {
+    Navigator.of(context, rootNavigator: true).pop(result);
+  }
+
   void _cancel() {
-    Navigator.of(context).pop();
+    _close();
   }
 
   void _send() {
-    Navigator.of(context).pop(_reasonController.text);
+    _close(_reasonController.text);
   }
 
   @override

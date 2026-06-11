@@ -11,6 +11,7 @@ const _user = UserSummary(
   displayName: '加一',
   avatarUrl: null,
   defaultAvatarKey: 'blue-3',
+  uid: '10001',
   bio: '随便写点什么',
   gender: 'male',
   roomRole: 'admin',
@@ -23,9 +24,7 @@ const _user = UserSummary(
 
 Widget _host(Widget child) {
   return MaterialApp(
-    home: Scaffold(
-      body: Center(child: child),
-    ),
+    home: Scaffold(body: Center(child: child)),
   );
 }
 
@@ -53,6 +52,7 @@ void main() {
     expect(find.text('2 个共同房间'), findsOneWidget);
     expect(find.text('摸鱼大队'), findsOneWidget);
     expect(find.text('技术交流'), findsOneWidget);
+    expect(find.text('UID: 10001'), findsOneWidget);
 
     // Card disappears when the pointer leaves the avatar.
     await gesture.moveTo(const Offset(5, 5));
@@ -77,6 +77,30 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     await tester.pumpAndSettle();
     expect(find.text('@logan'), findsOneWidget);
+  });
+
+  testWidgets('tap opens the profile card until an outside tap', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_host(const AvatarHoverCardForTest(user: _user)));
+
+    await tester.tap(find.byType(Avatar).first);
+    await tester.pumpAndSettle();
+    expect(find.text('@logan'), findsOneWidget);
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await gesture.moveTo(tester.getCenter(find.byType(Avatar).first));
+    await tester.pumpAndSettle();
+    await gesture.moveTo(const Offset(5, 5));
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
+    expect(find.text('@logan'), findsOneWidget);
+
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle();
+    expect(find.text('@logan'), findsNothing);
   });
 
   testWidgets('lazily resolves gender and common rooms on first hover', (

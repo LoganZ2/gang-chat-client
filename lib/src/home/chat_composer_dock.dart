@@ -12,6 +12,7 @@ class _ComposerDock extends StatelessWidget {
     required this.stickerPanel,
     required this.voiceState,
     required this.attachments,
+    required this.fileActionHighlighted,
     required this.onSubmit,
     required this.onSendSticker,
     required this.onOpenStickers,
@@ -31,6 +32,7 @@ class _ComposerDock extends StatelessWidget {
   final sticker_display.StickerPanelLoadState stickerPanel;
   final voice_display.VoiceRecorderState voiceState;
   final List<composer_attachment.ComposerAttachmentView> attachments;
+  final bool fileActionHighlighted;
   final ValueChanged<String> onSubmit;
   final ValueChanged<Sticker> onSendSticker;
   final VoidCallback onOpenStickers;
@@ -113,6 +115,7 @@ class _ComposerDock extends StatelessWidget {
                   id: 'file',
                   icon: Icons.attach_file,
                   label: '文件',
+                  selected: fileActionHighlighted,
                   onPressed: onPickFile,
                 ),
                 ComposerAction(
@@ -384,7 +387,8 @@ class _ComposerAttachmentChip extends StatelessWidget {
     final size = attachment.sizeLabel;
     final failed = attachment.hasFailed;
     final subtitle = switch (attachment.status) {
-      composer_attachment.ComposerAttachmentStatus.failed => '上传失败，点击重试',
+      composer_attachment.ComposerAttachmentStatus.failed =>
+        attachment.errorMessage ?? '上传失败，点击重试',
       composer_attachment.ComposerAttachmentStatus.uploading =>
         attachment.progress == null
             ? '上传中…'
@@ -402,7 +406,10 @@ class _ComposerAttachmentChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _ComposerAttachmentLeading(attachment: attachment, onRetry: onRetry),
+            _ComposerAttachmentLeading(
+              attachment: attachment,
+              onRetry: onRetry,
+            ),
             const SizedBox(width: 8),
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 180),
@@ -414,9 +421,7 @@ class _ComposerAttachmentChip extends StatelessWidget {
                     attachment.filename,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: UiTypography.label.copyWith(
-                      color: UiColors.text,
-                    ),
+                    style: UiTypography.label.copyWith(color: UiColors.text),
                   ),
                   if (subtitle != null)
                     Text(
@@ -473,11 +478,7 @@ class _ComposerAttachmentLeading extends StatelessWidget {
         return InkResponse(
           onTap: onRetry,
           radius: 16,
-          child: const Icon(
-            Icons.refresh,
-            size: 18,
-            color: UiColors.danger,
-          ),
+          child: const Icon(Icons.refresh, size: 18, color: UiColors.danger),
         );
       case composer_attachment.ComposerAttachmentStatus.uploaded:
         return Icon(

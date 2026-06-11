@@ -129,7 +129,9 @@ class _HomeShellState extends State<HomeShell> {
   // soon as it is picked; the message send later just collects the finished
   // assets. See [_StagedAttachment].
   final List<_StagedAttachment> _stagedAttachments = [];
-  final FileSelectionService _fileSelectionService = const FileSelectionService();
+  final FileSelectionService _fileSelectionService =
+      const FileSelectionService();
+  bool _pickingAttachments = false;
   bool _settingsOpen = false;
   bool _narrowContentOpen = false;
   _ContentMode _contentMode = _ContentMode.chat;
@@ -161,7 +163,8 @@ class _HomeShellState extends State<HomeShell> {
   // only sends position_ms at state changes. Recalibrated on each snapshot.
   Timer? _musicBoxTicker;
   // Drives the music box search field; results are fetched debounced.
-  final TextEditingController _musicBoxSearchController = TextEditingController();
+  final TextEditingController _musicBoxSearchController =
+      TextEditingController();
   List<MusicBoxSearchResult> _musicBoxSearchResults = const [];
   bool _musicBoxSearching = false;
   String? _musicBoxSearchError;
@@ -177,6 +180,7 @@ class _HomeShellState extends State<HomeShell> {
   search_display.GlobalSearchCategory? _activeSearchCategory;
   String? _busySearchPublicRoomId;
   Set<String> _searchPendingPublicRoomIds = const {};
+  bool _showingJoinApplicationDialog = false;
 
   RoomsController get _roomsController => _services.rooms;
   MessagesController get _messagesController => _services.messages;
@@ -445,6 +449,7 @@ class _StagedAttachment {
   int? sizeBytes;
   double? progress;
   Object? error;
+  String? errorMessage;
 
   bool get isUploaded =>
       status == composer_attachment.ComposerAttachmentStatus.uploaded;

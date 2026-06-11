@@ -15,6 +15,7 @@ class ComposerAction {
     this.panel,
     this.onPressed,
     this.tone = ButtonTone.neutral,
+    this.selected = false,
     this.alignment = ComposerActionAlignment.leading,
   });
 
@@ -25,6 +26,7 @@ class ComposerAction {
   final ComposerPanel? panel;
   final VoidCallback? onPressed;
   final ButtonTone tone;
+  final bool selected;
 
   /// Where the action sits on the button row below the input. Trailing actions
   /// (typically send) are pinned to the far right.
@@ -219,7 +221,8 @@ class _ComposerActionRow extends StatelessWidget {
           if (index > 0) const SizedBox(width: 8),
           _ComposerActionButton(
             action: leading[index],
-            selected: leading[index].id == openActionId,
+            selected:
+                leading[index].selected || leading[index].id == openActionId,
             onAction: onAction,
           ),
         ],
@@ -228,7 +231,8 @@ class _ComposerActionRow extends StatelessWidget {
           if (index > 0) const SizedBox(width: 8),
           _ComposerActionButton(
             action: trailing[index],
-            selected: trailing[index].id == openActionId,
+            selected:
+                trailing[index].selected || trailing[index].id == openActionId,
             onAction: onAction,
           ),
         ],

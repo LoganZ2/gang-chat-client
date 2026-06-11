@@ -28,12 +28,14 @@ class _AvatarHoverCard extends StatefulWidget {
 class _AvatarHoverCardState extends State<_AvatarHoverCard> {
   final GlobalKey _anchorKey = GlobalKey();
   final OverlayPortalController _portal = OverlayPortalController();
+  final Object _tapRegionGroup = Object();
 
   // Hover is tracked separately for the avatar and the card; the card stays
   // open while either is hovered. The timer gives the cursor a grace period to
   // cross the gap between them.
   bool _overAnchor = false;
   bool _overCard = false;
+  bool _pinned = false;
   Timer? _closeTimer;
 
   // Richer profile, fetched once on first open and reused afterwards.
@@ -75,6 +77,20 @@ class _AvatarHoverCardState extends State<_AvatarHoverCard> {
     _portal.show();
   }
 
+  void _pinOpen() {
+    _pinned = true;
+    _open();
+  }
+
+  void _dismissPinned() {
+    if (!_pinned && !_portal.isShowing) return;
+    _pinned = false;
+    _overAnchor = false;
+    _overCard = false;
+    _closeTimer?.cancel();
+    if (_portal.isShowing) _portal.hide();
+  }
+
   Future<void> _resolveProfile() async {
     final resolver = widget.onResolveProfile;
     if (resolver == null || _resolved != null || _resolving) return;
@@ -91,9 +107,10 @@ class _AvatarHoverCardState extends State<_AvatarHoverCard> {
   }
 
   void _scheduleClose() {
+    if (_pinned) return;
     _closeTimer?.cancel();
     _closeTimer = Timer(const Duration(milliseconds: 120), () {
-      if (!mounted || _overAnchor || _overCard) return;
+      if (!mounted || _pinned || _overAnchor || _overCard) return;
       if (_portal.isShowing) _portal.hide();
     });
   }
@@ -127,12 +144,16 @@ class _AvatarHoverCardState extends State<_AvatarHoverCard> {
                   gap: _profileCardGap,
                   cardWidth: _profileCardWidth,
                 ),
-                child: MouseRegion(
-                  onEnter: (_) => _enterCard(),
-                  onExit: (_) => _exitCard(),
-                  child: AnchoredPanel(
-                    width: _profileCardWidth,
-                    child: _ProfileCard(user: _displayUser),
+                child: TapRegion(
+                  groupId: _tapRegionGroup,
+                  onTapOutside: (_) => _dismissPinned(),
+                  child: MouseRegion(
+                    onEnter: (_) => _enterCard(),
+                    onExit: (_) => _exitCard(),
+                    child: AnchoredPanel(
+                      width: _profileCardWidth,
+                      child: _ProfileCard(user: _displayUser),
+                    ),
                   ),
                 ),
               );
@@ -140,10 +161,17 @@ class _AvatarHoverCardState extends State<_AvatarHoverCard> {
           ),
         );
       },
-      child: MouseRegion(
-        onEnter: (_) => _enterAnchor(),
-        onExit: (_) => _exitAnchor(),
-        child: KeyedSubtree(key: _anchorKey, child: widget.child),
+      child: TapRegion(
+        groupId: _tapRegionGroup,
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: _pinOpen,
+          child: MouseRegion(
+            onEnter: (_) => _enterAnchor(),
+            onExit: (_) => _exitAnchor(),
+            child: KeyedSubtree(key: _anchorKey, child: widget.child),
+          ),
+        ),
       ),
     );
   }
@@ -282,7 +310,7 @@ class _ProfileCard extends StatelessWidget {
           if (uid != null && uid.isNotEmpty) ...[
             const SizedBox(height: UiSpacing.sm),
             Text(
-              'ID: $uid',
+              'UID: $uid',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: UiTypography.label.copyWith(color: UiColors.textMuted),

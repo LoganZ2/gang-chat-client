@@ -55,6 +55,7 @@ class ChatPane extends StatelessWidget {
     required this.stickerPanel,
     required this.voiceState,
     required this.composerAttachments,
+    required this.fileActionHighlighted,
     required this.onSubmit,
     required this.onSendSticker,
     required this.onLoadStickers,
@@ -89,6 +90,7 @@ class ChatPane extends StatelessWidget {
   final sticker_display.StickerPanelLoadState stickerPanel;
   final voice_display.VoiceRecorderState voiceState;
   final List<composer_attachment.ComposerAttachmentView> composerAttachments;
+  final bool fileActionHighlighted;
   final ValueChanged<String> onSubmit;
   final ValueChanged<Sticker> onSendSticker;
   final VoidCallback onLoadStickers;
@@ -167,6 +169,7 @@ class ChatPane extends StatelessWidget {
                   stickerPanel: stickerPanel,
                   voiceState: voiceState,
                   attachments: composerAttachments,
+                  fileActionHighlighted: fileActionHighlighted,
                   onSubmit: onSubmit,
                   onSendSticker: onSendSticker,
                   onOpenStickers: onLoadStickers,

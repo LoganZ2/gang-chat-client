@@ -188,11 +188,18 @@ extension _HomeShellSearch on _HomeShellState {
     }
   }
 
-  Future<String?> _showJoinApplicationDialog(PublicRoom room) {
-    return showDialog<String>(
-      context: context,
-      builder: (context) => _JoinApplicationDialog(room: room),
-    );
+  Future<String?> _showJoinApplicationDialog(PublicRoom room) async {
+    if (_showingJoinApplicationDialog) return null;
+    _showingJoinApplicationDialog = true;
+    try {
+      return await showDialog<String>(
+        context: context,
+        useRootNavigator: true,
+        builder: (context) => _JoinApplicationDialog(room: room),
+      );
+    } finally {
+      _showingJoinApplicationDialog = false;
+    }
   }
 
   void _applyJoinedSearchRoom(RoomDetail room) {
