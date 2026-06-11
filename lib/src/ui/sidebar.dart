@@ -231,7 +231,7 @@ class _SidebarItemButton extends StatelessWidget {
               style: TextStyle(
                 color: foreground,
                 fontSize: 13,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 letterSpacing: 0,
               ),
               child: Row(
@@ -283,7 +283,7 @@ class _SidebarBadge extends StatelessWidget {
           style: TextStyle(
             color: color,
             fontSize: 11,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w600,
             letterSpacing: 0,
           ),
         ),

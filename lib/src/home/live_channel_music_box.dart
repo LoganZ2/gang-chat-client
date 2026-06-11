@@ -87,7 +87,7 @@ class _MusicBoxHeader extends StatelessWidget {
           style: TextStyle(
             color: UiColors.text,
             fontSize: 15,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w500,
           ),
         ),
         const SizedBox(width: 10),
@@ -145,7 +145,7 @@ class _MusicBoxNowPlaying extends StatelessWidget {
                 style: TextStyle(
                   color: current == null ? UiColors.textMuted : UiColors.text,
                   fontSize: 14,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(height: 3),
@@ -167,13 +167,14 @@ class _MusicBoxNowPlaying extends StatelessWidget {
               Row(
                 children: [
                   ButtonIcon(
-                    tooltip: transport == music_box_display
-                            .MusicBoxTransportAction.pause
+                    tooltip:
+                        transport ==
+                            music_box_display.MusicBoxTransportAction.pause
                         ? '暂停'
                         : '播放',
                     icon: Icon(
-                      transport == music_box_display
-                              .MusicBoxTransportAction.pause
+                      transport ==
+                              music_box_display.MusicBoxTransportAction.pause
                           ? Icons.pause
                           : Icons.play_arrow,
                     ),
@@ -193,8 +194,7 @@ class _MusicBoxNowPlaying extends StatelessWidget {
                     tooltip: '停止',
                     icon: const Icon(Icons.stop),
                     onPressed:
-                        state.playback.state !=
-                            MusicBoxPlaybackState.stopped
+                        state.playback.state != MusicBoxPlaybackState.stopped
                         ? onStop
                         : null,
                     size: 40,
@@ -256,10 +256,7 @@ class _VinylRecordState extends State<_VinylRecord>
   Widget build(BuildContext context) {
     return RotationTransition(
       turns: _controller,
-      child: CustomPaint(
-        size: const Size(64, 64),
-        painter: _VinylPainter(),
-      ),
+      child: CustomPaint(size: const Size(64, 64), painter: _VinylPainter()),
     );
   }
 }
@@ -273,11 +270,7 @@ class _VinylPainter extends CustomPainter {
     final radius = size.width / 2;
 
     // Disc body.
-    canvas.drawCircle(
-      center,
-      radius,
-      Paint()..color = const Color(0xFF12151A),
-    );
+    canvas.drawCircle(center, radius, Paint()..color = const Color(0xFF12151A));
     canvas.drawCircle(
       center,
       radius,
@@ -297,11 +290,7 @@ class _VinylPainter extends CustomPainter {
     }
 
     // Accent label and spindle hole.
-    canvas.drawCircle(
-      center,
-      radius * 0.30,
-      Paint()..color = UiColors.accent,
-    );
+    canvas.drawCircle(center, radius * 0.30, Paint()..color = UiColors.accent);
     canvas.drawCircle(
       center,
       radius * 0.30,
@@ -412,10 +401,7 @@ class _MusicBoxBody extends StatelessWidget {
                   error: searchError,
                   onQueueResult: onQueueResult,
                 )
-              : _MusicBoxQueueList(
-                  state: state,
-                  onRemoveItem: onRemoveItem,
-                ),
+              : _MusicBoxQueueList(state: state, onRemoveItem: onRemoveItem),
         ),
       ],
     );
@@ -497,7 +483,7 @@ class _MusicBoxQueueTile extends StatelessWidget {
                     style: TextStyle(
                       color: isCurrent ? UiColors.accent : UiColors.text,
                       fontSize: 13,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -597,10 +583,7 @@ class _MusicBoxSearchList extends StatelessWidget {
       return _MusicBoxEmpty(icon: Icons.error_outline, message: error!);
     }
     if (results.isEmpty) {
-      return const _MusicBoxEmpty(
-        icon: Icons.search_off,
-        message: '没有找到相关歌曲',
-      );
+      return const _MusicBoxEmpty(icon: Icons.search_off, message: '没有找到相关歌曲');
     }
     return ListView.separated(
       padding: EdgeInsets.zero,
@@ -654,7 +637,7 @@ class _MusicBoxSearchTile extends StatelessWidget {
                   style: const TextStyle(
                     color: UiColors.text,
                     fontSize: 13,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
                 const SizedBox(height: 2),

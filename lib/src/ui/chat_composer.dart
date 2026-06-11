@@ -96,7 +96,11 @@ class ChatComposer extends StatefulWidget {
 
 class _ChatComposerState extends State<ChatComposer> {
   final FocusNode _inputFocusNode = FocusNode();
+  TextEditingController? _localController;
   String? _openActionId;
+
+  TextEditingController get _effectiveController =>
+      widget.controller ?? _localController!;
 
   ComposerAction? get _openAction {
     final id = _openActionId;
@@ -110,29 +114,95 @@ class _ChatComposerState extends State<ChatComposer> {
   @override
   void initState() {
     super.initState();
+    _localController = widget.controller == null
+        ? TextEditingController()
+        : null;
     HardwareKeyboard.instance.addHandler(_handleKeyboardEvent);
+  }
+
+  @override
+  void didUpdateWidget(ChatComposer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller == widget.controller) return;
+
+    if (widget.controller == null) {
+      _localController = TextEditingController.fromValue(
+        oldWidget.controller?.value ?? TextEditingValue.empty,
+      );
+      return;
+    }
+
+    _localController?.dispose();
+    _localController = null;
   }
 
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_handleKeyboardEvent);
+    _localController?.dispose();
     _inputFocusNode.dispose();
     super.dispose();
   }
 
   bool _handleKeyboardEvent(KeyEvent event) {
-    final onPasteFiles = widget.onPasteFiles;
-    if (onPasteFiles == null ||
-        !_inputFocusNode.hasFocus ||
-        event is! KeyDownEvent) {
+    if (!_inputFocusNode.hasFocus || event is! KeyDownEvent) {
       return false;
     }
     final keyboard = HardwareKeyboard.instance;
-    if (event.logicalKey == LogicalKeyboardKey.keyV &&
+    final onPasteFiles = widget.onPasteFiles;
+    if (onPasteFiles != null &&
+        event.logicalKey == LogicalKeyboardKey.keyV &&
         (keyboard.isControlPressed || keyboard.isMetaPressed)) {
       onPasteFiles();
     }
-    return false;
+    if (!_isEnterKey(event.logicalKey) ||
+        keyboard.isAltPressed ||
+        keyboard.isMetaPressed) {
+      return false;
+    }
+
+    if (keyboard.isShiftPressed || keyboard.isControlPressed) {
+      _insertNewline();
+      return true;
+    }
+
+    final onSubmitted = widget.onSubmitted;
+    if (onSubmitted == null) return false;
+    onSubmitted(_effectiveController.text);
+    return true;
+  }
+
+  bool _isEnterKey(LogicalKeyboardKey key) {
+    return key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter;
+  }
+
+  void _insertNewline() {
+    final controller = _effectiveController;
+    final value = controller.value;
+    final text = value.text;
+    final selection = value.selection;
+
+    if (!selection.isValid) {
+      final nextText = '$text\n';
+      controller.value = value.copyWith(
+        text: nextText,
+        selection: TextSelection.collapsed(offset: nextText.length),
+        composing: TextRange.empty,
+      );
+      widget.onChanged?.call(nextText);
+      return;
+    }
+
+    final nextText =
+        '${selection.textBefore(text)}\n${selection.textAfter(text)}';
+    final nextOffset = selection.start + 1;
+    controller.value = value.copyWith(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: nextOffset),
+      composing: TextRange.empty,
+    );
+    widget.onChanged?.call(nextText);
   }
 
   void _handleAction(ComposerAction action) {
@@ -175,7 +245,7 @@ class _ChatComposerState extends State<ChatComposer> {
                       alignment: Alignment.topCenter,
                       child: openPanel == null
                           ? Input(
-                              controller: widget.controller,
+                              controller: _effectiveController,
                               focusNode: _inputFocusNode,
                               hintText: widget.hintText,
                               minLines: widget.minLines,

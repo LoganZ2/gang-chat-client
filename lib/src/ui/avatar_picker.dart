@@ -150,7 +150,7 @@ class _AvatarPickerPreview extends StatelessWidget {
           style: TextStyle(
             color: UiColors.text,
             fontSize: size * 0.34,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),

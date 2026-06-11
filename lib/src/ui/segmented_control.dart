@@ -160,7 +160,7 @@ class _SegmentedControlState<T> extends State<SegmentedControl<T>> {
     final painter = TextPainter(
       text: TextSpan(
         text: segment.label,
-        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
       ),
       maxLines: 1,
       textDirection: TextDirection.ltr,
@@ -298,7 +298,7 @@ class _SegmentHitTarget<T> extends StatelessWidget {
                   style: TextStyle(
                     color: foreground,
                     fontSize: 13,
-                    fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                   ),
                 ),
               ),

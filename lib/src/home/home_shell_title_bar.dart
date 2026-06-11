@@ -848,7 +848,7 @@ class _SearchResultTileState extends State<_SearchResultTile> {
                       overflow: TextOverflow.ellipsis,
                       style: UiTypography.body.copyWith(
                         fontSize: 13,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     if (widget.subtitle.trim().isNotEmpty) ...[

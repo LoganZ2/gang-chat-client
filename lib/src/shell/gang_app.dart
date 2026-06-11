@@ -205,10 +205,7 @@ class _AuthGateState extends State<_AuthGate> {
       logout: _logout,
     );
 
-    return HomePage(
-      app: app,
-      windowController: widget.windowController,
-    );
+    return HomePage(app: app, windowController: widget.windowController);
   }
 }
 
@@ -228,7 +225,7 @@ class _LoadingPage extends StatelessWidget {
               style: TextStyle(
                 color: Color(0xFFECEFF1),
                 fontSize: 22,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
                 letterSpacing: 0,
               ),
             ),
@@ -246,7 +243,7 @@ class _LoadingPage extends StatelessWidget {
               style: TextStyle(
                 color: Color(0xFFB0B8C0),
                 fontSize: 13,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w500,
                 letterSpacing: 0,
               ),
             ),

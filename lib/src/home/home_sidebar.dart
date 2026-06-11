@@ -302,7 +302,7 @@ class _UserSummaryBar extends StatelessWidget {
                       style: const TextStyle(
                         color: UiColors.text,
                         fontSize: 13,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                         letterSpacing: 0,
                       ),
                     ),
@@ -394,7 +394,7 @@ class _ServerCard extends StatelessWidget {
                   style: const TextStyle(
                     color: UiColors.text,
                     fontSize: 13,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                     letterSpacing: 0,
                   ),
                 ),
@@ -485,7 +485,7 @@ class _UnreadBadge extends StatelessWidget {
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 10,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
                 height: 1,
                 letterSpacing: 0,
               ),

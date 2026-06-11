@@ -1019,7 +1019,7 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
               style: const TextStyle(
                 color: UiColors.textMuted,
                 fontSize: 12,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
               ),
             ),
             children: [
@@ -1284,7 +1284,7 @@ class _StickerFieldLabel extends StatelessWidget {
       style: const TextStyle(
         color: UiColors.textMuted,
         fontSize: 12,
-        fontWeight: FontWeight.w900,
+        fontWeight: FontWeight.w600,
       ),
     );
   }
@@ -1414,7 +1414,7 @@ class _StickerGridTile extends StatelessWidget {
                               style: const TextStyle(
                                 color: UiColors.background,
                                 fontSize: 12,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
@@ -1544,7 +1544,7 @@ class _StickerFilterDialogState extends State<StickerFilterDialog> {
                 style: TextStyle(
                   color: UiColors.text,
                   fontSize: 18,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 16),
@@ -1590,7 +1590,7 @@ class _StickerFilterDialogState extends State<StickerFilterDialog> {
                                   ? _stickerAccent
                                   : UiColors.textSecondary,
                               fontSize: 13,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
@@ -1685,7 +1685,7 @@ class StickerConfirmDialog extends StatelessWidget {
                 style: TextStyle(
                   color: danger ? UiColors.danger : UiColors.text,
                   fontSize: 18,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 10),
@@ -1963,7 +1963,7 @@ class _StickerPreviewDialogState extends State<StickerPreviewDialog> {
                       style: TextStyle(
                         color: UiColors.text,
                         fontSize: 18,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -2219,7 +2219,7 @@ class _StickerDimensionsLineState extends State<_StickerDimensionsLine> {
       style: const TextStyle(
         color: UiColors.textMuted,
         fontSize: 12,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w500,
       ),
     );
   }

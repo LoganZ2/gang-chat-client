@@ -131,7 +131,7 @@ class _LiveChannelHeaderCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: UiTypography.label.copyWith(
                           color: liveActive ? UiColors.accent : UiColors.text,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),

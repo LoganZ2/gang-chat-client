@@ -176,7 +176,7 @@ class _ButtonContent extends StatelessWidget {
       style: TextStyle(
         color: colors.foreground,
         fontSize: 13,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
         letterSpacing: 0,
       ),
       child: ClipRect(child: child),

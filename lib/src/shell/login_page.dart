@@ -30,7 +30,7 @@ const double _authErrorGap = 4;
 const _authTitleBarStyle = TextStyle(
   color: UiColors.textSecondary,
   fontSize: 12,
-  fontWeight: FontWeight.w800,
+  fontWeight: FontWeight.w600,
   letterSpacing: 0,
 );
 
@@ -332,7 +332,7 @@ class _LoginPageState extends State<LoginPage> {
                                     style: const TextStyle(
                                       color: UiColors.danger,
                                       fontSize: 12,
-                                      fontWeight: FontWeight.w700,
+                                      fontWeight: FontWeight.w500,
                                     ),
                                   ),
                                 ),

@@ -41,7 +41,7 @@ class _DeviceSection extends StatelessWidget {
               style: const TextStyle(
                 color: _textPrimary,
                 fontSize: 15,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -116,7 +116,7 @@ class _AudioControlPanel extends StatelessWidget {
                 style: const TextStyle(
                   color: _textPrimary,
                   fontSize: 15,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -125,7 +125,7 @@ class _AudioControlPanel extends StatelessWidget {
               style: const TextStyle(
                 color: _textSecondary,
                 fontSize: 13,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -271,7 +271,7 @@ class _DeviceRow extends StatelessWidget {
               style: TextStyle(
                 color: selected ? _textPrimary : _textSecondary,
                 fontSize: 14,
-                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w600,
               ),
             ),
           ),

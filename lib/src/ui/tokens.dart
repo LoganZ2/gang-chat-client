@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+const String kClientFontFamily = 'Microsoft YaHei';
+const List<String> kClientFontFamilyFallback = ['Microsoft YaHei UI'];
+
 abstract final class UiColors {
   static const background = Color(0xFF14171D);
   static const surfaceLow = Color(0xFF181C24);
@@ -44,7 +47,7 @@ abstract final class UiTypography {
   static const label = TextStyle(
     color: UiColors.textSecondary,
     fontSize: 12,
-    fontWeight: FontWeight.w700,
+    fontWeight: FontWeight.w500,
     height: 1.35,
   );
 
@@ -57,7 +60,7 @@ abstract final class UiTypography {
   static const title = TextStyle(
     color: UiColors.text,
     fontSize: 18,
-    fontWeight: FontWeight.w800,
+    fontWeight: FontWeight.w600,
   );
 }
 
@@ -68,7 +71,8 @@ ThemeData uiTheme() {
       surface: UiColors.surfaceLow,
       error: UiColors.danger,
     ),
-    fontFamily: 'Roboto',
+    fontFamily: kClientFontFamily,
+    fontFamilyFallback: kClientFontFamilyFallback,
     scaffoldBackgroundColor: UiColors.background,
     // The app styles its own flat focus/hover/selected states (see the title
     // bar search field). Suppress Material's default interaction overlays so the

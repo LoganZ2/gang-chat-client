@@ -449,7 +449,7 @@ class _VoiceBody extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: UiTypography.body.copyWith(
                         color: _voiceAccent,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
@@ -654,7 +654,7 @@ class _FileAttachmentTile extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: UiTypography.body.copyWith(
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       if (meta.isNotEmpty) ...[

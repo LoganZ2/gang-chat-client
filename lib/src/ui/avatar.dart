@@ -11,7 +11,8 @@ String avatarInitials(String label) {
   return trimmed.characters.take(2).toString().toUpperCase();
 }
 
-Color avatarFallbackColor(String key) {  return switch (key) {
+Color avatarFallbackColor(String key) {
+  return switch (key) {
     'blue-3' => const Color(0xFF526C9F),
     'sky-2' => const Color(0xFF4F7F92),
     'cyan-2' => const Color(0xFF47777A),
@@ -61,9 +62,7 @@ class Avatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final initials = avatarInitials(label);
     final key = defaultAvatarKey;
-    final fillColor = key == null
-        ? UiColors.surface
-        : avatarFallbackColor(key);
+    final fillColor = key == null ? UiColors.surface : avatarFallbackColor(key);
     return SizedBox.square(
       dimension: size,
       child: DecoratedBox(
@@ -85,7 +84,7 @@ class Avatar extends StatelessWidget {
                           ? UiColors.accent
                           : UiColors.text,
                       fontSize: size * 0.34,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 )
@@ -137,7 +136,7 @@ class StatusBadge extends StatelessWidget {
               style: TextStyle(
                 color: color,
                 fontSize: 12,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],

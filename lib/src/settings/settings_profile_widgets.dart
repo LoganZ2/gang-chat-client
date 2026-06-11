@@ -44,7 +44,7 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
                 style: const TextStyle(
                   color: _danger,
                   fontSize: 18,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 10),
@@ -65,7 +65,7 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
                 contextMenuBuilder: buildTextFieldContextMenu,
                 style: const TextStyle(
                   color: _textPrimary,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w500,
                 ),
                 decoration: InputDecoration(
                   isDense: true,
@@ -153,7 +153,7 @@ class _FieldLabel extends StatelessWidget {
       style: const TextStyle(
         color: _textMuted,
         fontSize: 12,
-        fontWeight: FontWeight.w900,
+        fontWeight: FontWeight.w600,
       ),
     );
   }

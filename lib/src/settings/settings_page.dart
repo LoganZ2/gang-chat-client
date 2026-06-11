@@ -2340,7 +2340,7 @@ class _SettingsPageState extends State<SettingsPage> {
               style: const TextStyle(
                 color: _textMuted,
                 fontSize: 12,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
               ),
             ),
             children: [

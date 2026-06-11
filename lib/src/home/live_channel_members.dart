@@ -229,7 +229,7 @@ class _LiveMemberCard extends StatelessWidget {
               local ? '$name (you)' : name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: UiTypography.body.copyWith(fontWeight: FontWeight.w900),
+              style: UiTypography.body.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 3),
             Text(

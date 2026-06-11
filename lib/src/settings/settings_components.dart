@@ -171,7 +171,7 @@ class _CopyableField extends StatelessWidget {
               style: const TextStyle(
                 color: _textSecondary,
                 fontSize: 14,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
@@ -200,7 +200,7 @@ class _ReadOnlyLine extends StatelessWidget {
             style: const TextStyle(
               color: _textSecondary,
               fontSize: 14,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ),
@@ -280,7 +280,7 @@ class _SegmentedSetting extends StatelessWidget {
                       style: TextStyle(
                         color: value == option.value ? _cyan : _textSecondary,
                         fontSize: 13,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -349,7 +349,7 @@ class _SessionList extends StatelessWidget {
                               style: const TextStyle(
                                 color: _textPrimary,
                                 fontSize: 13,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
@@ -359,7 +359,7 @@ class _SessionList extends StatelessWidget {
                             style: TextStyle(
                               color: session.isActive ? _cyan : _textMuted,
                               fontSize: 12,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],

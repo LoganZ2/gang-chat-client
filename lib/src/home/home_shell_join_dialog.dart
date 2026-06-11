@@ -62,7 +62,7 @@ class _JoinApplicationDialogState extends State<_JoinApplicationDialog> {
                       child: Text(
                         '申请加入',
                         style: UiTypography.title.copyWith(
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
@@ -101,7 +101,7 @@ class _JoinApplicationDialogState extends State<_JoinApplicationDialog> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: UiTypography.body.copyWith(
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),

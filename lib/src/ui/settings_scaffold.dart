@@ -75,7 +75,7 @@ class SettingsScaffold extends StatelessWidget {
                     style: const TextStyle(
                       color: UiColors.text,
                       fontSize: 20,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -183,7 +183,7 @@ class SettingsCard extends StatelessWidget {
                     style: TextStyle(
                       color: danger ? UiColors.danger : UiColors.text,
                       fontSize: 15,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),

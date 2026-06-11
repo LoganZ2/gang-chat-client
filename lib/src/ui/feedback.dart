@@ -42,7 +42,7 @@ class Toast extends StatelessWidget {
                   style: const TextStyle(
                     color: UiColors.text,
                     fontSize: 13,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ),

@@ -204,7 +204,7 @@ class _AvatarCropDialogState extends State<AvatarCropDialog> {
                           style: const TextStyle(
                             color: UiColors.text,
                             fontSize: 18,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -333,7 +333,7 @@ class _AvatarCropDialogState extends State<AvatarCropDialog> {
                         style: const TextStyle(
                           color: UiColors.textSecondary,
                           fontSize: 12,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),

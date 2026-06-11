@@ -50,7 +50,7 @@ class _RoomDialogShell extends StatelessWidget {
                   style: const TextStyle(
                     color: UiColors.text,
                     fontSize: 20,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -64,10 +64,7 @@ class _RoomDialogShell extends StatelessWidget {
               ),
             ],
           ),
-          if (pinned != null) ...[
-            const SizedBox(height: 14),
-            pinned!,
-          ],
+          if (pinned != null) ...[const SizedBox(height: 14), pinned!],
           const SizedBox(height: 14),
           Expanded(child: child),
         ],
@@ -141,7 +138,7 @@ class _Pill extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: UiTypography.label.copyWith(
             color: active ? UiColors.accent : UiColors.textSecondary,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
@@ -404,10 +401,7 @@ Future<_CroppedRoomAvatar?> _pickAndCropRoomAvatar(BuildContext context) async {
   try {
     file = await fileSelectionService.openFile(
       acceptedTypeGroups: const [
-        FileTypeGroup(
-          label: '图片',
-          extensions: ['png', 'jpg', 'jpeg', 'webp'],
-        ),
+        FileTypeGroup(label: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp']),
       ],
     );
   } catch (error) {

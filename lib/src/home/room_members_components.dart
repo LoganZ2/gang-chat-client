@@ -133,7 +133,7 @@ class _MemberRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: UiTypography.body.copyWith(
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -331,7 +331,7 @@ class _InviteUserRow extends StatelessWidget {
               '${room_display.userPrimaryName(user)} · @${user.username}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: UiTypography.label.copyWith(fontWeight: FontWeight.w900),
+              style: UiTypography.label.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
           Button(
@@ -438,7 +438,7 @@ class _JoinRequestRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: UiTypography.label.copyWith(
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 if (room_join_requests.joinRequestReasonText(request)

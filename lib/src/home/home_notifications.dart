@@ -308,7 +308,7 @@ class _RoomInviteNotificationRow extends StatelessWidget {
                       style: const TextStyle(
                         color: UiColors.text,
                         fontSize: 14,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -328,7 +328,7 @@ class _RoomInviteNotificationRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: UiTypography.label.copyWith(
                       color: UiColors.textSecondary,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -419,7 +419,7 @@ class _RoomApplicationRequestNotificationRow extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: UiTypography.label.copyWith(
                 color: UiColors.textSecondary,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(width: 8),
@@ -518,7 +518,7 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
                       style: const TextStyle(
                         color: UiColors.text,
                         fontSize: 14,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -542,7 +542,7 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: UiTypography.label.copyWith(
                       color: UiColors.textSecondary,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -587,7 +587,7 @@ class _InviteRoleBadge extends StatelessWidget {
           style: UiTypography.label.copyWith(
             color: UiColors.textSecondary,
             fontSize: 11,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
@@ -623,7 +623,7 @@ class _InlineRoomTarget extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: UiTypography.label.copyWith(
               color: UiColors.text,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
@@ -725,7 +725,7 @@ class _InvalidInviteLabel extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: UiTypography.label.copyWith(
             color: UiColors.textMuted,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
@@ -757,7 +757,7 @@ class _ProcessedInviteLabel extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: UiTypography.label.copyWith(
             color: accepted ? UiColors.accent : UiColors.danger,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
@@ -803,7 +803,7 @@ class _ProcessedApplicationLabel extends StatelessWidget {
                 : rejected
                 ? UiColors.danger
                 : UiColors.textMuted,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
@@ -881,7 +881,7 @@ class _NotificationEmptyState extends StatelessWidget {
               textAlign: TextAlign.center,
               style: UiTypography.body.copyWith(
                 color: danger ? UiColors.danger : UiColors.textMuted,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
               ),
             ),
             if (subtitle != null) ...[
