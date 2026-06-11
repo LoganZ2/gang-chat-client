@@ -81,6 +81,11 @@ jobs:
     runs-on: macos-arm64
     needs: [prepare]
     if: needs.prepare.outputs.duplicate != 'true'
+    env:
+      # 固定为 Flutter 中国镜像，与 build-windows 一致。runner 在国内，pub.dev
+      # 不稳；不依赖 runner 全局配置可避免 pubspec.lock 的 url: 被改写漂移。
+      PUB_HOSTED_URL: https://pub.flutter-io.cn
+      FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
     steps:
       # 不用 actions/checkout：runner 在国内访问不了 gitea.com，克隆 action 会卡死。
       # 按 ref 名 fetch（而非 SHA）——服务器默认不允许 fetch 任意 SHA。

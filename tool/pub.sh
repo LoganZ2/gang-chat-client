@@ -12,12 +12,14 @@
 #   tool/pub.sh get        # equivalent to `flutter pub get`   (default)
 #   tool/pub.sh upgrade    # equivalent to `flutter pub upgrade`
 #
-# To use a local mirror only for download SPEED without rewriting the lock,
-# DON'T set PUB_HOSTED_URL globally — this script intentionally overrides it.
+# Source is the Flutter China mirror: reachable from both domestic build
+# machines (fast) and overseas (slower but works), unlike pub.dev which is
+# unreliable from inside China. CI must invoke deps through this script so the
+# lock's url: fields don't drift.
 set -euo pipefail
 
-# Canonical package source. Keep in sync with the team convention in README.
-export PUB_HOSTED_URL="https://pub.dev"
+# Canonical package source. CI and all contributors must resolve through this.
+export PUB_HOSTED_URL="https://pub.flutter-io.cn"
 
 cmd="${1:-get}"
 case "$cmd" in
