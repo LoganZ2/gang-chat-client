@@ -7,6 +7,7 @@ class RoomMembersDialog extends StatefulWidget {
     required this.room,
     required this.currentUser,
     required this.initialLive,
+    this.reloadToken = 0,
     this.embedded = false,
     this.onClose,
     this.onChanged,
@@ -16,6 +17,11 @@ class RoomMembersDialog extends StatefulWidget {
   final RoomDetail room;
   final CurrentUser currentUser;
   final LiveState initialLive;
+
+  /// Incremented by the host when a realtime event (join requests updated, role
+  /// changed) means this panel's data is stale. A change triggers a reload.
+  final int reloadToken;
+
   final bool embedded;
   final VoidCallback? onClose;
   final VoidCallback? onChanged;
@@ -89,6 +95,20 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
     _memberSearchController.dispose();
     _inviteSearchController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(RoomMembersDialog oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // The host bumps reloadToken when a realtime event invalidates this panel
+    // (join requests changed, or the current user's role changed). Re-pull the
+    // member/request lists, and adopt the freshest room so permission checks
+    // (canReviewRequests, canManageMembers) reflect the new role.
+    if (widget.reloadToken != oldWidget.reloadToken ||
+        !identical(widget.room, oldWidget.room)) {
+      _room = widget.room;
+      unawaited(_load());
+    }
   }
 
   void _close() {

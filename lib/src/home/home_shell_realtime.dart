@@ -67,6 +67,12 @@ extension _HomeShellRealtime on _HomeShellState {
       case 'room_applications_updated':
         _applyRoomApplicationsUpdated();
         break;
+      case 'room_role_changed':
+        _applyRoomRoleChanged(event.data);
+        break;
+      case 'room_join_requests_updated':
+        _applyRoomJoinRequestsUpdated(event.data);
+        break;
       case 'music_box_changed':
         _onMusicBoxChanged(event.data);
         break;
@@ -147,5 +153,37 @@ extension _HomeShellRealtime on _HomeShellState {
     if (patch.shouldDisconnectLive) {
       unawaited(_liveSessionController.disconnect());
     }
+  }
+
+  /// Applies a `room_role_changed` event for the affected member (the current
+  /// user). The shared room snapshot omits `my_role`, so this is the only way a
+  /// promote/demote reaches the open room without a manual refetch. Updates the
+  /// selected room's membership role in place so permission-gated UI (manage,
+  /// review join requests) re-evaluates immediately.
+  void _applyRoomRoleChanged(Map<String, dynamic> data) {
+    final patch = _roomsController.patchRoomRoleChanged(
+      selectedRoom: _selectedRoom,
+      data: data,
+    );
+    if (patch == null || !mounted) return;
+    _setHomeState(() {
+      _selectedRoom = patch.selectedRoom;
+      // A role change can flip whether the user may review join requests, so
+      // bump the members reload token to re-pull that list if the panel's open.
+      _membersReloadToken++;
+    });
+  }
+
+  /// Applies a `room_join_requests_updated` event: the pending join-request set
+  /// for [roomId] changed (new request, or one approved/denied elsewhere). If
+  /// it targets the open room, nudge the members panel to reload its request
+  /// list via the reload token. Also refresh the notification badge, since a
+  /// new request may need the current user's attention.
+  void _applyRoomJoinRequestsUpdated(Map<String, dynamic> data) {
+    final roomId = data['room_id'] as String?;
+    if (!mounted) return;
+    unawaited(_refreshPendingRoomInviteBadge());
+    if (roomId == null || roomId != _selectedServerId) return;
+    _setHomeState(() => _membersReloadToken++);
   }
 }

@@ -131,6 +131,10 @@ extension _HomeShellLiveActions on _HomeShellState {
     final patch = liveOutputMuteToggled(headphonesMuted: _headphonesMuted);
     _setHomeState(() => _headphonesMuted = patch.headphonesMuted);
     unawaited(_liveSessionController.setOutputMuted(patch.headphonesMuted));
+    // Report the headphone state to the server so other participants see it on
+    // the live snapshot. Best-effort: a failure here doesn't undo the local
+    // mute, which already took effect on the LiveKit session above.
+    unawaited(_patchLiveState(headphonesMuted: patch.headphonesMuted));
   }
 
   Future<void> _joinLive(String source) async {
@@ -244,6 +248,7 @@ extension _HomeShellLiveActions on _HomeShellState {
 
   Future<void> _patchLiveState({
     bool? micMuted,
+    bool? headphonesMuted,
     bool? cameraOn,
     bool? screenSharing,
   }) async {
@@ -263,6 +268,7 @@ extension _HomeShellLiveActions on _HomeShellState {
       final participant = await _liveController.updateMyState(
         roomId: roomId,
         micMuted: micMuted,
+        headphonesMuted: headphonesMuted,
         cameraOn: cameraOn,
         screenSharing: screenSharing,
       );

@@ -1122,6 +1122,8 @@ class RoomDetail {
     this.notificationPolicy = 'all',
     this.personalProfile = const RoomPersonalProfile(),
     this.aiVoiceAnnouncementsEnabled = true,
+    this.messageRecallPolicy = 'sender_only',
+    this.messageRecallWindowSeconds,
     this.canDeleteRoom,
     this.onlineMemberCount = 0,
   });
@@ -1136,6 +1138,14 @@ class RoomDetail {
   final String notificationPolicy;
   final RoomPersonalProfile personalProfile;
   final bool aiVoiceAnnouncementsEnabled;
+
+  /// Who may recall messages and within what window. Mirrors the server's
+  /// `message_recall_policy` (e.g. `sender_only`, `admins`, `disabled`) and
+  /// `message_recall_window_seconds` (null = unlimited). Drives whether the
+  /// recall action is offered and for how long after sending.
+  final String messageRecallPolicy;
+  final int? messageRecallWindowSeconds;
+
   final bool? canDeleteRoom;
   final String? avatarUrl;
   final String defaultAvatarKey;
@@ -1170,6 +1180,12 @@ class RoomDetail {
             'ai_voice_auto_broadcast',
           ]) ??
           true,
+      messageRecallPolicy:
+          _stringFromJson(json, const ['message_recall_policy']) ??
+          'sender_only',
+      messageRecallWindowSeconds: _intFromJson(json, const [
+        'message_recall_window_seconds',
+      ]),
       canDeleteRoom: _boolFromJson(json, const [
         'can_delete_room',
         'can_delete',
@@ -1227,6 +1243,8 @@ class RoomDetail {
       notificationPolicy: notificationPolicy,
       personalProfile: personalProfile,
       aiVoiceAnnouncementsEnabled: aiVoiceAnnouncementsEnabled,
+      messageRecallPolicy: messageRecallPolicy,
+      messageRecallWindowSeconds: messageRecallWindowSeconds,
       canDeleteRoom: canDeleteRoom,
       avatarUrl: avatarUrl,
       defaultAvatarKey: defaultAvatarKey,
@@ -1272,6 +1290,13 @@ class Message {
     required this.body,
     required this.createdAt,
     this.attachments = const [],
+    this.mentions = const [],
+    this.isRecalled = false,
+    this.recalledAt,
+    this.recalledBy,
+    this.isForceDeleted = false,
+    this.forceDeletedAt,
+    this.forceDeletedBy,
     this.pending = false,
     this.failed = false,
   });
@@ -1284,8 +1309,30 @@ class Message {
   final String body;
   final DateTime createdAt;
   final List<MessageAttachment> attachments;
+
+  /// Raw mention descriptors as sent by the server (opaque maps; shape is
+  /// `{user_id, ...}`). Kept as-is so the renderer can highlight @mentions.
+  final List<Map<String, Object?>> mentions;
+
+  /// Set when the sender (or an admin within policy) recalled the message.
+  /// The body/attachments are tombstoned server-side; the client shows a
+  /// "message recalled" placeholder.
+  final bool isRecalled;
+  final DateTime? recalledAt;
+  final UserSummary? recalledBy;
+
+  /// Set when an admin force-deleted the message. Distinct from a recall:
+  /// it's a moderation action, not the author retracting their own message.
+  final bool isForceDeleted;
+  final DateTime? forceDeletedAt;
+  final UserSummary? forceDeletedBy;
+
   final bool pending;
   final bool failed;
+
+  /// Whether the message content has been removed (recalled or force-deleted)
+  /// and should render as a placeholder rather than its original body.
+  bool get isRemoved => isRecalled || isForceDeleted;
 
   MessageAttachment? get stickerAttachment {
     if (type != 'sticker') return null;
@@ -1319,6 +1366,8 @@ class Message {
           ]),
           commonRooms: senderCommonRooms.isEmpty ? null : senderCommonRooms,
         );
+    final recalledByJson = _nullableMap(json['recalled_by']);
+    final forceDeletedByJson = _nullableMap(json['force_deleted_by']);
     return Message(
       id: json['id']! as String,
       roomId: json['room_id']! as String,
@@ -1329,6 +1378,17 @@ class Message {
       attachments: _listOfMaps(
         json['attachments'],
       ).map(MessageAttachment.fromJson).toList(),
+      mentions: _listOfMaps(json['mentions']),
+      isRecalled: _boolFromJson(json, const ['is_recalled']) ?? false,
+      recalledAt: _parseDateTime(json['recalled_at']),
+      recalledBy: recalledByJson == null
+          ? null
+          : UserSummary.fromJson(recalledByJson),
+      isForceDeleted: _boolFromJson(json, const ['is_force_deleted']) ?? false,
+      forceDeletedAt: _parseDateTime(json['force_deleted_at']),
+      forceDeletedBy: forceDeletedByJson == null
+          ? null
+          : UserSummary.fromJson(forceDeletedByJson),
       createdAt: DateTime.parse(json['created_at']! as String),
     );
   }
@@ -1364,6 +1424,13 @@ class Message {
       body: body,
       createdAt: createdAt,
       attachments: attachments,
+      mentions: mentions,
+      isRecalled: isRecalled,
+      recalledAt: recalledAt,
+      recalledBy: recalledBy,
+      isForceDeleted: isForceDeleted,
+      forceDeletedAt: forceDeletedAt,
+      forceDeletedBy: forceDeletedBy,
       failed: true,
     );
   }
@@ -1376,9 +1443,13 @@ class LiveParticipant {
     required this.joinedAt,
     required this.micMuted,
     required this.headphonesMuted,
+    this.headphonesListening = true,
     required this.voiceBlocked,
     required this.cameraOn,
     required this.screenSharing,
+    this.musicListening = false,
+    this.musicSessionId,
+    this.listeningWithUserId,
     required this.connectionState,
   });
 
@@ -1388,6 +1459,11 @@ class LiveParticipant {
   final bool micMuted;
   final bool headphonesMuted;
 
+  /// Whether the participant is actively listening (headphones engaged).
+  /// Inverse-ish of [headphonesMuted] but sent explicitly by the server;
+  /// defaults to true for servers that omit it.
+  final bool headphonesListening;
+
   /// A persistent room-level voice ban set by an admin (`block_voice`). While
   /// true the participant's LiveKit publish permission is revoked: the mic is
   /// force-muted and self-unmute requests are rejected by the server. Survives
@@ -1396,6 +1472,18 @@ class LiveParticipant {
   final bool voiceBlocked;
   final bool cameraOn;
   final bool screenSharing;
+
+  /// Whether the participant is currently listening to the room's shared music
+  /// (the "music box" / follow-listening feature).
+  final bool musicListening;
+
+  /// The music session the participant is part of, when follow-listening.
+  final String? musicSessionId;
+
+  /// The user this participant is listening along with (follow-listening
+  /// host), when set.
+  final String? listeningWithUserId;
+
   final String connectionState;
 
   factory LiveParticipant.fromJson(Map<String, Object?> json) {
@@ -1422,10 +1510,104 @@ class LiveParticipant {
       joinedAt: DateTime.parse(json['joined_at']! as String),
       micMuted: json['mic_muted']! as bool,
       headphonesMuted: json['headphones_muted'] as bool? ?? false,
+      headphonesListening: json['headphones_listening'] as bool? ?? true,
       voiceBlocked: json['voice_blocked'] as bool? ?? false,
       cameraOn: json['camera_on']! as bool,
       screenSharing: json['screen_sharing']! as bool,
+      musicListening: json['music_listening'] as bool? ?? false,
+      musicSessionId: json['music_session_id'] as String?,
+      listeningWithUserId: json['listening_with_user_id'] as String?,
       connectionState: json['connection_state']! as String,
+    );
+  }
+}
+
+/// A per-listener volume override for one target speaker in a live room. Each
+/// listener tunes how loudly they hear each other participant; the server keys
+/// these by (room, listener, target) and only ever returns the caller's own
+/// overrides.
+class LiveMemberVolume {
+  const LiveMemberVolume({
+    required this.roomId,
+    required this.targetUser,
+    required this.volume,
+    required this.updatedAt,
+  });
+
+  final String roomId;
+  final UserSummary targetUser;
+
+  /// 0–100, where 100 is the unattenuated default.
+  final int volume;
+  final DateTime updatedAt;
+
+  factory LiveMemberVolume.fromJson(Map<String, Object?> json) {
+    return LiveMemberVolume(
+      roomId: json['room_id']! as String,
+      targetUser: UserSummary.fromJson(
+        json['target_user']! as Map<String, Object?>,
+      ),
+      volume: json['volume']! as int,
+      updatedAt: DateTime.parse(json['updated_at']! as String),
+    );
+  }
+}
+
+/// A pending request to recall a message, created when a room's recall policy
+/// is `admin_approval` and a non-admin asks to recall their own message. Admins
+/// list and approve/reject these.
+class MessageRecallRequest {
+  const MessageRecallRequest({
+    required this.id,
+    required this.roomId,
+    required this.messageId,
+    required this.status,
+    required this.createdAt,
+    this.requestedByUserId,
+  });
+
+  final String id;
+  final String roomId;
+  final String messageId;
+  final String status;
+  final DateTime createdAt;
+  final String? requestedByUserId;
+
+  factory MessageRecallRequest.fromJson(Map<String, Object?> json) {
+    return MessageRecallRequest(
+      id: json['id']! as String,
+      roomId: json['room_id']! as String,
+      messageId: json['message_id']! as String,
+      status: json['status'] as String? ?? 'pending',
+      requestedByUserId: json['requested_by_user_id'] as String?,
+      createdAt: DateTime.parse(json['created_at']! as String),
+    );
+  }
+}
+
+/// The outcome of a recall request. The server either recalls the message
+/// immediately (sender within policy/window, or an admin) returning the updated
+/// [message], or — under `admin_approval` for a non-admin — files a pending
+/// [recallRequest] for an admin to review.
+class MessageRecallResult {
+  const MessageRecallResult({this.message, this.recallRequest});
+
+  /// Set when the recall took effect immediately.
+  final Message? message;
+
+  /// Set when the recall was queued for admin approval instead.
+  final MessageRecallRequest? recallRequest;
+
+  bool get isPending => recallRequest != null && message == null;
+
+  factory MessageRecallResult.fromJson(Map<String, Object?> json) {
+    final messageJson = _nullableMap(json['message']);
+    final requestJson = _nullableMap(json['recall_request']);
+    return MessageRecallResult(
+      message: messageJson == null ? null : Message.fromJson(messageJson),
+      recallRequest: requestJson == null
+          ? null
+          : MessageRecallRequest.fromJson(requestJson),
     );
   }
 }

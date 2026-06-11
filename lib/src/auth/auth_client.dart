@@ -141,16 +141,37 @@ class AuthSession {
   final CurrentUser user;
 
   factory AuthSession.fromJson(Map<String, Object?> json) {
-    final expiresAtJson = json['access_token_expires_at'] as String?;
-    final expiresInJson = json['expires_in'];
-    final accessTokenExpiresAt = expiresAtJson == null
-        ? DateTime.now().add(Duration(seconds: expiresInJson! as int))
-        : DateTime.parse(expiresAtJson);
     return AuthSession(
       accessToken: json['access_token']! as String,
       refreshToken: json['refresh_token']! as String,
-      accessTokenExpiresAt: accessTokenExpiresAt,
+      accessTokenExpiresAt: _parseAccessTokenExpiry(json),
       user: CurrentUser.fromJson(json['user']! as Map<String, Object?>),
+    );
+  }
+
+  /// Resolves the access-token expiry from whichever field the server sent.
+  /// Prefers the absolute `access_token_expires_at`; otherwise derives it from
+  /// a relative `expires_in` (accepting int, double, or numeric string). Falls
+  /// back to a conservative default when neither is present or parseable, so a
+  /// malformed/partial token response can't crash the login flow.
+  static DateTime _parseAccessTokenExpiry(Map<String, Object?> json) {
+    const fallback = Duration(minutes: 15);
+    final expiresAtJson = json['access_token_expires_at'] as String?;
+    if (expiresAtJson != null) {
+      final parsed = DateTime.tryParse(expiresAtJson);
+      if (parsed != null) return parsed;
+    }
+    final expiresIn = json['expires_in'];
+    int? seconds;
+    if (expiresIn is int) {
+      seconds = expiresIn;
+    } else if (expiresIn is double) {
+      seconds = expiresIn.toInt();
+    } else if (expiresIn is String) {
+      seconds = int.tryParse(expiresIn);
+    }
+    return DateTime.now().add(
+      seconds != null && seconds > 0 ? Duration(seconds: seconds) : fallback,
     );
   }
 

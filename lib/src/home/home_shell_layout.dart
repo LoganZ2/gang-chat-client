@@ -55,6 +55,7 @@ extension _HomeShellLayout on _HomeShellState {
         room: _selectedRoom!,
         currentUser: _currentUser,
         initialLive: _live ?? _selectedRoom!.live,
+        reloadToken: _membersReloadToken,
         embedded: true,
         onClose: _openChat,
         onChanged: () => unawaited(_loadServers()),

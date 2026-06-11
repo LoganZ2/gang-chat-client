@@ -133,6 +133,10 @@ class _HomeShellState extends State<HomeShell> {
   bool _settingsOpen = false;
   bool _narrowContentOpen = false;
   _ContentMode _contentMode = _ContentMode.chat;
+  // Bumped to ask an open members panel to reload (e.g. after a
+  // `room_join_requests_updated` or `room_role_changed` SSE event). The panel
+  // watches this via didUpdateWidget and re-pulls its members/requests.
+  int _membersReloadToken = 0;
   List<RoomInvite> _notificationInvites = const [];
   List<RoomApplication> _notificationApplications = const [];
   bool _loadingNotifications = false;

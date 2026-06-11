@@ -171,12 +171,14 @@ class LiveController {
   Future<LiveParticipant> updateMyState({
     required String roomId,
     bool? micMuted,
+    bool? headphonesMuted,
     bool? cameraOn,
     bool? screenSharing,
   }) {
     return api.updateMyLiveState(
       roomId: roomId,
       micMuted: micMuted,
+      headphonesMuted: headphonesMuted,
       cameraOn: cameraOn,
       screenSharing: screenSharing,
     );

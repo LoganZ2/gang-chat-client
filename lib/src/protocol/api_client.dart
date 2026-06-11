@@ -301,6 +301,57 @@ abstract interface class GangApi {
     required String lastReadMessageId,
   });
 
+  /// Recalls a message. Succeeds immediately for the sender (within the room's
+  /// recall policy/window) or an admin; under `admin_approval` a non-admin's
+  /// request is queued for review instead (see [MessageRecallResult.isPending]).
+  Future<MessageRecallResult> recallMessage({
+    required String roomId,
+    required String messageId,
+    String? reason,
+  });
+
+  /// Lists pending message-recall requests awaiting admin review.
+  Future<List<MessageRecallRequest>> listMessageRecallRequests({
+    required String roomId,
+    String status = 'pending',
+  });
+
+  /// Approves or rejects a pending message-recall request (admin only).
+  Future<void> reviewMessageRecallRequest({
+    required String roomId,
+    required String requestId,
+    required bool approve,
+    String? reason,
+  });
+
+  /// Force-deletes a message as a moderation action (admin only). Distinct from
+  /// a recall; requires explicit confirmation server-side.
+  Future<Message> forceDeleteMessage({
+    required String roomId,
+    required String messageId,
+    String? reason,
+  });
+
+  /// Lists the caller's own per-member volume overrides for a live room.
+  Future<List<LiveMemberVolume>> listMyLiveMemberVolumes(String roomId);
+
+  /// Sets how loudly the caller hears [targetUserId] in [roomId]'s live
+  /// session. [volume] is clamped 0–100 server-side.
+  Future<LiveMemberVolume> updateMyLiveMemberVolume({
+    required String roomId,
+    required String targetUserId,
+    required int volume,
+  });
+
+  /// Applies an admin moderation action to a live participant. [action] is one
+  /// of `kick`, `mute_mic`, `block_voice`, `restore_voice`.
+  Future<void> moderateLiveParticipant({
+    required String roomId,
+    required String userId,
+    required String action,
+    String? reason,
+  });
+
   Future<LiveState> getLiveState(String roomId);
 
   Future<LiveJoinResult> joinLive({
@@ -313,6 +364,7 @@ abstract interface class GangApi {
   Future<LiveParticipant> updateMyLiveState({
     required String roomId,
     bool? micMuted,
+    bool? headphonesMuted,
     bool? cameraOn,
     bool? screenSharing,
     String? connectionState,
@@ -1294,6 +1346,130 @@ class GangApiClient implements GangApi {
   }
 
   @override
+  Future<MessageRecallResult> recallMessage({
+    required String roomId,
+    required String messageId,
+    String? reason,
+  }) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.post(
+        _uri('/rooms/$roomId/messages/$messageId/recall'),
+        headers: _headers(token),
+        body: encodeJsonBody({'reason': ?reason}),
+      );
+    });
+    return MessageRecallResult.fromJson(decoded);
+  }
+
+  @override
+  Future<List<MessageRecallRequest>> listMessageRecallRequests({
+    required String roomId,
+    String status = 'pending',
+  }) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.get(
+        _uri('/rooms/$roomId/message-recall-requests', {'status': status}),
+        headers: _headers(token),
+      );
+    }, retryTransientFailures: true);
+    final requests = decoded['requests'] as List<Object?>? ?? const [];
+    return requests
+        .cast<Map<String, Object?>>()
+        .map(MessageRecallRequest.fromJson)
+        .toList();
+  }
+
+  @override
+  Future<void> reviewMessageRecallRequest({
+    required String roomId,
+    required String requestId,
+    required bool approve,
+    String? reason,
+  }) async {
+    await _sendJson((token) {
+      return _httpClient.patch(
+        _uri('/rooms/$roomId/message-recall-requests/$requestId'),
+        headers: _headers(token),
+        body: encodeJsonBody({
+          'decision': approve ? 'approve' : 'reject',
+          'reason': ?reason,
+        }),
+      );
+    });
+  }
+
+  @override
+  Future<Message> forceDeleteMessage({
+    required String roomId,
+    required String messageId,
+    String? reason,
+  }) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.post(
+        _uri('/rooms/$roomId/messages/$messageId/force-delete'),
+        headers: _headers(token),
+        body: encodeJsonBody({
+          'confirm': true,
+          'reason': ?reason,
+        }),
+      );
+    });
+    return Message.fromJson(decoded['message']! as Map<String, Object?>);
+  }
+
+  @override
+  Future<List<LiveMemberVolume>> listMyLiveMemberVolumes(String roomId) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.get(
+        _uri('/rooms/$roomId/live/me/member-volumes'),
+        headers: _headers(token),
+      );
+    }, retryTransientFailures: true);
+    final volumes = decoded['member_volumes'] as List<Object?>? ?? const [];
+    return volumes
+        .cast<Map<String, Object?>>()
+        .map(LiveMemberVolume.fromJson)
+        .toList();
+  }
+
+  @override
+  Future<LiveMemberVolume> updateMyLiveMemberVolume({
+    required String roomId,
+    required String targetUserId,
+    required int volume,
+  }) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.patch(
+        _uri('/rooms/$roomId/live/me/member-volumes/$targetUserId'),
+        headers: _headers(token),
+        body: encodeJsonBody({'volume': volume}),
+      );
+    });
+    return LiveMemberVolume.fromJson(
+      decoded['member_volume']! as Map<String, Object?>,
+    );
+  }
+
+  @override
+  Future<void> moderateLiveParticipant({
+    required String roomId,
+    required String userId,
+    required String action,
+    String? reason,
+  }) async {
+    await _sendJson((token) {
+      return _httpClient.post(
+        _uri('/rooms/$roomId/live/participants/$userId/moderation'),
+        headers: _headers(token),
+        body: encodeJsonBody({
+          'action': action,
+          'reason': ?reason,
+        }),
+      );
+    });
+  }
+
+  @override
   Future<LiveState> getLiveState(String roomId) async {
     final decoded = await _sendJson((token) {
       return _httpClient.get(
@@ -1328,12 +1504,14 @@ class GangApiClient implements GangApi {
   Future<LiveParticipant> updateMyLiveState({
     required String roomId,
     bool? micMuted,
+    bool? headphonesMuted,
     bool? cameraOn,
     bool? screenSharing,
     String? connectionState,
   }) async {
     final body = <String, Object?>{};
     if (micMuted != null) body['mic_muted'] = micMuted;
+    if (headphonesMuted != null) body['headphones_muted'] = headphonesMuted;
     if (cameraOn != null) body['camera_on'] = cameraOn;
     if (screenSharing != null) body['screen_sharing'] = screenSharing;
     if (connectionState != null) body['connection_state'] = connectionState;

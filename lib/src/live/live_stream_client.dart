@@ -179,11 +179,29 @@ class LiveStreamClient extends ChangeNotifier {
       return;
     }
     if (decoded == null) return;
-    // Server wraps payloads as the eventbus.Event {type, room_id, data}.
+    // Server wraps payloads as the eventbus.Event {type, room_id, data}. The
+    // top-level room_id is authoritative for room scoping, while `data` carries
+    // the event-specific payload. Build a single map that preserves both:
+    //   - start from the envelope's room_id (so room scoping always survives),
+    //   - merge the data payload when it's an object,
+    //   - otherwise keep the raw payload under 'data' so non-object payloads
+    //     (lists/scalars) aren't silently dropped.
     final data = decoded['data'];
-    final payload = data is Map<String, dynamic>
-        ? data
-        : <String, dynamic>{...decoded};
+    final payload = <String, dynamic>{};
+    final roomId = decoded['room_id'];
+    if (roomId != null) payload['room_id'] = roomId;
+    if (data is Map<String, dynamic>) {
+      payload.addAll(data);
+    } else if (data != null) {
+      payload['data'] = data;
+    } else {
+      // No nested `data`: the envelope itself is the payload (minus the
+      // routing fields we've already captured).
+      for (final entry in decoded.entries) {
+        if (entry.key == 'type' || entry.key == 'room_id') continue;
+        payload[entry.key] = entry.value;
+      }
+    }
     if (!_controller.isClosed) {
       _controller.add(LiveEvent(type: type, data: payload));
     }
