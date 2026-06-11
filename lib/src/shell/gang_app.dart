@@ -205,7 +205,9 @@ class _AuthGateState extends State<_AuthGate> {
       logout: _logout,
     );
 
-    return HomePage(app: app, windowController: widget.windowController);
+    return SelectionContainer.disabled(
+      child: HomePage(app: app, windowController: widget.windowController),
+    );
   }
 }
 
