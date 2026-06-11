@@ -65,6 +65,7 @@ class ChatPane extends StatelessWidget {
     required this.onSendVoice,
     required this.onCancelVoice,
     required this.onPickFile,
+    required this.onPasteFiles,
     required this.onRemoveAttachment,
     required this.onRetryAttachment,
     required this.onRetry,
@@ -72,6 +73,7 @@ class ChatPane extends StatelessWidget {
     required this.onOpenRoomMembers,
     required this.onOpenRoomSettings,
     this.onResolveSenderProfile,
+    this.composerDropKey,
   });
 
   final CurrentUser currentUser;
@@ -100,6 +102,7 @@ class ChatPane extends StatelessWidget {
   final VoidCallback onSendVoice;
   final VoidCallback onCancelVoice;
   final VoidCallback onPickFile;
+  final VoidCallback onPasteFiles;
   final ValueChanged<String> onRemoveAttachment;
   final ValueChanged<String> onRetryAttachment;
   final VoidCallback onRetry;
@@ -112,6 +115,7 @@ class ChatPane extends StatelessWidget {
   /// lightweight summary carried by the message.
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
+  final Key? composerDropKey;
 
   @override
   Widget build(BuildContext context) {
@@ -179,8 +183,10 @@ class ChatPane extends StatelessWidget {
                   onSendVoice: onSendVoice,
                   onCancelVoice: onCancelVoice,
                   onPickFile: onPickFile,
+                  onPasteFiles: onPasteFiles,
                   onRemoveAttachment: onRemoveAttachment,
                   onRetryAttachment: onRetryAttachment,
+                  dropKey: composerDropKey,
                 ),
               ),
             ),

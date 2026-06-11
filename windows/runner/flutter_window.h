@@ -5,6 +5,7 @@
 #include <flutter/encodable_value.h>
 #include <flutter/flutter_view_controller.h>
 #include <flutter/method_channel.h>
+#include <shellapi.h>
 
 #include <memory>
 
@@ -16,6 +17,8 @@ class FlutterWindow : public Win32Window {
   // Creates a new FlutterWindow hosting a Flutter view running |project|.
   explicit FlutterWindow(const flutter::DartProject& project);
   virtual ~FlutterWindow();
+
+  void HandleNativeFileDrop(HWND window, HDROP drop);
 
  protected:
   // Win32Window:
@@ -34,6 +37,16 @@ class FlutterWindow : public Win32Window {
   // Native clipboard bridge used by the message input to paste Windows files.
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
       clipboard_channel_;
+
+  // Native file-drop bridge used to upload files dropped onto the composer.
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
+      file_drop_channel_;
+
+  HWND file_drop_child_window_ = nullptr;
+  WNDPROC original_child_proc_ = nullptr;
+
+  void AttachFileDropTarget(HWND child_window);
+  void DetachFileDropTarget();
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

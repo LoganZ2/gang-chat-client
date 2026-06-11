@@ -111,6 +111,7 @@ void main() {
 
     expect(find.byType(Image), findsNothing);
     expect(find.byIcon(Icons.picture_as_pdf_outlined), findsOneWidget);
+    expect(find.byTooltip('report.pdf'), findsOneWidget);
   });
 }
 

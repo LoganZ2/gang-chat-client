@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'button.dart';
 import 'input.dart';
@@ -72,6 +73,7 @@ class ChatComposer extends StatefulWidget {
     this.maxLines = 5,
     this.onSubmitted,
     this.onChanged,
+    this.onPasteFiles,
     this.attachments,
   });
 
@@ -82,6 +84,7 @@ class ChatComposer extends StatefulWidget {
   final int maxLines;
   final ValueChanged<String>? onSubmitted;
   final ValueChanged<String>? onChanged;
+  final VoidCallback? onPasteFiles;
 
   /// Optional strip rendered above the input, used to show files staged for
   /// the next message. Null (or empty) leaves the composer unchanged.
@@ -105,9 +108,31 @@ class _ChatComposerState extends State<ChatComposer> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_handleKeyboardEvent);
+  }
+
+  @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleKeyboardEvent);
     _inputFocusNode.dispose();
     super.dispose();
+  }
+
+  bool _handleKeyboardEvent(KeyEvent event) {
+    final onPasteFiles = widget.onPasteFiles;
+    if (onPasteFiles == null ||
+        !_inputFocusNode.hasFocus ||
+        event is! KeyDownEvent) {
+      return false;
+    }
+    final keyboard = HardwareKeyboard.instance;
+    if (event.logicalKey == LogicalKeyboardKey.keyV &&
+        (keyboard.isControlPressed || keyboard.isMetaPressed)) {
+      onPasteFiles();
+    }
+    return false;
   }
 
   void _handleAction(ComposerAction action) {

@@ -98,6 +98,24 @@ String clipboardFilesReadFailureMessage(Object error) {
   return 'Unable to read clipboard files: $error';
 }
 
+String clipboardImageUploadFilename({
+  required DateTime timestamp,
+  required int sequence,
+  String mimeType = 'image/png',
+}) {
+  final local = timestamp.toLocal();
+  final serial = (sequence < 1 ? 1 : sequence).toString().padLeft(3, '0');
+  return 'clipboard-image-'
+      '${_fixedDigits(local.year, 4)}'
+      '${_fixedDigits(local.month, 2)}'
+      '${_fixedDigits(local.day, 2)}-'
+      '${_fixedDigits(local.hour, 2)}'
+      '${_fixedDigits(local.minute, 2)}'
+      '${_fixedDigits(local.second, 2)}-'
+      '${_fixedDigits(local.millisecond, 3)}-'
+      '$serial.${_imageExtensionForMimeType(mimeType)}';
+}
+
 String filePickerOpenFailureMessage(Object error) {
   return '无法打开文件选择器：$error';
 }
@@ -143,6 +161,19 @@ String mimeTypeFromFilename(String filename) {
     'wav' => 'audio/wav',
     'mp4' => 'video/mp4',
     _ => 'application/octet-stream',
+  };
+}
+
+String _fixedDigits(int value, int width) =>
+    value.toString().padLeft(width, '0');
+
+String _imageExtensionForMimeType(String mimeType) {
+  return switch (mimeType.toLowerCase().split(';').first.trim()) {
+    'image/jpeg' => 'jpg',
+    'image/webp' => 'webp',
+    'image/gif' => 'gif',
+    'image/bmp' => 'bmp',
+    _ => 'png',
   };
 }
 

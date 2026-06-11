@@ -35,7 +35,9 @@ import '../protocol/api_client.dart'
     show ApiException, UploadCancelledException, UploadTransferController;
 import '../protocol/models.dart';
 import '../settings/settings_page.dart';
+import '../shell/clipboard_service.dart';
 import '../shell/desktop_window_controller.dart';
+import '../shell/file_drop_service.dart';
 import '../shell/file_selection_service.dart';
 import '../ui/ui.dart';
 import 'chat_pane.dart';
@@ -98,8 +100,10 @@ class _HomeShellState extends State<HomeShell> {
   late CurrentUser _currentUser;
   final TextEditingController _composerController = TextEditingController();
   final TextEditingController _titleSearchController = TextEditingController();
+  final GlobalKey _composerDropKey = GlobalKey();
   final Object _searchTapRegionGroup = Object();
   StreamSubscription<RealtimeEvent>? _realtimeEvents;
+  StreamSubscription<FileDropEvent>? _fileDropEvents;
 
   List<RoomCard> _servers = const [];
   bool _loadingServers = false;
@@ -129,8 +133,11 @@ class _HomeShellState extends State<HomeShell> {
   // soon as it is picked; the message send later just collects the finished
   // assets. See [_StagedAttachment].
   final List<_StagedAttachment> _stagedAttachments = [];
+  final ClipboardService _clipboardService = const ClipboardService();
+  final FileDropService _fileDropService = const FileDropService();
   final FileSelectionService _fileSelectionService =
       const FileSelectionService();
+  int _clipboardImagePasteSerial = 0;
   bool _pickingAttachments = false;
   bool _settingsOpen = false;
   bool _narrowContentOpen = false;
@@ -201,6 +208,7 @@ class _HomeShellState extends State<HomeShell> {
     _musicBoxSearchController.addListener(_handleMusicBoxSearchChanged);
     _installServices();
     _attachLiveSessionCallbacks();
+    _fileDropEvents = _fileDropService.drops.listen(_handleDroppedFiles);
     _startRealtime();
     unawaited(_loadServers());
     unawaited(_refreshPendingRoomInviteBadge());
@@ -276,6 +284,8 @@ class _HomeShellState extends State<HomeShell> {
   void dispose() {
     final realtimeEvents = _realtimeEvents;
     if (realtimeEvents != null) unawaited(realtimeEvents.cancel());
+    final fileDropEvents = _fileDropEvents;
+    if (fileDropEvents != null) unawaited(fileDropEvents.cancel());
     unawaited(_setSystemFullScreen(false));
     _detachLiveSessionCallbacks();
     _voiceTicker?.cancel();

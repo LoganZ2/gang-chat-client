@@ -6,9 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 Widget _host(Widget child) {
   return MaterialApp(
     home: Scaffold(
-      body: Center(
-        child: SizedBox(width: 360, child: child),
-      ),
+      body: Center(child: SizedBox(width: 360, child: child)),
     ),
   );
 }
@@ -40,6 +38,8 @@ void main() {
 
     expect(find.text('report.pdf'), findsOneWidget);
     expect(find.text('photo.png'), findsOneWidget);
+    expect(find.byTooltip('report.pdf'), findsOneWidget);
+    expect(find.byTooltip('photo.png'), findsOneWidget);
     // Size shows only when the picker reported one.
     expect(find.text('2.0 KB'), findsOneWidget);
     expect(find.byIcon(Icons.picture_as_pdf_outlined), findsOneWidget);

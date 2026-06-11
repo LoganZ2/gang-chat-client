@@ -42,6 +42,23 @@ void main() {
     expect(fileDownloadedNotice(), '文件已下载');
   });
 
+  test('clipboard image upload filenames include timestamp and sequence', () {
+    final timestamp = DateTime(2026, 6, 11, 17, 55, 1, 23);
+
+    expect(
+      clipboardImageUploadFilename(timestamp: timestamp, sequence: 1),
+      'clipboard-image-20260611-175501-023-001.png',
+    );
+    expect(
+      clipboardImageUploadFilename(
+        timestamp: timestamp,
+        sequence: 2,
+        mimeType: 'image/jpeg; charset=binary',
+      ),
+      'clipboard-image-20260611-175501-023-002.jpg',
+    );
+  });
+
   test('extension and mime type are inferred from normalized basename', () {
     expect(extensionOf('/tmp/photo.JPEG?token=1'), 'jpeg');
     expect(mimeTypeFromFilename('/tmp/photo.JPEG?token=1'), 'image/jpeg');

@@ -549,7 +549,7 @@ class _FileAttachmentTile extends StatelessWidget {
       return tile;
     }
     return Tooltip(
-      message: interaction.tooltip,
+      message: title,
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
         child: GestureDetector(onTap: startDownload, child: tile),

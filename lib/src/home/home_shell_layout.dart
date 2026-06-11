@@ -162,6 +162,7 @@ extension _HomeShellLayout on _HomeShellState {
       onSendVoice: () => unawaited(_finishAndSendVoice()),
       onCancelVoice: () => unawaited(_cancelVoiceRecording()),
       onPickFile: () => unawaited(_pickAttachments()),
+      onPasteFiles: () => unawaited(_pasteAttachments()),
       onRemoveAttachment: _removeAttachment,
       onRetryAttachment: _retryAttachment,
       onRetry: () => unawaited(_retryOpenSelectedRoom()),
@@ -169,6 +170,7 @@ extension _HomeShellLayout on _HomeShellState {
       onOpenRoomMembers: () => unawaited(_openRoomMembers()),
       onOpenRoomSettings: () => unawaited(_openRoomSettings()),
       onResolveSenderProfile: _resolveSenderProfile,
+      composerDropKey: _composerDropKey,
     );
   }
 

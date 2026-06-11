@@ -31,6 +31,20 @@ class SelectedFile {
     return SelectedFile._fromSelectorFile(file_selector.XFile(path));
   }
 
+  factory SelectedFile.fromBytes({
+    required String name,
+    required String mimeType,
+    required Uint8List bytes,
+  }) {
+    final data = Uint8List.fromList(bytes);
+    return SelectedFile._(
+      name: name,
+      mimeType: mimeType,
+      readAsBytes: () async => Uint8List.fromList(data),
+      length: () async => data.length,
+    );
+  }
+
   final String name;
   final String? mimeType;
   final Future<Uint8List> Function() _readAsBytes;

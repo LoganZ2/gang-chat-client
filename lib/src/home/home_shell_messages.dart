@@ -455,6 +455,68 @@ extension _HomeShellMessages on _HomeShellState {
     }
     if (!mounted || files.isEmpty) return;
 
+    _stageAttachmentFiles(files);
+  }
+
+  Future<void> _pasteAttachments() async {
+    if (_selectedRoom == null) return;
+    try {
+      final paths = await _clipboardService.readFilePaths();
+      if (!mounted) return;
+      final normalized = file_display.normalizedFilePaths(paths);
+      if (normalized.isNotEmpty) {
+        _stageAttachmentPaths(normalized);
+        return;
+      }
+      final image = await _clipboardService.readImageFile();
+      if (!mounted || image == null) return;
+      final filename = file_display.clipboardImageUploadFilename(
+        timestamp: DateTime.now(),
+        sequence: ++_clipboardImagePasteSerial,
+        mimeType: image.mimeType,
+      );
+      _stageAttachmentFiles([
+        SelectedFile.fromBytes(
+          name: filename,
+          mimeType: image.mimeType,
+          bytes: image.bytes,
+        ),
+      ]);
+    } catch (error) {
+      if (!mounted) return;
+      _setHomeState(
+        () => _sendError = file_display.clipboardFilesReadFailureMessage(error),
+      );
+      return;
+    }
+  }
+
+  void _handleDroppedFiles(FileDropEvent event) {
+    if (!_composerContainsDropPoint(event.x, event.y)) return;
+    _stageAttachmentPaths(event.paths);
+  }
+
+  bool _composerContainsDropPoint(double x, double y) {
+    if (_selectedRoom == null ||
+        _settingsOpen ||
+        _contentMode != _ContentMode.chat) {
+      return false;
+    }
+    final context = _composerDropKey.currentContext;
+    final renderObject = context?.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) return false;
+    final topLeft = renderObject.localToGlobal(Offset.zero);
+    return (topLeft & renderObject.size).contains(Offset(x, y));
+  }
+
+  void _stageAttachmentPaths(Iterable<String> paths) {
+    final normalized = file_display.normalizedFilePaths(paths);
+    if (normalized.isEmpty) return;
+    _stageAttachmentFiles(_fileSelectionService.filesFromPaths(normalized));
+  }
+
+  void _stageAttachmentFiles(List<SelectedFile> files) {
+    if (_selectedRoom == null || files.isEmpty) return;
     final fresh = <_StagedAttachment>[];
     _setHomeState(() {
       for (final file in files) {
