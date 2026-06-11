@@ -156,7 +156,7 @@ void main() {
     expect(find.text('15s'), findsOneWidget);
     expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
     expect(find.byIcon(Icons.audio_file_outlined), findsNothing);
-    expect(find.byTooltip('voice_1.m4a'), findsOneWidget);
+    expect(find.byTooltip('voice_1.m4a'), findsNothing);
 
     await tester.tap(find.byIcon(Icons.play_arrow_rounded));
     expect(toggles, ['client_1|https://assets.test/uploads/voice_1.m4a']);

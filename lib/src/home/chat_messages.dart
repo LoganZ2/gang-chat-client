@@ -394,7 +394,6 @@ class _VoiceBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = file_display.fileAttachmentTitle(attachment);
     final resolvedUrl = AppConfigScope.of(
       context,
     ).resolveAssetUrl(attachment.asset?.url);
@@ -415,46 +414,42 @@ class _VoiceBody extends StatelessWidget {
       onToggle(playbackKey, url);
     }
 
-    return Tooltip(
-      message: title,
-      waitDuration: const Duration(milliseconds: 350),
-      child: Semantics(
-        button: canPlay,
-        label: playing ? '停止播放录音' : '播放录音',
-        child: MouseRegion(
-          cursor: canPlay ? SystemMouseCursors.click : MouseCursor.defer,
-          child: GestureDetector(
-            onTap: canPlay ? togglePlayback : null,
-            behavior: HitTestBehavior.opaque,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 150, maxWidth: 190),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox.square(
-                    dimension: 22,
-                    child: Icon(
-                      playing ? Icons.stop_rounded : Icons.play_arrow_rounded,
-                      color: canPlay ? _voiceAccent : UiColors.textMuted,
-                      size: 22,
+    return Semantics(
+      button: canPlay,
+      label: playing ? '停止播放录音' : '播放录音',
+      child: MouseRegion(
+        cursor: canPlay ? SystemMouseCursors.click : MouseCursor.defer,
+        child: GestureDetector(
+          onTap: canPlay ? togglePlayback : null,
+          behavior: HitTestBehavior.opaque,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 150, maxWidth: 190),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox.square(
+                  dimension: 22,
+                  child: Icon(
+                    playing ? Icons.stop_rounded : Icons.play_arrow_rounded,
+                    color: canPlay ? _voiceAccent : UiColors.textMuted,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const _VoiceWaveform(),
+                if (durationText.isNotEmpty) ...[
+                  const SizedBox(width: 12),
+                  Text(
+                    durationText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: UiTypography.body.copyWith(
+                      color: _voiceAccent,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  const _VoiceWaveform(),
-                  if (durationText.isNotEmpty) ...[
-                    const SizedBox(width: 12),
-                    Text(
-                      durationText,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: UiTypography.body.copyWith(
-                        color: _voiceAccent,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
                 ],
-              ),
+              ],
             ),
           ),
         ),
