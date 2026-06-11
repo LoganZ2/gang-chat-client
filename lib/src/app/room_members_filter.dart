@@ -354,7 +354,7 @@ RoomMemberManagementPatch transferCreatorFailed({
 
 String roomMemberPresenceLabel(RoomMemberPresence presence) {
   return switch (presence) {
-    RoomMemberPresence.live => '语音房',
+    RoomMemberPresence.live => '直播间',
     RoomMemberPresence.online => '在线',
     RoomMemberPresence.offline => '离线',
   };

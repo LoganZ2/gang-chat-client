@@ -100,6 +100,8 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
   @override
   void didUpdateWidget(RoomMembersDialog oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final liveChanged = !identical(widget.initialLive, oldWidget.initialLive);
+    final liveBelongsToRoom = widget.initialLive.roomId == widget.room.id;
     // The host bumps reloadToken when a realtime event invalidates this panel
     // (join requests changed, or the current user's role changed). Re-pull the
     // member/request lists, and adopt the freshest room so permission checks
@@ -107,7 +109,12 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
     if (widget.reloadToken != oldWidget.reloadToken ||
         !identical(widget.room, oldWidget.room)) {
       _room = widget.room;
+      if (liveChanged && liveBelongsToRoom) {
+        _live = widget.initialLive;
+      }
       unawaited(_load());
+    } else if (liveChanged && liveBelongsToRoom) {
+      setState(() => _live = widget.initialLive);
     }
   }
 
@@ -259,6 +266,13 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
         _requestError = error.toString();
       });
     }
+  }
+
+  Future<void> _showJoinRequestDetails(JoinRequest request) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => _JoinRequestDetailsDialog(request: request),
+    );
   }
 
   Future<void> _setMemberRole(RoomMember member, String role) async {
@@ -459,6 +473,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
               requests: _requests,
               busyRequestIds: _busyRequestIds,
               error: _requestError,
+              onDetail: _showJoinRequestDetails,
               onApprove: (request) => _reviewRequest(request, true),
               onReject: (request) => _reviewRequest(request, false),
             ),

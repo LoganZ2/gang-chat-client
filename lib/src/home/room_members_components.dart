@@ -351,6 +351,7 @@ class _JoinRequestsSection extends StatelessWidget {
     required this.requests,
     required this.busyRequestIds,
     required this.error,
+    required this.onDetail,
     required this.onApprove,
     required this.onReject,
   });
@@ -358,6 +359,7 @@ class _JoinRequestsSection extends StatelessWidget {
   final List<JoinRequest> requests;
   final Set<String> busyRequestIds;
   final String? error;
+  final ValueChanged<JoinRequest> onDetail;
   final ValueChanged<JoinRequest> onApprove;
   final ValueChanged<JoinRequest> onReject;
 
@@ -387,6 +389,7 @@ class _JoinRequestsSection extends StatelessWidget {
                   _JoinRequestRow(
                     request: request,
                     busy: busyRequestIds.contains(request.id),
+                    onDetail: () => onDetail(request),
                     onApprove: () => onApprove(request),
                     onReject: () => onReject(request),
                   ),
@@ -404,12 +407,14 @@ class _JoinRequestRow extends StatelessWidget {
   const _JoinRequestRow({
     required this.request,
     required this.busy,
+    required this.onDetail,
     required this.onApprove,
     required this.onReject,
   });
 
   final JoinRequest request;
   final bool busy;
+  final VoidCallback onDetail;
   final VoidCallback onApprove;
   final VoidCallback onReject;
 
@@ -434,28 +439,20 @@ class _JoinRequestRow extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  '${room_display.userPrimaryName(request.user)} · @${request.user.username}',
+                  room_display.userPrimaryName(request.user),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: UiTypography.label.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                if (room_join_requests.joinRequestReasonText(request)
-                    case final reason?) ...[
-                  const SizedBox(height: 3),
-                  Tooltip(
-                    message: reason,
-                    child: Text(
-                      '申请说明：$reason',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: UiTypography.label.copyWith(
-                        color: UiColors.textMuted,
-                      ),
-                    ),
-                  ),
-                ],
+                const SizedBox(height: 3),
+                Text(
+                  room_join_requests.joinRequestUserMeta(request),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: UiTypography.label.copyWith(color: UiColors.textMuted),
+                ),
               ],
             ),
           ),
@@ -468,6 +465,13 @@ class _JoinRequestRow extends StatelessWidget {
               ),
             )
           else ...[
+            ButtonIcon(
+              tooltip: '详情',
+              icon: const Icon(Icons.info_outline),
+              onPressed: onDetail,
+              size: 32,
+            ),
+            const SizedBox(width: 6),
             ButtonIcon(
               tooltip: '拒绝',
               icon: const Icon(Icons.close),
@@ -484,6 +488,122 @@ class _JoinRequestRow extends StatelessWidget {
               size: 32,
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _JoinRequestDetailsDialog extends StatelessWidget {
+  const _JoinRequestDetailsDialog({required this.request});
+
+  final JoinRequest request;
+
+  @override
+  Widget build(BuildContext context) {
+    return DialogFrame(
+      title: '申请详情',
+      icon: Icons.fact_check_outlined,
+      actions: [
+        Button(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('关闭'),
+        ),
+      ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _JoinRequestDetailBlock(
+            label: '来源',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  room_join_requests.joinRequestSourceText(request),
+                  style: UiTypography.body.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (room_join_requests.joinRequestFromInvitation(request) &&
+                    request.inviters.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  for (final inviter in request.inviters) ...[
+                    _JoinRequestInviterRow(user: inviter),
+                    if (inviter != request.inviters.last)
+                      const SizedBox(height: 6),
+                  ],
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          _JoinRequestDetailBlock(
+            label: '申请理由',
+            child: Text(
+              room_join_requests.joinRequestDetailReasonText(request),
+              style: UiTypography.body,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _JoinRequestDetailBlock extends StatelessWidget {
+  const _JoinRequestDetailBlock({required this.label, required this.child});
+
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          label,
+          style: UiTypography.label.copyWith(
+            color: UiColors.textMuted,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 6),
+        child,
+      ],
+    );
+  }
+}
+
+class _JoinRequestInviterRow extends StatelessWidget {
+  const _JoinRequestInviterRow({required this.user});
+
+  final UserSummary user;
+
+  @override
+  Widget build(BuildContext context) {
+    return _RowSurface(
+      compact: true,
+      child: Row(
+        children: [
+          Avatar(
+            label: room_display.userPrimaryName(user),
+            imageUrl: AppConfigScope.of(
+              context,
+            ).resolveAssetUrl(user.avatarUrl),
+            defaultAvatarKey: user.defaultAvatarKey,
+            size: 32,
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              user.username,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: UiTypography.label.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
         ],
       ),
     );

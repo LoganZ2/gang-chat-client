@@ -175,8 +175,8 @@ class _RoomHeaderActions extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               _HeaderIconButton(
-                tooltip: '房间详情',
-                icon: Icons.info_outline,
+                tooltip: '房间成员',
+                icon: Icons.groups_outlined,
                 onPressed: onMembersPressed,
               ),
               const SizedBox(height: _headerActionGap),

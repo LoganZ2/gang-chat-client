@@ -35,6 +35,18 @@ class RoomCardsPatch {
   final List<RoomCard> rooms;
 }
 
+class RoomUpdatedPatch {
+  const RoomUpdatedPatch({
+    required this.rooms,
+    required this.selectedRoom,
+    required this.shouldReloadMembers,
+  });
+
+  final List<RoomCard> rooms;
+  final RoomDetail? selectedRoom;
+  final bool shouldReloadMembers;
+}
+
 class RoomOpenStatePatch {
   const RoomOpenStatePatch({
     required this.settingsOpen,
@@ -979,6 +991,32 @@ class RoomsController {
     return RoomCardsPatch(rooms: mergeRoomUpdated(rooms, incoming));
   }
 
+  RoomUpdatedPatch patchRoomUpdated({
+    required List<RoomCard> rooms,
+    required RoomCard incoming,
+    required RoomDetail? selectedRoom,
+  }) {
+    final nextRooms = patchRoomCardUpdated(
+      rooms: rooms,
+      incoming: incoming,
+    ).rooms;
+    final current = selectedRoom;
+    if (current == null || current.id != incoming.id) {
+      return RoomUpdatedPatch(
+        rooms: nextRooms,
+        selectedRoom: current,
+        shouldReloadMembers: false,
+      );
+    }
+    return RoomUpdatedPatch(
+      rooms: nextRooms,
+      selectedRoom: _mergeSelectedRoomSnapshot(current, incoming),
+      shouldReloadMembers:
+          current.memberCount != incoming.memberCount ||
+          current.onlineMemberCount != incoming.onlineMemberCount,
+    );
+  }
+
   RoomSelectedDetailPatch patchRoomDetailApplied({
     required List<RoomCard> rooms,
     required RoomDetail detail,
@@ -1083,6 +1121,33 @@ class RoomsController {
     // local unread count until read-state is modeled explicitly.
     next[idx] = incoming.copyWith(unreadCount: existing.unreadCount);
     return next;
+  }
+
+  RoomDetail _mergeSelectedRoomSnapshot(RoomDetail room, RoomCard incoming) {
+    return RoomDetail(
+      id: room.id,
+      name: incoming.name,
+      rid: incoming.rid,
+      visibility: incoming.visibility,
+      description: incoming.description,
+      joinPolicy: room.joinPolicy,
+      remarkName: incoming.remarkName,
+      notificationPolicy: incoming.notificationPolicy,
+      personalProfile: room.personalProfile,
+      aiVoiceAnnouncementsEnabled: room.aiVoiceAnnouncementsEnabled,
+      messageRecallPolicy: room.messageRecallPolicy,
+      messageRecallWindowSeconds: room.messageRecallWindowSeconds,
+      canDeleteRoom: room.canDeleteRoom,
+      avatarUrl: incoming.avatarUrl,
+      defaultAvatarKey: incoming.defaultAvatarKey,
+      memberCount: incoming.memberCount,
+      onlineMemberCount: incoming.onlineMemberCount,
+      createdBy: room.createdBy,
+      myMembership: room.myMembership,
+      live: room.live,
+      createdAt: room.createdAt,
+      updatedAt: incoming.updatedAt,
+    );
   }
 
   RoomLiveSnapshotPatch? patchLiveSnapshot({

@@ -52,13 +52,33 @@ JoinRequestListBodyState joinRequestListBodyState(
 }
 
 String joinRequestUserMeta(JoinRequest request) {
-  return userIdentityMeta(request.user);
+  final uid = request.user.uid?.trim();
+  if (uid != null && uid.isNotEmpty) return uid;
+  return request.user.id;
 }
 
 String? joinRequestReasonText(JoinRequest request) {
   final reason = request.reason.trim();
   if (reason.isEmpty) return null;
   return reason;
+}
+
+String joinRequestDetailReasonText(JoinRequest request) {
+  return joinRequestReasonText(request) ?? '未填写';
+}
+
+bool joinRequestFromInvitation(JoinRequest request) {
+  return request.source == 'invitation' || request.inviters.isNotEmpty;
+}
+
+String joinRequestSourceText(JoinRequest request) {
+  if (!joinRequestFromInvitation(request)) return '公开房间搜索';
+  final names = request.inviters
+      .map(userPrimaryName)
+      .where((name) => name.trim().isNotEmpty)
+      .toList();
+  if (names.isEmpty) return '邀请';
+  return '${names.join('、')} 的邀请';
 }
 
 bool canStartJoinRequestReview({

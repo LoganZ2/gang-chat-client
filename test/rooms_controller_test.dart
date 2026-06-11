@@ -940,15 +940,52 @@ void main() {
       expect(ids, ['other']);
     },
   );
+
+  test('patchRoomUpdated updates selected room counts and reload hint', () {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        fail('Patch test should not call the API: ${request.url}');
+      }),
+    );
+    addTearDown(api.close);
+    final controller = RoomsController(api: api);
+
+    final patch = controller.patchRoomUpdated(
+      rooms: [_roomCard('room_1', unreadCount: 5, onlineMemberCount: 1)],
+      incoming: _roomCard(
+        'room_1',
+        name: 'Renamed',
+        memberCount: 4,
+        onlineMemberCount: 2,
+      ),
+      selectedRoom: _roomDetail('room_1', onlineMemberCount: 1),
+    );
+
+    expect(patch.rooms.single.unreadCount, 5);
+    expect(patch.rooms.single.onlineMemberCount, 2);
+    expect(patch.selectedRoom?.name, 'Renamed');
+    expect(patch.selectedRoom?.memberCount, 4);
+    expect(patch.selectedRoom?.onlineMemberCount, 2);
+    expect(patch.shouldReloadMembers, isTrue);
+  });
 }
 
-RoomCard _roomCard(String id, {String? name, int unreadCount = 0}) {
+RoomCard _roomCard(
+  String id, {
+  String? name,
+  int unreadCount = 0,
+  int memberCount = 3,
+  int onlineMemberCount = 0,
+}) {
   return RoomCard(
     id: id,
     name: name ?? id,
     avatarUrl: null,
     defaultAvatarKey: 'room-1',
-    memberCount: 3,
+    memberCount: memberCount,
+    onlineMemberCount: onlineMemberCount,
     liveParticipantCount: 0,
     liveAvatarPreview: const [],
     lastMessage: null,
@@ -985,13 +1022,18 @@ RoomMember _roomMember(String userId) {
   );
 }
 
-RoomDetail _roomDetail(String id, {String role = 'member'}) {
+RoomDetail _roomDetail(
+  String id, {
+  String role = 'member',
+  int onlineMemberCount = 0,
+}) {
   return RoomDetail(
     id: id,
     name: id,
     avatarUrl: null,
     defaultAvatarKey: 'room-1',
     memberCount: 3,
+    onlineMemberCount: onlineMemberCount,
     myMembership: RoomMembership(
       joinedAt: DateTime.utc(2026, 6, 4),
       role: role,

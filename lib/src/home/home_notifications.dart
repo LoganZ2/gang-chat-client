@@ -651,6 +651,16 @@ class _InviteDecisionActions extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         ButtonIcon(
+          tooltip: '拒绝邀请',
+          icon: const Icon(Icons.close),
+          tone: ButtonTone.danger,
+          onPressed: enabled
+              ? () => unawaited(onReviewInvite(invite, false))
+              : null,
+          size: 34,
+        ),
+        const SizedBox(width: 8),
+        ButtonIcon(
           tooltip: '接受邀请',
           icon: const Icon(Icons.check),
           tone: ButtonTone.primary,
@@ -658,16 +668,6 @@ class _InviteDecisionActions extends StatelessWidget {
               ? () => unawaited(onReviewInvite(invite, true))
               : null,
           loading: busy,
-          size: 34,
-        ),
-        const SizedBox(width: 8),
-        ButtonIcon(
-          tooltip: '拒绝邀请',
-          icon: const Icon(Icons.close),
-          tone: ButtonTone.danger,
-          onPressed: enabled
-              ? () => unawaited(onReviewInvite(invite, false))
-              : null,
           size: 34,
         ),
       ],

@@ -38,7 +38,25 @@ void main() {
       joinRequestReasonText(_request('blank_reason', reason: '  ')),
       isNull,
     );
+    expect(joinRequestDetailReasonText(_request('blank_reason')), '未填写');
   });
+
+  test(
+    'join request source helpers describe public search and invitations',
+    () {
+      final publicSearch = _request('public');
+      expect(joinRequestFromInvitation(publicSearch), isFalse);
+      expect(joinRequestSourceText(publicSearch), '公开房间搜索');
+
+      final invited = _request(
+        'invited',
+        source: 'invitation',
+        inviters: [_user('inviter_1', displayName: 'Inviter One')],
+      );
+      expect(joinRequestFromInvitation(invited), isTrue);
+      expect(joinRequestSourceText(invited), 'Inviter One 的邀请');
+    },
+  );
 
   test('join request badge refresh gate follows room and permission', () {
     expect(
@@ -165,36 +183,47 @@ void main() {
     );
   });
 
-  test('joinRequestUserMeta prefers uid and falls back to user id', () {
-    expect(
-      joinRequestUserMeta(
-        _request('with_uid', user: _user('user_1', uid: '1001')),
-      ),
-      '1001 · @user_1',
-    );
+  test(
+    'joinRequestUserMeta prefers uid and falls back to user id without username',
+    () {
+      expect(
+        joinRequestUserMeta(
+          _request('with_uid', user: _user('user_1', uid: '1001')),
+        ),
+        '1001',
+      );
 
-    expect(
-      joinRequestUserMeta(_request('without_uid', user: _user('user_2'))),
-      'user_2 · @user_2',
-    );
-  });
+      expect(
+        joinRequestUserMeta(_request('without_uid', user: _user('user_2'))),
+        'user_2',
+      );
+    },
+  );
 }
 
-JoinRequest _request(String id, {UserSummary? user, String reason = ''}) {
+JoinRequest _request(
+  String id, {
+  UserSummary? user,
+  String reason = '',
+  String source = 'public_search',
+  List<UserSummary> inviters = const [],
+}) {
   return JoinRequest(
     id: id,
     status: 'pending',
     reason: reason,
+    source: source,
+    inviters: inviters,
     user: user ?? _user('user_$id'),
     createdAt: DateTime.utc(2026, 6, 5),
   );
 }
 
-UserSummary _user(String id, {String? uid}) {
+UserSummary _user(String id, {String? uid, String? displayName}) {
   return UserSummary(
     id: id,
     username: id,
-    displayName: 'User $id',
+    displayName: displayName ?? 'User $id',
     avatarUrl: null,
     defaultAvatarKey: 'blue-3',
     uid: uid,

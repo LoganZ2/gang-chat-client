@@ -790,12 +790,24 @@ void main() {
     await tester.tap(find.text('Alpha Room'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('房间详情'));
+    await tester.tap(find.byTooltip('房间成员'));
     await tester.pumpAndSettle();
 
     expect(find.text('成员'), findsAtLeastNWidgets(1));
     expect(find.text('邀请成员'), findsOneWidget);
-    expect(find.text('申请说明：Please approve my request'), findsOneWidget);
+    expect(find.text('@riley'), findsNothing);
+    expect(find.byTooltip('详情'), findsOneWidget);
+    await tester.ensureVisible(find.byTooltip('详情'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('详情'));
+    await tester.pumpAndSettle();
+    expect(find.text('申请详情'), findsOneWidget);
+    expect(find.text('来源'), findsOneWidget);
+    expect(find.text('公开房间搜索'), findsOneWidget);
+    expect(find.text('申请理由'), findsOneWidget);
+    expect(find.text('Please approve my request'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ui.Button, '关闭'));
+    await tester.pumpAndSettle();
     expect(find.text('Kai'), findsWidgets);
     expect(find.text('Morgan'), findsWidgets);
     expect(requestedPaths, contains('/api/v1/rooms/server-alpha/members'));

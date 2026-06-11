@@ -839,19 +839,30 @@ class JoinRequest {
     required this.user,
     required this.createdAt,
     this.reason = '',
+    this.source = 'public_search',
+    this.inviters = const [],
   });
 
   final String id;
   final String status;
   final String reason;
+  final String source;
+  final List<UserSummary> inviters;
   final UserSummary user;
   final DateTime createdAt;
 
   factory JoinRequest.fromJson(Map<String, Object?> json) {
+    final inviters = _listOfMaps(
+      json['inviters'],
+    ).map(UserSummary.fromJson).toList();
     return JoinRequest(
       id: json['id']! as String,
       status: json['status'] as String? ?? 'pending',
       reason: _stringFromJson(json, const ['reason', 'description']) ?? '',
+      source:
+          _stringFromJson(json, const ['source', 'request_source']) ??
+          (inviters.isEmpty ? 'public_search' : 'invitation'),
+      inviters: inviters,
       user: UserSummary.fromJson(json['user']! as Map<String, Object?>),
       createdAt: DateTime.parse(json['created_at']! as String),
     );

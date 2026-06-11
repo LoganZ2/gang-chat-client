@@ -110,10 +110,15 @@ extension _HomeShellRealtime on _HomeShellState {
   void _applyRoomUpdated(Map<String, dynamic> data) {
     final room = _roomsController.roomCardFromSnapshot(data);
     if (room == null || !mounted) return;
+    final patch = _roomsController.patchRoomUpdated(
+      rooms: _servers,
+      incoming: room,
+      selectedRoom: _selectedRoom,
+    );
     _setHomeState(() {
-      _servers = _roomsController
-          .patchRoomCardUpdated(rooms: _servers, incoming: room)
-          .rooms;
+      _servers = patch.rooms;
+      _selectedRoom = patch.selectedRoom;
+      if (patch.shouldReloadMembers) _membersReloadToken++;
     });
   }
 
