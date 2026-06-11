@@ -72,6 +72,12 @@ bool shouldShowFileAttachmentBody({
   return trimmedBody != fileAttachmentTitle(attachments[0]);
 }
 
+String stickerAttachmentTitle(MessageAttachment attachment) {
+  final explicitName = attachment.name?.trim();
+  if (explicitName != null && explicitName.isNotEmpty) return explicitName;
+  return '表情';
+}
+
 String? messageDeliveryStatusText(Message message) {
   if (message.failed) return '发送失败';
   if (message.pending) return '发送中';

@@ -295,13 +295,9 @@ class _StickerBody extends StatelessWidget {
         : AppConfigScope.of(
             context,
           ).resolveAssetUrl(asset.thumbnailUrl ?? asset.url);
-    final name = attachment.name ?? '表情';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (imageUrl != null && imageUrl.isNotEmpty)
-          ClipRRect(
+    final name = message_display.stickerAttachmentTitle(attachment);
+    final image = imageUrl != null && imageUrl.isNotEmpty
+        ? ClipRRect(
             borderRadius: BorderRadius.circular(UiRadii.md),
             child: Image.network(
               imageUrl,
@@ -312,11 +308,12 @@ class _StickerBody extends StatelessWidget {
                   _StickerFallback(name: name),
             ),
           )
-        else
-          _StickerFallback(name: name),
-        const SizedBox(height: 7),
-        Text(name, style: UiTypography.label),
-      ],
+        : _StickerFallback(name: name);
+
+    return Tooltip(
+      message: name,
+      waitDuration: const Duration(milliseconds: 350),
+      child: image,
     );
   }
 }
@@ -433,10 +430,14 @@ class _FileAttachmentTile extends StatelessWidget {
     final progress = transfer == null
         ? null
         : file_display.fileTransferProgressState(transfer);
+    final previewPath = file_display.fileAttachmentPreviewPath(asset);
 
     // Resolve the asset URL here, at the widget layer, so the download
     // orchestration stays free of [AppConfig].
-    final resolvedUrl = AppConfigScope.of(context).resolveAssetUrl(asset?.url);
+    final config = AppConfigScope.of(context);
+    final resolvedUrl = config.resolveAssetUrl(asset?.url);
+    final previewUrl = config.resolveAssetUrl(previewPath);
+    final previewSize = file_display.fileAttachmentPreviewSize(asset);
     final interaction = file_display.fileAttachmentInteractionState(
       title: title,
       url: resolvedUrl,
@@ -463,63 +464,79 @@ class _FileAttachmentTile extends StatelessWidget {
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 10, 16, 10),
-        child: Row(
+        padding: const EdgeInsets.all(10),
+        child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              fileIconForMime(asset?.mimeType),
-              color: UiColors.textSecondary,
-              size: 22,
-            ),
-            const SizedBox(width: 10),
-            Flexible(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: UiTypography.body.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  if (meta.isNotEmpty) ...[
-                    const SizedBox(height: 3),
-                    Text(
-                      meta,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: UiTypography.label.copyWith(
-                        color: progress?.failed == true
-                            ? UiColors.danger
-                            : UiColors.textMuted,
-                      ),
-                    ),
-                  ],
-                  if (progress != null) ...[
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: 180,
-                      child: LinearProgressIndicator(
-                        value: progress.value,
-                        minHeight: 3,
-                        color: progress.failed
-                            ? UiColors.danger
-                            : UiColors.accent,
-                        backgroundColor: UiColors.border,
-                      ),
-                    ),
-                  ],
-                ],
+            if (previewUrl != null && previewUrl.isNotEmpty) ...[
+              _FileImagePreview(
+                url: previewUrl,
+                title: title,
+                width: previewSize.width,
+                height: previewSize.height,
               ),
-            ),
-            _FileAttachmentTrailing(
-              state: trailing,
-              downloadKey: slot.downloadKey,
-              actions: downloadActions,
+              const SizedBox(height: 10),
+            ],
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  fileIconForMime(asset?.mimeType),
+                  color: UiColors.textSecondary,
+                  size: 22,
+                ),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: UiTypography.body.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      if (meta.isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          meta,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: UiTypography.label.copyWith(
+                            color: progress?.failed == true
+                                ? UiColors.danger
+                                : UiColors.textMuted,
+                          ),
+                        ),
+                      ],
+                      if (progress != null) ...[
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: 180,
+                          child: LinearProgressIndicator(
+                            value: progress.value,
+                            minHeight: 3,
+                            color: progress.failed
+                                ? UiColors.danger
+                                : UiColors.accent,
+                            backgroundColor: UiColors.border,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                _FileAttachmentTrailing(
+                  state: trailing,
+                  downloadKey: slot.downloadKey,
+                  actions: downloadActions,
+                ),
+              ],
             ),
           ],
         ),
@@ -535,9 +552,57 @@ class _FileAttachmentTile extends StatelessWidget {
       message: interaction.tooltip,
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          onTap: startDownload,
-          child: tile,
+        child: GestureDetector(onTap: startDownload, child: tile),
+      ),
+    );
+  }
+}
+
+class _FileImagePreview extends StatelessWidget {
+  const _FileImagePreview({
+    required this.url,
+    required this.title,
+    required this.width,
+    required this.height,
+  });
+
+  final String url;
+  final String title;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(UiRadii.sm),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: UiColors.surfaceLow,
+          border: Border.all(color: UiColors.border),
+        ),
+        child: SizedBox(
+          width: width,
+          height: height,
+          child: Image.network(
+            url,
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(
+                    title,
+                    maxLines: 2,
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    style: UiTypography.label.copyWith(
+                      color: UiColors.textMuted,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
         ),
       ),
     );
@@ -614,6 +679,39 @@ class _FileAttachmentTrailing extends StatelessWidget {
       case file_display.FileAttachmentTrailingKind.placeholder:
         return const SizedBox.shrink();
     }
+  }
+}
+
+/// Test-only entry point for a single private message bubble.
+@visibleForTesting
+class MessageBubbleForTest extends StatelessWidget {
+  const MessageBubbleForTest({
+    super.key,
+    required this.message,
+    required this.downloadActions,
+    this.outgoing = false,
+    this.transfer,
+    this.fileDownloads = const {},
+  });
+
+  final Message message;
+  final ChatFileDownloadActions downloadActions;
+  final bool outgoing;
+  final FileTransferState? transfer;
+  final Map<String, FileTransferState> fileDownloads;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: _messageMaxWidth),
+      child: _MessageBubble(
+        message: message,
+        outgoing: outgoing,
+        transfer: transfer,
+        fileDownloads: fileDownloads,
+        downloadActions: downloadActions,
+      ),
+    );
   }
 }
 

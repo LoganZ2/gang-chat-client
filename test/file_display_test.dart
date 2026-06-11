@@ -125,6 +125,30 @@ void main() {
     expect(isImageMimeType(null), isFalse);
   });
 
+  test('fileAttachmentPreviewSize preserves image ratio within bounds', () {
+    var size = fileAttachmentPreviewSize(
+      _asset(mimeType: 'image/png', width: 1600, height: 900),
+    );
+    expect(size.width, 320);
+    expect(size.height, 180);
+
+    size = fileAttachmentPreviewSize(
+      _asset(mimeType: 'image/png', width: 900, height: 1600),
+    );
+    expect(size.width, 135);
+    expect(size.height, 240);
+
+    size = fileAttachmentPreviewSize(
+      _asset(mimeType: 'image/png', width: 128, height: 96),
+    );
+    expect(size.width, 128);
+    expect(size.height, 96);
+
+    size = fileAttachmentPreviewSize(_asset(mimeType: 'image/png'));
+    expect(size.width, 220);
+    expect(size.height, 150);
+  });
+
   test('fileTransferLabel reflects state progress and speed', () {
     final transfer =
         FileTransferState.upload(
@@ -350,6 +374,8 @@ UploadedAsset _asset({
   String? filename = 'file.txt',
   String mimeType = 'text/plain',
   int? sizeBytes,
+  int? width,
+  int? height,
 }) {
   return UploadedAsset(
     id: id,
@@ -358,6 +384,8 @@ UploadedAsset _asset({
     mimeType: mimeType,
     filename: filename,
     sizeBytes: sizeBytes,
+    width: width,
+    height: height,
   );
 }
 

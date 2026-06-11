@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import '../protocol/models.dart';
 import 'file_transfer_state.dart';
 
@@ -57,6 +59,13 @@ class FileAttachmentTrailingState {
   final String? pauseResumeTooltip;
   final bool pauseResumeIsResume;
   final String? cancelTooltip;
+}
+
+class FileImagePreviewSize {
+  const FileImagePreviewSize({required this.width, required this.height});
+
+  final double width;
+  final double height;
 }
 
 String basename(String value) {
@@ -185,6 +194,36 @@ bool canCancelActiveFileTransfer(FileTransferState? transfer) {
 String? fileAttachmentPreviewPath(UploadedAsset? asset) {
   if (asset == null || !isImageMimeType(asset.mimeType)) return null;
   return asset.thumbnailUrl ?? asset.url;
+}
+
+FileImagePreviewSize fileAttachmentPreviewSize(
+  UploadedAsset? asset, {
+  double maxWidth = 320,
+  double maxHeight = 240,
+  double fallbackWidth = 220,
+  double fallbackHeight = 150,
+}) {
+  final fallback = FileImagePreviewSize(
+    width: fallbackWidth,
+    height: fallbackHeight,
+  );
+  final sourceWidth = asset?.width;
+  final sourceHeight = asset?.height;
+  if (sourceWidth == null ||
+      sourceHeight == null ||
+      sourceWidth <= 0 ||
+      sourceHeight <= 0 ||
+      maxWidth <= 0 ||
+      maxHeight <= 0) {
+    return fallback;
+  }
+
+  final scale = math.min(maxWidth / sourceWidth, maxHeight / sourceHeight);
+  final safeScale = scale.isFinite && scale > 0 ? math.min(1.0, scale) : 1.0;
+  return FileImagePreviewSize(
+    width: sourceWidth * safeScale,
+    height: sourceHeight * safeScale,
+  );
 }
 
 String formatFileSize(int bytes) {

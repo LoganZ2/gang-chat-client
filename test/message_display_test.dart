@@ -83,6 +83,28 @@ void main() {
     );
   });
 
+  test(
+    'stickerAttachmentTitle trims names and falls back to sticker label',
+    () {
+      expect(
+        stickerAttachmentTitle(
+          const MessageAttachment(type: 'sticker', name: ' wave '),
+        ),
+        'wave',
+      );
+      expect(
+        stickerAttachmentTitle(
+          const MessageAttachment(type: 'sticker', name: '   '),
+        ),
+        '表情',
+      );
+      expect(
+        stickerAttachmentTitle(const MessageAttachment(type: 'sticker')),
+        '表情',
+      );
+    },
+  );
+
   test('messageDeliveryStatusText reflects pending and failed states', () {
     expect(messageDeliveryStatusText(_message()), isNull);
     expect(messageDeliveryStatusText(_message(pending: true)), '发送中');
