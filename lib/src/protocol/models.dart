@@ -1447,9 +1447,6 @@ class LiveParticipant {
     required this.voiceBlocked,
     required this.cameraOn,
     required this.screenSharing,
-    this.musicListening = false,
-    this.musicSessionId,
-    this.listeningWithUserId,
     required this.connectionState,
   });
 
@@ -1472,17 +1469,6 @@ class LiveParticipant {
   final bool voiceBlocked;
   final bool cameraOn;
   final bool screenSharing;
-
-  /// Whether the participant is currently listening to the room's shared music
-  /// (the "music box" / follow-listening feature).
-  final bool musicListening;
-
-  /// The music session the participant is part of, when follow-listening.
-  final String? musicSessionId;
-
-  /// The user this participant is listening along with (follow-listening
-  /// host), when set.
-  final String? listeningWithUserId;
 
   final String connectionState;
 
@@ -1514,9 +1500,6 @@ class LiveParticipant {
       voiceBlocked: json['voice_blocked'] as bool? ?? false,
       cameraOn: json['camera_on']! as bool,
       screenSharing: json['screen_sharing']! as bool,
-      musicListening: json['music_listening'] as bool? ?? false,
-      musicSessionId: json['music_session_id'] as String?,
-      listeningWithUserId: json['listening_with_user_id'] as String?,
       connectionState: json['connection_state']! as String,
     );
   }
