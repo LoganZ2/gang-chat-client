@@ -459,18 +459,22 @@ extension _HomeShellMessages on _HomeShellState {
     _stageAttachmentFiles(files);
   }
 
-  Future<void> _pasteAttachments() async {
-    if (_selectedRoom == null) return;
+  /// Stage any files/image on the clipboard as attachments. Returns true when
+  /// something was staged, so the paste handler can suppress the default text
+  /// paste — on macOS a copied file also exposes its name as plain text, which
+  /// would otherwise land in the composer.
+  Future<bool> _pasteAttachments() async {
+    if (_selectedRoom == null) return false;
     try {
       final paths = await _clipboardService.readFilePaths();
-      if (!mounted) return;
+      if (!mounted) return false;
       final normalized = file_display.normalizedFilePaths(paths);
       if (normalized.isNotEmpty) {
         _stageAttachmentPaths(normalized);
-        return;
+        return true;
       }
       final image = await _clipboardService.readImageFile();
-      if (!mounted || image == null) return;
+      if (!mounted || image == null) return false;
       final filename = file_display.clipboardImageUploadFilename(
         timestamp: DateTime.now(),
         sequence: ++_clipboardImagePasteSerial,
@@ -483,12 +487,13 @@ extension _HomeShellMessages on _HomeShellState {
           bytes: image.bytes,
         ),
       ]);
+      return true;
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted) return false;
       _setHomeState(
         () => _sendError = file_display.clipboardFilesReadFailureMessage(error),
       );
-      return;
+      return false;
     }
   }
 

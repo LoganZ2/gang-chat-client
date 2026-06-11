@@ -21,7 +21,9 @@ class ClipboardService {
   static const _clipboardFilesChannel = MethodChannel('gang_chat/clipboard');
 
   Future<List<String>> readFilePaths() async {
-    if (kIsWeb || !Platform.isWindows) return const <String>[];
+    if (kIsWeb || !(Platform.isWindows || Platform.isMacOS)) {
+      return const <String>[];
+    }
     return await _clipboardFilesChannel.invokeListMethod<String>(
           'readFilePaths',
         ) ??
@@ -29,7 +31,7 @@ class ClipboardService {
   }
 
   Future<ClipboardImageFile?> readImageFile() async {
-    if (kIsWeb || !Platform.isWindows) return null;
+    if (kIsWeb || !(Platform.isWindows || Platform.isMacOS)) return null;
     final result = await _clipboardFilesChannel
         .invokeMapMethod<Object?, Object?>('readImageFile');
     if (result == null) return null;

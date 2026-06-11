@@ -25,7 +25,9 @@ class FileDropService {
   }
 
   static void _ensureInstalled() {
-    if (_installed || kIsWeb || !Platform.isWindows) return;
+    if (_installed || kIsWeb || !(Platform.isWindows || Platform.isMacOS)) {
+      return;
+    }
     _installed = true;
     _channel.setMethodCallHandler((call) async {
       if (call.method != 'dropFiles') return null;

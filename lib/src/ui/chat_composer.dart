@@ -84,7 +84,12 @@ class ChatComposer extends StatefulWidget {
   final int maxLines;
   final ValueChanged<String>? onSubmitted;
   final ValueChanged<String>? onChanged;
-  final VoidCallback? onPasteFiles;
+
+  /// Invoked when the user pastes into the composer. Should stage any clipboard
+  /// files/image as attachments and return true when it consumed the paste, so
+  /// the composer can skip the default text paste (a copied file also carries
+  /// its name as plain text on macOS).
+  final Future<bool> Function()? onPasteFiles;
 
   /// Optional strip rendered above the input, used to show files staged for
   /// the next message. Null (or empty) leaves the composer unchanged.
@@ -149,12 +154,6 @@ class _ChatComposerState extends State<ChatComposer> {
       return false;
     }
     final keyboard = HardwareKeyboard.instance;
-    final onPasteFiles = widget.onPasteFiles;
-    if (onPasteFiles != null &&
-        event.logicalKey == LogicalKeyboardKey.keyV &&
-        (keyboard.isControlPressed || keyboard.isMetaPressed)) {
-      onPasteFiles();
-    }
     if (!_isEnterKey(event.logicalKey) ||
         keyboard.isAltPressed ||
         keyboard.isMetaPressed) {
@@ -218,6 +217,20 @@ class _ChatComposerState extends State<ChatComposer> {
     action.onPressed?.call();
   }
 
+  // Routes the input's paste through [_ComposerPasteAction] so a copied file
+  // becomes an attachment instead of having its filename typed into the field.
+  // Without an [onPasteFiles] handler the input keeps Flutter's default paste.
+  Widget _wrapPaste(Widget input) {
+    final onPasteFiles = widget.onPasteFiles;
+    if (onPasteFiles == null) return input;
+    return Actions(
+      actions: <Type, Action<Intent>>{
+        PasteTextIntent: _ComposerPasteAction(onPasteFiles),
+      },
+      child: input,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final openAction = _openAction;
@@ -244,14 +257,16 @@ class _ChatComposerState extends State<ChatComposer> {
                       curve: Curves.easeOutCubic,
                       alignment: Alignment.topCenter,
                       child: openPanel == null
-                          ? Input(
-                              controller: _effectiveController,
-                              focusNode: _inputFocusNode,
-                              hintText: widget.hintText,
-                              minLines: widget.minLines,
-                              maxLines: widget.maxLines,
-                              onSubmitted: widget.onSubmitted,
-                              onChanged: widget.onChanged,
+                          ? _wrapPaste(
+                              Input(
+                                controller: _effectiveController,
+                                focusNode: _inputFocusNode,
+                                hintText: widget.hintText,
+                                minLines: widget.minLines,
+                                maxLines: widget.maxLines,
+                                onSubmitted: widget.onSubmitted,
+                                onChanged: widget.onChanged,
+                              ),
                             )
                           : _ComposerPanelFrame(
                               key: ValueKey(openAction!.id),
@@ -423,5 +438,33 @@ class _ComposerContent extends StatelessWidget {
       onNotification: (_) => true,
       child: child,
     );
+  }
+}
+
+/// Overrides the input's [PasteTextIntent] so a paste first tries to stage
+/// clipboard files/image as attachments; only when nothing was staged does it
+/// fall back to the field's default text paste (via [callingAction]). This is
+/// the single paste path for both Cmd/Ctrl+V and the context-menu "Paste".
+class _ComposerPasteAction extends Action<PasteTextIntent> {
+  _ComposerPasteAction(this.onPasteFiles);
+
+  final Future<bool> Function() onPasteFiles;
+
+  @override
+  bool get isActionEnabled => callingAction?.isActionEnabled ?? false;
+
+  @override
+  bool consumesKey(PasteTextIntent intent) =>
+      callingAction?.consumesKey(intent) ?? false;
+
+  @override
+  Object? invoke(PasteTextIntent intent) {
+    // Capture the default action now; callingAction is only valid for the
+    // synchronous span of invoke, and the file check below is async.
+    final fallback = callingAction;
+    onPasteFiles().then((staged) {
+      if (!staged) fallback?.invoke(intent);
+    });
+    return null;
   }
 }

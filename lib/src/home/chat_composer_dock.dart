@@ -44,7 +44,7 @@ class _ComposerDock extends StatelessWidget {
   final VoidCallback onSendVoice;
   final VoidCallback onCancelVoice;
   final VoidCallback onPickFile;
-  final VoidCallback onPasteFiles;
+  final Future<bool> Function() onPasteFiles;
   final ValueChanged<String> onRemoveAttachment;
   final ValueChanged<String> onRetryAttachment;
   final Key? dropKey;

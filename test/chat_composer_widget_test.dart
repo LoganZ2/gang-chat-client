@@ -44,7 +44,12 @@ void main() {
         theme: ui.uiTheme(),
         home: Scaffold(
           body: ui.ChatComposer(
-            onPasteFiles: () => pasteAttempts++,
+            onPasteFiles: () async {
+              pasteAttempts++;
+              // Report "consumed" so the default text paste is suppressed,
+              // matching a clipboard that holds a file.
+              return true;
+            },
             actions: const [
               ui.ComposerAction(
                 id: 'file',
@@ -63,6 +68,7 @@ void main() {
     await tester.sendKeyDownEvent(LogicalKeyboardKey.keyV);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.keyV);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
 
     expect(pasteAttempts, 1);
   });
@@ -160,5 +166,100 @@ void main() {
     expect(submissions, isEmpty);
     expect(controller.text, 'h\no');
     expect(controller.selection.baseOffset, 2);
+  });
+
+  testWidgets('paste does not type clipboard text when a file is staged', (
+    tester,
+  ) async {
+    // Simulate macOS putting a copied file's name on the clipboard as text.
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.getData') {
+          return <String, dynamic>{'text': '/Users/me/report.pdf'};
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: Scaffold(
+          body: ui.ChatComposer(
+            controller: controller,
+            // Returns true => paste was consumed as an attachment.
+            onPasteFiles: () async => true,
+            actions: const [],
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.keyV);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.keyV);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+
+    expect(controller.text, isEmpty);
+  });
+
+  testWidgets('paste still inserts text when no file is staged', (
+    tester,
+  ) async {
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.getData') {
+          return <String, dynamic>{'text': 'hello world'};
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: Scaffold(
+          body: ui.ChatComposer(
+            controller: controller,
+            // Returns false => nothing staged, fall back to default text paste.
+            onPasteFiles: () async => false,
+            actions: const [],
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.keyV);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.keyV);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+
+    expect(controller.text, 'hello world');
   });
 }
