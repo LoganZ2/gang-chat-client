@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import '../protocol/models.dart';
 import 'file_display.dart' as file_display;
 
@@ -187,4 +189,32 @@ String formatVoiceBubbleDuration(Duration? duration) {
   final minutes = totalSeconds ~/ 60;
   final seconds = totalSeconds % 60;
   return '$minutes:${seconds.toString().padLeft(2, '0')}';
+}
+
+const double kVoiceWaveformMinWidth = 70;
+const double kVoiceWaveformMaxWidth = 160;
+
+double voiceWaveformWidth(Duration? duration) {
+  if (duration == null || duration <= Duration.zero) {
+    return kVoiceWaveformMinWidth;
+  }
+  final seconds = ((duration.inMilliseconds + 999) ~/ 1000).clamp(
+    1,
+    kVoiceRecordingMaxDuration.inSeconds,
+  );
+  final ratio =
+      math.log(seconds + 1) /
+      math.log(kVoiceRecordingMaxDuration.inSeconds + 1);
+  return kVoiceWaveformMinWidth +
+      (kVoiceWaveformMaxWidth - kVoiceWaveformMinWidth) * ratio;
+}
+
+double voicePlaybackProgress({
+  required Duration position,
+  required Duration? duration,
+}) {
+  final total = duration;
+  if (total == null || total <= Duration.zero) return 0;
+  final ratio = position.inMilliseconds / total.inMilliseconds;
+  return ratio.clamp(0, 1).toDouble();
 }

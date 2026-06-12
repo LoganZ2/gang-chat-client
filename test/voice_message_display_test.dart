@@ -124,6 +124,54 @@ void main() {
     expect(formatVoiceBubbleDuration(const Duration(seconds: 65)), '1:05');
   });
 
+  test('waveform width grows with duration up to a cap', () {
+    expect(voiceWaveformWidth(null), kVoiceWaveformMinWidth);
+    expect(voiceWaveformWidth(Duration.zero), kVoiceWaveformMinWidth);
+    expect(
+      voiceWaveformWidth(const Duration(seconds: 5)),
+      greaterThan(kVoiceWaveformMinWidth),
+    );
+    expect(
+      voiceWaveformWidth(const Duration(seconds: 20)),
+      greaterThan(voiceWaveformWidth(const Duration(seconds: 5))),
+    );
+    expect(
+      voiceWaveformWidth(const Duration(minutes: 5)),
+      kVoiceWaveformMaxWidth,
+    );
+  });
+
+  test('playback progress is clamped to the current duration', () {
+    expect(
+      voicePlaybackProgress(
+        position: const Duration(seconds: 5),
+        duration: null,
+      ),
+      0,
+    );
+    expect(
+      voicePlaybackProgress(
+        position: const Duration(seconds: -1),
+        duration: const Duration(seconds: 10),
+      ),
+      0,
+    );
+    expect(
+      voicePlaybackProgress(
+        position: const Duration(seconds: 5),
+        duration: const Duration(seconds: 10),
+      ),
+      0.5,
+    );
+    expect(
+      voicePlaybackProgress(
+        position: const Duration(seconds: 15),
+        duration: const Duration(seconds: 10),
+      ),
+      1,
+    );
+  });
+
   test(
     'voice attachment detection handles audio messages and legacy files',
     () {

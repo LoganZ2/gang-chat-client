@@ -1,4 +1,8 @@
+import 'package:client/src/app/composer_attachment_display.dart'
+    as composer_attachment;
 import 'package:client/src/app/message_display.dart' as message_display;
+import 'package:client/src/app/sticker_display.dart' as sticker_display;
+import 'package:client/src/app/voice_message_display.dart' as voice_display;
 import 'package:client/src/config/app_config.dart';
 import 'package:client/src/home/chat_pane.dart';
 import 'package:client/src/protocol/models.dart';
@@ -8,6 +12,104 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('message timestamps toggle between brief and detailed labels', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    final now = DateTime.now();
+    final firstAt = now.subtract(const Duration(minutes: 5));
+    final secondAt = now.subtract(const Duration(minutes: 3));
+    final firstBrief = message_display.formatChatTimestamp(firstAt, now: now);
+    final secondBrief = message_display.formatChatTimestamp(secondAt, now: now);
+    final firstDetailed = message_display.formatDetailedChatTimestamp(firstAt);
+    final secondDetailed = message_display.formatDetailedChatTimestamp(
+      secondAt,
+    );
+
+    await tester.pumpWidget(
+      _host(
+        ChatPane(
+          currentUser: _currentUser,
+          roomCard: _roomCard,
+          room: null,
+          live: null,
+          messages: [
+            _message(type: 'text', body: 'hello', createdAt: firstAt),
+            _message(
+              type: 'text',
+              body: 'world',
+              createdAt: secondAt,
+              clientMessageId: 'client_2',
+            ),
+          ],
+          fileTransfers: const {},
+          fileDownloads: const {},
+          downloadActions: _downloadActions(),
+          voicePlaybackActions: const ChatVoicePlaybackActions.disabled(),
+          loading: false,
+          error: null,
+          sending: false,
+          sendError: null,
+          composerController: controller,
+          stickerPanel: const sticker_display.StickerPanelLoadState(),
+          voiceState: const voice_display.VoiceRecorderState(),
+          composerAttachments:
+              const <composer_attachment.ComposerAttachmentView>[],
+          fileActionHighlighted: false,
+          onSubmit: (_) {},
+          onSendSticker: (_) {},
+          onLoadStickers: () {},
+          onRefreshStickers: () {},
+          onStickerSourceChanged: (_) {},
+          onStartVoice: () {},
+          onSendVoice: () {},
+          onCancelVoice: () {},
+          onPickFile: () {},
+          onPasteFiles: () async => false,
+          onRemoveAttachment: (_) {},
+          onRetryAttachment: (_) {},
+          onRetry: () {},
+          onOpenLiveChannel: () {},
+          onOpenRoomMembers: () {},
+          onOpenRoomSettings: () {},
+        ),
+      ),
+    );
+
+    expect(find.text(firstBrief), findsOneWidget);
+    expect(find.text(secondBrief), findsOneWidget);
+    expect(find.text(firstDetailed), findsNothing);
+    expect(find.text(secondDetailed), findsNothing);
+
+    await tester.tap(find.text(firstBrief));
+    await tester.pump();
+
+    expect(find.text(firstDetailed), findsOneWidget);
+    expect(find.text(secondDetailed), findsOneWidget);
+
+    await tester.tap(find.text(firstDetailed));
+    await tester.pump();
+
+    expect(find.text(firstBrief), findsOneWidget);
+    expect(find.text(secondBrief), findsOneWidget);
+    expect(find.text(firstDetailed), findsNothing);
+    expect(find.text(secondDetailed), findsNothing);
+  });
+
+  testWidgets('text message body is selectable for copy', (tester) async {
+    await tester.pumpWidget(
+      _host(
+        MessageBubbleForTest(
+          message: _message(type: 'text', body: 'copy this'),
+          downloadActions: _downloadActions(),
+        ),
+      ),
+    );
+
+    expect(find.widgetWithText(SelectableText, 'copy this'), findsOneWidget);
+  });
+
   testWidgets('sticker bubble exposes the sticker name only as a tooltip', (
     tester,
   ) async {
@@ -155,6 +257,13 @@ void main() {
     );
 
     expect(find.text('15s'), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(const ValueKey('voice-waveform'))).width,
+      closeTo(
+        voice_display.voiceWaveformWidth(const Duration(seconds: 15)),
+        0.01,
+      ),
+    );
     expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
     expect(find.byIcon(Icons.audio_file_outlined), findsNothing);
     expect(find.byTooltip('voice_1.m4a'), findsNothing);
@@ -178,6 +287,30 @@ void main() {
     );
 
     expect(find.byIcon(Icons.stop_rounded), findsOneWidget);
+  });
+
+  testWidgets('voice waveform width follows attachment duration', (
+    tester,
+  ) async {
+    Future<double> renderWidth(Duration duration) async {
+      await tester.pumpWidget(
+        _host(
+          MessageBubbleForTest(
+            message: _voiceMessage(duration: duration),
+            downloadActions: _downloadActions(),
+          ),
+        ),
+      );
+      return tester.getSize(find.byKey(const ValueKey('voice-waveform'))).width;
+    }
+
+    final shortWidth = await renderWidth(const Duration(seconds: 3));
+    final mediumWidth = await renderWidth(const Duration(seconds: 30));
+    final longWidth = await renderWidth(const Duration(minutes: 5));
+
+    expect(mediumWidth, greaterThan(shortWidth));
+    expect(longWidth, greaterThan(mediumWidth));
+    expect(longWidth, closeTo(voice_display.kVoiceWaveformMaxWidth, 0.01));
   });
 
   testWidgets('attachment bubbles keep sender and time outside the bubble', (
@@ -275,8 +408,10 @@ Widget _host(Widget child) {
 
 Message _message({
   required String type,
-  required String body,
-  required List<MessageAttachment> attachments,
+  String body = '',
+  List<MessageAttachment> attachments = const [],
+  DateTime? createdAt,
+  String clientMessageId = 'client_1',
 }) {
   return Message(
     id: 'message_1',
@@ -288,13 +423,65 @@ Message _message({
       avatarUrl: null,
       defaultAvatarKey: 'blue-3',
     ),
-    clientMessageId: 'client_1',
+    clientMessageId: clientMessageId,
     type: type,
     body: body,
-    createdAt: DateTime.utc(2026, 6, 11),
+    createdAt: createdAt ?? DateTime.utc(2026, 6, 11),
     attachments: attachments,
   );
 }
+
+Message _voiceMessage({required Duration duration}) {
+  return _message(
+    type: 'audio',
+    body: 'voice_1.m4a',
+    attachments: [
+      MessageAttachment(
+        type: 'audio',
+        name: 'voice_1.m4a',
+        durationMs: duration.inMilliseconds,
+        asset: const UploadedAsset(
+          id: 'asset_voice',
+          url: '/uploads/voice_1.m4a',
+          thumbnailUrl: null,
+          mimeType: 'audio/mp4',
+          filename: 'voice_1.m4a',
+          sizeBytes: 4096,
+        ),
+      ),
+    ],
+  );
+}
+
+const _currentUser = CurrentUser(
+  id: 'current_user',
+  uid: '1000000',
+  username: 'me',
+  displayName: 'Me',
+  bio: '',
+  gender: 'secret',
+  email: null,
+  emailPublic: false,
+  phoneNumber: null,
+  phoneNumberPublic: false,
+  avatarUrl: null,
+  defaultAvatarKey: 'blue-3',
+  isSuperuser: false,
+  createdAt: null,
+);
+
+final _roomCard = RoomCard(
+  id: 'room_1',
+  name: 'Test room',
+  avatarUrl: null,
+  defaultAvatarKey: 'room-1',
+  memberCount: 2,
+  liveParticipantCount: 0,
+  liveAvatarPreview: const [],
+  lastMessage: null,
+  unreadCount: 0,
+  updatedAt: DateTime(2026, 6, 12),
+);
 
 ChatFileDownloadActions _downloadActions() {
   return ChatFileDownloadActions(

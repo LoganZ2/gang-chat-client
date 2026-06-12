@@ -149,6 +149,8 @@ extension _HomeShellLayout on _HomeShellState {
         activeMessageId: _voicePlayback.playing
             ? _voicePlayback.activeMessageId
             : null,
+        activePosition: _voicePlayback.position,
+        activeDuration: _voicePlayback.duration,
         onToggle: (messageId, resolvedUrl) => unawaited(
           _toggleVoicePlayback(messageId: messageId, resolvedUrl: resolvedUrl),
         ),

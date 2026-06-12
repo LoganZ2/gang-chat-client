@@ -32,17 +32,34 @@ class ChatVoicePlaybackActions {
   const ChatVoicePlaybackActions({
     required this.activeMessageId,
     required this.onToggle,
+    this.activePosition = Duration.zero,
+    this.activeDuration = Duration.zero,
   });
 
   const ChatVoicePlaybackActions.disabled()
     : activeMessageId = null,
-      onToggle = null;
+      onToggle = null,
+      activePosition = Duration.zero,
+      activeDuration = Duration.zero;
 
   final String? activeMessageId;
+  final Duration activePosition;
+  final Duration activeDuration;
   final void Function(String messageId, String resolvedUrl)? onToggle;
 
   bool isPlaying(String messageId) {
     return activeMessageId == messageId;
+  }
+
+  double progressFor(String messageId, {Duration? fallbackDuration}) {
+    if (!isPlaying(messageId)) return 0;
+    final duration = activeDuration > Duration.zero
+        ? activeDuration
+        : fallbackDuration;
+    return voice_display.voicePlaybackProgress(
+      position: activePosition,
+      duration: duration,
+    );
   }
 }
 
@@ -95,10 +112,9 @@ class _MessageStageState extends State<_MessageStage> {
     }
   }
 
-  void _showAllDetailedTimestamps() {
-    if (_showDetailedTimestamps) return;
+  void _toggleDetailedTimestamps() {
     setState(() {
-      _showDetailedTimestamps = true;
+      _showDetailedTimestamps = !_showDetailedTimestamps;
     });
   }
 
@@ -164,7 +180,7 @@ class _MessageStageState extends State<_MessageStage> {
             if (showTimestamp) ...[
               _MessageTimeDivider(
                 label: timestamp,
-                onTap: _showAllDetailedTimestamps,
+                onTap: _toggleDetailedTimestamps,
               ),
               const SizedBox(height: 10),
             ],
@@ -396,7 +412,11 @@ class _TextBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(body, style: UiTypography.body);
+    return SelectableText(
+      body,
+      style: UiTypography.body,
+      cursorColor: UiColors.accent,
+    );
   }
 }
 
@@ -490,8 +510,12 @@ class _VoiceBody extends StatelessWidget {
         resolvedUrl != null &&
         resolvedUrl.isNotEmpty &&
         playbackActions.onToggle != null;
-    final durationText = voice_display.formatVoiceBubbleDuration(
-      voice_display.voiceAttachmentDuration(attachment),
+    final duration = voice_display.voiceAttachmentDuration(attachment);
+    final durationText = voice_display.formatVoiceBubbleDuration(duration);
+    final waveformWidth = voice_display.voiceWaveformWidth(duration);
+    final playbackProgress = playbackActions.progressFor(
+      playbackKey,
+      fallbackDuration: duration,
     );
 
     void togglePlayback() {
@@ -510,7 +534,7 @@ class _VoiceBody extends StatelessWidget {
           onTap: canPlay ? togglePlayback : null,
           behavior: HitTestBehavior.opaque,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 150, maxWidth: 190),
+            constraints: const BoxConstraints(minWidth: 150, maxWidth: 280),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -523,7 +547,11 @@ class _VoiceBody extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                const _VoiceWaveform(),
+                _VoiceWaveform(
+                  key: const ValueKey('voice-waveform'),
+                  width: waveformWidth,
+                  progress: playbackProgress,
+                ),
                 if (durationText.isNotEmpty) ...[
                   const SizedBox(width: 12),
                   Text(
@@ -546,7 +574,14 @@ class _VoiceBody extends StatelessWidget {
 }
 
 class _VoiceWaveform extends StatelessWidget {
-  const _VoiceWaveform();
+  const _VoiceWaveform({
+    super.key,
+    required this.width,
+    required this.progress,
+  });
+
+  final double width;
+  final double progress;
 
   static const _heights = <double>[
     8,
@@ -567,16 +602,45 @@ class _VoiceWaveform extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 72,
+      width: width,
+      height: 28,
+      child: Stack(
+        children: [
+          _VoiceWaveformBars(
+            color: _voiceAccent.withValues(alpha: 0.28),
+            width: width,
+          ),
+          Positioned.fill(
+            child: ClipRect(
+              clipper: _VoiceProgressClipper(progress),
+              child: _VoiceWaveformBars(color: _voiceAccent, width: width),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VoiceWaveformBars extends StatelessWidget {
+  const _VoiceWaveformBars({required this.color, required this.width});
+
+  final Color color;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
       height: 28,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          for (final height in _heights)
+          for (final height in _waveformHeightsForWidth(width))
             DecoratedBox(
               decoration: BoxDecoration(
-                color: _voiceAccent,
+                color: color,
                 borderRadius: BorderRadius.circular(999),
               ),
               child: SizedBox(width: 3, height: height),
@@ -584,6 +648,31 @@ class _VoiceWaveform extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+List<double> _waveformHeightsForWidth(double width) {
+  final count = (width / 6).round().clamp(12, 28);
+  return [
+    for (var i = 0; i < count; i++)
+      _VoiceWaveform._heights[i % _VoiceWaveform._heights.length],
+  ];
+}
+
+class _VoiceProgressClipper extends CustomClipper<Rect> {
+  const _VoiceProgressClipper(this.progress);
+
+  final double progress;
+
+  @override
+  Rect getClip(Size size) {
+    final clamped = progress.clamp(0, 1).toDouble();
+    return Rect.fromLTWH(0, 0, size.width * clamped, size.height);
+  }
+
+  @override
+  bool shouldReclip(covariant _VoiceProgressClipper oldClipper) {
+    return oldClipper.progress != progress;
   }
 }
 
