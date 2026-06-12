@@ -881,6 +881,7 @@ void main() {
 
     expect(requestedPaths, contains('/api/v1/users/search'));
     expect(find.textContaining('Riley'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('@riley'), findsNothing);
 
     await tester.tap(find.widgetWithText(ui.Button, '邀请'));
     await tester.pumpAndSettle();

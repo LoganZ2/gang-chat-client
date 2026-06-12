@@ -309,7 +309,7 @@ class _InviteUserRow extends StatelessWidget {
           const SizedBox(width: 9),
           Expanded(
             child: Text(
-              '${room_display.userPrimaryName(user)} · @${user.username}',
+              room_display.userPrimaryName(user),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: UiTypography.label.copyWith(fontWeight: FontWeight.w600),
