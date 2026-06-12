@@ -148,3 +148,29 @@ String musicBoxUsageLabel(MusicBoxUsage usage) {
   return '${musicBoxFormatBytes(usage.usedBytes)} / '
       '${musicBoxFormatBytes(usage.limitBytes)}';
 }
+
+/// A selectable music search source. The GD music API documents many sources
+/// (tencent/kuwo/tidal/qobuz/joox/apple/ytmusic/spotify) but notes that "部分音乐源
+/// 暂不开放" — several return HTTP 400 on search, and others (kuwo/joox) search
+/// fine yet hand back an empty url ({"url":"","br":-1}) on resolve, so a track
+/// can never play. We surface only the sources verified end-to-end (search +
+/// playable url), with netease as the default.
+class MusicBoxSource {
+  const MusicBoxSource({required this.id, required this.label});
+
+  /// The `source` value the server forwards to the GD music API.
+  final String id;
+
+  /// Short display name for the source picker.
+  final String label;
+}
+
+/// The sources offered in the search picker, in display order. netease is first
+/// and is treated as the default selection.
+const List<MusicBoxSource> musicBoxSources = [
+  MusicBoxSource(id: 'netease', label: '网易云'),
+  MusicBoxSource(id: 'bilibili', label: '哔哩哔哩'),
+];
+
+/// The default source id (netease).
+const String musicBoxDefaultSource = 'netease';

@@ -16,6 +16,7 @@ extension _HomeShellMusicBox on _HomeShellState {
     _musicBoxSearchResults = const [];
     _musicBoxSearching = false;
     _musicBoxSearchError = null;
+    _musicBoxSource = music_box_display.musicBoxDefaultSource;
     if (_musicBoxSearchController.text.isNotEmpty) {
       _musicBoxSearchController.clear();
     }
@@ -36,6 +37,21 @@ extension _HomeShellMusicBox on _HomeShellState {
 
   void _toggleMusicBoxPanel() {
     _setHomeState(() => _musicBoxOpen = !_musicBoxOpen);
+  }
+
+  /// Switches the search source and re-runs the current query against it.
+  void _changeMusicBoxSource(String source) {
+    if (source == _musicBoxSource) return;
+    _setHomeState(() => _musicBoxSource = source);
+    final keyword = _musicBoxSearchController.text.trim();
+    if (keyword.isEmpty) return;
+    _musicBoxSearchDebounce?.cancel();
+    _setHomeState(() {
+      _musicBoxSearchResults = const [];
+      _musicBoxSearching = true;
+      _musicBoxSearchError = null;
+    });
+    unawaited(_searchMusicBox(keyword));
   }
 
   /// Applies an authoritative snapshot from a write response or SSE event,
@@ -77,6 +93,7 @@ extension _HomeShellMusicBox on _HomeShellState {
       final results = await _musicBoxController.search(
         roomId: roomId,
         keyword: trimmed,
+        source: _musicBoxSource,
       );
       if (!mounted || serial != _musicBoxSearchSerial) return;
       _setHomeState(() {

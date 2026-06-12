@@ -82,12 +82,14 @@ class LiveChannelPane extends StatefulWidget {
     required this.musicBoxSearchResults,
     required this.musicBoxSearching,
     required this.musicBoxSearchError,
+    required this.musicBoxSource,
     required this.onToggleMusicBox,
     required this.onMusicBoxTogglePlayback,
     required this.onMusicBoxSkip,
     required this.onMusicBoxStop,
     required this.onMusicBoxQueueResult,
     required this.onMusicBoxRemoveItem,
+    required this.onMusicBoxSourceChanged,
   });
 
   final String title;
@@ -120,12 +122,14 @@ class LiveChannelPane extends StatefulWidget {
   final List<MusicBoxSearchResult> musicBoxSearchResults;
   final bool musicBoxSearching;
   final String? musicBoxSearchError;
+  final String musicBoxSource;
   final VoidCallback onToggleMusicBox;
   final VoidCallback onMusicBoxTogglePlayback;
   final VoidCallback onMusicBoxSkip;
   final VoidCallback onMusicBoxStop;
   final ValueChanged<MusicBoxSearchResult> onMusicBoxQueueResult;
   final ValueChanged<MusicBoxQueueItem> onMusicBoxRemoveItem;
+  final ValueChanged<String> onMusicBoxSourceChanged;
 
   @override
   State<LiveChannelPane> createState() => _LiveChannelPaneState();
@@ -230,11 +234,13 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                             searchResults: widget.musicBoxSearchResults,
                             searching: widget.musicBoxSearching,
                             searchError: widget.musicBoxSearchError,
+                            source: widget.musicBoxSource,
                             onTogglePlayback: widget.onMusicBoxTogglePlayback,
                             onSkip: widget.onMusicBoxSkip,
                             onStop: widget.onMusicBoxStop,
                             onQueueResult: widget.onMusicBoxQueueResult,
                             onRemoveItem: widget.onMusicBoxRemoveItem,
+                            onSourceChanged: widget.onMusicBoxSourceChanged,
                           ),
                         ),
                     ],

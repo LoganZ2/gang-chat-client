@@ -175,6 +175,9 @@ class _HomeShellState extends State<HomeShell> {
   List<MusicBoxSearchResult> _musicBoxSearchResults = const [];
   bool _musicBoxSearching = false;
   String? _musicBoxSearchError;
+  // The selected search source forwarded to the GD music API (defaults to
+  // netease). Changing it re-runs the current query.
+  String _musicBoxSource = music_box_display.musicBoxDefaultSource;
   int _musicBoxSearchSerial = 0;
   Timer? _musicBoxSearchDebounce;
   Timer? _searchDebounce;

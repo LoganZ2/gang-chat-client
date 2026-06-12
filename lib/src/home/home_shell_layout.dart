@@ -111,6 +111,7 @@ extension _HomeShellLayout on _HomeShellState {
         musicBoxSearchResults: _musicBoxSearchResults,
         musicBoxSearching: _musicBoxSearching,
         musicBoxSearchError: _musicBoxSearchError,
+        musicBoxSource: _musicBoxSource,
         onToggleMusicBox: _toggleMusicBoxPanel,
         onMusicBoxTogglePlayback: _toggleMusicBoxPlayback,
         onMusicBoxSkip: () => unawaited(_controlMusicBox('skip')),
@@ -118,6 +119,7 @@ extension _HomeShellLayout on _HomeShellState {
         onMusicBoxQueueResult: (result) =>
             unawaited(_queueMusicBoxTrack(result)),
         onMusicBoxRemoveItem: (item) => unawaited(_removeMusicBoxItem(item)),
+        onMusicBoxSourceChanged: _changeMusicBoxSource,
       );
     }
 

@@ -12,11 +12,13 @@ class LiveMusicBoxPanel extends StatelessWidget {
     required this.searchResults,
     required this.searching,
     required this.searchError,
+    required this.source,
     required this.onTogglePlayback,
     required this.onSkip,
     required this.onStop,
     required this.onQueueResult,
     required this.onRemoveItem,
+    required this.onSourceChanged,
   });
 
   final MusicBoxState state;
@@ -24,11 +26,13 @@ class LiveMusicBoxPanel extends StatelessWidget {
   final List<MusicBoxSearchResult> searchResults;
   final bool searching;
   final String? searchError;
+  final String source;
   final VoidCallback onTogglePlayback;
   final VoidCallback onSkip;
   final VoidCallback onStop;
   final ValueChanged<MusicBoxSearchResult> onQueueResult;
   final ValueChanged<MusicBoxQueueItem> onRemoveItem;
+  final ValueChanged<String> onSourceChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -59,8 +63,10 @@ class LiveMusicBoxPanel extends StatelessWidget {
                 searchResults: searchResults,
                 searching: searching,
                 searchError: searchError,
+                source: source,
                 onQueueResult: onQueueResult,
                 onRemoveItem: onRemoveItem,
+                onSourceChanged: onSourceChanged,
               ),
             ),
           ],
@@ -361,15 +367,17 @@ class _MusicBoxProgressBar extends StatelessWidget {
 }
 
 /// Tabbed lower body: the queue, plus a search field that adds hits to it.
-class _MusicBoxBody extends StatelessWidget {
+class _MusicBoxBody extends StatefulWidget {
   const _MusicBoxBody({
     required this.state,
     required this.searchController,
     required this.searchResults,
     required this.searching,
     required this.searchError,
+    required this.source,
     required this.onQueueResult,
     required this.onRemoveItem,
+    required this.onSourceChanged,
   });
 
   final MusicBoxState state;
@@ -377,32 +385,75 @@ class _MusicBoxBody extends StatelessWidget {
   final List<MusicBoxSearchResult> searchResults;
   final bool searching;
   final String? searchError;
+  final String source;
   final ValueChanged<MusicBoxSearchResult> onQueueResult;
   final ValueChanged<MusicBoxQueueItem> onRemoveItem;
+  final ValueChanged<String> onSourceChanged;
+
+  @override
+  State<_MusicBoxBody> createState() => _MusicBoxBodyState();
+}
+
+class _MusicBoxBodyState extends State<_MusicBoxBody> {
+  // The body shows search by default; the toggle beside the search box flips to
+  // the play queue and back.
+  bool _showQueue = false;
 
   @override
   Widget build(BuildContext context) {
-    final hasQuery = searchController.text.trim().isNotEmpty;
+    final hasQuery = widget.searchController.text.trim().isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Input(
-          controller: searchController,
-          hintText: '搜索歌曲点歌',
-          prefixIcon: Icons.search,
-          maxLines: 1,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Input(
+                controller: widget.searchController,
+                hintText: '搜索歌曲点歌',
+                prefixIcon: Icons.search,
+                maxLines: 1,
+              ),
+            ),
+            const SizedBox(width: 8),
+            ButtonIcon(
+              tooltip: _showQueue ? '返回搜索' : '播放列表',
+              icon: const Icon(Icons.queue_music),
+              selected: _showQueue,
+              onPressed: () => setState(() => _showQueue = !_showQueue),
+              size: Input.defaultHeight,
+            ),
+          ],
         ),
+        // The source picker only applies to search, so hide it on the queue tab.
+        if (!_showQueue) ...[
+          const SizedBox(height: 10),
+          SegmentedControl<String>(
+            expanded: true,
+            value: widget.source,
+            segments: [
+              for (final source in music_box_display.musicBoxSources)
+                Segment(value: source.id, label: source.label),
+            ],
+            onChanged: widget.onSourceChanged,
+          ),
+        ],
         const SizedBox(height: 12),
         Expanded(
-          child: hasQuery
-              ? _MusicBoxSearchList(
-                  results: searchResults,
-                  query: searchController.text,
-                  searching: searching,
-                  error: searchError,
-                  onQueueResult: onQueueResult,
+          child: _showQueue
+              ? _MusicBoxQueueList(
+                  state: widget.state,
+                  onRemoveItem: widget.onRemoveItem,
                 )
-              : _MusicBoxQueueList(state: state, onRemoveItem: onRemoveItem),
+              : _MusicBoxSearchList(
+                  results: widget.searchResults,
+                  query: widget.searchController.text,
+                  searching: widget.searching,
+                  error: widget.searchError,
+                  hasQuery: hasQuery,
+                  onQueueResult: widget.onQueueResult,
+                ),
         ),
       ],
     );
@@ -458,99 +509,103 @@ class _MusicBoxQueueTile extends StatelessWidget {
     final loading =
         item.status == MusicBoxQueueItemStatus.pending ||
         item.status == MusicBoxQueueItemStatus.downloading;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: isCurrent ? UiColors.selected : UiColors.surfaceLow,
-        borderRadius: BorderRadius.circular(UiRadii.md),
-        border: Border.all(
-          color: isCurrent ? UiColors.selectedBorder : UiColors.border,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        child: Row(
-          children: [
-            _MusicBoxArtwork(playing: isCurrent),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    item.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: isCurrent ? UiColors.accent : UiColors.text,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                    ),
+    return PressableSurface(
+      width: double.infinity,
+      height: 56,
+      hoverLift: 2,
+      baseDepth: 4,
+      interactive: false,
+      hoverEffect: false,
+      pressEffect: false,
+      selected: isCurrent,
+      backgroundColor: UiColors.surfaceLow,
+      selectedBackgroundColor: UiColors.selected,
+      borderColor: UiColors.border,
+      selectedBorderColor: UiColors.selectedBorder,
+      borderRadius: UiRadii.md,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      child: Row(
+        children: [
+          _MusicBoxArtwork(playing: isCurrent),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  item.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: isCurrent ? UiColors.accent : UiColors.text,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
                   ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      if (statusLabel != null) ...[
-                        if (loading)
-                          const SizedBox(
-                            width: 10,
-                            height: 10,
-                            child: CircularProgressIndicator(strokeWidth: 1.6),
-                          ),
-                        if (loading) const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            statusLabel,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: failed
-                                  ? UiColors.danger
-                                  : UiColors.textSecondary,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ] else
-                        Expanded(
-                          child: Text(
-                            item.artist.isEmpty ? '未知艺人' : item.artist,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: UiColors.textSecondary,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            if (item.durationMs > 0) ...[
-              const SizedBox(width: 8),
-              Text(
-                music_box_display.musicBoxFormatDuration(item.durationMs),
-                style: const TextStyle(
-                  color: UiColors.textMuted,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
                 ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    if (statusLabel != null) ...[
+                      if (loading)
+                        const SizedBox(
+                          width: 10,
+                          height: 10,
+                          child: CircularProgressIndicator(strokeWidth: 1.6),
+                        ),
+                      if (loading) const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          statusLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: failed
+                                ? UiColors.danger
+                                : UiColors.textSecondary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ] else
+                      Expanded(
+                        child: Text(
+                          item.artist.isEmpty ? '未知艺人' : item.artist,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: UiColors.textSecondary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          if (item.durationMs > 0) ...[
+            const SizedBox(width: 8),
+            Text(
+              music_box_display.musicBoxFormatDuration(item.durationMs),
+              style: const TextStyle(
+                color: UiColors.textMuted,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
               ),
-            ],
-            const SizedBox(width: 4),
-            ButtonIcon(
-              tooltip: '移除',
-              icon: const Icon(Icons.close),
-              tone: ButtonTone.danger,
-              onPressed: onRemove,
-              size: 28,
             ),
           ],
-        ),
+          const SizedBox(width: 4),
+          ButtonIcon(
+            tooltip: '移除',
+            icon: const Icon(Icons.close),
+            tone: ButtonTone.danger,
+            onPressed: onRemove,
+            size: 28,
+          ),
+        ],
       ),
     );
   }
@@ -562,6 +617,7 @@ class _MusicBoxSearchList extends StatelessWidget {
     required this.query,
     required this.searching,
     required this.error,
+    required this.hasQuery,
     required this.onQueueResult,
   });
 
@@ -569,10 +625,17 @@ class _MusicBoxSearchList extends StatelessWidget {
   final String query;
   final bool searching;
   final String? error;
+  final bool hasQuery;
   final ValueChanged<MusicBoxSearchResult> onQueueResult;
 
   @override
   Widget build(BuildContext context) {
+    if (!hasQuery) {
+      return const _MusicBoxEmpty(
+        icon: Icons.search,
+        message: '搜索歌曲点歌吧',
+      );
+    }
     if (searching && results.isEmpty) {
       return const Center(
         child: SizedBox(
