@@ -110,7 +110,7 @@ void main() {
     expect(find.widgetWithText(SelectableText, 'copy this'), findsOneWidget);
   });
 
-  testWidgets('system role message renders centered with an inline timestamp', (
+  testWidgets('system role message renders below a centered timestamp', (
     tester,
   ) async {
     final controller = TextEditingController();
@@ -157,6 +157,59 @@ void main() {
     await tester.pump();
 
     expect(find.text(detailed), findsOneWidget);
+  });
+
+  testWidgets('system and ordinary messages can share a timestamp divider', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    final now = DateTime.now();
+    final createdAt = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      now.hour,
+      now.minute,
+      5,
+    );
+    final brief = message_display.formatChatTimestamp(
+      createdAt,
+      now: DateTime.now(),
+    );
+
+    await tester.pumpWidget(
+      _host(
+        _chatPane(
+          controller: controller,
+          messages: [
+            _message(
+              type: 'system',
+              body: '进入了直播间',
+              createdAt: createdAt,
+              attachments: const [
+                MessageAttachment(
+                  type: 'system',
+                  event: message_display.kSystemEventLiveJoined,
+                  target: _systemTarget,
+                ),
+              ],
+            ),
+            _message(
+              type: 'text',
+              body: 'hello after live join',
+              createdAt: createdAt.add(const Duration(seconds: 10)),
+              clientMessageId: 'client_after_system',
+            ),
+          ],
+        ),
+      ),
+    );
+
+    expect(find.text(brief), findsOneWidget);
+    expect(find.text('Logan'), findsWidgets);
+    expect(find.text('进入了直播间'), findsOneWidget);
+    expect(find.text('hello after live join'), findsOneWidget);
   });
 
   testWidgets('sticker bubble exposes the sticker name only as a tooltip', (

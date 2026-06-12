@@ -152,6 +152,7 @@ extension _HomeShellLiveActions on _HomeShellState {
       targetRoomId: room.id,
     );
     if (previousLiveRoomId != null) {
+      await _notifyLiveLeft(previousLiveRoomId);
       await _liveSessionController.disconnect();
       if (mounted) {
         _setHomeState(() {
@@ -228,6 +229,7 @@ extension _HomeShellLiveActions on _HomeShellState {
     );
     _setHomeState(() => _applyLiveLocalDeparturePatch(patch));
     try {
+      await _notifyLiveLeft(roomId);
       await _liveSessionController.disconnect();
     } catch (error) {
       if (mounted) _setHomeState(() => _roomError = error.toString());
@@ -243,6 +245,15 @@ extension _HomeShellLiveActions on _HomeShellState {
           ),
         );
       }
+    }
+  }
+
+  Future<void> _notifyLiveLeft(String roomId) async {
+    try {
+      await _liveController.leaveLive(roomId: roomId);
+    } catch (error) {
+      if (!mounted || isBenignGoneLiveStatePatch(error)) return;
+      _setHomeState(() => _roomError = error.toString());
     }
   }
 

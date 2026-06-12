@@ -178,7 +178,7 @@ class _MessageStageState extends State<_MessageStage> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (showTimestamp && systemEvent == null) ...[
+            if (showTimestamp) ...[
               _MessageTimeDivider(
                 label: timestamp,
                 onTap: _toggleDetailedTimestamps,
@@ -186,11 +186,7 @@ class _MessageStageState extends State<_MessageStage> {
               const SizedBox(height: 10),
             ],
             if (systemEvent != null)
-              _SystemMessageRow(
-                event: systemEvent,
-                timestamp: timestamp,
-                onTapTimestamp: _toggleDetailedTimestamps,
-              )
+              _SystemMessageRow(event: systemEvent)
             else
               _MessageRow(
                 message: message,
@@ -248,15 +244,9 @@ class _MessageTimeDivider extends StatelessWidget {
 }
 
 class _SystemMessageRow extends StatelessWidget {
-  const _SystemMessageRow({
-    required this.event,
-    required this.timestamp,
-    required this.onTapTimestamp,
-  });
+  const _SystemMessageRow({required this.event});
 
   final message_display.SystemMessageEvent event;
-  final String timestamp;
-  final VoidCallback onTapTimestamp;
 
   @override
   Widget build(BuildContext context) {
@@ -276,38 +266,8 @@ class _SystemMessageRow extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               spacing: 5,
               runSpacing: 5,
-              children: [
-                _SystemTimestamp(label: timestamp, onTap: onTapTimestamp),
-                ..._SystemMessageParts(event: event).build(context),
-              ],
+              children: [..._SystemMessageParts(event: event).build(context)],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SystemTimestamp extends StatelessWidget {
-  const _SystemTimestamp({required this.label, required this.onTap});
-
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: UiTypography.label.copyWith(
-            color: UiColors.textMuted,
-            fontSize: 11,
           ),
         ),
       ),

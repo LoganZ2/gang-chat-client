@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 import 'package:client/src/app/live_controller.dart';
@@ -284,6 +287,38 @@ void main() {
     );
   });
 
+  test('leaveLive reports a left connection state to the server', () async {
+    Map<String, Object?>? body;
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'PATCH');
+        expect(request.url.path, '/api/v1/rooms/room_1/live/me');
+        body =
+            jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>;
+        return http.Response(
+          jsonEncode({
+            'participant': _participantJson(
+              user: _userJson('alice'),
+              connectionState: 'left',
+            ),
+          }),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }),
+    );
+    addTearDown(api.close);
+
+    final participant = await LiveController(
+      api: api,
+    ).leaveLive(roomId: 'room_1');
+
+    expect(body, {'connection_state': 'left'});
+    expect(participant.connectionState, 'left');
+  });
+
   test('patchJoinResult mirrors participant flags and room live preview', () {
     final api = GangApiClient(
       baseUrl: 'http://example.test/api/v1',
@@ -438,6 +473,32 @@ void main() {
 
     expect(controller.mergeParticipant(null, bob), isNull);
   });
+}
+
+Map<String, Object?> _userJson(String id) {
+  return {
+    'id': id,
+    'username': id,
+    'display_name': 'User $id',
+    'default_avatar_key': 'blue-3',
+  };
+}
+
+Map<String, Object?> _participantJson({
+  required Map<String, Object?> user,
+  String connectionState = 'connected',
+}) {
+  return {
+    'live_session_id': 'live_${user['id']}',
+    'user': user,
+    'joined_at': '2026-06-05T00:00:00Z',
+    'mic_muted': false,
+    'headphones_muted': false,
+    'voice_blocked': false,
+    'camera_on': false,
+    'screen_sharing': false,
+    'connection_state': connectionState,
+  };
 }
 
 UserSummary _user(String id) {

@@ -184,6 +184,10 @@ class LiveController {
     );
   }
 
+  Future<LiveParticipant> leaveLive({required String roomId}) {
+    return api.updateMyLiveState(roomId: roomId, connectionState: 'left');
+  }
+
   LiveJoinStatePatch patchJoinStarted({required String? joinedLiveRoomId}) {
     return LiveJoinStatePatch(
       joinedLiveRoomId: joinedLiveRoomId,
