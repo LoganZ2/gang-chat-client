@@ -15,10 +15,10 @@ class LiveMusicBoxPanel extends StatelessWidget {
     required this.source,
     required this.onTogglePlayback,
     required this.onSkip,
-    required this.onStop,
     required this.onQueueResult,
     required this.onRemoveItem,
     required this.onSourceChanged,
+    required this.onClose,
   });
 
   final MusicBoxState state;
@@ -29,10 +29,10 @@ class LiveMusicBoxPanel extends StatelessWidget {
   final String source;
   final VoidCallback onTogglePlayback;
   final VoidCallback onSkip;
-  final VoidCallback onStop;
   final ValueChanged<MusicBoxSearchResult> onQueueResult;
   final ValueChanged<MusicBoxQueueItem> onRemoveItem;
   final ValueChanged<String> onSourceChanged;
+  final VoidCallback onClose;
 
   @override
   Widget build(BuildContext context) {
@@ -41,19 +41,25 @@ class LiveMusicBoxPanel extends StatelessWidget {
         color: UiColors.surface,
         borderRadius: BorderRadius.circular(_liveRoomRadius),
         border: Border.all(color: UiColors.border),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x66080A0D),
+            offset: Offset(0, 10),
+            blurRadius: 22,
+          ),
+        ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _MusicBoxHeader(usage: state.usage),
+            _MusicBoxHeader(usage: state.usage, onClose: onClose),
             const SizedBox(height: 16),
             _MusicBoxNowPlaying(
               state: state,
               onTogglePlayback: onTogglePlayback,
               onSkip: onSkip,
-              onStop: onStop,
             ),
             const SizedBox(height: 16),
             Expanded(
@@ -77,9 +83,10 @@ class LiveMusicBoxPanel extends StatelessWidget {
 }
 
 class _MusicBoxHeader extends StatelessWidget {
-  const _MusicBoxHeader({required this.usage});
+  const _MusicBoxHeader({required this.usage, required this.onClose});
 
   final MusicBoxUsage usage;
+  final VoidCallback onClose;
 
   @override
   Widget build(BuildContext context) {
@@ -108,6 +115,13 @@ class _MusicBoxHeader extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ),
+        const SizedBox(width: 6),
+        ButtonIcon(
+          tooltip: '收起',
+          icon: const Icon(Icons.close),
+          onPressed: onClose,
+          size: 28,
+        ),
       ],
     );
   }
@@ -120,13 +134,11 @@ class _MusicBoxNowPlaying extends StatelessWidget {
     required this.state,
     required this.onTogglePlayback,
     required this.onSkip,
-    required this.onStop,
   });
 
   final MusicBoxState state;
   final VoidCallback onTogglePlayback;
   final VoidCallback onSkip;
-  final VoidCallback onStop;
 
   @override
   Widget build(BuildContext context) {
@@ -195,16 +207,6 @@ class _MusicBoxNowPlaying extends StatelessWidget {
                     onPressed: hasQueue ? onSkip : null,
                     size: 40,
                   ),
-                  const SizedBox(width: 8),
-                  ButtonIcon(
-                    tooltip: '停止',
-                    icon: const Icon(Icons.stop),
-                    onPressed:
-                        state.playback.state != MusicBoxPlaybackState.stopped
-                        ? onStop
-                        : null,
-                    size: 40,
-                  ),
                 ],
               ),
             ],
@@ -219,10 +221,11 @@ class _MusicBoxNowPlaying extends StatelessWidget {
 /// freezes its current angle when paused/stopped — an at-a-glance read of
 /// whether the music box is playing.
 class _VinylRecord extends StatefulWidget {
-  const _VinylRecord({required this.spinning, this.label});
+  const _VinylRecord({required this.spinning, this.label, this.size = 64});
 
   final bool spinning;
   final String? label;
+  final double size;
 
   @override
   State<_VinylRecord> createState() => _VinylRecordState();
@@ -262,7 +265,10 @@ class _VinylRecordState extends State<_VinylRecord>
   Widget build(BuildContext context) {
     return RotationTransition(
       turns: _controller,
-      child: CustomPaint(size: const Size(64, 64), painter: _VinylPainter()),
+      child: CustomPaint(
+        size: Size.square(widget.size),
+        painter: _VinylPainter(),
+      ),
     );
   }
 }

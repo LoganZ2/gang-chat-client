@@ -16,6 +16,8 @@ const _paneEdgeInset = 14.0;
 const _paneTopInset = _paneEdgeInset;
 const _liveRoomRadius = UiRadii.md;
 const _liveRoomPadding = 18.0;
+// Width of the right-docked music box panel (search + queue) when expanded.
+const _musicBoxPanelWidth = 340.0;
 const _memberCardWidth = 154.0;
 const _memberCardHeight = 126.0;
 const _controlButtonSize = 44.0;
@@ -86,7 +88,6 @@ class LiveChannelPane extends StatefulWidget {
     required this.onToggleMusicBox,
     required this.onMusicBoxTogglePlayback,
     required this.onMusicBoxSkip,
-    required this.onMusicBoxStop,
     required this.onMusicBoxQueueResult,
     required this.onMusicBoxRemoveItem,
     required this.onMusicBoxSourceChanged,
@@ -126,7 +127,6 @@ class LiveChannelPane extends StatefulWidget {
   final VoidCallback onToggleMusicBox;
   final VoidCallback onMusicBoxTogglePlayback;
   final VoidCallback onMusicBoxSkip;
-  final VoidCallback onMusicBoxStop;
   final ValueChanged<MusicBoxSearchResult> onMusicBoxQueueResult;
   final ValueChanged<MusicBoxQueueItem> onMusicBoxRemoveItem;
   final ValueChanged<String> onMusicBoxSourceChanged;
@@ -226,21 +226,31 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                           ],
                         ),
                       ),
+                      // The search + queue panel slides out as a narrow
+                      // right-docked surface over the stage when expanded. The
+                      // compact now-playing strip itself lives inline in the
+                      // control bar below (see _LiveControlBar).
                       if (musicBoxOpen && musicBox != null)
-                        Positioned.fill(
-                          child: LiveMusicBoxPanel(
-                            state: musicBox,
-                            searchController: widget.musicBoxSearchController,
-                            searchResults: widget.musicBoxSearchResults,
-                            searching: widget.musicBoxSearching,
-                            searchError: widget.musicBoxSearchError,
-                            source: widget.musicBoxSource,
-                            onTogglePlayback: widget.onMusicBoxTogglePlayback,
-                            onSkip: widget.onMusicBoxSkip,
-                            onStop: widget.onMusicBoxStop,
-                            onQueueResult: widget.onMusicBoxQueueResult,
-                            onRemoveItem: widget.onMusicBoxRemoveItem,
-                            onSourceChanged: widget.onMusicBoxSourceChanged,
+                        Positioned(
+                          top: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: SizedBox(
+                            width: _musicBoxPanelWidth,
+                            child: LiveMusicBoxPanel(
+                              state: musicBox,
+                              searchController: widget.musicBoxSearchController,
+                              searchResults: widget.musicBoxSearchResults,
+                              searching: widget.musicBoxSearching,
+                              searchError: widget.musicBoxSearchError,
+                              source: widget.musicBoxSource,
+                              onTogglePlayback: widget.onMusicBoxTogglePlayback,
+                              onSkip: widget.onMusicBoxSkip,
+                              onQueueResult: widget.onMusicBoxQueueResult,
+                              onRemoveItem: widget.onMusicBoxRemoveItem,
+                              onSourceChanged: widget.onMusicBoxSourceChanged,
+                              onClose: widget.onToggleMusicBox,
+                            ),
                           ),
                         ),
                     ],
@@ -255,6 +265,7 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                   voiceBlocked: widget.voiceBlocked,
                   cameraOn: widget.cameraOn,
                   screenSharing: widget.screenSharing,
+                  musicBox: musicBox,
                   musicBoxEnabled: musicBoxEnabled,
                   musicBoxOpen: musicBoxOpen,
                   onJoin: widget.onJoin,
@@ -264,6 +275,8 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                   onToggleCamera: widget.onToggleCamera,
                   onToggleShare: widget.onToggleShare,
                   onToggleMusicBox: widget.onToggleMusicBox,
+                  onMusicBoxTogglePlayback: widget.onMusicBoxTogglePlayback,
+                  onMusicBoxSkip: widget.onMusicBoxSkip,
                   onCollapse: widget.onBackToChat,
                 ),
               ],

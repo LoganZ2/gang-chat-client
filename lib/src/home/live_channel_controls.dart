@@ -9,6 +9,7 @@ class _LiveControlBar extends StatelessWidget {
     required this.voiceBlocked,
     required this.cameraOn,
     required this.screenSharing,
+    required this.musicBox,
     required this.musicBoxEnabled,
     required this.musicBoxOpen,
     required this.onJoin,
@@ -18,6 +19,8 @@ class _LiveControlBar extends StatelessWidget {
     required this.onToggleCamera,
     required this.onToggleShare,
     required this.onToggleMusicBox,
+    required this.onMusicBoxTogglePlayback,
+    required this.onMusicBoxSkip,
     required this.onCollapse,
   });
 
@@ -28,6 +31,7 @@ class _LiveControlBar extends StatelessWidget {
   final bool voiceBlocked;
   final bool cameraOn;
   final bool screenSharing;
+  final MusicBoxState? musicBox;
   final bool musicBoxEnabled;
   final bool musicBoxOpen;
   final VoidCallback onJoin;
@@ -37,6 +41,8 @@ class _LiveControlBar extends StatelessWidget {
   final VoidCallback onToggleCamera;
   final VoidCallback onToggleShare;
   final VoidCallback onToggleMusicBox;
+  final VoidCallback onMusicBoxTogglePlayback;
+  final VoidCallback onMusicBoxSkip;
   final VoidCallback onCollapse;
 
   @override
@@ -90,13 +96,13 @@ class _LiveControlBar extends StatelessWidget {
           ),
         ];
 
-        final musicBoxButton = (joined && musicBoxEnabled)
-            ? ButtonIcon(
-                tooltip: musicBoxOpen ? '收起音乐盒' : '音乐盒',
-                icon: const Icon(Icons.library_music),
-                selected: musicBoxOpen,
-                onPressed: onToggleMusicBox,
-                size: _controlButtonSize,
+        final musicBoxStrip = (joined && musicBoxEnabled && musicBox != null)
+            ? _InlineMusicBox(
+                state: musicBox!,
+                expanded: musicBoxOpen,
+                onTogglePlayback: onMusicBoxTogglePlayback,
+                onSkip: onMusicBoxSkip,
+                onToggleExpand: onToggleMusicBox,
               )
             : null;
 
@@ -119,7 +125,6 @@ class _LiveControlBar extends StatelessWidget {
                     )
                   else
                     ...controls,
-                  ?musicBoxButton,
                   ButtonIcon(
                     tooltip: '收起直播频道',
                     icon: const Icon(Icons.keyboard_arrow_up),
@@ -128,39 +133,52 @@ class _LiveControlBar extends StatelessWidget {
                   ),
                 ],
               ),
+              if (musicBoxStrip != null) ...[
+                const SizedBox(height: 10),
+                musicBoxStrip,
+              ],
             ],
           );
         }
 
-        return Center(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (!joined) ...[
-                Button(
-                  height: _controlButtonSize,
-                  loading: joining,
-                  icon: const Icon(Icons.call),
-                  onPressed: onJoin,
-                  child: const Text('加入'),
-                ),
-                const SizedBox(width: 12),
-              ] else ...[
-                ..._withControlGaps(controls),
-                const SizedBox(width: 10),
-              ],
-              if (musicBoxButton != null) ...[
-                musicBoxButton,
-                const SizedBox(width: 10),
-              ],
-              ButtonIcon(
-                tooltip: '收起直播频道',
-                icon: const Icon(Icons.keyboard_arrow_up),
-                onPressed: onCollapse,
-                size: _controlButtonSize,
+        // The transport buttons stay centered against the full bar width; the
+        // inline music box overlays at the right edge via a Stack so it doesn't
+        // shove the buttons off-center.
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!joined) ...[
+                    Button(
+                      height: _controlButtonSize,
+                      loading: joining,
+                      icon: const Icon(Icons.call),
+                      onPressed: onJoin,
+                      child: const Text('加入'),
+                    ),
+                    const SizedBox(width: 12),
+                  ] else ...[
+                    ..._withControlGaps(controls),
+                    const SizedBox(width: 10),
+                  ],
+                  ButtonIcon(
+                    tooltip: '收起直播频道',
+                    icon: const Icon(Icons.keyboard_arrow_up),
+                    onPressed: onCollapse,
+                    size: _controlButtonSize,
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+            if (musicBoxStrip != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: musicBoxStrip,
+              ),
+          ],
         );
       },
     );
@@ -174,4 +192,138 @@ List<Widget> _withControlGaps(List<Widget> children) {
       children[index],
     ],
   ];
+}
+
+/// The now-playing strip embedded inline at the right of the live control bar:
+/// a small spinning vinyl, the current track, transport controls, and a button
+/// that expands the full search + queue panel. Replaces the old standalone
+/// music box button so the player no longer claims its own content column.
+class _InlineMusicBox extends StatelessWidget {
+  const _InlineMusicBox({
+    required this.state,
+    required this.expanded,
+    required this.onTogglePlayback,
+    required this.onSkip,
+    required this.onToggleExpand,
+  });
+
+  final MusicBoxState state;
+  final bool expanded;
+  final VoidCallback onTogglePlayback;
+  final VoidCallback onSkip;
+  final VoidCallback onToggleExpand;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = state.currentItem;
+    final spinning = music_box_display.musicBoxRecordSpinning(state);
+    final transport = music_box_display.musicBoxPrimaryTransport(state);
+    final hasQueue = state.queue.isNotEmpty;
+    final isPause =
+        transport == music_box_display.MusicBoxTransportAction.pause;
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 280),
+      child: SizedBox(
+        height: _controlButtonSize,
+        child: Stack(
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+            _VinylRecord(spinning: spinning, label: current?.title, size: 26),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    current?.title ?? '未在播放',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: current == null
+                          ? UiColors.textMuted
+                          : UiColors.text,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    current?.artist.isNotEmpty == true
+                        ? current!.artist
+                        : '点一首歌开始播放',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: UiColors.textSecondary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            ButtonIcon(
+              tooltip: isPause ? '暂停' : '播放',
+              icon: Icon(isPause ? Icons.pause : Icons.play_arrow),
+              tone: ButtonTone.primary,
+              onPressed: hasQueue ? onTogglePlayback : null,
+              size: 30,
+            ),
+            const SizedBox(width: 4),
+            ButtonIcon(
+              tooltip: '下一首',
+              icon: const Icon(Icons.skip_next),
+              onPressed: hasQueue ? onSkip : null,
+              size: 30,
+            ),
+            const SizedBox(width: 4),
+            ButtonIcon(
+              tooltip: expanded ? '收起音乐盒' : '搜索 / 播放列表',
+              icon: const Icon(Icons.queue_music),
+              selected: expanded,
+              onPressed: onToggleExpand,
+              size: 30,
+            ),
+              ],
+            ),
+            // A hairline progress track pinned to the bottom edge of the strip,
+            // spanning its full width — keeps the title/artist lines intact
+            // while still reading playback position at a glance.
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _InlineProgress(state: state),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A hairline server-authoritative progress track that hugs the bottom edge of
+/// the inline music box. No time labels — just a 2px bar reflecting the
+/// snapshot's reported position, set on a subtly darker groove so the unplayed
+/// remainder still reads against the control bar.
+class _InlineProgress extends StatelessWidget {
+  const _InlineProgress({required this.state});
+
+  final MusicBoxState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = music_box_display.musicBoxProgress(state);
+    return LinearProgressIndicator(
+      value: progress.fraction,
+      minHeight: 3,
+      backgroundColor: UiColors.surfacePressed,
+      valueColor: const AlwaysStoppedAnimation(UiColors.accent),
+    );
+  }
 }
