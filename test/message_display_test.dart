@@ -257,7 +257,7 @@ void main() {
     final sticker = _sticker();
     final draft = stickerMessageDraft(sticker);
 
-    expect(draft.body, '[wave]');
+    expect(draft.body, '[表情] wave');
     expect(draft.type, 'sticker');
     expect(draft.attachments, hasLength(1));
     expect(draft.attachments.single.type, 'sticker');

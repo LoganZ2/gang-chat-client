@@ -232,7 +232,7 @@ String? outgoingTextMessageBody(String value) {
 
 StickerMessageDraft stickerMessageDraft(Sticker sticker) {
   return StickerMessageDraft(
-    body: '[${sticker.name}]',
+    body: '[表情] ${sticker.name}',
     type: 'sticker',
     attachments: [
       MessageAttachment(

@@ -167,7 +167,7 @@ void main() {
         MessageBubbleForTest(
           message: _message(
             type: 'sticker',
-            body: '[wave]',
+            body: '[表情] wave',
             attachments: const [
               MessageAttachment(
                 type: 'sticker',
@@ -405,7 +405,7 @@ void main() {
       ),
       _message(
         type: 'sticker',
-        body: '[wave]',
+        body: '[表情] wave',
         attachments: const [
           MessageAttachment(
             type: 'sticker',
