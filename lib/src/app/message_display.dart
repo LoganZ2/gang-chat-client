@@ -57,6 +57,57 @@ String formatMessageTime(DateTime value) {
   return '$hour:$minute';
 }
 
+String formatChatTimestamp(DateTime value, {DateTime? now}) {
+  final local = value.toLocal();
+  final localNow = (now ?? DateTime.now()).toLocal();
+  final today = DateTime(localNow.year, localNow.month, localNow.day);
+  final date = DateTime(local.year, local.month, local.day);
+  final dayDelta = today.difference(date).inDays;
+  final time = formatMessageTime(local);
+
+  if (dayDelta == 0) return time;
+  if (dayDelta == 1) return '昨天 $time';
+  if (dayDelta == 2) return '前天 $time';
+  if (dayDelta >= 3 && dayDelta < 7) {
+    return '${_weekdayLabel(local.weekday)} $time';
+  }
+  if (local.year == localNow.year) {
+    return '${local.month}月${local.day}日 $time';
+  }
+  return '${local.year}年${local.month}月${local.day}日 $time';
+}
+
+String formatDetailedChatTimestamp(DateTime value) {
+  final local = value.toLocal();
+  final time = formatMessageTime(local);
+  return '${local.year}年${local.month}月${local.day}日 '
+      '${_weekdayLabel(local.weekday)} $time';
+}
+
+bool shouldShowChatTimestamp({
+  required DateTime current,
+  DateTime? previous,
+  DateTime? now,
+}) {
+  if (previous == null) return true;
+  final referenceNow = now ?? DateTime.now();
+  return formatChatTimestamp(current, now: referenceNow) !=
+      formatChatTimestamp(previous, now: referenceNow);
+}
+
+String _weekdayLabel(int weekday) {
+  return switch (weekday) {
+    DateTime.monday => '星期一',
+    DateTime.tuesday => '星期二',
+    DateTime.wednesday => '星期三',
+    DateTime.thursday => '星期四',
+    DateTime.friday => '星期五',
+    DateTime.saturday => '星期六',
+    DateTime.sunday => '星期日',
+    _ => '星期日',
+  };
+}
+
 MessageContentKind messageContentKind(Message message) {
   if (message.stickerAttachment != null) return MessageContentKind.sticker;
   if (voice_display.voiceMessageAttachment(message) != null) {

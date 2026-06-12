@@ -150,6 +150,7 @@ class ChatPane extends StatelessWidget {
           Expanded(
             child: _ChatBody(
               messageStage: (bottomInset) => _MessageStage(
+                roomId: room?.id ?? roomCard?.id,
                 currentUserId: currentUser.id,
                 roomReady: room != null,
                 loading: loading,

@@ -1,3 +1,4 @@
+import 'package:client/src/app/message_display.dart' as message_display;
 import 'package:client/src/config/app_config.dart';
 import 'package:client/src/home/chat_pane.dart';
 import 'package:client/src/protocol/models.dart';
@@ -177,6 +178,83 @@ void main() {
     );
 
     expect(find.byIcon(Icons.stop_rounded), findsOneWidget);
+  });
+
+  testWidgets('attachment bubbles keep sender and time outside the bubble', (
+    tester,
+  ) async {
+    final messages = [
+      _message(
+        type: 'file',
+        body: 'report.pdf',
+        attachments: const [
+          MessageAttachment(
+            type: 'file',
+            name: 'report.pdf',
+            asset: UploadedAsset(
+              id: 'asset_report',
+              url: '/uploads/report.pdf',
+              thumbnailUrl: null,
+              mimeType: 'application/pdf',
+              filename: 'report.pdf',
+              sizeBytes: 2048,
+            ),
+          ),
+        ],
+      ),
+      _message(
+        type: 'audio',
+        body: 'voice_1.m4a',
+        attachments: const [
+          MessageAttachment(
+            type: 'audio',
+            name: 'voice_1.m4a',
+            durationMs: 15000,
+            asset: UploadedAsset(
+              id: 'asset_voice',
+              url: '/uploads/voice_1.m4a',
+              thumbnailUrl: null,
+              mimeType: 'audio/mp4',
+              filename: 'voice_1.m4a',
+              sizeBytes: 4096,
+            ),
+          ),
+        ],
+      ),
+      _message(
+        type: 'sticker',
+        body: '[wave]',
+        attachments: const [
+          MessageAttachment(
+            type: 'sticker',
+            name: 'wave',
+            asset: UploadedAsset(
+              id: 'asset_sticker',
+              url: '/stickers/wave.webp',
+              thumbnailUrl: '/stickers/wave-thumb.webp',
+              mimeType: 'image/webp',
+            ),
+          ),
+        ],
+      ),
+    ];
+
+    for (final message in messages) {
+      await tester.pumpWidget(
+        _host(
+          MessageBubbleForTest(
+            message: message,
+            downloadActions: _downloadActions(),
+          ),
+        ),
+      );
+
+      expect(find.text('Logan'), findsNothing);
+      expect(
+        find.text(message_display.formatMessageTime(message.createdAt)),
+        findsNothing,
+      );
+    }
   });
 }
 

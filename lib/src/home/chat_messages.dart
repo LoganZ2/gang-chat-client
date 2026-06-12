@@ -46,8 +46,9 @@ class ChatVoicePlaybackActions {
   }
 }
 
-class _MessageStage extends StatelessWidget {
+class _MessageStage extends StatefulWidget {
   const _MessageStage({
+    required this.roomId,
     required this.currentUserId,
     required this.roomReady,
     required this.loading,
@@ -62,6 +63,7 @@ class _MessageStage extends StatelessWidget {
     this.onResolveSenderProfile,
   });
 
+  final String? roomId;
   final String currentUserId;
   final bool roomReady;
   final bool loading;
@@ -79,21 +81,43 @@ class _MessageStage extends StatelessWidget {
   onResolveSenderProfile;
 
   @override
+  State<_MessageStage> createState() => _MessageStageState();
+}
+
+class _MessageStageState extends State<_MessageStage> {
+  bool _showDetailedTimestamps = false;
+
+  @override
+  void didUpdateWidget(covariant _MessageStage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.roomId != widget.roomId) {
+      _showDetailedTimestamps = false;
+    }
+  }
+
+  void _showAllDetailedTimestamps() {
+    if (_showDetailedTimestamps) return;
+    setState(() {
+      _showDetailedTimestamps = true;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (error != null && !roomReady) {
+    if (widget.error != null && !widget.roomReady) {
       return _CenteredState(
         icon: Icons.error_outline,
         title: '无法加载聊天',
-        detail: error!,
+        detail: widget.error!,
         action: Button(
           icon: const Icon(Icons.refresh),
-          onPressed: onRetry,
+          onPressed: widget.onRetry,
           child: const Text('重试'),
         ),
       );
     }
 
-    if (loading && messages.isEmpty) {
+    if (widget.loading && widget.messages.isEmpty) {
       return const Center(
         child: SizedBox.square(
           dimension: 24,
@@ -105,7 +129,7 @@ class _MessageStage extends StatelessWidget {
       );
     }
 
-    if (messages.isEmpty) {
+    if (widget.messages.isEmpty) {
       return const _CenteredState(
         icon: Icons.forum_outlined,
         title: '还没有消息',
@@ -113,27 +137,88 @@ class _MessageStage extends StatelessWidget {
       );
     }
 
+    final now = DateTime.now();
     return ListView.separated(
       padding: EdgeInsets.fromLTRB(
         _chatHorizontalPadding,
         18,
         _chatHorizontalPadding,
-        bottomInset,
+        widget.bottomInset,
       ),
-      itemCount: messages.length,
+      itemCount: widget.messages.length,
       separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
-        final message = messages[index];
-        return _MessageRow(
-          message: message,
-          outgoing: message.sender.id == currentUserId,
-          transfer: fileTransfers[message.clientMessageId],
-          fileDownloads: fileDownloads,
-          downloadActions: downloadActions,
-          voicePlaybackActions: voicePlaybackActions,
-          onResolveSenderProfile: onResolveSenderProfile,
+        final message = widget.messages[index];
+        final previous = index == 0 ? null : widget.messages[index - 1];
+        final showTimestamp = message_display.shouldShowChatTimestamp(
+          current: message.createdAt,
+          previous: previous?.createdAt,
+          now: now,
+        );
+        final timestamp = _showDetailedTimestamps
+            ? message_display.formatDetailedChatTimestamp(message.createdAt)
+            : message_display.formatChatTimestamp(message.createdAt, now: now);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (showTimestamp) ...[
+              _MessageTimeDivider(
+                label: timestamp,
+                onTap: _showAllDetailedTimestamps,
+              ),
+              const SizedBox(height: 10),
+            ],
+            _MessageRow(
+              message: message,
+              outgoing: message.sender.id == widget.currentUserId,
+              transfer: widget.fileTransfers[message.clientMessageId],
+              fileDownloads: widget.fileDownloads,
+              downloadActions: widget.downloadActions,
+              voicePlaybackActions: widget.voicePlaybackActions,
+              onResolveSenderProfile: widget.onResolveSenderProfile,
+            ),
+          ],
         );
       },
+    );
+  }
+}
+
+class _MessageTimeDivider extends StatelessWidget {
+  const _MessageTimeDivider({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: UiColors.surfacePressed,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: UiColors.border),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: UiTypography.label.copyWith(
+                  color: UiColors.textMuted,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -160,22 +245,49 @@ class _MessageRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sender = _senderName(message.sender);
     final bubble = Flexible(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: _messageMaxWidth),
-        child: _MessageBubble(
-          message: message,
-          outgoing: outgoing,
-          transfer: transfer,
-          fileDownloads: fileDownloads,
-          downloadActions: downloadActions,
-          voicePlaybackActions: voicePlaybackActions,
-        ),
+      child: Column(
+        crossAxisAlignment: outgoing
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: _messageMaxWidth),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Text(
+                sender,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: outgoing ? TextAlign.right : TextAlign.left,
+                style: UiTypography.label.copyWith(
+                  color: outgoing ? UiColors.accent : UiColors.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: _messageMaxWidth),
+            child: _MessageBubble(
+              message: message,
+              outgoing: outgoing,
+              transfer: transfer,
+              fileDownloads: fileDownloads,
+              downloadActions: downloadActions,
+              voicePlaybackActions: voicePlaybackActions,
+            ),
+          ),
+        ],
       ),
     );
 
     final avatar = Avatar(
-      label: _senderName(message.sender),
+      label: sender,
       imageUrl: AppConfigScope.of(
         context,
       ).resolveAssetUrl(message.sender.avatarUrl),
@@ -185,22 +297,21 @@ class _MessageRow extends StatelessWidget {
       activeBorderWidth: 1,
     );
 
+    final avatarHoverCard = _AvatarHoverCard(
+      user: message.sender,
+      onResolveProfile: onResolveSenderProfile,
+      child: avatar,
+    );
+
     return Row(
       mainAxisAlignment: outgoing
           ? MainAxisAlignment.end
           : MainAxisAlignment.start,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (!outgoing) ...[
-          _AvatarHoverCard(
-            user: message.sender,
-            onResolveProfile: onResolveSenderProfile,
-            child: avatar,
-          ),
-          const SizedBox(width: 10),
-        ],
+        if (!outgoing) ...[avatarHoverCard, const SizedBox(width: 10)],
         bubble,
-        if (outgoing) ...[const SizedBox(width: 10), avatar],
+        if (outgoing) ...[const SizedBox(width: 10), avatarHoverCard],
       ],
     );
   }
@@ -227,7 +338,6 @@ class _MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final contentKind = message_display.messageContentKind(message);
     final status = message_display.messageDeliveryStatusText(message);
-    final sender = _senderName(message.sender);
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -243,29 +353,6 @@ class _MessageBubble extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: Text(
-                    sender,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: UiTypography.label.copyWith(
-                      color: outgoing
-                          ? UiColors.accent
-                          : UiColors.textSecondary,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  message_display.formatMessageTime(message.createdAt),
-                  style: UiTypography.label.copyWith(color: UiColors.textMuted),
-                ),
-              ],
-            ),
-            const SizedBox(height: 7),
             switch (contentKind) {
               message_display.MessageContentKind.sticker => _StickerBody(
                 attachment: message.stickerAttachment!,

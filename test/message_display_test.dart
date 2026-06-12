@@ -31,6 +31,72 @@ void main() {
     expect(formatMessageTime(DateTime(2026, 6, 4, 23, 59)), '23:59');
   });
 
+  test('formatChatTimestamp follows chat relative date labels', () {
+    final now = DateTime(2026, 6, 12, 10);
+
+    expect(formatChatTimestamp(DateTime(2026, 6, 12, 7, 5), now: now), '07:05');
+    expect(
+      formatChatTimestamp(DateTime(2026, 6, 11, 7, 5), now: now),
+      '昨天 07:05',
+    );
+    expect(
+      formatChatTimestamp(DateTime(2026, 6, 10, 7, 5), now: now),
+      '前天 07:05',
+    );
+    expect(
+      formatChatTimestamp(DateTime(2026, 6, 9, 7, 5), now: now),
+      '星期二 07:05',
+    );
+    expect(
+      formatChatTimestamp(DateTime(2026, 5, 31, 7, 5), now: now),
+      '5月31日 07:05',
+    );
+    expect(
+      formatChatTimestamp(DateTime(2025, 12, 31, 7, 5), now: now),
+      '2025年12月31日 07:05',
+    );
+  });
+
+  test('formatDetailedChatTimestamp always includes full date and weekday', () {
+    expect(
+      formatDetailedChatTimestamp(DateTime(2026, 6, 12, 7, 5)),
+      '2026年6月12日 星期五 07:05',
+    );
+    expect(
+      formatDetailedChatTimestamp(DateTime(2025, 12, 31, 23, 59)),
+      '2025年12月31日 星期三 23:59',
+    );
+  });
+
+  test('shouldShowChatTimestamp shares identical timestamp labels', () {
+    final now = DateTime(2026, 6, 12, 10);
+
+    expect(
+      shouldShowChatTimestamp(
+        current: DateTime(2026, 6, 12, 7, 5),
+        previous: null,
+        now: now,
+      ),
+      isTrue,
+    );
+    expect(
+      shouldShowChatTimestamp(
+        current: DateTime(2026, 6, 12, 7, 5, 45),
+        previous: DateTime(2026, 6, 12, 7, 5, 5),
+        now: now,
+      ),
+      isFalse,
+    );
+    expect(
+      shouldShowChatTimestamp(
+        current: DateTime(2026, 6, 12, 7, 6),
+        previous: DateTime(2026, 6, 12, 7, 5),
+        now: now,
+      ),
+      isTrue,
+    );
+  });
+
   test(
     'messageContentKind prioritizes stickers then voice then files then text',
     () {
