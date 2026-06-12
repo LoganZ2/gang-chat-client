@@ -5,12 +5,11 @@ import '../protocol/models.dart';
 /// lives here so it can be unit-tested without a widget tree, mirroring
 /// `live_display.dart`.
 
-/// The live playback position. The position is client-authoritative: the server
-/// snapshot's [MusicBoxPlayback.positionMs] is only the *base*, captured the
-/// moment a track starts/resumes/recalibrates. From there the client steps the
-/// position forward on its own clock (see [musicBoxProgress]'s [elapsed]),
-/// deliberately ignoring the server's `updated_at` so client/server clock skew
-/// can never make the bar jump.
+/// The live playback position. Fully server-authoritative: the client renders
+/// the snapshot's [MusicBoxPlayback.positionMs] as-is and never extrapolates
+/// locally. The server pushes a fresh snapshot every second (the
+/// `music_box_changed` event), so the bar advances purely by re-rendering each
+/// snapshot — no client clock is involved, so there's nothing to drift.
 class MusicBoxProgress {
   const MusicBoxProgress({required this.positionMs, required this.durationMs});
 
@@ -26,36 +25,18 @@ class MusicBoxProgress {
   }
 }
 
-/// Computes the position to render. [elapsed] is the client-measured time since
-/// the caller anchored on the current snapshot's [MusicBoxPlayback.positionMs];
-/// while playing it's added to that base, while paused/stopped it's ignored and
-/// the base holds. The result is floored to whole seconds for a steady
-/// per-second step, and clamped to the track duration so it never overruns the
-/// end while the client owns the stepping.
-MusicBoxProgress musicBoxProgress(
-  MusicBoxState state, {
-  required Duration elapsed,
-}) {
+/// The position to render for [state]. Reads the server-reported position
+/// straight from the snapshot, floored to whole seconds for a steady
+/// per-second display, and clamped to the track duration.
+MusicBoxProgress musicBoxProgress(MusicBoxState state) {
   final current = state.currentItem;
   final durationMs = current?.durationMs ?? 0;
-  final playback = state.playback;
-  var positionMs = playback.positionMs;
-  if (playback.state == MusicBoxPlaybackState.playing &&
-      elapsed > Duration.zero) {
-    positionMs += elapsed.inMilliseconds;
-  }
+  var positionMs = state.playback.positionMs;
   if (positionMs < 0) positionMs = 0;
-  // Floor to whole seconds so the bar and the time label step once per second.
+  // Floor to whole seconds so the bar and the time label move in second steps.
   positionMs -= positionMs % 1000;
   if (durationMs > 0 && positionMs > durationMs) positionMs = durationMs;
   return MusicBoxProgress(positionMs: positionMs, durationMs: durationMs);
-}
-
-/// Whether a local ticker should run to advance the progress bar: only while a
-/// track is actually playing.
-bool musicBoxShouldTick(MusicBoxState state) {
-  return state.playback.state == MusicBoxPlaybackState.playing &&
-      state.currentItem != null;
 }
 
 /// The play/pause toggle the primary transport button should drive, given the

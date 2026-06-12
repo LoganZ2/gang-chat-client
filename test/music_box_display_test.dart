@@ -5,25 +5,22 @@ import 'package:client/src/protocol/models.dart';
 
 void main() {
   group('musicBoxProgress', () {
-    test('advances position locally while playing', () {
+    test('renders the server-reported position as-is', () {
       final state = _state(
         playbackState: MusicBoxPlaybackState.playing,
         currentItemId: 'item-1',
-        positionMs: 5000,
+        positionMs: 8000,
         queue: [_item(id: 'item-1', durationMs: 200000)],
       );
 
-      final progress = musicBoxProgress(
-        state,
-        elapsed: const Duration(seconds: 3),
-      );
+      final progress = musicBoxProgress(state);
 
       expect(progress.positionMs, 8000);
       expect(progress.durationMs, 200000);
       expect(progress.fraction, closeTo(0.04, 0.0001));
     });
 
-    test('holds at recorded position while paused', () {
+    test('uses the recorded position regardless of playback state', () {
       final state = _state(
         playbackState: MusicBoxPlaybackState.paused,
         currentItemId: 'item-1',
@@ -31,43 +28,33 @@ void main() {
         queue: [_item(id: 'item-1', durationMs: 200000)],
       );
 
-      final progress = musicBoxProgress(
-        state,
-        elapsed: const Duration(seconds: 30),
-      );
+      final progress = musicBoxProgress(state);
 
       expect(progress.positionMs, 5000);
     });
 
-    test('floors the advanced position to whole seconds', () {
+    test('floors the position to whole seconds', () {
       final state = _state(
         playbackState: MusicBoxPlaybackState.playing,
         currentItemId: 'item-1',
-        positionMs: 5200,
+        positionMs: 6900,
         queue: [_item(id: 'item-1', durationMs: 200000)],
       );
 
-      final progress = musicBoxProgress(
-        state,
-        elapsed: const Duration(milliseconds: 1700),
-      );
+      final progress = musicBoxProgress(state);
 
-      // 5200 + 1700 = 6900, floored to 6000.
       expect(progress.positionMs, 6000);
     });
 
-    test('clamps advanced position to the track duration', () {
+    test('clamps the position to the track duration', () {
       final state = _state(
         playbackState: MusicBoxPlaybackState.playing,
         currentItemId: 'item-1',
-        positionMs: 9000,
+        positionMs: 30000,
         queue: [_item(id: 'item-1', durationMs: 10000)],
       );
 
-      final progress = musicBoxProgress(
-        state,
-        elapsed: const Duration(seconds: 30),
-      );
+      final progress = musicBoxProgress(state);
 
       expect(progress.positionMs, 10000);
       expect(progress.fraction, 1.0);
@@ -81,40 +68,9 @@ void main() {
         queue: [_item(id: 'item-1', durationMs: 0)],
       );
 
-      final progress = musicBoxProgress(state, elapsed: Duration.zero);
+      final progress = musicBoxProgress(state);
 
       expect(progress.fraction, 0);
-    });
-  });
-
-  group('musicBoxShouldTick', () {
-    test('ticks only when playing with a current item', () {
-      expect(
-        musicBoxShouldTick(
-          _state(
-            playbackState: MusicBoxPlaybackState.playing,
-            currentItemId: 'item-1',
-            queue: [_item(id: 'item-1')],
-          ),
-        ),
-        isTrue,
-      );
-      expect(
-        musicBoxShouldTick(
-          _state(
-            playbackState: MusicBoxPlaybackState.paused,
-            currentItemId: 'item-1',
-            queue: [_item(id: 'item-1')],
-          ),
-        ),
-        isFalse,
-      );
-      expect(
-        musicBoxShouldTick(
-          _state(playbackState: MusicBoxPlaybackState.playing),
-        ),
-        isFalse,
-      );
     });
   });
 

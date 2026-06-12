@@ -4,12 +4,9 @@ import 'package:client/src/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// Widget-level coverage for the client-authoritative progress bar. The bar
-/// anchors on the snapshot's base position and ignores the server wall clock,
-/// re-anchors when a fresh snapshot moves the base, and holds while paused. The
-/// per-second stepping arithmetic itself is covered by the pure-function tests
-/// in `music_box_display_test.dart` (the widget steps on a real monotonic
-/// [Stopwatch], which a widget test's fake clock can't advance).
+/// Widget-level coverage for the server-authoritative progress bar: it renders
+/// the snapshot's reported position verbatim and updates only when a fresh
+/// snapshot arrives — no local stepping, no client clock.
 
 Widget _host(MusicBoxState state, TextEditingController searchController) {
   return MaterialApp(
@@ -38,7 +35,6 @@ MusicBoxState _state({
   required MusicBoxPlaybackState playbackState,
   required int positionMs,
   String currentItemId = 'a',
-  DateTime? updatedAt,
 }) {
   return MusicBoxState(
     enabled: true,
@@ -47,7 +43,7 @@ MusicBoxState _state({
       currentItemId: currentItemId,
       positionMs: positionMs,
       volume: 100,
-      updatedAt: updatedAt,
+      updatedAt: null,
     ),
     queue: [
       MusicBoxQueueItem(
@@ -70,9 +66,7 @@ MusicBoxState _state({
 }
 
 void main() {
-  testWidgets('anchors on the snapshot base, ignoring the server wall clock', (
-    tester,
-  ) async {
+  testWidgets('renders the server-reported position', (tester) async {
     final controller = TextEditingController();
     addTearDown(controller.dispose);
 
@@ -81,8 +75,6 @@ void main() {
         _state(
           playbackState: MusicBoxPlaybackState.playing,
           positionMs: 5000,
-          // A wildly skewed server timestamp the bar must not use.
-          updatedAt: DateTime.utc(1990, 1, 1),
         ),
         controller,
       ),
@@ -91,7 +83,7 @@ void main() {
     expect(find.text('0:05'), findsOneWidget);
   });
 
-  testWidgets('re-anchors when a fresh snapshot moves the base position', (
+  testWidgets('does not advance the position without a fresh snapshot', (
     tester,
   ) async {
     final controller = TextEditingController();
@@ -108,37 +100,39 @@ void main() {
     );
     expect(find.text('0:05'), findsOneWidget);
 
-    // A new snapshot resets the base; the bar jumps to it immediately.
-    await tester.pumpWidget(
-      _host(
-        _state(
-          playbackState: MusicBoxPlaybackState.playing,
-          positionMs: 30000,
-        ),
-        controller,
-      ),
-    );
-    expect(find.text('0:30'), findsOneWidget);
-    expect(find.text('0:05'), findsNothing);
-  });
-
-  testWidgets('holds the recorded position while paused', (tester) async {
-    final controller = TextEditingController();
-    addTearDown(controller.dispose);
-
-    await tester.pumpWidget(
-      _host(
-        _state(
-          playbackState: MusicBoxPlaybackState.paused,
-          positionMs: 12000,
-        ),
-        controller,
-      ),
-    );
-    expect(find.text('0:12'), findsOneWidget);
-
-    // No ticker while paused: a bounded pump must not advance the label.
+    // No local ticker: pumping a frame must not move the position. The server
+    // is the only thing that advances it, via a new snapshot.
     await tester.pump(const Duration(seconds: 5));
-    expect(find.text('0:12'), findsOneWidget);
+    expect(find.text('0:05'), findsOneWidget);
+  });
+
+  testWidgets('updates when a fresh snapshot reports a new position', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      _host(
+        _state(
+          playbackState: MusicBoxPlaybackState.playing,
+          positionMs: 5000,
+        ),
+        controller,
+      ),
+    );
+    expect(find.text('0:05'), findsOneWidget);
+
+    await tester.pumpWidget(
+      _host(
+        _state(
+          playbackState: MusicBoxPlaybackState.playing,
+          positionMs: 6000,
+        ),
+        controller,
+      ),
+    );
+    expect(find.text('0:06'), findsOneWidget);
+    expect(find.text('0:05'), findsNothing);
   });
 }
