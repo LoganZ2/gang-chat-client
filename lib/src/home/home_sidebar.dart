@@ -31,6 +31,7 @@ class HomeSidebar extends StatelessWidget {
     required this.settingsActive,
     required this.createRoomActive,
     required this.notificationsActive,
+    required this.logoutActive,
     required this.hasPendingNotifications,
     required this.onServerSelected,
     required this.onCreateRoom,
@@ -51,6 +52,7 @@ class HomeSidebar extends StatelessWidget {
   final bool settingsActive;
   final bool createRoomActive;
   final bool notificationsActive;
+  final bool logoutActive;
   final bool hasPendingNotifications;
   final bool includeWindowChromeOffset;
   final ValueChanged<RoomCard> onServerSelected;
@@ -98,6 +100,7 @@ class HomeSidebar extends StatelessWidget {
                       settingsActive: settingsActive,
                       createRoomActive: createRoomActive,
                       notificationsActive: notificationsActive,
+                      logoutActive: logoutActive,
                       hasPendingNotifications: hasPendingNotifications,
                       onCreateRoom: onCreateRoom,
                       onOpenNotifications: onOpenNotifications,
@@ -157,6 +160,7 @@ class _SidebarFooter extends StatelessWidget {
     required this.settingsActive,
     required this.createRoomActive,
     required this.notificationsActive,
+    required this.logoutActive,
     required this.hasPendingNotifications,
     required this.onCreateRoom,
     required this.onOpenNotifications,
@@ -167,6 +171,7 @@ class _SidebarFooter extends StatelessWidget {
   final bool settingsActive;
   final bool createRoomActive;
   final bool notificationsActive;
+  final bool logoutActive;
   final bool hasPendingNotifications;
   final VoidCallback onCreateRoom;
   final VoidCallback onOpenNotifications;
@@ -208,6 +213,7 @@ class _SidebarFooter extends StatelessWidget {
               ButtonIcon(
                 tooltip: '退出登录',
                 icon: const Icon(Icons.logout),
+                selected: logoutActive,
                 onPressed: onLogout,
                 size: _footerButtonSize,
               ),
@@ -370,6 +376,7 @@ class _ServerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lastMessageTime = room_display.roomSidebarLastMessageTime(server);
     return PressableSurface(
       width: double.infinity,
       height: _serverCardHeight,
@@ -393,17 +400,37 @@ class _ServerCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                HighlightedText(
-                  text: server.displayName,
-                  query: searchQuery,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: UiColors.text,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: HighlightedText(
+                        text: server.displayName,
+                        query: searchQuery,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: UiColors.text,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ),
+                    if (lastMessageTime.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        lastMessageTime,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: UiTypography.label.copyWith(
+                          color: selected
+                              ? UiColors.textSecondary
+                              : UiColors.textMuted,
+                          fontSize: 10.5,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 4),
                 HighlightedText(

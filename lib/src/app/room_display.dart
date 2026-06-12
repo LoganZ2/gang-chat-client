@@ -83,6 +83,27 @@ String roomSidebarSubtitle(RoomCard room) {
   return parts.join(' · ');
 }
 
+String roomSidebarLastMessageTime(RoomCard room, {DateTime? now}) {
+  final last = room.lastMessage;
+  if (last == null) return '';
+  return roomSidebarTimestamp(last.createdAt, now: now);
+}
+
+String roomSidebarTimestamp(DateTime value, {DateTime? now}) {
+  final local = value.toLocal();
+  final localNow = (now ?? DateTime.now()).toLocal();
+  final today = DateTime(localNow.year, localNow.month, localNow.day);
+  final date = DateTime(local.year, local.month, local.day);
+  final dayDelta = today.difference(date).inDays;
+  final time = _formatClock(local);
+
+  if (dayDelta == 0) return time;
+  if (dayDelta == 1) return '昨天 $time';
+  if (dayDelta == 2) return '前天 $time';
+  if (dayDelta >= 3 && dayDelta < 7) return _weekdayLabel(local.weekday);
+  return '${local.year}/${_twoDigits(local.month)}/${_twoDigits(local.day)}';
+}
+
 String roomCopySuccessNotice(String label) {
   return '$label 已复制';
 }
@@ -447,4 +468,23 @@ String? _nonEmpty(String? value) {
   final trimmed = value?.trim();
   if (trimmed == null || trimmed.isEmpty) return null;
   return trimmed;
+}
+
+String _formatClock(DateTime value) {
+  return '${_twoDigits(value.hour)}:${_twoDigits(value.minute)}';
+}
+
+String _twoDigits(int value) => value.toString().padLeft(2, '0');
+
+String _weekdayLabel(int weekday) {
+  return switch (weekday) {
+    DateTime.monday => '星期一',
+    DateTime.tuesday => '星期二',
+    DateTime.wednesday => '星期三',
+    DateTime.thursday => '星期四',
+    DateTime.friday => '星期五',
+    DateTime.saturday => '星期六',
+    DateTime.sunday => '星期日',
+    _ => '星期日',
+  };
 }

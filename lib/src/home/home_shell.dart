@@ -143,6 +143,7 @@ class _HomeShellState extends State<HomeShell> {
   int _clipboardImagePasteSerial = 0;
   bool _pickingAttachments = false;
   bool _settingsOpen = false;
+  bool _logoutConfirming = false;
   bool _narrowContentOpen = false;
   _ContentMode _contentMode = _ContentMode.chat;
   // Bumped to ask an open members panel to reload (e.g. after a
@@ -254,6 +255,7 @@ class _HomeShellState extends State<HomeShell> {
       _sendError = null;
       _stickerPanelState = const sticker_display.StickerPanelLoadState();
       _settingsOpen = false;
+      _logoutConfirming = false;
       _narrowContentOpen = false;
       _contentMode = _ContentMode.chat;
       _notificationInvites = const [];

@@ -1136,8 +1136,44 @@ void main() {
     expect(find.text('偏好设置已保存'), findsOneWidget);
 
     await tester.tap(find.byTooltip('退出登录'));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
+    expect(logoutCount, 0);
+    expect(find.text('确认退出当前账号？'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '取消'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '退出登录'), findsOneWidget);
+    expect(
+      tester
+          .widget<ui.PressableSurface>(
+            find.ancestor(
+              of: find.byTooltip('退出登录'),
+              matching: find.byType(ui.PressableSurface),
+            ),
+          )
+          .selected,
+      isTrue,
+    );
+
+    await tester.tap(find.widgetWithText(ui.Button, '取消'));
+    await tester.pumpAndSettle();
+    expect(logoutCount, 0);
+    expect(find.text('确认退出当前账号？'), findsNothing);
+    expect(
+      tester
+          .widget<ui.PressableSurface>(
+            find.ancestor(
+              of: find.byTooltip('退出登录'),
+              matching: find.byType(ui.PressableSurface),
+            ),
+          )
+          .selected,
+      isFalse,
+    );
+
+    await tester.tap(find.byTooltip('退出登录'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ui.Button, '退出登录'));
+    await tester.pumpAndSettle();
     expect(logoutCount, 1);
     expect(tester.takeException(), isNull);
   });

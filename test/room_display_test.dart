@@ -36,6 +36,46 @@ void main() {
     );
   });
 
+  test('room sidebar latest message time follows compact chat rules', () {
+    final now = DateTime(2026, 6, 12, 10);
+    expect(
+      roomSidebarTimestamp(DateTime(2026, 6, 12, 7, 5), now: now),
+      '07:05',
+    );
+    expect(
+      roomSidebarTimestamp(DateTime(2026, 6, 11, 7, 5), now: now),
+      '昨天 07:05',
+    );
+    expect(
+      roomSidebarTimestamp(DateTime(2026, 6, 10, 7, 5), now: now),
+      '前天 07:05',
+    );
+    expect(roomSidebarTimestamp(DateTime(2026, 6, 9, 7, 5), now: now), '星期二');
+    expect(
+      roomSidebarTimestamp(DateTime(2026, 5, 31, 7, 5), now: now),
+      '2026/05/31',
+    );
+    expect(
+      roomSidebarTimestamp(DateTime(2025, 12, 31, 7, 5), now: now),
+      '2025/12/31',
+    );
+    expect(roomSidebarLastMessageTime(_roomCard(), now: now), '');
+    expect(
+      roomSidebarLastMessageTime(
+        _roomCard(
+          lastMessage: LastMessagePreview(
+            id: 'message_1',
+            senderDisplayName: 'Logan',
+            bodyPreview: 'hello',
+            createdAt: DateTime(2026, 6, 12, 7, 5),
+          ),
+        ),
+        now: now,
+      ),
+      '07:05',
+    );
+  });
+
   test('room identity display helpers provide stable fallbacks', () {
     expect(roomIdentifier(_roomDetail(rid: 'R001')), 'R001');
     expect(roomIdentifier(_roomDetail()), 'room_1');

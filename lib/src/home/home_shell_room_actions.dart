@@ -156,6 +156,41 @@ extension _HomeShellRoomActions on _HomeShellState {
     _setHomeState(() => _settingsOpen = false);
   }
 
+  Future<void> _confirmLogout() async {
+    if (_logoutConfirming) return;
+    _setHomeState(() => _logoutConfirming = true);
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => DialogFrame(
+          title: '退出登录',
+          icon: Icons.logout,
+          actions: [
+            Button(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            Button(
+              onPressed: () => Navigator.of(context).pop(true),
+              tone: ButtonTone.danger,
+              child: const Text('退出登录'),
+            ),
+          ],
+          child: Text(
+            '确认退出当前账号？',
+            style: UiTypography.body.copyWith(color: UiColors.textSecondary),
+          ),
+        ),
+      );
+      if (!mounted || confirmed != true) return;
+      await _logout();
+    } finally {
+      if (mounted) {
+        _setHomeState(() => _logoutConfirming = false);
+      }
+    }
+  }
+
   Future<void> _logout() async {
     _joinedLiveRoomId = null;
     await _liveSessionController.disconnect(

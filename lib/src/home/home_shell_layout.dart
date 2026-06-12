@@ -204,6 +204,7 @@ extension _HomeShellLayout on _HomeShellState {
           !_settingsOpen && _contentMode == _ContentMode.createRoom,
       notificationsActive:
           !_settingsOpen && _contentMode == _ContentMode.notifications,
+      logoutActive: _logoutConfirming,
       hasPendingNotifications: _hasPendingRoomInvites,
       includeWindowChromeOffset: false,
       onServerSelected: (server) =>
@@ -212,7 +213,7 @@ extension _HomeShellLayout on _HomeShellState {
       onOpenNotifications: () =>
           _openNotifications(openContent: openContentOnSelect),
       onOpenSettings: () => _toggleSettings(openContent: openContentOnSelect),
-      onLogout: () => unawaited(_logout()),
+      onLogout: () => unawaited(_confirmLogout()),
     );
   }
 }
