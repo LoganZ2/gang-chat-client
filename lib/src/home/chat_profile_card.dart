@@ -217,11 +217,29 @@ class _ProfileCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: UiTypography.title.copyWith(fontSize: 16),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: UiTypography.title.copyWith(fontSize: 16),
+                          ),
+                        ),
+                        if (gender != null) ...[
+                          const SizedBox(width: 5),
+                          Text(
+                            gender.symbol,
+                            maxLines: 1,
+                            style: UiTypography.title.copyWith(
+                              color: gender.color,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -248,7 +266,6 @@ class _ProfileCard extends StatelessWidget {
                 active: online,
               ),
               StatusBadge(label: role),
-              if (gender != null) StatusBadge(label: _genderLabel(user.gender)),
             ],
           ),
           if (bio != null && bio.isNotEmpty) ...[
@@ -320,14 +337,6 @@ class _ProfileCard extends StatelessWidget {
       ),
     );
   }
-}
-
-String _genderLabel(String? value) {
-  return switch (value?.trim().toLowerCase()) {
-    'male' || 'm' || 'man' => '男',
-    'female' || 'f' || 'woman' => '女',
-    _ => '其他',
-  };
 }
 
 /// Places the profile card beside the avatar: to the right when there's room,

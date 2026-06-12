@@ -81,6 +81,24 @@ class RoomMemberPresenceGroup {
   int get count => members.length;
 }
 
+class RoomMemberFilterCounts {
+  const RoomMemberFilterCounts({
+    required this.allPresence,
+    required this.online,
+    required this.offline,
+    required this.allRoles,
+    required this.roleMembers,
+    required this.admins,
+  });
+
+  final int allPresence;
+  final int online;
+  final int offline;
+  final int allRoles;
+  final int roleMembers;
+  final int admins;
+}
+
 bool canStartRoomMemberAction({
   required String userId,
   required Iterable<String> busyMemberIds,
@@ -358,6 +376,79 @@ String roomMemberPresenceLabel(RoomMemberPresence presence) {
     RoomMemberPresence.online => '在线',
     RoomMemberPresence.offline => '离线',
   };
+}
+
+RoomMemberFilterCounts roomMemberFilterCounts({
+  required Iterable<RoomMember> members,
+  required LiveState live,
+  String? ownerUserId,
+}) {
+  var allPresence = 0;
+  var online = 0;
+  var offline = 0;
+  var allRoles = 0;
+  var roleMembers = 0;
+  var admins = 0;
+
+  for (final member in members) {
+    allPresence += 1;
+    allRoles += 1;
+
+    final presence = roomMemberPresence(member, live: live);
+    if (presence == RoomMemberPresence.offline) {
+      offline += 1;
+    } else {
+      online += 1;
+    }
+
+    if (_matchesRoleFilter(
+      member,
+      RoomMemberRoleFilter.member,
+      ownerUserId: ownerUserId,
+    )) {
+      roleMembers += 1;
+    }
+    if (_matchesRoleFilter(
+      member,
+      RoomMemberRoleFilter.admin,
+      ownerUserId: ownerUserId,
+    )) {
+      admins += 1;
+    }
+  }
+
+  return RoomMemberFilterCounts(
+    allPresence: allPresence,
+    online: online,
+    offline: offline,
+    allRoles: allRoles,
+    roleMembers: roleMembers,
+    admins: admins,
+  );
+}
+
+String roomMemberPresenceFilterLabel(
+  RoomMemberPresenceFilter filter,
+  RoomMemberFilterCounts counts,
+) {
+  final (label, count) = switch (filter) {
+    RoomMemberPresenceFilter.all => ('全部', counts.allPresence),
+    RoomMemberPresenceFilter.online => ('在线', counts.online),
+    RoomMemberPresenceFilter.offline => ('离线', counts.offline),
+  };
+  return '$label $count';
+}
+
+String roomMemberRoleFilterLabel(
+  RoomMemberRoleFilter filter,
+  RoomMemberFilterCounts counts,
+) {
+  final (label, count) = switch (filter) {
+    RoomMemberRoleFilter.all => ('所有身份', counts.allRoles),
+    RoomMemberRoleFilter.member => ('成员', counts.roleMembers),
+    RoomMemberRoleFilter.admin => ('管理员', counts.admins),
+  };
+  return '$label $count';
 }
 
 List<RoomMember> visibleRoomMembers({

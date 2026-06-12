@@ -12,6 +12,8 @@ const double _inputBaseDepth = 5;
 const double _inputTextVerticalOffset = 4;
 const double _inputIconVerticalOffset = 5;
 const double _inputUnboundedBottomPadding = 8;
+const double _inputClearButtonSize = 26;
+const double _inputClearIconSize = 15;
 
 class Input extends StatefulWidget {
   const Input({
@@ -25,6 +27,8 @@ class Input extends StatefulWidget {
     this.keyboardType,
     this.prefixIcon,
     this.suffix,
+    this.showClearButton = false,
+    this.clearTooltip = '清空搜索',
     this.minLines = 1,
     this.maxLines = 5,
     this.onSubmitted,
@@ -44,6 +48,8 @@ class Input extends StatefulWidget {
   final TextInputType? keyboardType;
   final IconData? prefixIcon;
   final Widget? suffix;
+  final bool showClearButton;
+  final String clearTooltip;
   final int minLines;
   final int? maxLines;
   final ValueChanged<String>? onSubmitted;
@@ -136,9 +142,17 @@ class _InputState extends State<Input> {
     setState(() => _hovered = hovered);
   }
 
+  void _clearText() {
+    if (_effectiveController.text.isEmpty) return;
+    _effectiveController.clear();
+    widget.onChanged?.call('');
+    _effectiveFocusNode.requestFocus();
+  }
+
   @override
   Widget build(BuildContext context) {
     final focused = _effectiveFocusNode.hasFocus;
+    final suffix = _effectiveSuffix();
     final content = ConstrainedBox(
       constraints: const BoxConstraints(minHeight: Input.defaultHeight),
       child: TextField(
@@ -188,7 +202,7 @@ class _InputState extends State<Input> {
             minWidth: 0,
             minHeight: 0,
           ),
-          suffixIcon: widget.suffix == null
+          suffixIcon: suffix == null
               ? null
               : Padding(
                   padding: const EdgeInsets.only(
@@ -197,7 +211,7 @@ class _InputState extends State<Input> {
                   ),
                   child: Transform.translate(
                     offset: const Offset(0, _inputIconVerticalOffset),
-                    child: widget.suffix,
+                    child: suffix,
                   ),
                 ),
           suffixIconConstraints: const BoxConstraints(
@@ -259,6 +273,18 @@ class _InputState extends State<Input> {
     );
   }
 
+  Widget? _effectiveSuffix() {
+    final canClear =
+        widget.showClearButton &&
+        widget.enabled &&
+        _effectiveController.text.isNotEmpty;
+    if (!canClear) return widget.suffix;
+    return _InputClearButton(
+      tooltip: widget.clearTooltip,
+      onPressed: _clearText,
+    );
+  }
+
   EdgeInsets _contentPaddingFor(BuildContext context) {
     final painter = TextPainter(
       text: TextSpan(text: ' ', style: widget.style),
@@ -278,6 +304,41 @@ class _InputState extends State<Input> {
       verticalPadding -
           textOffset +
           (_effectiveMaxLines == null ? _inputUnboundedBottomPadding : 0),
+    );
+  }
+}
+
+class _InputClearButton extends StatelessWidget {
+  const _InputClearButton({required this.tooltip, required this.onPressed});
+
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(
+        button: true,
+        label: tooltip,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onPressed,
+            child: const SizedBox.square(
+              dimension: _inputClearButtonSize,
+              child: Center(
+                child: Icon(
+                  Icons.close,
+                  size: _inputClearIconSize,
+                  color: UiColors.textMuted,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

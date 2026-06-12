@@ -45,9 +45,18 @@ void main() {
 
     expect(find.text('@logan'), findsOneWidget);
     expect(find.text('加一'), findsWidgets);
+    expect(find.text('♂'), findsOneWidget);
     expect(find.text('在线'), findsOneWidget);
     expect(find.text('管理员'), findsOneWidget);
-    expect(find.text('男'), findsOneWidget);
+    expect(find.text('男'), findsNothing);
+    expect(
+      tester.widget<Text>(find.text('♂')).style?.color,
+      genderMark('male')?.color,
+    );
+    expect(
+      tester.widget<Text>(find.text('♂')).style?.fontWeight,
+      FontWeight.w900,
+    );
     expect(find.text('随便写点什么'), findsOneWidget);
     expect(find.text('2 个共同房间'), findsOneWidget);
     expect(find.text('摸鱼大队'), findsOneWidget);
@@ -133,7 +142,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(calls, 1);
-    expect(find.text('男'), findsOneWidget);
+    expect(find.text('♂'), findsOneWidget);
+    expect(find.text('男'), findsNothing);
     expect(find.text('2 个共同房间'), findsOneWidget);
     expect(find.text('摸鱼大队'), findsOneWidget);
   });

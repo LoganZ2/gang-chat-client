@@ -439,6 +439,12 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final effectiveMembers = _effectiveMembers;
+    final filterCounts = member_filter.roomMemberFilterCounts(
+      members: effectiveMembers,
+      live: _live,
+      ownerUserId: _room.createdBy?.id,
+    );
     return _RoomDialogShell(
       title: '成员',
       icon: Icons.group_outlined,
@@ -461,6 +467,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
           if (_error != null) _NoticeStrip(message: _error!, danger: true),
           _MemberFilters(
             controller: _memberSearchController,
+            filterCounts: filterCounts,
             presenceFilter: _presenceFilter,
             roleFilter: _roleFilter,
             onPresenceChanged: (value) =>
@@ -473,7 +480,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
             query: _inviteQuery,
             searching: _searchingInvites,
             results: _inviteResults,
-            members: _effectiveMembers,
+            members: effectiveMembers,
             pendingInviteUserIds: _pendingInviteUserIds,
             busyUserIds: _busyInviteUserIds,
             error: _inviteError,

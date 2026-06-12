@@ -3,6 +3,7 @@ part of 'room_management.dart';
 class _MemberFilters extends StatelessWidget {
   const _MemberFilters({
     required this.controller,
+    required this.filterCounts,
     required this.presenceFilter,
     required this.roleFilter,
     required this.onPresenceChanged,
@@ -10,6 +11,7 @@ class _MemberFilters extends StatelessWidget {
   });
 
   final TextEditingController controller;
+  final member_filter.RoomMemberFilterCounts filterCounts;
   final member_filter.RoomMemberPresenceFilter presenceFilter;
   final member_filter.RoomMemberRoleFilter roleFilter;
   final ValueChanged<member_filter.RoomMemberPresenceFilter> onPresenceChanged;
@@ -23,6 +25,7 @@ class _MemberFilters extends StatelessWidget {
           controller: controller,
           hintText: '搜索成员',
           prefixIcon: Icons.search,
+          showClearButton: true,
         ),
         const SizedBox(height: 10),
         Row(
@@ -32,18 +35,27 @@ class _MemberFilters extends StatelessWidget {
                 expanded: true,
                 value: presenceFilter,
                 onChanged: onPresenceChanged,
-                segments: const [
+                segments: [
                   Segment(
                     value: member_filter.RoomMemberPresenceFilter.all,
-                    label: '全部',
+                    label: member_filter.roomMemberPresenceFilterLabel(
+                      member_filter.RoomMemberPresenceFilter.all,
+                      filterCounts,
+                    ),
                   ),
                   Segment(
                     value: member_filter.RoomMemberPresenceFilter.online,
-                    label: '在线',
+                    label: member_filter.roomMemberPresenceFilterLabel(
+                      member_filter.RoomMemberPresenceFilter.online,
+                      filterCounts,
+                    ),
                   ),
                   Segment(
                     value: member_filter.RoomMemberPresenceFilter.offline,
-                    label: '离线',
+                    label: member_filter.roomMemberPresenceFilterLabel(
+                      member_filter.RoomMemberPresenceFilter.offline,
+                      filterCounts,
+                    ),
                   ),
                 ],
               ),
@@ -54,18 +66,27 @@ class _MemberFilters extends StatelessWidget {
                 expanded: true,
                 value: roleFilter,
                 onChanged: onRoleChanged,
-                segments: const [
+                segments: [
                   Segment(
                     value: member_filter.RoomMemberRoleFilter.all,
-                    label: '所有身份',
+                    label: member_filter.roomMemberRoleFilterLabel(
+                      member_filter.RoomMemberRoleFilter.all,
+                      filterCounts,
+                    ),
                   ),
                   Segment(
                     value: member_filter.RoomMemberRoleFilter.member,
-                    label: '成员',
+                    label: member_filter.roomMemberRoleFilterLabel(
+                      member_filter.RoomMemberRoleFilter.member,
+                      filterCounts,
+                    ),
                   ),
                   Segment(
                     value: member_filter.RoomMemberRoleFilter.admin,
-                    label: '管理员',
+                    label: member_filter.roomMemberRoleFilterLabel(
+                      member_filter.RoomMemberRoleFilter.admin,
+                      filterCounts,
+                    ),
                   ),
                 ],
               ),
@@ -237,6 +258,7 @@ class _InviteSection extends StatelessWidget {
               hintText: '按用户名、昵称或 UID 搜索',
               prefixIcon: Icons.person_add_alt_1,
               enabled: enabled,
+              showClearButton: true,
             ),
             if (error != null) ...[
               const SizedBox(height: 8),

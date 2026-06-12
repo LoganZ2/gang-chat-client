@@ -1554,6 +1554,7 @@ class _StickerFilterDialogState extends State<StickerFilterDialog> {
                 controller: _keywordController,
                 focusNode: _keywordFocusNode,
                 hintText: '',
+                showClearButton: true,
                 minLines: 1,
                 maxLines: 1,
               ),

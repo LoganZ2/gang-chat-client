@@ -10,6 +10,50 @@ void main() {
     expect(roomMemberPresenceLabel(RoomMemberPresence.offline), '离线');
   });
 
+  test('room member filter counts feed presence and role labels', () {
+    final counts = roomMemberFilterCounts(
+      members: [
+        _member('owner', isOnline: false),
+        _member('admin', role: 'admin', isOnline: true),
+        _member('member', isOnline: false),
+        _member('live_member', isOnline: false),
+      ],
+      live: _live(['live_member']),
+      ownerUserId: 'owner',
+    );
+
+    expect(counts.allPresence, 4);
+    expect(counts.online, 2);
+    expect(counts.offline, 2);
+    expect(counts.allRoles, 4);
+    expect(counts.roleMembers, 2);
+    expect(counts.admins, 2);
+    expect(
+      roomMemberPresenceFilterLabel(RoomMemberPresenceFilter.all, counts),
+      '全部 4',
+    );
+    expect(
+      roomMemberPresenceFilterLabel(RoomMemberPresenceFilter.online, counts),
+      '在线 2',
+    );
+    expect(
+      roomMemberPresenceFilterLabel(RoomMemberPresenceFilter.offline, counts),
+      '离线 2',
+    );
+    expect(
+      roomMemberRoleFilterLabel(RoomMemberRoleFilter.all, counts),
+      '所有身份 4',
+    );
+    expect(
+      roomMemberRoleFilterLabel(RoomMemberRoleFilter.member, counts),
+      '成员 2',
+    );
+    expect(
+      roomMemberRoleFilterLabel(RoomMemberRoleFilter.admin, counts),
+      '管理员 2',
+    );
+  });
+
   test('room member filter patches preserve the other filter dimension', () {
     final presencePatch = roomMemberPresenceFilterChanged(
       searchQuery: 'alice',

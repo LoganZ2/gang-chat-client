@@ -90,14 +90,7 @@ class _HomeNotificationsPaneState extends State<HomeNotificationsPane> {
             controller: _searchController,
             hintText: '搜索通知',
             prefixIcon: Icons.search,
-            suffix: _query.trim().isEmpty
-                ? null
-                : ButtonIcon(
-                    tooltip: '清空搜索',
-                    icon: const Icon(Icons.close),
-                    onPressed: _searchController.clear,
-                    size: 30,
-                  ),
+            showClearButton: true,
           ),
           const SizedBox(height: 12),
           SegmentedControl<RoomNotificationFilter>(

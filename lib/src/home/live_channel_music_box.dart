@@ -413,6 +413,7 @@ class _MusicBoxBodyState extends State<_MusicBoxBody> {
                 controller: widget.searchController,
                 hintText: '搜索歌曲点歌',
                 prefixIcon: Icons.search,
+                showClearButton: true,
                 maxLines: 1,
               ),
             ),
@@ -631,10 +632,7 @@ class _MusicBoxSearchList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!hasQuery) {
-      return const _MusicBoxEmpty(
-        icon: Icons.search,
-        message: '搜索歌曲点歌吧',
-      );
+      return const _MusicBoxEmpty(icon: Icons.search, message: '搜索歌曲点歌吧');
     }
     if (searching && results.isEmpty) {
       return const Center(
