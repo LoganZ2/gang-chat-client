@@ -2120,7 +2120,6 @@ void main() {
                 'track_id': 't9',
                 'name': '晴天',
                 'artists': ['周杰伦'],
-                'pic_id': 'p9',
               },
             ],
           }),
@@ -2151,7 +2150,6 @@ void main() {
           'track_id': 't9',
           'title': '晴天',
           'artist': '周杰伦',
-          'pic_id': 'p9',
         });
         return http.Response(
           jsonEncode({'enabled': true, 'queue': [], 'usage': {}}),
@@ -2166,7 +2164,6 @@ void main() {
       title: '晴天',
       source: 'netease',
       artist: '周杰伦',
-      picId: 'p9',
     );
 
     expect(state.enabled, isTrue);

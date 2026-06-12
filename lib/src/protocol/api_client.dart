@@ -386,7 +386,6 @@ abstract interface class GangApi {
     required String title,
     String? source,
     String? artist,
-    String? picId,
     int? durationMs,
     String? idempotencyKey,
   });
@@ -1569,14 +1568,12 @@ class GangApiClient implements GangApi {
     required String title,
     String? source,
     String? artist,
-    String? picId,
     int? durationMs,
     String? idempotencyKey,
   }) async {
     final body = <String, Object?>{'track_id': trackId, 'title': title};
     if (source != null && source.isNotEmpty) body['source'] = source;
     if (artist != null && artist.isNotEmpty) body['artist'] = artist;
-    if (picId != null && picId.isNotEmpty) body['pic_id'] = picId;
     if (durationMs != null) body['duration_ms'] = durationMs;
     final requestIdempotencyKey = idempotencyKey ?? newUuid();
     final decoded = await _sendJson((token) {

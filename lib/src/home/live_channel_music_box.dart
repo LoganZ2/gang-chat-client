@@ -527,8 +527,6 @@ class _MusicBoxQueueTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10),
       child: Row(
         children: [
-          _MusicBoxArtwork(playing: isCurrent),
-          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -693,8 +691,6 @@ class _MusicBoxSearchTile extends StatelessWidget {
       onPressed: onQueue,
       child: Row(
         children: [
-          const _MusicBoxArtwork(playing: false),
-          const SizedBox(width: 10),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -727,33 +723,6 @@ class _MusicBoxSearchTile extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// A placeholder cover tile. The server doesn't yet expose a `pic_id` -> URL
-/// resolver, so we render a music-note glyph instead of guessing a third-party
-/// image address.
-class _MusicBoxArtwork extends StatelessWidget {
-  const _MusicBoxArtwork({required this.playing});
-
-  final bool playing;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: UiColors.surfaceRaised,
-        borderRadius: BorderRadius.circular(UiRadii.sm),
-      ),
-      alignment: Alignment.center,
-      child: Icon(
-        playing ? Icons.graphic_eq : Icons.music_note,
-        size: 18,
-        color: playing ? UiColors.accent : UiColors.textMuted,
       ),
     );
   }

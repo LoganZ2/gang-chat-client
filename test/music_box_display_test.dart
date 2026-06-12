@@ -309,7 +309,6 @@ MusicBoxQueueItem _item({
     trackId: 'track-$id',
     title: title,
     artist: artist,
-    picId: '',
     durationMs: durationMs,
     status: status,
     fileSizeBytes: 0,

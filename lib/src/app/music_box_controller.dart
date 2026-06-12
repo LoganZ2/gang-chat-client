@@ -43,7 +43,6 @@ class MusicBoxController {
       title: result.name,
       source: result.source,
       artist: result.artists.join('、'),
-      picId: result.picId,
       durationMs: durationMs,
     );
   }

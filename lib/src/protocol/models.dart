@@ -1754,7 +1754,6 @@ class MusicBoxQueueItem {
     required this.trackId,
     required this.title,
     required this.artist,
-    required this.picId,
     required this.durationMs,
     required this.status,
     required this.fileSizeBytes,
@@ -1768,7 +1767,6 @@ class MusicBoxQueueItem {
   final String trackId;
   final String title;
   final String artist;
-  final String picId;
   final int durationMs;
   final MusicBoxQueueItemStatus status;
   final int fileSizeBytes;
@@ -1786,7 +1784,6 @@ class MusicBoxQueueItem {
       trackId: _stringFromJson(json, const ['track_id']) ?? '',
       title: _stringFromJson(json, const ['title', 'name']) ?? '',
       artist: _stringFromJson(json, const ['artist']) ?? '',
-      picId: _stringFromJson(json, const ['pic_id']) ?? '',
       durationMs: _intFromJson(json, const ['duration_ms']) ?? 0,
       status: _musicBoxQueueItemStatusFrom(json['status'] as String?),
       fileSizeBytes: _intFromJson(json, const ['file_size_bytes']) ?? 0,
@@ -1868,14 +1865,12 @@ class MusicBoxSearchResult {
     required this.trackId,
     required this.name,
     required this.artists,
-    required this.picId,
     required this.source,
   });
 
   final String trackId;
   final String name;
   final List<String> artists;
-  final String picId;
   final String source;
 
   factory MusicBoxSearchResult.fromJson(Map<String, Object?> json) {
@@ -1887,7 +1882,6 @@ class MusicBoxSearchResult {
       trackId: _stringFromJson(json, const ['track_id', 'id']) ?? '',
       name: _stringFromJson(json, const ['name', 'title']) ?? '',
       artists: artists,
-      picId: _stringFromJson(json, const ['pic_id']) ?? '',
       source: _stringFromJson(json, const ['source']) ?? '',
     );
   }

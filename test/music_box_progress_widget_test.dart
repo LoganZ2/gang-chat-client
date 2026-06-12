@@ -54,7 +54,6 @@ MusicBoxState _state({
         trackId: 'track-$currentItemId',
         title: 'Song',
         artist: '',
-        picId: '',
         durationMs: 200000,
         status: MusicBoxQueueItemStatus.ready,
         fileSizeBytes: 0,
