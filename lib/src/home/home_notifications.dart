@@ -218,6 +218,7 @@ class _NotificationsBody extends StatelessWidget {
         return switch (item.type) {
           RoomNotificationItemType.invite => _RoomInviteNotificationRow(
             invite: item.invite!,
+            query: query,
             busy: busyInviteId == item.invite!.id,
             busyInviteId: busyInviteId,
             onReviewInvite: onReviewInvite,
@@ -225,6 +226,7 @@ class _NotificationsBody extends StatelessWidget {
           RoomNotificationItemType.applicationRequested =>
             _RoomApplicationRequestNotificationRow(
               application: item.application!,
+              query: query,
               busy: busyApplicationId == item.application!.id,
               busyApplicationId: busyApplicationId,
               onWithdrawApplication: onWithdrawApplication,
@@ -232,6 +234,7 @@ class _NotificationsBody extends StatelessWidget {
           RoomNotificationItemType.applicationReviewed =>
             _RoomApplicationReviewNotificationRow(
               application: item.application!,
+              query: query,
             ),
         };
       },
@@ -242,12 +245,14 @@ class _NotificationsBody extends StatelessWidget {
 class _RoomInviteNotificationRow extends StatelessWidget {
   const _RoomInviteNotificationRow({
     required this.invite,
+    required this.query,
     required this.busy,
     required this.busyInviteId,
     required this.onReviewInvite,
   });
 
   final RoomInvite invite;
+  final String query;
   final bool busy;
   final String? busyInviteId;
   final RoomInviteReviewCallback onReviewInvite;
@@ -276,8 +281,9 @@ class _RoomInviteNotificationRow extends StatelessWidget {
           children: [
             SizedBox(
               width: 116,
-              child: Text(
-                time,
+              child: HighlightedText(
+                text: time,
+                query: query,
                 key: ValueKey('notification-time-${invite.id}'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -300,8 +306,9 @@ class _RoomInviteNotificationRow extends StatelessWidget {
                 children: [
                   Flexible(
                     flex: 3,
-                    child: Text(
-                      inviterName,
+                    child: HighlightedText(
+                      text: inviterName,
+                      query: query,
                       key: ValueKey('notification-inviter-name-${invite.id}'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -318,6 +325,7 @@ class _RoomInviteNotificationRow extends StatelessWidget {
                     child: _InviteRoleBadge(
                       key: ValueKey('notification-inviter-role-${invite.id}'),
                       label: role,
+                      query: query,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -334,7 +342,11 @@ class _RoomInviteNotificationRow extends StatelessWidget {
                   const SizedBox(width: 8),
                   Flexible(
                     flex: 4,
-                    child: _InlineRoomTarget(room: room, inviteId: invite.id),
+                    child: _InlineRoomTarget(
+                      room: room,
+                      inviteId: invite.id,
+                      query: query,
+                    ),
                   ),
                 ],
               ),
@@ -345,7 +357,7 @@ class _RoomInviteNotificationRow extends StatelessWidget {
               child: Align(
                 alignment: Alignment.centerRight,
                 child: invalid
-                    ? _InvalidInviteLabel(invite: invite)
+                    ? _InvalidInviteLabel(invite: invite, query: query)
                     : isPendingRoomInvite(invite)
                     ? _InviteDecisionActions(
                         invite: invite,
@@ -356,7 +368,7 @@ class _RoomInviteNotificationRow extends StatelessWidget {
                         ),
                         onReviewInvite: onReviewInvite,
                       )
-                    : _ProcessedInviteLabel(invite: invite),
+                    : _ProcessedInviteLabel(invite: invite, query: query),
               ),
             ),
           ],
@@ -369,12 +381,14 @@ class _RoomInviteNotificationRow extends StatelessWidget {
 class _RoomApplicationRequestNotificationRow extends StatelessWidget {
   const _RoomApplicationRequestNotificationRow({
     required this.application,
+    required this.query,
     required this.busy,
     required this.busyApplicationId,
     required this.onWithdrawApplication,
   });
 
   final RoomApplication application;
+  final String query;
   final bool busy;
   final String? busyApplicationId;
   final RoomApplicationWithdrawCallback onWithdrawApplication;
@@ -399,8 +413,9 @@ class _RoomApplicationRequestNotificationRow extends StatelessWidget {
           children: [
             SizedBox(
               width: 116,
-              child: Text(
-                time,
+              child: HighlightedText(
+                text: time,
+                query: query,
                 key: ValueKey(
                   'notification-application-time-${application.id}',
                 ),
@@ -427,6 +442,7 @@ class _RoomApplicationRequestNotificationRow extends StatelessWidget {
               child: _InlineRoomTarget(
                 room: room,
                 inviteId: 'application-${application.id}',
+                query: query,
               ),
             ),
             const SizedBox(width: 12),
@@ -444,7 +460,10 @@ class _RoomApplicationRequestNotificationRow extends StatelessWidget {
                         ),
                         onWithdrawApplication: onWithdrawApplication,
                       )
-                    : _ProcessedApplicationLabel(application: application),
+                    : _ProcessedApplicationLabel(
+                        application: application,
+                        query: query,
+                      ),
               ),
             ),
           ],
@@ -455,9 +474,13 @@ class _RoomApplicationRequestNotificationRow extends StatelessWidget {
 }
 
 class _RoomApplicationReviewNotificationRow extends StatelessWidget {
-  const _RoomApplicationReviewNotificationRow({required this.application});
+  const _RoomApplicationReviewNotificationRow({
+    required this.application,
+    required this.query,
+  });
 
   final RoomApplication application;
+  final String query;
 
   @override
   Widget build(BuildContext context) {
@@ -480,8 +503,9 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
           children: [
             SizedBox(
               width: 116,
-              child: Text(
-                time,
+              child: HighlightedText(
+                text: time,
+                query: query,
                 key: ValueKey(
                   'notification-application-review-time-${application.id}',
                 ),
@@ -508,8 +532,9 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
                 children: [
                   Flexible(
                     flex: 3,
-                    child: Text(
-                      reviewerName,
+                    child: HighlightedText(
+                      text: reviewerName,
+                      query: query,
                       key: ValueKey(
                         'notification-application-reviewer-name-${application.id}',
                       ),
@@ -530,11 +555,13 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
                         'notification-application-reviewer-role-${application.id}',
                       ),
                       label: role,
+                      query: query,
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    roomApplicationReviewActionLabel(application),
+                  HighlightedText(
+                    text: roomApplicationReviewActionLabel(application),
+                    query: query,
                     key: ValueKey(
                       'notification-application-review-action-${application.id}',
                     ),
@@ -551,6 +578,7 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
                     child: _InlineRoomTarget(
                       room: room,
                       inviteId: 'application-reviewed-${application.id}',
+                      query: query,
                     ),
                   ),
                 ],
@@ -566,9 +594,10 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
 }
 
 class _InviteRoleBadge extends StatelessWidget {
-  const _InviteRoleBadge({super.key, required this.label});
+  const _InviteRoleBadge({super.key, required this.label, required this.query});
 
   final String label;
+  final String query;
 
   @override
   Widget build(BuildContext context) {
@@ -580,8 +609,9 @@ class _InviteRoleBadge extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-        child: Text(
-          label,
+        child: HighlightedText(
+          text: label,
+          query: query,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: UiTypography.label.copyWith(
@@ -596,10 +626,15 @@ class _InviteRoleBadge extends StatelessWidget {
 }
 
 class _InlineRoomTarget extends StatelessWidget {
-  const _InlineRoomTarget({required this.room, required this.inviteId});
+  const _InlineRoomTarget({
+    required this.room,
+    required this.inviteId,
+    required this.query,
+  });
 
   final PublicRoom room;
   final String inviteId;
+  final String query;
 
   @override
   Widget build(BuildContext context) {
@@ -616,8 +651,9 @@ class _InlineRoomTarget extends StatelessWidget {
         ),
         const SizedBox(width: 5),
         Flexible(
-          child: Text(
-            room.name,
+          child: HighlightedText(
+            text: room.name,
+            query: query,
             key: ValueKey('notification-room-name-$inviteId'),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -705,9 +741,10 @@ class _ApplicationWithdrawAction extends StatelessWidget {
 }
 
 class _InvalidInviteLabel extends StatelessWidget {
-  const _InvalidInviteLabel({required this.invite});
+  const _InvalidInviteLabel({required this.invite, required this.query});
 
   final RoomInvite invite;
+  final String query;
 
   @override
   Widget build(BuildContext context) {
@@ -719,8 +756,9 @@ class _InvalidInviteLabel extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-        child: Text(
-          roomInviteDecisionLabel(invite),
+        child: HighlightedText(
+          text: roomInviteDecisionLabel(invite),
+          query: query,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: UiTypography.label.copyWith(
@@ -734,9 +772,10 @@ class _InvalidInviteLabel extends StatelessWidget {
 }
 
 class _ProcessedInviteLabel extends StatelessWidget {
-  const _ProcessedInviteLabel({required this.invite});
+  const _ProcessedInviteLabel({required this.invite, required this.query});
 
   final RoomInvite invite;
+  final String query;
 
   @override
   Widget build(BuildContext context) {
@@ -751,8 +790,9 @@ class _ProcessedInviteLabel extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-        child: Text(
-          roomInviteDecisionLabel(invite),
+        child: HighlightedText(
+          text: roomInviteDecisionLabel(invite),
+          query: query,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: UiTypography.label.copyWith(
@@ -766,9 +806,13 @@ class _ProcessedInviteLabel extends StatelessWidget {
 }
 
 class _ProcessedApplicationLabel extends StatelessWidget {
-  const _ProcessedApplicationLabel({required this.application});
+  const _ProcessedApplicationLabel({
+    required this.application,
+    required this.query,
+  });
 
   final RoomApplication application;
+  final String query;
 
   @override
   Widget build(BuildContext context) {
@@ -793,8 +837,9 @@ class _ProcessedApplicationLabel extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-        child: Text(
-          label,
+        child: HighlightedText(
+          text: label,
+          query: query,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: UiTypography.label.copyWith(

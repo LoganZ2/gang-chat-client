@@ -7,6 +7,7 @@ export 'feedback.dart';
 export 'chat_composer.dart';
 export 'file_icons.dart';
 export 'gender_mark.dart';
+export 'highlighted_text.dart';
 export 'input.dart';
 export 'member_presence_icons.dart';
 export 'navigation.dart';

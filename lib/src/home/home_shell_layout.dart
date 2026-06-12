@@ -192,6 +192,7 @@ extension _HomeShellLayout on _HomeShellState {
       servers: _sidebarServers,
       selectedServerId: _selectedServerId,
       joinedLiveRoomId: _joinedLiveRoomId,
+      searchQuery: _filteringSidebarBySearch ? _searchQuery : '',
       loading: _loadingServers || _loadingSidebarSearch,
       error: _serverLoadError,
       settingsActive: _settingsOpen,

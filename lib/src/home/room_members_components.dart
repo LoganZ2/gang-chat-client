@@ -83,6 +83,7 @@ class _MemberRow extends StatelessWidget {
     required this.live,
     required this.permission,
     required this.ownerUserId,
+    required this.query,
     required this.busy,
     required this.onSetAdmin,
     required this.onUnsetAdmin,
@@ -94,6 +95,7 @@ class _MemberRow extends StatelessWidget {
   final LiveState live;
   final member_filter.RoomMemberPermissionState permission;
   final String? ownerUserId;
+  final String query;
   final bool busy;
   final VoidCallback onSetAdmin;
   final VoidCallback onUnsetAdmin;
@@ -122,8 +124,9 @@ class _MemberRow extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(
-                member_filter.roomMemberDisplayName(member),
+              child: HighlightedText(
+                text: member_filter.roomMemberDisplayName(member),
+                query: query,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: UiTypography.body.copyWith(fontWeight: FontWeight.w600),
@@ -257,6 +260,7 @@ class _InviteSection extends StatelessWidget {
                 for (final candidate in candidates.take(4)) ...[
                   _InviteUserRow(
                     user: candidate.user,
+                    query: query,
                     alreadyMember: candidate.existing,
                     pending: candidate.pending,
                     busy: candidate.busy,
@@ -277,6 +281,7 @@ class _InviteSection extends StatelessWidget {
 class _InviteUserRow extends StatelessWidget {
   const _InviteUserRow({
     required this.user,
+    required this.query,
     required this.alreadyMember,
     required this.pending,
     required this.busy,
@@ -285,6 +290,7 @@ class _InviteUserRow extends StatelessWidget {
   });
 
   final UserSummary user;
+  final String query;
   final bool alreadyMember;
   final bool pending;
   final bool busy;
@@ -308,8 +314,9 @@ class _InviteUserRow extends StatelessWidget {
           ),
           const SizedBox(width: 9),
           Expanded(
-            child: Text(
-              room_display.userPrimaryName(user),
+            child: HighlightedText(
+              text: room_display.userPrimaryName(user),
+              query: query,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: UiTypography.label.copyWith(fontWeight: FontWeight.w600),

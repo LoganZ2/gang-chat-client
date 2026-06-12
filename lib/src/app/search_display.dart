@@ -1,4 +1,6 @@
 import '../protocol/models.dart';
+import 'file_display.dart' as file_display;
+import 'room_notifications.dart' as room_notifications;
 
 enum GlobalSearchCategory { myRooms, publicRooms, messages, files }
 
@@ -71,4 +73,52 @@ RoomCard roomCardFromSearchContext(
     unreadCount: 0,
     updatedAt: updatedAt,
   );
+}
+
+String globalSearchMessageTitle(MessageSearchResult result) {
+  final roomName = result.room.name.trim();
+  return roomName.isNotEmpty ? roomName : '房间';
+}
+
+String globalSearchMessageSubtitle(MessageSearchResult result) {
+  final senderName = globalSearchMessageSenderName(result);
+  final body = result.message.body.trim();
+  if (body.isEmpty) return senderName;
+  return '$senderName · $body';
+}
+
+String globalSearchMessageSenderName(MessageSearchResult result) {
+  final roomDisplayName = result.message.sender.roomDisplayName?.trim();
+  if (roomDisplayName != null && roomDisplayName.isNotEmpty) {
+    return roomDisplayName;
+  }
+  final displayName = result.message.sender.displayName.trim();
+  if (displayName.isNotEmpty) return displayName;
+  final username = result.message.sender.username.trim();
+  return username.isNotEmpty ? username : '用户';
+}
+
+String globalSearchFileTitle(MessageSearchResult result) {
+  final attachment = _firstFileAttachment(result.message);
+  if (attachment != null) return file_display.fileAttachmentTitle(attachment);
+  final body = result.message.body.trim();
+  return body.isNotEmpty ? body : 'file';
+}
+
+String globalSearchFileSubtitle(MessageSearchResult result) {
+  final meta = file_display.fileAttachmentMeta(
+    _firstFileAttachment(result.message)?.asset,
+  );
+  return meta.isNotEmpty ? meta : '文件';
+}
+
+String globalSearchResultTimeLabel(MessageSearchResult result) {
+  return room_notifications.roomInviteTimestampLabel(result.message.createdAt);
+}
+
+MessageAttachment? _firstFileAttachment(Message message) {
+  for (final attachment in message.fileAttachments) {
+    return attachment;
+  }
+  return null;
 }

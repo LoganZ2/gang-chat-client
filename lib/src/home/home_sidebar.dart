@@ -24,6 +24,7 @@ class HomeSidebar extends StatelessWidget {
     required this.servers,
     required this.selectedServerId,
     required this.joinedLiveRoomId,
+    required this.searchQuery,
     required this.loading,
     required this.error,
     required this.settingsActive,
@@ -43,6 +44,7 @@ class HomeSidebar extends StatelessWidget {
   final List<RoomCard> servers;
   final String? selectedServerId;
   final String? joinedLiveRoomId;
+  final String searchQuery;
   final bool loading;
   final String? error;
   final bool settingsActive;
@@ -141,6 +143,7 @@ class HomeSidebar extends StatelessWidget {
           server: server,
           selected: server.id == selectedServerId,
           voiceJoined: server.id == joinedLiveRoomId,
+          searchQuery: searchQuery,
           onPressed: () => onServerSelected(server),
         );
       },
@@ -354,12 +357,14 @@ class _ServerCard extends StatelessWidget {
     required this.server,
     required this.selected,
     required this.voiceJoined,
+    required this.searchQuery,
     required this.onPressed,
   });
 
   final RoomCard server;
   final bool selected;
   final bool voiceJoined;
+  final String searchQuery;
   final VoidCallback onPressed;
 
   @override
@@ -387,8 +392,9 @@ class _ServerCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  server.displayName,
+                HighlightedText(
+                  text: server.displayName,
+                  query: searchQuery,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -399,8 +405,9 @@ class _ServerCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  _serverMeta(server),
+                HighlightedText(
+                  text: _serverMeta(server),
+                  query: searchQuery,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: UiTypography.label.copyWith(

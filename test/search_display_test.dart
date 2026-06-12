@@ -72,6 +72,28 @@ void main() {
       rooms,
     );
   });
+
+  test(
+    'message search title uses room and subtitle keeps sender with message',
+    () {
+      final result = _messageResult(
+        'room_1',
+        createdAt: DateTime(2026, 6, 1, 9, 30),
+      );
+
+      expect(globalSearchMessageTitle(result), 'Alpha');
+      expect(globalSearchMessageSenderName(result), 'Alice');
+      expect(globalSearchMessageSubtitle(result), 'Alice · alpha roadmap');
+      expect(globalSearchResultTimeLabel(result), '2026/06/01 09:30');
+    },
+  );
+
+  test('file search display uses filename and asset metadata', () {
+    final result = _messageResult('room_1', type: 'file');
+
+    expect(globalSearchFileTitle(result), 'alpha.pdf');
+    expect(globalSearchFileSubtitle(result), 'application/pdf - 4.0 KB');
+  });
 }
 
 RoomCard _room(String id) {
@@ -105,7 +127,11 @@ PublicRoom _publicRoom(String id) {
   );
 }
 
-MessageSearchResult _messageResult(String roomId, {String type = 'text'}) {
+MessageSearchResult _messageResult(
+  String roomId, {
+  String type = 'text',
+  DateTime? createdAt,
+}) {
   return MessageSearchResult(
     room: SearchRoomContext(
       id: roomId,
@@ -127,7 +153,7 @@ MessageSearchResult _messageResult(String roomId, {String type = 'text'}) {
       clientMessageId: 'cmsg_$type',
       type: type,
       body: type == 'file' ? 'alpha.pdf' : 'alpha roadmap',
-      createdAt: DateTime.utc(2026, 6, 1),
+      createdAt: createdAt ?? DateTime.utc(2026, 6, 1),
       attachments: type == 'file'
           ? [
               const MessageAttachment(
@@ -139,6 +165,7 @@ MessageSearchResult _messageResult(String roomId, {String type = 'text'}) {
                   thumbnailUrl: null,
                   mimeType: 'application/pdf',
                   filename: 'alpha.pdf',
+                  sizeBytes: 4096,
                 ),
               ),
             ]

@@ -397,6 +397,7 @@ class _MusicBoxBody extends StatelessWidget {
           child: hasQuery
               ? _MusicBoxSearchList(
                   results: searchResults,
+                  query: searchController.text,
                   searching: searching,
                   error: searchError,
                   onQueueResult: onQueueResult,
@@ -558,12 +559,14 @@ class _MusicBoxQueueTile extends StatelessWidget {
 class _MusicBoxSearchList extends StatelessWidget {
   const _MusicBoxSearchList({
     required this.results,
+    required this.query,
     required this.searching,
     required this.error,
     required this.onQueueResult,
   });
 
   final List<MusicBoxSearchResult> results;
+  final String query;
   final bool searching;
   final String? error;
   final ValueChanged<MusicBoxSearchResult> onQueueResult;
@@ -593,6 +596,7 @@ class _MusicBoxSearchList extends StatelessWidget {
         final result = results[index];
         return _MusicBoxSearchTile(
           result: result,
+          query: query,
           onQueue: () => onQueueResult(result),
         );
       },
@@ -601,9 +605,14 @@ class _MusicBoxSearchList extends StatelessWidget {
 }
 
 class _MusicBoxSearchTile extends StatelessWidget {
-  const _MusicBoxSearchTile({required this.result, required this.onQueue});
+  const _MusicBoxSearchTile({
+    required this.result,
+    required this.query,
+    required this.onQueue,
+  });
 
   final MusicBoxSearchResult result;
+  final String query;
   final VoidCallback onQueue;
 
   @override
@@ -630,8 +639,9 @@ class _MusicBoxSearchTile extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  result.name,
+                HighlightedText(
+                  text: result.name,
+                  query: query,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -641,8 +651,9 @@ class _MusicBoxSearchTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  artists.isEmpty ? '未知艺人' : artists,
+                HighlightedText(
+                  text: artists.isEmpty ? '未知艺人' : artists,
+                  query: query,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(

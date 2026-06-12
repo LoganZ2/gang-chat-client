@@ -533,6 +533,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
           live: _live,
           permission: permission,
           ownerUserId: _room.createdBy?.id,
+          query: _memberQuery,
           busy: _busyMemberIds.contains(member.user.id),
           onSetAdmin: () => _setMemberRole(member, 'admin'),
           onUnsetAdmin: () => _setMemberRole(member, 'member'),

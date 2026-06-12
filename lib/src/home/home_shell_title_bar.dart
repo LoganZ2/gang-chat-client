@@ -485,6 +485,7 @@ class _TitleSearchResultsPanel extends StatelessWidget {
               (room) => _RoomSearchResultTile(
                 title: room.displayName,
                 subtitle: _roomSearchMeta(room.rid, room.memberCount),
+                query: query,
                 avatarUrl: room.avatarUrl,
                 defaultAvatarKey: room.defaultAvatarKey,
                 onPressed: () => onMyRoomSelected(room),
@@ -502,6 +503,7 @@ class _TitleSearchResultsPanel extends StatelessWidget {
               (candidate) => _RoomSearchResultTile(
                 title: candidate.room.name,
                 subtitle: _publicRoomSearchMeta(candidate.room),
+                query: query,
                 avatarUrl: candidate.room.avatarUrl,
                 defaultAvatarKey: candidate.room.defaultAvatarKey,
                 onPressed: candidate.actionEnabled
@@ -519,9 +521,10 @@ class _TitleSearchResultsPanel extends StatelessWidget {
             .map(
               (result) => _MessageSearchResultTile(
                 result: result,
-                icon: Icons.chat_bubble_outline,
-                title: _messageSearchTitle(result),
-                subtitle: result.message.body,
+                title: search_display.globalSearchMessageTitle(result),
+                subtitle: search_display.globalSearchMessageSubtitle(result),
+                subtitleLeading: _MessageSearchSenderAvatar(result: result),
+                query: query,
                 onPressed: () => onMessageSelected(result),
               ),
             )
@@ -531,11 +534,9 @@ class _TitleSearchResultsPanel extends StatelessWidget {
             .map(
               (result) => _MessageSearchResultTile(
                 result: result,
-                icon: fileIconForMime(
-                  _firstFileAttachment(result.message)?.asset?.mimeType,
-                ),
-                title: _fileSearchTitle(result.message),
-                subtitle: result.room.name,
+                title: search_display.globalSearchFileTitle(result),
+                subtitle: search_display.globalSearchFileSubtitle(result),
+                query: query,
                 onPressed: () => onFileSelected(result),
               ),
             )
@@ -697,6 +698,7 @@ class _RoomSearchResultTile extends StatelessWidget {
   const _RoomSearchResultTile({
     required this.title,
     required this.subtitle,
+    required this.query,
     required this.avatarUrl,
     required this.defaultAvatarKey,
     required this.onPressed,
@@ -705,6 +707,7 @@ class _RoomSearchResultTile extends StatelessWidget {
 
   final String title;
   final String subtitle;
+  final String query;
   final String? avatarUrl;
   final String defaultAvatarKey;
   final VoidCallback? onPressed;
@@ -722,6 +725,7 @@ class _RoomSearchResultTile extends StatelessWidget {
       ),
       title: title,
       subtitle: subtitle,
+      query: query,
       trailing: trailing,
     );
   }
@@ -759,31 +763,59 @@ class _PublicRoomJoinActivity extends StatelessWidget {
 class _MessageSearchResultTile extends StatelessWidget {
   const _MessageSearchResultTile({
     required this.result,
-    required this.icon,
     required this.title,
     required this.subtitle,
+    required this.query,
     required this.onPressed,
+    this.subtitleLeading,
   });
 
   final MessageSearchResult result;
-  final IconData icon;
   final String title;
   final String subtitle;
+  final String query;
   final VoidCallback onPressed;
+  final Widget? subtitleLeading;
 
   @override
   Widget build(BuildContext context) {
     return _SearchResultTile(
       onPressed: onPressed,
-      leading: Icon(icon, size: 18, color: UiColors.textSecondary),
+      leading: Avatar(
+        label: result.room.name,
+        imageUrl: AppConfigScope.of(
+          context,
+        ).resolveAssetUrl(result.room.avatarUrl),
+        defaultAvatarKey: result.room.defaultAvatarKey,
+        size: 30,
+      ),
       title: title,
       subtitle: subtitle,
+      query: query,
+      subtitleLeading: subtitleLeading,
       trailing: Text(
-        result.room.name,
+        search_display.globalSearchResultTimeLabel(result),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: UiTypography.label.copyWith(color: UiColors.textMuted),
       ),
+    );
+  }
+}
+
+class _MessageSearchSenderAvatar extends StatelessWidget {
+  const _MessageSearchSenderAvatar({required this.result});
+
+  final MessageSearchResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final sender = result.message.sender;
+    return Avatar(
+      label: search_display.globalSearchMessageSenderName(result),
+      imageUrl: AppConfigScope.of(context).resolveAssetUrl(sender.avatarUrl),
+      defaultAvatarKey: sender.defaultAvatarKey,
+      size: 18,
     );
   }
 }
@@ -793,6 +825,8 @@ class _SearchResultTile extends StatefulWidget {
     required this.leading,
     required this.title,
     required this.subtitle,
+    required this.query,
+    this.subtitleLeading,
     this.trailing,
     this.onPressed,
   });
@@ -800,6 +834,8 @@ class _SearchResultTile extends StatefulWidget {
   final Widget leading;
   final String title;
   final String subtitle;
+  final String query;
+  final Widget? subtitleLeading;
   final Widget? trailing;
   final VoidCallback? onPressed;
 
@@ -842,8 +878,9 @@ class _SearchResultTileState extends State<_SearchResultTile> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      widget.title,
+                    HighlightedText(
+                      text: widget.title,
+                      query: widget.query,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: UiTypography.body.copyWith(
@@ -853,13 +890,28 @@ class _SearchResultTileState extends State<_SearchResultTile> {
                     ),
                     if (widget.subtitle.trim().isNotEmpty) ...[
                       const SizedBox(height: 3),
-                      Text(
-                        widget.subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: UiTypography.label.copyWith(
-                          color: UiColors.textMuted,
-                        ),
+                      Row(
+                        children: [
+                          if (widget.subtitleLeading != null) ...[
+                            SizedBox.square(
+                              dimension: 18,
+                              child: Center(child: widget.subtitleLeading),
+                            ),
+                            const SizedBox(width: 5),
+                          ],
+                          Expanded(
+                            child: HighlightedText(
+                              text: widget.subtitle,
+                              query: widget.query,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: UiTypography.label.copyWith(
+                                color: UiColors.textMuted,
+                                height: 1.2,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ],
@@ -933,27 +985,6 @@ String _publicRoomSearchMeta(PublicRoom room) {
   if (trimmedRid.isNotEmpty) parts.add(trimmedRid);
   parts.add('${room.memberCount} 名成员');
   return parts.join(' - ');
-}
-
-String _messageSearchTitle(MessageSearchResult result) {
-  final sender = result.message.sender.roomDisplayName?.trim();
-  final displayName = sender != null && sender.isNotEmpty
-      ? sender
-      : result.message.sender.displayName;
-  return '$displayName - ${result.room.name}';
-}
-
-String _fileSearchTitle(Message message) {
-  final attachment = _firstFileAttachment(message);
-  if (attachment == null) return message.body;
-  return file_display.fileAttachmentTitle(attachment);
-}
-
-MessageAttachment? _firstFileAttachment(Message message) {
-  for (final attachment in message.fileAttachments) {
-    return attachment;
-  }
-  return null;
 }
 
 class _WindowDragRegion extends StatelessWidget {
