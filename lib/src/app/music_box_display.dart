@@ -149,12 +149,13 @@ String musicBoxUsageLabel(MusicBoxUsage usage) {
       '${musicBoxFormatBytes(usage.limitBytes)}';
 }
 
-/// A selectable music search source. Both go through the GD music API, with
-/// netease as the default. Verified end-to-end (search + playable url).
+/// A selectable music search source. netease and bilibili go through the GD
+/// music API; tencent (QQ音乐) routes to the self-hosted QQ音乐 service on the
+/// server. netease is the default. Verified end-to-end (search + playable url).
 class MusicBoxSource {
   const MusicBoxSource({required this.id, required this.label});
 
-  /// The `source` value the server routes on (the GD music API).
+  /// The `source` value the server routes on.
   final String id;
 
   /// Short display name for the source picker.
@@ -166,6 +167,7 @@ class MusicBoxSource {
 const List<MusicBoxSource> musicBoxSources = [
   MusicBoxSource(id: 'netease', label: '网易云'),
   MusicBoxSource(id: 'bilibili', label: '哔哩哔哩'),
+  MusicBoxSource(id: 'tencent', label: 'QQ音乐'),
 ];
 
 /// The default source id (netease).
