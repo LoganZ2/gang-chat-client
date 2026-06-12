@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../app/room_display.dart' as room_display;
 import '../protocol/models.dart';
 import '../ui/ui.dart';
 
@@ -406,7 +407,7 @@ class _ServerCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 HighlightedText(
-                  text: _serverMeta(server),
+                  text: room_display.roomSidebarSubtitle(server),
                   query: searchQuery,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -508,12 +509,4 @@ String _userStatus(CurrentUser user) {
   final status = user.status?.trim();
   if (status != null && status.isNotEmpty) return status;
   return '在线';
-}
-
-String _serverMeta(RoomCard server) {
-  final parts = ['${server.memberCount} 名成员'];
-  if (server.liveParticipantCount > 0) {
-    parts.add('${server.liveParticipantCount} 直播中');
-  }
-  return parts.join(' · ');
 }

@@ -191,7 +191,7 @@ String formatVoiceBubbleDuration(Duration? duration) {
   return '$minutes:${seconds.toString().padLeft(2, '0')}';
 }
 
-const double kVoiceWaveformMinWidth = 70;
+const double kVoiceWaveformMinWidth = 48;
 const double kVoiceWaveformMaxWidth = 160;
 
 double voiceWaveformWidth(Duration? duration) {

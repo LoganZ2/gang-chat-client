@@ -110,6 +110,10 @@ extension _HomeShellRealtime on _HomeShellState {
   void _applyRoomUpdated(Map<String, dynamic> data) {
     final room = _roomsController.roomCardFromSnapshot(data);
     if (room == null || !mounted) return;
+    final shouldRefreshMessages =
+        room.id == _selectedServerId &&
+        room.lastMessage != null &&
+        room.lastMessage!.id != _latestLoadedServerMessageId();
     final patch = _roomsController.patchRoomUpdated(
       rooms: _servers,
       incoming: room,
@@ -120,6 +124,33 @@ extension _HomeShellRealtime on _HomeShellState {
       _selectedRoom = patch.selectedRoom;
       if (patch.shouldReloadMembers) _membersReloadToken++;
     });
+    if (shouldRefreshMessages) {
+      unawaited(_refreshSelectedMessagesSilently(room.id));
+    }
+  }
+
+  String? _latestLoadedServerMessageId() {
+    for (final message in _messages.reversed) {
+      if (!message.pending) return message.id;
+    }
+    return null;
+  }
+
+  Future<void> _refreshSelectedMessagesSilently(String roomId) async {
+    try {
+      final messages = await _messagesController.loadMessages(roomId);
+      if (!mounted || _selectedServerId != roomId) return;
+      final serverClientIds = {
+        for (final message in messages) message.clientMessageId,
+      };
+      final pending = [
+        for (final message in _messages)
+          if (message.pending &&
+              !serverClientIds.contains(message.clientMessageId))
+            message,
+      ];
+      _setHomeState(() => _messages = [...messages, ...pending]);
+    } catch (_) {}
   }
 
   void _applyRoomDeleted(Map<String, dynamic> data) {

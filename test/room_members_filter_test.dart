@@ -337,6 +337,16 @@ void main() {
     expect(admin.canRemoveMember, isTrue);
     expect(admin.adminActionLabel, '移除管理员');
 
+    final adminManagedByAdmin = roomMemberPermissionState(
+      member: _member('admin_peer', role: 'admin'),
+      currentUser: currentUser,
+      canEditCreatorOnly: false,
+      canManageMembers: true,
+      ownerUserId: 'owner',
+    );
+    expect(adminManagedByAdmin.canRoleEdit, isFalse);
+    expect(adminManagedByAdmin.canRemoveMember, isFalse);
+
     final managedByAdmin = roomMemberPermissionState(
       member: _member('managed'),
       currentUser: currentUser,

@@ -620,7 +620,8 @@ RoomMemberPermissionState roomMemberPermissionState({
       canManageMembers &&
       !isSuperuser &&
       !isOwner &&
-      member.user.id != currentUser.id;
+      member.user.id != currentUser.id &&
+      (canEditCreatorOnly || !isAdmin);
   return RoomMemberPermissionState(
     isSuperuser: isSuperuser,
     isOwner: isOwner,

@@ -4,6 +4,37 @@ import 'voice_message_display.dart' as voice_display;
 
 enum MessageContentKind { sticker, voice, files, text }
 
+const String kSystemMessageType = 'system';
+const String kSystemEventRoomMemberJoined = 'room_member_joined';
+const String kSystemEventRoomMemberLeft = 'room_member_left';
+const String kSystemEventRoomMemberRemoved = 'room_member_removed';
+const String kSystemEventLiveJoined = 'live_joined';
+const String kSystemEventLiveLeft = 'live_left';
+const String kSystemEventRoomRoleChanged = 'room_role_changed';
+
+class SystemMessageEvent {
+  const SystemMessageEvent({
+    required this.event,
+    required this.message,
+    this.user,
+    this.actor,
+    this.target,
+    this.fromRole,
+    this.toRole,
+  });
+
+  final String event;
+  final Message message;
+  final UserSummary? user;
+  final UserSummary? actor;
+  final UserSummary? target;
+  final String? fromRole;
+  final String? toRole;
+
+  UserSummary get subject => target ?? user ?? message.sender;
+  bool get isRoleChange => event == kSystemEventRoomRoleChanged;
+}
+
 class MessageTextEdit {
   const MessageTextEdit({required this.text, required this.cursorOffset});
 
@@ -115,6 +146,61 @@ MessageContentKind messageContentKind(Message message) {
   }
   if (message.fileAttachments.isNotEmpty) return MessageContentKind.files;
   return MessageContentKind.text;
+}
+
+SystemMessageEvent? systemMessageEvent(Message message) {
+  if (message.type != kSystemMessageType) return null;
+  MessageAttachment? attachment;
+  for (final candidate in message.attachments) {
+    if (candidate.type == kSystemMessageType) {
+      attachment = candidate;
+      break;
+    }
+  }
+  final event = attachment?.event?.trim();
+  if (event == null || event.isEmpty) return null;
+  final user = attachment?.user;
+  final target = attachment?.target ?? user;
+  return SystemMessageEvent(
+    event: event,
+    message: message,
+    user: user,
+    actor: attachment?.actor,
+    target: target,
+    fromRole: attachment?.fromRole,
+    toRole: attachment?.toRole,
+  );
+}
+
+String systemMessageRoleLabel(String? role) {
+  return switch (role) {
+    'owner' || 'creator' => '创建者',
+    'admin' => '管理员',
+    'member' => '成员',
+    _ => '成员',
+  };
+}
+
+String systemMessageRoleVerb(SystemMessageEvent event) {
+  final fromRank = _roleRank(event.fromRole);
+  final toRank = _roleRank(event.toRole);
+  if (toRank > fromRank) return '晋升为';
+  return '降职为';
+}
+
+bool systemMessageRoleChangeOmitsActor(SystemMessageEvent event) {
+  return event.isRoleChange &&
+      event.fromRole == 'owner' &&
+      event.toRole == 'admin';
+}
+
+int _roleRank(String? role) {
+  return switch (role) {
+    'owner' || 'creator' => 3,
+    'admin' => 2,
+    'member' => 1,
+    _ => 0,
+  };
 }
 
 bool shouldShowFileAttachmentBody({

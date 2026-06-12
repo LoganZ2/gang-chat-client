@@ -479,6 +479,12 @@ class MessageAttachment {
     this.name,
     this.asset,
     this.durationMs,
+    this.event,
+    this.user,
+    this.actor,
+    this.target,
+    this.fromRole,
+    this.toRole,
   });
 
   final String type;
@@ -486,15 +492,30 @@ class MessageAttachment {
   final String? name;
   final UploadedAsset? asset;
   final int? durationMs;
+  final String? event;
+  final UserSummary? user;
+  final UserSummary? actor;
+  final UserSummary? target;
+  final String? fromRole;
+  final String? toRole;
 
   factory MessageAttachment.fromJson(Map<String, Object?> json) {
     final assetJson = _nullableMap(json['asset']);
+    final userJson = _nullableMap(json['user']);
+    final actorJson = _nullableMap(json['actor']);
+    final targetJson = _nullableMap(json['target']);
     return MessageAttachment(
       type: json['type'] as String? ?? 'file',
       stickerId: json['sticker_id'] as String?,
       name: json['name'] as String?,
       asset: assetJson == null ? null : UploadedAsset.fromJson(assetJson),
       durationMs: _nullableInt(json['duration_ms']),
+      event: _stringFromJson(json, const ['event', 'system_event']),
+      user: userJson == null ? null : UserSummary.fromJson(userJson),
+      actor: actorJson == null ? null : UserSummary.fromJson(actorJson),
+      target: targetJson == null ? null : UserSummary.fromJson(targetJson),
+      fromRole: _stringFromJson(json, const ['from_role', 'previous_role']),
+      toRole: _stringFromJson(json, const ['to_role', 'role']),
     );
   }
 
@@ -505,8 +526,29 @@ class MessageAttachment {
       if (name != null) 'name': name,
       if (asset != null) 'asset': asset!.toJson(),
       if (durationMs != null) 'duration_ms': durationMs,
+      if (event != null) 'event': event,
+      if (user != null) 'user': _userSummaryToJson(user!),
+      if (actor != null) 'actor': _userSummaryToJson(actor!),
+      if (target != null) 'target': _userSummaryToJson(target!),
+      if (fromRole != null) 'from_role': fromRole,
+      if (toRole != null) 'to_role': toRole,
     };
   }
+}
+
+Map<String, Object?> _userSummaryToJson(UserSummary user) {
+  return {
+    'id': user.id,
+    if (user.uid != null) 'uid': user.uid,
+    'username': user.username,
+    'display_name': user.displayName,
+    'avatar_url': user.avatarUrl,
+    'default_avatar_key': user.defaultAvatarKey,
+    if (user.roomDisplayName != null) 'room_display_name': user.roomDisplayName,
+    if (user.roomRole != null) 'room_role': user.roomRole,
+    if (user.isSuperuser) 'is_superuser': true,
+    if (user.isOnline != null) 'is_online': user.isOnline,
+  };
 }
 
 class LastMessagePreview {

@@ -18,7 +18,21 @@ void main() {
           ),
         ),
       ),
-      '8 名成员 · 3 人在线 · 2 直播中 · Logan: hello',
+      'Logan · hello',
+    );
+    expect(roomSidebarSubtitle(_roomCard()), '8 名成员 · 2 直播中');
+    expect(
+      roomSidebarSubtitle(
+        _roomCard(
+          lastMessage: LastMessagePreview(
+            id: 'message_1',
+            senderDisplayName: 'Logan',
+            bodyPreview: 'hello',
+            createdAt: DateTime.utc(2026, 6, 4),
+          ),
+        ),
+      ),
+      'Logan · hello',
     );
   });
 

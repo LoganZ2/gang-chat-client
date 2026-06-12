@@ -165,6 +165,7 @@ class _MessageStageState extends State<_MessageStage> {
       separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final message = widget.messages[index];
+        final systemEvent = message_display.systemMessageEvent(message);
         final previous = index == 0 ? null : widget.messages[index - 1];
         final showTimestamp = message_display.shouldShowChatTimestamp(
           current: message.createdAt,
@@ -177,22 +178,29 @@ class _MessageStageState extends State<_MessageStage> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (showTimestamp) ...[
+            if (showTimestamp && systemEvent == null) ...[
               _MessageTimeDivider(
                 label: timestamp,
                 onTap: _toggleDetailedTimestamps,
               ),
               const SizedBox(height: 10),
             ],
-            _MessageRow(
-              message: message,
-              outgoing: message.sender.id == widget.currentUserId,
-              transfer: widget.fileTransfers[message.clientMessageId],
-              fileDownloads: widget.fileDownloads,
-              downloadActions: widget.downloadActions,
-              voicePlaybackActions: widget.voicePlaybackActions,
-              onResolveSenderProfile: widget.onResolveSenderProfile,
-            ),
+            if (systemEvent != null)
+              _SystemMessageRow(
+                event: systemEvent,
+                timestamp: timestamp,
+                onTapTimestamp: _toggleDetailedTimestamps,
+              )
+            else
+              _MessageRow(
+                message: message,
+                outgoing: message.sender.id == widget.currentUserId,
+                transfer: widget.fileTransfers[message.clientMessageId],
+                fileDownloads: widget.fileDownloads,
+                downloadActions: widget.downloadActions,
+                voicePlaybackActions: widget.voicePlaybackActions,
+                onResolveSenderProfile: widget.onResolveSenderProfile,
+              ),
           ],
         );
       },
@@ -232,6 +240,207 @@ class _MessageTimeDivider extends StatelessWidget {
                 ),
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SystemMessageRow extends StatelessWidget {
+  const _SystemMessageRow({
+    required this.event,
+    required this.timestamp,
+    required this.onTapTimestamp,
+  });
+
+  final message_display.SystemMessageEvent event;
+  final String timestamp;
+  final VoidCallback onTapTimestamp;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _messageMaxWidth + 96),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: UiColors.surfacePressed.withValues(alpha: 0.82),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: UiColors.border),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 5,
+              runSpacing: 5,
+              children: [
+                _SystemTimestamp(label: timestamp, onTap: onTapTimestamp),
+                ..._SystemMessageParts(event: event).build(context),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SystemTimestamp extends StatelessWidget {
+  const _SystemTimestamp({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: UiTypography.label.copyWith(
+            color: UiColors.textMuted,
+            fontSize: 11,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SystemMessageParts {
+  const _SystemMessageParts({required this.event});
+
+  final message_display.SystemMessageEvent event;
+
+  List<Widget> build(BuildContext context) {
+    final subject = event.subject;
+    switch (event.event) {
+      case message_display.kSystemEventRoomMemberJoined:
+        return [_SystemUserChip(user: subject), _text('加入了房间')];
+      case message_display.kSystemEventRoomMemberLeft:
+        return [_SystemUserChip(user: subject), _text('离开了房间')];
+      case message_display.kSystemEventRoomMemberRemoved:
+        final actor = event.actor;
+        return [
+          _SystemUserChip(user: subject),
+          if (actor == null)
+            _text('被踢出了房间')
+          else ...[
+            _text('被'),
+            _SystemUserChip(user: actor),
+            _text('踢出了房间'),
+          ],
+        ];
+      case message_display.kSystemEventLiveJoined:
+        return [_SystemUserChip(user: subject), _text('进入了直播间')];
+      case message_display.kSystemEventLiveLeft:
+        return [_SystemUserChip(user: subject), _text('退出了直播间')];
+      case message_display.kSystemEventRoomRoleChanged:
+        final actor = event.actor;
+        final roleLabel = message_display.systemMessageRoleLabel(event.toRole);
+        final verb = message_display.systemMessageRoleVerb(event);
+        final omitActor = message_display.systemMessageRoleChangeOmitsActor(
+          event,
+        );
+        return [
+          _SystemUserChip(user: subject),
+          if (!omitActor && actor != null) ...[
+            _text('被'),
+            _SystemUserChip(user: actor),
+          ],
+          _text(verb),
+          _SystemRoleTag(label: roleLabel),
+        ];
+      default:
+        final fallback = event.message.body.trim();
+        return [
+          _SystemUserChip(user: subject),
+          if (fallback.isNotEmpty) _text(fallback),
+        ];
+    }
+  }
+
+  Widget _text(String value) {
+    return Text(
+      value,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: UiTypography.label.copyWith(
+        color: UiColors.textSecondary,
+        fontSize: 12,
+      ),
+    );
+  }
+}
+
+class _SystemUserChip extends StatelessWidget {
+  const _SystemUserChip({required this.user});
+
+  final UserSummary user;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = _senderName(user);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Avatar(
+          label: name,
+          imageUrl: AppConfigScope.of(context).resolveAssetUrl(user.avatarUrl),
+          defaultAvatarKey: user.defaultAvatarKey,
+          size: 16,
+          activeBorderWidth: 1,
+        ),
+        const SizedBox(width: 4),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 128),
+          child: Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: UiTypography.label.copyWith(
+              color: UiColors.text,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SystemRoleTag extends StatelessWidget {
+  const _SystemRoleTag({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: UiColors.selected,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: UiColors.selectedBorder),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: UiTypography.label.copyWith(
+            color: UiColors.accent,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),

@@ -140,6 +140,47 @@ void main() {
     },
   );
 
+  test('systemMessageEvent parses structured role-change messages', () {
+    const actor = UserSummary(
+      id: 'user_actor',
+      username: 'owner',
+      displayName: 'Owner',
+      avatarUrl: null,
+      defaultAvatarKey: 'blue-3',
+    );
+    const target = UserSummary(
+      id: 'user_target',
+      username: 'logan',
+      displayName: 'Logan',
+      avatarUrl: null,
+      defaultAvatarKey: 'green-2',
+    );
+    final event = systemMessageEvent(
+      _message(
+        type: 'system',
+        body: '降职为管理员',
+        attachments: const [
+          MessageAttachment(
+            type: 'system',
+            event: kSystemEventRoomRoleChanged,
+            actor: actor,
+            target: target,
+            fromRole: 'owner',
+            toRole: 'admin',
+          ),
+        ],
+      ),
+    );
+
+    expect(event, isNotNull);
+    expect(event!.event, kSystemEventRoomRoleChanged);
+    expect(event.subject.id, 'user_target');
+    expect(event.actor?.id, 'user_actor');
+    expect(systemMessageRoleLabel(event.toRole), '管理员');
+    expect(systemMessageRoleVerb(event), '降职为');
+    expect(systemMessageRoleChangeOmitsActor(event), isTrue);
+  });
+
   test('shouldShowFileAttachmentBody hides duplicate single-file body', () {
     const attachment = MessageAttachment(type: 'file', name: 'report.pdf');
 
@@ -266,6 +307,7 @@ void main() {
 
 Message _message({
   String type = 'text',
+  String body = 'hello',
   List<MessageAttachment> attachments = const [],
   bool pending = false,
   bool failed = false,
@@ -282,7 +324,7 @@ Message _message({
     ),
     clientMessageId: 'client_1',
     type: type,
-    body: 'hello',
+    body: body,
     createdAt: DateTime.utc(2026, 6, 4),
     attachments: attachments,
     pending: pending,

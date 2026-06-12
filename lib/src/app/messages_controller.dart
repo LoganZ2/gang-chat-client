@@ -215,6 +215,11 @@ class MessagesController {
     );
   }
 
+  Future<List<Message>> loadMessages(String roomId) async {
+    final page = await _client.listMessages(roomId: roomId);
+    return page.messages;
+  }
+
   Future<Message> sendMessage({
     required String roomId,
     required String clientMessageId,

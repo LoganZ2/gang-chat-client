@@ -523,7 +523,6 @@ class _TitleSearchResultsPanel extends StatelessWidget {
                 result: result,
                 title: search_display.globalSearchMessageTitle(result),
                 subtitle: search_display.globalSearchMessageSubtitle(result),
-                subtitleLeading: _MessageSearchSenderAvatar(result: result),
                 query: query,
                 onPressed: () => onMessageSelected(result),
               ),
@@ -767,7 +766,6 @@ class _MessageSearchResultTile extends StatelessWidget {
     required this.subtitle,
     required this.query,
     required this.onPressed,
-    this.subtitleLeading,
   });
 
   final MessageSearchResult result;
@@ -775,7 +773,6 @@ class _MessageSearchResultTile extends StatelessWidget {
   final String subtitle;
   final String query;
   final VoidCallback onPressed;
-  final Widget? subtitleLeading;
 
   @override
   Widget build(BuildContext context) {
@@ -792,7 +789,6 @@ class _MessageSearchResultTile extends StatelessWidget {
       title: title,
       subtitle: subtitle,
       query: query,
-      subtitleLeading: subtitleLeading,
       trailing: Text(
         search_display.globalSearchResultTimeLabel(result),
         maxLines: 1,
@@ -803,30 +799,12 @@ class _MessageSearchResultTile extends StatelessWidget {
   }
 }
 
-class _MessageSearchSenderAvatar extends StatelessWidget {
-  const _MessageSearchSenderAvatar({required this.result});
-
-  final MessageSearchResult result;
-
-  @override
-  Widget build(BuildContext context) {
-    final sender = result.message.sender;
-    return Avatar(
-      label: search_display.globalSearchMessageSenderName(result),
-      imageUrl: AppConfigScope.of(context).resolveAssetUrl(sender.avatarUrl),
-      defaultAvatarKey: sender.defaultAvatarKey,
-      size: 18,
-    );
-  }
-}
-
 class _SearchResultTile extends StatefulWidget {
   const _SearchResultTile({
     required this.leading,
     required this.title,
     required this.subtitle,
     required this.query,
-    this.subtitleLeading,
     this.trailing,
     this.onPressed,
   });
@@ -835,7 +813,6 @@ class _SearchResultTile extends StatefulWidget {
   final String title;
   final String subtitle;
   final String query;
-  final Widget? subtitleLeading;
   final Widget? trailing;
   final VoidCallback? onPressed;
 
@@ -892,13 +869,6 @@ class _SearchResultTileState extends State<_SearchResultTile> {
                       const SizedBox(height: 3),
                       Row(
                         children: [
-                          if (widget.subtitleLeading != null) ...[
-                            SizedBox.square(
-                              dimension: 18,
-                              child: Center(child: widget.subtitleLeading),
-                            ),
-                            const SizedBox(width: 5),
-                          ],
                           Expanded(
                             child: HighlightedText(
                               text: widget.subtitle,

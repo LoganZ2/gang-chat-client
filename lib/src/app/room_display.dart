@@ -61,9 +61,26 @@ String roomSubtitle(RoomCard room) {
   final online = room.onlineMemberCount;
   final last = room.lastMessage;
   if (last != null) {
-    return '${room.memberCount} 名成员 · $online 人在线 · $live 直播中 · ${last.senderDisplayName}: ${last.bodyPreview}';
+    final sender = _nonEmpty(last.senderDisplayName) ?? '用户';
+    final body = _nonEmpty(last.bodyPreview) ?? '消息';
+    return '$sender · $body';
   }
   return '${room.memberCount} 名成员 · $online 人在线 · $live 直播中';
+}
+
+String roomSidebarSubtitle(RoomCard room) {
+  final last = room.lastMessage;
+  if (last != null) {
+    final sender = _nonEmpty(last.senderDisplayName) ?? '用户';
+    final body = _nonEmpty(last.bodyPreview) ?? '消息';
+    return '$sender · $body';
+  }
+
+  final parts = ['${room.memberCount} 名成员'];
+  if (room.liveParticipantCount > 0) {
+    parts.add('${room.liveParticipantCount} 直播中');
+  }
+  return parts.join(' · ');
 }
 
 String roomCopySuccessNotice(String label) {

@@ -110,6 +110,55 @@ void main() {
     expect(find.widgetWithText(SelectableText, 'copy this'), findsOneWidget);
   });
 
+  testWidgets('system role message renders centered with an inline timestamp', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    final createdAt = DateTime.now().subtract(const Duration(minutes: 2));
+    final brief = message_display.formatChatTimestamp(
+      createdAt,
+      now: DateTime.now(),
+    );
+    final detailed = message_display.formatDetailedChatTimestamp(createdAt);
+
+    await tester.pumpWidget(
+      _host(
+        _chatPane(
+          controller: controller,
+          messages: [
+            _message(
+              type: 'system',
+              body: '降职为管理员',
+              createdAt: createdAt,
+              attachments: const [
+                MessageAttachment(
+                  type: 'system',
+                  event: message_display.kSystemEventRoomRoleChanged,
+                  target: _systemTarget,
+                  actor: _systemActor,
+                  fromRole: 'owner',
+                  toRole: 'admin',
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+
+    expect(find.text(brief), findsOneWidget);
+    expect(find.text('Logan'), findsOneWidget);
+    expect(find.text('Owner'), findsNothing);
+    expect(find.text('降职为'), findsOneWidget);
+    expect(find.text('管理员'), findsOneWidget);
+
+    await tester.tap(find.text(brief));
+    await tester.pump();
+
+    expect(find.text(detailed), findsOneWidget);
+  });
+
   testWidgets('sticker bubble exposes the sticker name only as a tooltip', (
     tester,
   ) async {
@@ -406,6 +455,48 @@ Widget _host(Widget child) {
   );
 }
 
+Widget _chatPane({
+  required TextEditingController controller,
+  required List<Message> messages,
+}) {
+  return ChatPane(
+    currentUser: _currentUser,
+    roomCard: _roomCard,
+    room: null,
+    live: null,
+    messages: messages,
+    fileTransfers: const {},
+    fileDownloads: const {},
+    downloadActions: _downloadActions(),
+    voicePlaybackActions: const ChatVoicePlaybackActions.disabled(),
+    loading: false,
+    error: null,
+    sending: false,
+    sendError: null,
+    composerController: controller,
+    stickerPanel: const sticker_display.StickerPanelLoadState(),
+    voiceState: const voice_display.VoiceRecorderState(),
+    composerAttachments: const <composer_attachment.ComposerAttachmentView>[],
+    fileActionHighlighted: false,
+    onSubmit: (_) {},
+    onSendSticker: (_) {},
+    onLoadStickers: () {},
+    onRefreshStickers: () {},
+    onStickerSourceChanged: (_) {},
+    onStartVoice: () {},
+    onSendVoice: () {},
+    onCancelVoice: () {},
+    onPickFile: () {},
+    onPasteFiles: () async => false,
+    onRemoveAttachment: (_) {},
+    onRetryAttachment: (_) {},
+    onRetry: () {},
+    onOpenLiveChannel: () {},
+    onOpenRoomMembers: () {},
+    onOpenRoomSettings: () {},
+  );
+}
+
 Message _message({
   required String type,
   String body = '',
@@ -468,6 +559,22 @@ const _currentUser = CurrentUser(
   defaultAvatarKey: 'blue-3',
   isSuperuser: false,
   createdAt: null,
+);
+
+const _systemTarget = UserSummary(
+  id: 'user_target',
+  username: 'logan',
+  displayName: 'Logan',
+  avatarUrl: null,
+  defaultAvatarKey: 'green-2',
+);
+
+const _systemActor = UserSummary(
+  id: 'user_actor',
+  username: 'owner',
+  displayName: 'Owner',
+  avatarUrl: null,
+  defaultAvatarKey: 'blue-3',
 );
 
 final _roomCard = RoomCard(
