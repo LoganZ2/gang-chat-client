@@ -404,10 +404,11 @@ class LiveSession extends ChangeNotifier {
           // null — falls back to LiveKit's screenShareH1080FPS15 preset, hard
           // capped at 15fps. Set it explicitly so the encoder isn't the
           // bottleneck. maxBitrate must scale with the frame rate or the
-          // encoder starves frames to stay under budget. 720p60 ≈ 4 Mbps.
+          // encoder starves frames to stay under budget. 1080p30 is given a
+          // 10 Mbps ceiling so the encoder isn't bitrate-starved.
           screenShareEncoding: lk.VideoEncoding(
-            maxFramerate: 60,
-            maxBitrate: 4000 * 1000,
+            maxFramerate: 30,
+            maxBitrate: 10000 * 1000,
           ),
         ),
       ),
@@ -505,13 +506,16 @@ class LiveSession extends ChangeNotifier {
       // ScreenCaptureKit, which samples at the display's native resolution and
       // ignores params.dimensions — so dimensions here only bounds non-SCKit
       // platforms. The encoding (and defaultVideoPublishOptions in connect())
-      // still governs what viewers receive. Keep both at 720p60.
+      // still governs what viewers receive. Keep both at 1080p30.
       final options = lk.ScreenShareCaptureOptions(
         sourceId: sourceId,
-        maxFrameRate: 60.0,
+        maxFrameRate: 30.0,
         params: const lk.VideoParameters(
-          dimensions: lk.VideoDimensionsPresets.h720_169,
-          encoding: lk.VideoEncoding(maxFramerate: 60, maxBitrate: 4000 * 1000),
+          dimensions: lk.VideoDimensionsPresets.h1080_169,
+          encoding: lk.VideoEncoding(
+            maxFramerate: 30,
+            maxBitrate: 10000 * 1000,
+          ),
         ),
       );
       await local.setScreenShareEnabled(

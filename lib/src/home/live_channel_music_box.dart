@@ -263,7 +263,13 @@ class _MusicBoxVolumeState extends State<_MusicBoxVolume> {
   // drag ends, then fall back to the hover state.
   bool _dragging = false;
 
-  bool get _expanded => _hovered || _dragging;
+  // When true, the pill sits expanded at rest (full width, slider always
+  // visible) instead of collapsing to a square that grows on hover. The
+  // hover/drag expansion still works either way — flip this back to false to
+  // restore the collapse-by-default behaviour.
+  static const _expandedByDefault = true;
+
+  bool get _expanded => _expandedByDefault || _hovered || _dragging;
 
   bool get _muted => _volume <= 0;
 
@@ -315,12 +321,13 @@ class _MusicBoxVolumeState extends State<_MusicBoxVolume> {
     );
   }
 
-  // Elongates rightward in place; the icon stays put on the left.
+  // Elongates rightward in place; the icon stays put on the left. Collapsed it
+  // is a single square; expanded it fills the full panel width so the slider
+  // gets the whole row to travel across.
   @override
   Widget build(BuildContext context) {
     final p = _palette;
     final height = _size;
-    final expandedWidth = height + _gap + _sliderExtent + _pad;
 
     // The width is tweened explicitly — PressableSurface sizes itself with a
     // plain SizedBox, so without this the hover expansion would snap instantly.
@@ -332,43 +339,53 @@ class _MusicBoxVolumeState extends State<_MusicBoxVolume> {
     // its own pointer handling. A press anywhere sinks the whole pill (it and
     // its contents move down as one piece); releasing on the icon toggles mute,
     // releasing on the slider commits the dragged volume.
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
-        child: TweenAnimationBuilder<double>(
-          duration: _duration,
-          curve: Curves.easeOutCubic,
-          tween: Tween(end: _expanded ? expandedWidth : height),
-          builder: (context, width, child) {
-            return PressableSurface(
-              height: height,
-              width: width,
-              enabled: true,
-              interactive: true,
-              borderRadius: UiRadii.md,
-              padding: EdgeInsets.zero,
-              backgroundColor: p.background,
-              selectedBackgroundColor: p.background,
-              borderColor: p.border,
-              selectedBorderColor: p.border,
-              child: child!,
-            );
-          },
-          child: Row(
-            children: [
-              _iconButton(height),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(right: _pad),
-                  child: _slider(),
-                ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Expand to the full available row width; fall back to the legacy fixed
+        // extent if the panel is laid out unbounded (shouldn't happen in the
+        // music box column, but keeps the tween finite).
+        final expandedWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : height + _gap + _sliderExtent + _pad;
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: MouseRegion(
+            onEnter: (_) => setState(() => _hovered = true),
+            onExit: (_) => setState(() => _hovered = false),
+            child: TweenAnimationBuilder<double>(
+              duration: _duration,
+              curve: Curves.easeOutCubic,
+              tween: Tween(end: _expanded ? expandedWidth : height),
+              builder: (context, width, child) {
+                return PressableSurface(
+                  height: height,
+                  width: width,
+                  enabled: true,
+                  interactive: true,
+                  borderRadius: UiRadii.md,
+                  padding: EdgeInsets.zero,
+                  backgroundColor: p.background,
+                  selectedBackgroundColor: p.background,
+                  borderColor: p.border,
+                  selectedBorderColor: p.border,
+                  child: child!,
+                );
+              },
+              child: Row(
+                children: [
+                  _iconButton(height),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: _pad),
+                      child: _slider(),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
