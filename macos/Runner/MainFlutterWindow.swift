@@ -1,6 +1,8 @@
 import Cocoa
+import CoreAudio
 import CoreGraphics
 import FlutterMacOS
+import WebRTC
 
 private let loginWindowSize = NSSize(width: 430, height: 256)
 private let resizeCursorEdgeWidth: CGFloat = 8
@@ -11,6 +13,7 @@ private let v2TitleBarHeight: CGFloat = 44
 private let screenThumbnailChannel = "gang_chat/screen_thumbnail"
 private let clipboardChannel = "gang_chat/clipboard"
 private let fileDropChannel = "gang_chat/file_drop"
+private let audioDevicesChannel = "gang_chat/audio_devices"
 private let appBackground = NSColor(
   red: CGFloat(0x14) / 255.0,
   green: CGFloat(0x17) / 255.0,
@@ -21,6 +24,9 @@ private let appBackground = NSColor(
 class MainFlutterWindow: NSWindow {
   private var resizeCursorActive = false
   private var fileDropMethodChannel: FlutterMethodChannel?
+  private var audioDevicesMethodChannel: FlutterMethodChannel?
+  private var defaultInputListenerBlock: AudioObjectPropertyListenerBlock?
+  private lazy var audioDeviceFactory = RTCPeerConnectionFactory()
 
   override func awakeFromNib() {
     alphaValue = 0
@@ -41,6 +47,7 @@ class MainFlutterWindow: NSWindow {
 
     registerScreenThumbnailChannel(flutterViewController)
     registerClipboardChannel(flutterViewController)
+    registerAudioDevicesChannel(flutterViewController)
     installFileDropTarget(flutterViewController)
     RegisterGeneratedPlugins(registry: flutterViewController)
 
@@ -66,6 +73,7 @@ class MainFlutterWindow: NSWindow {
 
   deinit {
     NotificationCenter.default.removeObserver(self)
+    removeDefaultInputListener()
   }
 
   // Centers the native traffic lights within the v2 title-bar band and insets
@@ -192,6 +200,94 @@ class MainFlutterWindow: NSWindow {
         result(FlutterMethodNotImplemented)
       }
     }
+  }
+
+  // Exposes the system's current default audio input device on
+  // `gang_chat/audio_devices`. flutter_webrtc's CoreAudio ADM never surfaces a
+  // synthetic "default" entry on macOS (unlike Windows), so the Dart side has no
+  // way to tell which enumerated device the OS currently treats as the default
+  // microphone. We answer that here using WebRTC's own RTCIODevice list, whose
+  // `deviceId` strings are the exact ones flutter_webrtc reports through
+  // enumerateDevices — so the value lines up with no UID translation. A CoreAudio
+  // property listener pushes `defaultInputDeviceChanged` whenever the user
+  // switches the default input in System Settings, letting the picker follow it
+  // live.
+  //
+  // Methods: `getDefaultInputDeviceId` -> String? (deviceId of the default mic).
+  // Events: `defaultInputDeviceChanged` with argument String? (the new deviceId).
+  private func registerAudioDevicesChannel(_ flutterViewController: FlutterViewController) {
+    let channel = FlutterMethodChannel(
+      name: audioDevicesChannel,
+      binaryMessenger: flutterViewController.engine.binaryMessenger
+    )
+    audioDevicesMethodChannel = channel
+    channel.setMethodCallHandler { [weak self] call, result in
+      switch call.method {
+      case "getDefaultInputDeviceId":
+        result(self?.defaultInputDeviceId())
+      case "startListening":
+        self?.installDefaultInputListener()
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  // RTCAudioDeviceModule.inputDevices is the exact array flutter_webrtc builds
+  // its enumerateDevices() result from (see FlutterRTCMediaStream's getSources),
+  // so the deviceId of whichever entry is flagged `isDefault` matches the
+  // picker's device ids with no UID translation. We read it through our own
+  // factory rather than flutter_webrtc's private singleton; both link the same
+  // WebRTC-SDK pod version, so the deviceId derivation is identical.
+  private func defaultInputDeviceId() -> String? {
+    let adm = audioDeviceFactory.audioDeviceModule
+    let inputs = adm.inputDevices
+    if let match = inputs.first(where: { $0.isDefault }) {
+      return match.deviceId
+    }
+    return adm.inputDevice.deviceId
+  }
+
+  private func installDefaultInputListener() {
+    guard defaultInputListenerBlock == nil else { return }
+    var address = AudioObjectPropertyAddress(
+      mSelector: kAudioHardwarePropertyDefaultInputDevice,
+      mScope: kAudioObjectPropertyScopeGlobal,
+      mElement: kAudioObjectPropertyElementMain
+    )
+    let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+      guard let self = self else { return }
+      self.audioDevicesMethodChannel?.invokeMethod(
+        "defaultInputDeviceChanged",
+        arguments: self.defaultInputDeviceId()
+      )
+    }
+    let status = AudioObjectAddPropertyListenerBlock(
+      AudioObjectID(kAudioObjectSystemObject),
+      &address,
+      DispatchQueue.main,
+      block
+    )
+    if status == noErr {
+      defaultInputListenerBlock = block
+    }
+  }
+
+  private func removeDefaultInputListener() {
+    guard let block = defaultInputListenerBlock else { return }
+    var address = AudioObjectPropertyAddress(
+      mSelector: kAudioHardwarePropertyDefaultInputDevice,
+      mScope: kAudioObjectPropertyScopeGlobal,
+      mElement: kAudioObjectPropertyElementMain
+    )
+    AudioObjectRemovePropertyListenerBlock(
+      AudioObjectID(kAudioObjectSystemObject),
+      &address,
+      DispatchQueue.main,
+      block
+    )
+    defaultInputListenerBlock = nil
   }
 
   // Mirrors the Windows runner's `gang_chat/clipboard` channel so paste-to-send

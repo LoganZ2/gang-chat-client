@@ -40,6 +40,7 @@ T? preferredStoredAudioDeviceFrom<T>(
   required String? storedDeviceId,
   required AudioDeviceKindOf<T> kindOf,
   required AudioDeviceIdOf<T> deviceIdOf,
+  String? systemDefaultDeviceId,
 }) {
   final storedDevice = storedAudioDeviceFrom(
     devices,
@@ -50,8 +51,20 @@ T? preferredStoredAudioDeviceFrom<T>(
   );
   if (storedDevice != null) return storedDevice;
 
+  // macOS never enumerates a synthetic "default" device, so the OS-selected
+  // device is identified by an explicit id from the native channel. Prefer it
+  // when there is no local preference yet so the picker follows the system.
+  final systemDefault = storedAudioDeviceFrom(
+    devices,
+    kind: kind,
+    deviceId: systemDefaultDeviceId,
+    kindOf: kindOf,
+    deviceIdOf: deviceIdOf,
+  );
+  if (systemDefault != null) return systemDefault;
+
   // WebRTC exposes the OS-selected device as the synthetic "default" device
-  // on desktop. Use it whenever there is no local preference yet, or when the
+  // on Windows. Use it whenever there is no local preference yet, or when the
   // saved device is temporarily unavailable.
   return storedAudioDeviceFrom(
     devices,

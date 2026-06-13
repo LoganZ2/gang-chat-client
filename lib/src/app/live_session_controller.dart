@@ -3,6 +3,7 @@ import 'dart:async';
 import '../live/live_session.dart';
 import '../live/audio_device_restorer.dart';
 import '../live/livekit_url.dart';
+import '../live/system_default_audio_input.dart';
 import '../protocol/models.dart';
 import 'audio_device_store.dart';
 
@@ -18,7 +19,22 @@ class LiveSessionController {
        _audioDeviceRestorer =
            audioDeviceRestorer ??
            ((store) async {
-             await restoreStoredAudioDevices(store);
+             // On macOS the OS-selected mic is only known via the native
+             // channel; pass it so a room join follows the system default when
+             // the user has not pinned a device. Other platforms return null
+             // and fall back to the synthetic "default" device as before.
+             final systemDefaultInput = SystemDefaultAudioInput();
+             String? systemDefaultInputId;
+             try {
+               systemDefaultInputId =
+                   await systemDefaultInput.currentDeviceId();
+             } finally {
+               await systemDefaultInput.dispose();
+             }
+             await restoreStoredAudioDevices(
+               store,
+               systemDefaultInputId: systemDefaultInputId,
+             );
            });
 
   final String apiBaseUrl;

@@ -13,6 +13,7 @@ DEPENDENCIES:
   - flutter_webrtc (from `Flutter/ephemeral/.symlinks/plugins/flutter_webrtc/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
   - livekit_client (from `Flutter/ephemeral/.symlinks/plugins/livekit_client/macos`)
+  - WebRTC-SDK (= 144.7559.01)
 
 SPEC REPOS:
   trunk:
@@ -32,6 +33,6 @@ SPEC CHECKSUMS:
   livekit_client: 3e024a31e364d4a2e0deda1b3908e93933dbf6dc
   WebRTC-SDK: ab9b5319e458c2bfebdc92b3600740da35d5630d
 
-PODFILE CHECKSUM: 54d867c82ac51cbd61b565781b9fada492027009
+PODFILE CHECKSUM: 7994f3fa765b866d1060c754613f9eaca695eaea
 
 COCOAPODS: 1.16.2

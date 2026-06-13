@@ -21,6 +21,7 @@ import '../app/sticker_uploads.dart';
 import '../live/audio_device_restorer.dart';
 import '../live/audio_device_service.dart';
 import '../live/audio_test_service.dart';
+import '../live/system_default_audio_input.dart';
 import '../protocol/api_client.dart';
 import '../protocol/models.dart';
 import '../protocol/sticker_pack_store.dart';
@@ -50,6 +51,7 @@ class SettingsPage extends StatefulWidget {
     this.isSubWindow = false,
     this.audioDeviceStore = const SecureAudioDeviceStore(),
     this.audioDeviceService = const LiveAudioDeviceService(),
+    this.systemDefaultAudioInput,
     this.controller,
     this.api,
     this.apiBaseUrl = '',
@@ -67,6 +69,7 @@ class SettingsPage extends StatefulWidget {
   final bool isSubWindow;
   final AudioDeviceStore audioDeviceStore;
   final LiveAudioDeviceService audioDeviceService;
+  final SystemDefaultAudioInput? systemDefaultAudioInput;
   final SettingsController? controller;
   final GangApi? api;
   final String apiBaseUrl;
@@ -149,6 +152,14 @@ class _SettingsPageState extends State<SettingsPage> {
   final _audioTestService = AudioTestService();
   AudioTestHandle? _inputTest;
   AudioTestHandle? _outputTest;
+  SystemDefaultAudioInput? _systemDefaultAudioInput;
+  StreamSubscription<String?>? _systemDefaultInputSubscription;
+  String? _systemDefaultInputId;
+
+  SystemDefaultAudioInput get _systemDefaultInput {
+    return _systemDefaultAudioInput ??=
+        widget.systemDefaultAudioInput ?? SystemDefaultAudioInput();
+  }
 
   SettingsController get _settingsController {
     final injected = widget.controller;
@@ -182,6 +193,8 @@ class _SettingsPageState extends State<SettingsPage> {
     unawaited(_stopInputTest(updateState: false));
     unawaited(_stopOutputTest(updateState: false));
     unawaited(_deviceSubscription?.cancel());
+    unawaited(_systemDefaultInputSubscription?.cancel());
+    unawaited(_systemDefaultAudioInput?.dispose());
     _usernameController.dispose();
     _displayNameController.dispose();
     _bioController.dispose();
@@ -483,8 +496,18 @@ class _SettingsPageState extends State<SettingsPage> {
       ) {
         unawaited(_applyDevices(devices));
       });
+      // Follow the OS-selected microphone when the user has not pinned one.
+      // macOS reports it through the native channel; the subscription re-runs
+      // selection whenever the system default changes underneath us.
+      _systemDefaultInputSubscription ??= _systemDefaultInput.changes.listen((
+        deviceId,
+      ) {
+        _systemDefaultInputId = deviceId;
+        unawaited(_onSystemDefaultInputChanged());
+      });
       unawaited(_loadStoredAudioSettings());
     }
+    _systemDefaultInputId = await _systemDefaultInput.currentDeviceId();
     await _loadDevices();
   }
 
@@ -1928,9 +1951,13 @@ class _SettingsPageState extends State<SettingsPage> {
       // Enumerate while a mic capture track is live. On macOS the device list
       // is empty until the audio module has been initialized by a running
       // capture unit, which is why devices only used to appear after joining a
-      // room. Holding the track open across enumeration reproduces that state.
+      // room. Holding the track open across enumeration reproduces that state,
+      // and retrying while no input has shown up yet covers the brief window
+      // where the module starts before its device list is populated.
       final devices = await _audioTestService.withCaptureSession(
         widget.audioDeviceService.enumerateDevices,
+        retryWhile: (devices) =>
+            !devices.any((device) => audioDeviceInfoKind(device) == 'audioinput'),
       );
       await _applyDevices(devices);
     } catch (e) {
@@ -1951,6 +1978,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _applyDevices(List<AudioDeviceInfo> devices) async {
     if (!mounted) return;
+    final systemDefaultInputId = _systemDefaultInputId;
     RestoredAudioDevices<AudioDeviceInfo> restored =
         const RestoredAudioDevices();
     try {
@@ -1958,12 +1986,22 @@ class _SettingsPageState extends State<SettingsPage> {
         widget.audioDeviceStore,
         audioDevices: widget.audioDeviceService,
         devices: devices,
+        systemDefaultInputId: systemDefaultInputId,
       );
     } catch (_) {
       // Device choices are a local convenience. If storage or OS routing fails,
       // keep rendering the current device list and let the user re-select.
     }
     if (!mounted) return;
+    final systemDefaultInput = systemDefaultInputId == null
+        ? null
+        : storedAudioDeviceFrom(
+            devices,
+            kind: 'audioinput',
+            deviceId: systemDefaultInputId,
+            kindOf: audioDeviceInfoKind,
+            deviceIdOf: audioDeviceInfoId,
+          );
     setState(
       () => _applyAudioDeviceListPatch(
         audioDeviceListApplied(
@@ -1977,9 +2015,19 @@ class _SettingsPageState extends State<SettingsPage> {
           kindOf: audioDeviceInfoKind,
           deviceIdOf: audioDeviceInfoId,
           error: _error,
+          systemDefaultInput: systemDefaultInput,
         ),
       ),
     );
+  }
+
+  // Re-runs device selection when the OS default microphone changes while
+  // Settings is open. restoreStoredAudioDevices only falls back to the system
+  // default when the user has not pinned a device, so an explicit choice is
+  // preserved; otherwise the picker and capture follow the new default.
+  Future<void> _onSystemDefaultInputChanged() async {
+    if (!mounted || !_voiceInitialized) return;
+    await _applyDevices([..._audioInputs, ..._audioOutputs]);
   }
 
   Future<void> _selectInput(AudioDeviceInfo device) async {
