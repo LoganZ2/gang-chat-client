@@ -7,6 +7,7 @@ class StoredAudioDevices {
     this.outputDeviceId,
     this.inputVolume = 1.0,
     this.outputVolume = 1.0,
+    this.musicBoxVolume = 1.0,
   });
 
   final String? inputDeviceId;
@@ -14,11 +15,16 @@ class StoredAudioDevices {
   final double inputVolume;
   final double outputVolume;
 
+  /// Local listening volume for the music box bot's audio track. Independent of
+  /// [outputVolume] — it scales only the `__musicbox__` participant.
+  final double musicBoxVolume;
+
   bool get isEmpty =>
       (inputDeviceId == null || inputDeviceId!.isEmpty) &&
       (outputDeviceId == null || outputDeviceId!.isEmpty) &&
       inputVolume == 1.0 &&
-      outputVolume == 1.0;
+      outputVolume == 1.0 &&
+      musicBoxVolume == 1.0;
 }
 
 class RestoredAudioDevices<T> {

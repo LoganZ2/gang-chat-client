@@ -91,6 +91,8 @@ class LiveChannelPane extends StatefulWidget {
     required this.onMusicBoxQueueResult,
     required this.onMusicBoxRemoveItem,
     required this.onMusicBoxSourceChanged,
+    required this.musicBoxVolume,
+    required this.onMusicBoxVolumeChanged,
   });
 
   final String title;
@@ -130,6 +132,11 @@ class LiveChannelPane extends StatefulWidget {
   final ValueChanged<MusicBoxSearchResult> onMusicBoxQueueResult;
   final ValueChanged<MusicBoxQueueItem> onMusicBoxRemoveItem;
   final ValueChanged<String> onMusicBoxSourceChanged;
+
+  /// Local listening volume for the music box bot (0–1), restored from the
+  /// store and persisted by [onMusicBoxVolumeChanged].
+  final double musicBoxVolume;
+  final ValueChanged<double> onMusicBoxVolumeChanged;
 
   @override
   State<LiveChannelPane> createState() => _LiveChannelPaneState();
@@ -250,6 +257,8 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                               onRemoveItem: widget.onMusicBoxRemoveItem,
                               onSourceChanged: widget.onMusicBoxSourceChanged,
                               onClose: widget.onToggleMusicBox,
+                              volume: widget.musicBoxVolume,
+                              onVolumeChanged: widget.onMusicBoxVolumeChanged,
                             ),
                           ),
                         ),

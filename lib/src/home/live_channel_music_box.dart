@@ -19,6 +19,8 @@ class LiveMusicBoxPanel extends StatelessWidget {
     required this.onRemoveItem,
     required this.onSourceChanged,
     required this.onClose,
+    required this.volume,
+    required this.onVolumeChanged,
   });
 
   final MusicBoxState state;
@@ -33,6 +35,10 @@ class LiveMusicBoxPanel extends StatelessWidget {
   final ValueChanged<MusicBoxQueueItem> onRemoveItem;
   final ValueChanged<String> onSourceChanged;
   final VoidCallback onClose;
+
+  /// Local listening volume for the music box (0–1), restored from the store.
+  final double volume;
+  final ValueChanged<double> onVolumeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -60,6 +66,11 @@ class LiveMusicBoxPanel extends StatelessWidget {
               state: state,
               onTogglePlayback: onTogglePlayback,
               onSkip: onSkip,
+            ),
+            const SizedBox(height: 14),
+            _MusicBoxVolume(
+              initialVolume: volume,
+              onChanged: onVolumeChanged,
             ),
             const SizedBox(height: 16),
             Expanded(
@@ -213,6 +224,189 @@ class _MusicBoxNowPlaying extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// A volume control shaped like a single icon button at rest that elongates
+/// rightward on hover, the extra width revealing an inline [UiSlider] within the
+/// same raised pill. Drives the local listening volume of the music box bot's
+/// audio track via [onChanged] — purely a per-listener preference, independent
+/// of the room's output volume. [initialVolume] seeds it from the restored
+/// store; the widget then owns the value while mounted.
+class _MusicBoxVolume extends StatefulWidget {
+  const _MusicBoxVolume({required this.initialVolume, required this.onChanged});
+
+  final double initialVolume;
+  final ValueChanged<double> onChanged;
+
+  @override
+  State<_MusicBoxVolume> createState() => _MusicBoxVolumeState();
+}
+
+class _MusicBoxVolumeState extends State<_MusicBoxVolume> {
+  // The collapsed square size / pill height.
+  static const _size = 32.0;
+  // The width the slider tail expands to on hover.
+  static const _sliderExtent = 110.0;
+  static const _gap = 10.0;
+  static const _pad = 12.0;
+  static const _duration = Duration(milliseconds: 180);
+
+  late double _volume = widget.initialVolume;
+  // The level to restore to when unmuting; captured at the moment of muting.
+  late double _premute = widget.initialVolume > 0 ? widget.initialVolume : 0.7;
+  bool _hovered = false;
+  // True while a slider drag is in flight. The pointer gets captured by the
+  // slider for the whole drag, so the cursor can wander off the pill (firing
+  // MouseRegion.onExit) without meaning to collapse it — keep it open until the
+  // drag ends, then fall back to the hover state.
+  bool _dragging = false;
+
+  bool get _expanded => _hovered || _dragging;
+
+  bool get _muted => _volume <= 0;
+
+  void _setVolume(double value) {
+    setState(() => _volume = value);
+    widget.onChanged(value);
+  }
+
+  void _toggleMute() {
+    if (_muted) {
+      _setVolume(_premute > 0 ? _premute : 0.7);
+    } else {
+      _premute = _volume;
+      _setVolume(0);
+    }
+  }
+
+  IconData get _icon {
+    if (_muted) return Icons.volume_off;
+    if (_volume < 0.5) return Icons.volume_down;
+    return Icons.volume_up;
+  }
+
+  ({Color background, Color border, Color foreground}) get _palette {
+    final active = !_muted;
+    return (
+      background: active ? UiColors.selected : UiColors.surface,
+      border: active ? UiColors.selectedBorder : UiColors.border,
+      foreground: active ? UiColors.accent : UiColors.text,
+    );
+  }
+
+  Widget _iconButton(double size) {
+    return _VolumeIconButton(
+      icon: _icon,
+      color: _palette.foreground,
+      tooltip: _muted ? '取消静音' : '静音',
+      size: size,
+      onTap: _toggleMute,
+    );
+  }
+
+  Widget _slider() {
+    return UiSlider(
+      value: _volume,
+      onChangeStart: (_) => setState(() => _dragging = true),
+      onChangeEnd: (_) => setState(() => _dragging = false),
+      onChanged: _setVolume,
+    );
+  }
+
+  // Elongates rightward in place; the icon stays put on the left.
+  @override
+  Widget build(BuildContext context) {
+    final p = _palette;
+    final height = _size;
+    final expandedWidth = height + _gap + _sliderExtent + _pad;
+
+    // The width is tweened explicitly — PressableSurface sizes itself with a
+    // plain SizedBox, so without this the hover expansion would snap instantly.
+    //
+    // The pill carries the raised face's own hover-lift and press-sink
+    // (interactive, with no onPressed of its own). Muting is the inner icon's
+    // GestureDetector — its tap recognizer goes through the gesture arena, so
+    // it doesn't fight the pill's bare pointer Listener — and the slider drives
+    // its own pointer handling. A press anywhere sinks the whole pill (it and
+    // its contents move down as one piece); releasing on the icon toggles mute,
+    // releasing on the slider commits the dragged volume.
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: TweenAnimationBuilder<double>(
+          duration: _duration,
+          curve: Curves.easeOutCubic,
+          tween: Tween(end: _expanded ? expandedWidth : height),
+          builder: (context, width, child) {
+            return PressableSurface(
+              height: height,
+              width: width,
+              enabled: true,
+              interactive: true,
+              borderRadius: UiRadii.md,
+              padding: EdgeInsets.zero,
+              backgroundColor: p.background,
+              selectedBackgroundColor: p.background,
+              borderColor: p.border,
+              selectedBorderColor: p.border,
+              child: child!,
+            );
+          },
+          child: Row(
+            children: [
+              _iconButton(height),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(right: _pad),
+                  child: _slider(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A bare, borderless tap target for the mute icon inside the volume pill — the
+/// pill itself supplies the raised face, so this only needs the icon and a
+/// click region.
+class _VolumeIconButton extends StatelessWidget {
+  const _VolumeIconButton({
+    required this.icon,
+    required this.color,
+    required this.tooltip,
+    required this.size,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String tooltip;
+  final double size;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: SizedBox(
+            width: size,
+            height: size,
+            child: Icon(icon, color: color, size: size * 0.46),
+          ),
+        ),
+      ),
     );
   }
 }

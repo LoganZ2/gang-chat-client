@@ -34,4 +34,10 @@ class AudioDeviceStore {
       'AudioDeviceStore.writeOutputVolume must be implemented.',
     );
   }
+
+  Future<void> writeMusicBoxVolume(double volume) {
+    throw UnimplementedError(
+      'AudioDeviceStore.writeMusicBoxVolume must be implemented.',
+    );
+  }
 }

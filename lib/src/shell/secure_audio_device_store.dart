@@ -11,6 +11,7 @@ class SecureAudioDeviceStore extends AudioDeviceStore {
   static const _outputDeviceIdKey = 'gang.audioOutputDeviceId';
   static const _inputVolumeKey = 'gang.audioInputVolume';
   static const _outputVolumeKey = 'gang.audioOutputVolume';
+  static const _musicBoxVolumeKey = 'gang.musicBoxVolume';
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage(
     mOptions: MacOsOptions(usesDataProtectionKeychain: false),
@@ -23,12 +24,14 @@ class SecureAudioDeviceStore extends AudioDeviceStore {
       _storage.read(key: _outputDeviceIdKey),
       _storage.read(key: _inputVolumeKey),
       _storage.read(key: _outputVolumeKey),
+      _storage.read(key: _musicBoxVolumeKey),
     ]);
     return StoredAudioDevices(
       inputDeviceId: storedAudioDeviceIdFromStorageValue(values[0]),
       outputDeviceId: storedAudioDeviceIdFromStorageValue(values[1]),
       inputVolume: storedAudioVolumeFromStorageValue(values[2]),
       outputVolume: storedAudioVolumeFromStorageValue(values[3]),
+      musicBoxVolume: storedAudioVolumeFromStorageValue(values[4]),
     );
   }
 
@@ -54,6 +57,14 @@ class SecureAudioDeviceStore extends AudioDeviceStore {
   Future<void> writeOutputVolume(double volume) {
     return _storage.write(
       key: _outputVolumeKey,
+      value: audioVolumeStorageString(volume),
+    );
+  }
+
+  @override
+  Future<void> writeMusicBoxVolume(double volume) {
+    return _storage.write(
+      key: _musicBoxVolumeKey,
       value: audioVolumeStorageString(volume),
     );
   }

@@ -7,6 +7,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:livekit_client/livekit_client.dart' as lk;
 
 import '../app/audio_levels.dart';
+import '../protocol/models.dart' show musicBoxBotIdentity;
 
 /// A capturable desktop source (a whole screen or a single window), used to
 /// populate the screen-share picker. Wraps flutter_webrtc's source so the UI
@@ -249,6 +250,7 @@ class LiveSession extends ChangeNotifier {
   bool _canPublish = true;
   double _inputVolume = 1.0;
   double _outputVolume = 1.0;
+  double _musicBoxVolume = 1.0;
   bool _outputMuted = false;
 
   final Set<String> _speakingIdentities = <String>{};
@@ -278,6 +280,10 @@ class LiveSession extends ChangeNotifier {
   bool get canPublish => _canPublish;
   double get inputVolume => _inputVolume;
   double get outputVolume => _outputVolume;
+
+  /// Local listening volume applied only to the music box bot's audio track,
+  /// independent of [outputVolume] (which covers every other remote speaker).
+  double get musicBoxVolume => _musicBoxVolume;
   bool get outputMuted => _outputMuted;
 
   /// Whether the local microphone is muted according to the LiveKit track
@@ -428,6 +434,7 @@ class LiveSession extends ChangeNotifier {
       }
       await _applyInputVolume();
       await _applyOutputVolume();
+      await _applyMusicBoxVolume();
       _refreshAllMicStates();
     } catch (e) {
       await _cancelEvents?.call();
@@ -467,6 +474,11 @@ class LiveSession extends ChangeNotifier {
   Future<void> setOutputVolume(double volume) async {
     _outputVolume = normalizedAudioVolume(volume);
     await _applyOutputVolume();
+  }
+
+  Future<void> setMusicBoxVolume(double volume) async {
+    _musicBoxVolume = normalizedAudioVolume(volume);
+    await _applyMusicBoxVolume();
   }
 
   Future<void> setOutputMuted(bool muted) async {
@@ -654,6 +666,7 @@ class LiveSession extends ChangeNotifier {
         event.participant,
       );
       unawaited(_applyOutputVolume());
+      unawaited(_applyMusicBoxVolume());
       notifyListeners();
       return;
     }
@@ -689,6 +702,7 @@ class LiveSession extends ChangeNotifier {
         event is lk.TrackUnmutedEvent) {
       unawaited(_applyInputVolume());
       unawaited(_applyOutputVolume());
+      unawaited(_applyMusicBoxVolume());
       _refreshAllMicStates();
       // A local screen-share track can be stopped from the OS (e.g. the
       // "stop sharing" bar); keep our flag honest.
@@ -759,11 +773,29 @@ class LiveSession extends ChangeNotifier {
     if (room == null) return;
     final volume = _outputMuted ? 0.0 : _outputVolume;
     for (final participant in room.remoteParticipants.values) {
+      // The music box bot has its own independent volume knob; leave it to
+      // _applyMusicBoxVolume so the two don't fight over the same track.
+      if (participant.identity == musicBoxBotIdentity) continue;
       for (final pub in participant.audioTrackPublications) {
         final track = pub.track;
         if (track == null) continue;
         try {
           await rtc.Helper.setVolume(volume, track.mediaStreamTrack);
+        } catch (_) {}
+      }
+    }
+  }
+
+  Future<void> _applyMusicBoxVolume() async {
+    final room = _room;
+    if (room == null) return;
+    for (final participant in room.remoteParticipants.values) {
+      if (participant.identity != musicBoxBotIdentity) continue;
+      for (final pub in participant.audioTrackPublications) {
+        final track = pub.track;
+        if (track == null) continue;
+        try {
+          await rtc.Helper.setVolume(_musicBoxVolume, track.mediaStreamTrack);
         } catch (_) {}
       }
     }

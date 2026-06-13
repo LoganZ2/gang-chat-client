@@ -110,6 +110,15 @@ class _LiveControlBar extends StatelessWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (musicBoxStrip != null) ...[
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 280),
+                    child: musicBoxStrip,
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
               Wrap(
                 alignment: WrapAlignment.center,
                 spacing: 10,
@@ -133,51 +142,51 @@ class _LiveControlBar extends StatelessWidget {
                   ),
                 ],
               ),
-              if (musicBoxStrip != null) ...[
-                const SizedBox(height: 10),
-                musicBoxStrip,
-              ],
             ],
           );
         }
 
-        // The transport buttons stay centered against the full bar width; the
-        // inline music box overlays at the right edge via a Stack so it doesn't
-        // shove the buttons off-center.
-        return Stack(
-          alignment: Alignment.center,
+        // The inline music box sits on its own centered row above the
+        // transport buttons, so it never competes with them for horizontal
+        // space — it just ellipsizes its title/artist within the 280 cap.
+        final buttonRow = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!joined) ...[
+              Button(
+                height: _controlButtonSize,
+                loading: joining,
+                icon: const Icon(Icons.call),
+                onPressed: onJoin,
+                child: const Text('加入'),
+              ),
+              const SizedBox(width: 12),
+            ] else ...[
+              ..._withControlGaps(controls),
+              const SizedBox(width: 10),
+            ],
+            ButtonIcon(
+              tooltip: '收起直播频道',
+              icon: const Icon(Icons.keyboard_arrow_up),
+              onPressed: onCollapse,
+              size: _controlButtonSize,
+            ),
+          ],
+        );
+
+        if (musicBoxStrip == null) return Center(child: buttonRow);
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Center(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (!joined) ...[
-                    Button(
-                      height: _controlButtonSize,
-                      loading: joining,
-                      icon: const Icon(Icons.call),
-                      onPressed: onJoin,
-                      child: const Text('加入'),
-                    ),
-                    const SizedBox(width: 12),
-                  ] else ...[
-                    ..._withControlGaps(controls),
-                    const SizedBox(width: 10),
-                  ],
-                  ButtonIcon(
-                    tooltip: '收起直播频道',
-                    icon: const Icon(Icons.keyboard_arrow_up),
-                    onPressed: onCollapse,
-                    size: _controlButtonSize,
-                  ),
-                ],
-              ),
-            ),
-            if (musicBoxStrip != null)
-              Align(
-                alignment: Alignment.centerRight,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 280),
                 child: musicBoxStrip,
               ),
+            ),
+            const SizedBox(height: 10),
+            Center(child: buttonRow),
           ],
         );
       },
@@ -228,68 +237,81 @@ class _InlineMusicBox extends StatelessWidget {
         height: _controlButtonSize,
         child: Stack(
           children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-            _VinylRecord(spinning: spinning, label: current?.title, size: 26),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    current?.title ?? '未在播放',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: current == null
-                          ? UiColors.textMuted
-                          : UiColors.text,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                // Drop the skip button once the strip narrows so the title/artist
+                // can keep shrinking instead of the whole strip bottoming out at
+                // the full button-row width.
+                final showSkip = constraints.maxWidth >= 175;
+                return Row(
+                  children: [
+                    _VinylRecord(
+                      spinning: spinning,
+                      label: current?.title,
+                      size: 26,
                     ),
-                  ),
-                  Text(
-                    current?.artist.isNotEmpty == true
-                        ? current!.artist
-                        : '点一首歌开始播放',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: UiColors.textSecondary,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            current?.title ?? '未在播放',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: current == null
+                                  ? UiColors.textMuted
+                                  : UiColors.text,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            current?.artist.isNotEmpty == true
+                                ? current!.artist
+                                : '点一首歌开始播放',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: UiColors.textSecondary,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 6),
-            ButtonIcon(
-              tooltip: isPause ? '暂停' : '播放',
-              icon: Icon(isPause ? Icons.pause : Icons.play_arrow),
-              tone: ButtonTone.primary,
-              onPressed: hasQueue ? onTogglePlayback : null,
-              size: 30,
-            ),
-            const SizedBox(width: 4),
-            ButtonIcon(
-              tooltip: '下一首',
-              icon: const Icon(Icons.skip_next),
-              onPressed: hasQueue ? onSkip : null,
-              size: 30,
-            ),
-            const SizedBox(width: 4),
-            ButtonIcon(
-              tooltip: expanded ? '收起音乐盒' : '搜索 / 播放列表',
-              icon: const Icon(Icons.queue_music),
-              selected: expanded,
-              onPressed: onToggleExpand,
-              size: 30,
-            ),
-              ],
+                    const SizedBox(width: 6),
+                    ButtonIcon(
+                      tooltip: isPause ? '暂停' : '播放',
+                      icon: Icon(isPause ? Icons.pause : Icons.play_arrow),
+                      tone: ButtonTone.primary,
+                      onPressed: hasQueue ? onTogglePlayback : null,
+                      size: 30,
+                    ),
+                    if (showSkip) ...[
+                      const SizedBox(width: 4),
+                      ButtonIcon(
+                        tooltip: '下一首',
+                        icon: const Icon(Icons.skip_next),
+                        onPressed: hasQueue ? onSkip : null,
+                        size: 30,
+                      ),
+                    ],
+                    const SizedBox(width: 4),
+                    ButtonIcon(
+                      tooltip: expanded ? '收起音乐盒' : '搜索 / 播放列表',
+                      icon: const Icon(Icons.queue_music),
+                      selected: expanded,
+                      onPressed: onToggleExpand,
+                      size: 30,
+                    ),
+                  ],
+                );
+              },
             ),
             // A hairline progress track pinned to the bottom edge of the strip,
             // spanning its full width — keeps the title/artist lines intact

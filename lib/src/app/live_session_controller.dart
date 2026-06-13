@@ -72,6 +72,18 @@ class LiveSessionController {
     return session.setOutputVolume(volume);
   }
 
+  double get musicBoxVolume => session.musicBoxVolume;
+
+  Future<void> setMusicBoxVolume(double volume) async {
+    await session.setMusicBoxVolume(volume);
+    try {
+      await audioDeviceStore.writeMusicBoxVolume(volume);
+    } catch (_) {
+      // A failed persist shouldn't undo the live volume change; it just won't
+      // survive the next launch.
+    }
+  }
+
   Future<void> setOutputMuted(bool muted) => session.setOutputMuted(muted);
 
   Future<void> connectWithRetry(
@@ -110,6 +122,7 @@ class LiveSessionController {
       final stored = await audioDeviceStore.read();
       await session.setInputVolume(stored.inputVolume);
       await session.setOutputVolume(stored.outputVolume);
+      await session.setMusicBoxVolume(stored.musicBoxVolume);
       await _audioDeviceRestorer(audioDeviceStore);
     } catch (_) {
       // Joining voice should still work with LiveKit's current/default device

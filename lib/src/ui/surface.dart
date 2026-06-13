@@ -120,7 +120,10 @@ class _PressableSurfaceState extends State<PressableSurface> {
 
   void _handlePointerMove(PointerMoveEvent event) {
     if (event.pointer != _pressedPointer) return;
-    _setPressed(_isInsideHitTarget(event.localPosition));
+    // Keep the pressed effect for the whole hold, even if the pointer wanders
+    // outside the hit target. Whether the tap actually fires is decided at
+    // pointer-up from the release position.
+    _setPressed(true);
   }
 
   void _handlePointerUp(PointerUpEvent event) {

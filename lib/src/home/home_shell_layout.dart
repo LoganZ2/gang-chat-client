@@ -119,6 +119,9 @@ extension _HomeShellLayout on _HomeShellState {
             unawaited(_queueMusicBoxTrack(result)),
         onMusicBoxRemoveItem: (item) => unawaited(_removeMusicBoxItem(item)),
         onMusicBoxSourceChanged: _changeMusicBoxSource,
+        musicBoxVolume: _liveSessionController.musicBoxVolume,
+        onMusicBoxVolumeChanged: (volume) =>
+            unawaited(_liveSessionController.setMusicBoxVolume(volume)),
       );
     }
 
