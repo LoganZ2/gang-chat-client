@@ -22,36 +22,6 @@ class AudioTestService {
     }
   }
 
-  /// Runs [action] while a microphone capture track is live, then tears it
-  /// down.
-  ///
-  /// macOS's CoreAudio audio device module only reports the full device list
-  /// once an audio capture unit has been instantiated. Creating a probe track
-  /// and disposing it *before* enumerating (as [ensureDeviceAccess] alone does)
-  /// leaves the module uninitialized, so the first `enumerateDevices()` in
-  /// Settings came back empty until a room had been joined and kept a mic track
-  /// open. Holding the track open across [action] mirrors that in-room state so
-  /// the devices are reported on the first pass.
-  ///
-  /// If the probe track can't be created (permission denied, no input device),
-  /// [action] still runs so output devices continue to surface.
-  Future<T> withCaptureSession<T>(Future<T> Function() action) async {
-    lk.LocalAudioTrack? track;
-    try {
-      track = await lk.LocalAudioTrack.create();
-      await track.start();
-    } catch (_) {
-      // Fall through and enumerate without a live input track.
-    } finally {
-      _requestedDeviceAccess = true;
-    }
-    try {
-      return await action();
-    } finally {
-      await _disposeTestTrack(track);
-    }
-  }
-
   Future<AudioTestHandle> startInputTest({
     required String? inputDeviceId,
     required double volume,

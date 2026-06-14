@@ -6,6 +6,7 @@ Future<RestoredAudioDevices<AudioDeviceInfo>> restoreStoredAudioDevices(
   AudioDeviceStore store, {
   LiveAudioDeviceService audioDevices = const LiveAudioDeviceService(),
   List<AudioDeviceInfo>? devices,
+  String? systemDefaultInputId,
 }) async {
   final stored = await store.read();
   final availableDevices = devices ?? await audioDevices.enumerateDevices();
@@ -15,6 +16,7 @@ Future<RestoredAudioDevices<AudioDeviceInfo>> restoreStoredAudioDevices(
     storedDeviceId: stored.inputDeviceId,
     kindOf: audioDeviceInfoKind,
     deviceIdOf: audioDeviceInfoId,
+    systemDefaultDeviceId: systemDefaultInputId,
   );
   final output = preferredStoredAudioDeviceFrom(
     availableDevices,

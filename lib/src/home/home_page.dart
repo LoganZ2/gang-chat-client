@@ -5,14 +5,14 @@ import '../app/authenticated_app_context.dart';
 import '../app/live_session_controller.dart';
 import '../app/realtime_controller.dart';
 import '../shell/desktop_window_controller.dart';
-import '../shell/secure_audio_device_store.dart';
+import '../shell/local_audio_device_store.dart';
 import 'home_shell.dart';
 
 class HomePage extends StatelessWidget {
   HomePage({
     super.key,
     required this.app,
-    this.audioDeviceStore = const SecureAudioDeviceStore(),
+    this.audioDeviceStore = const LocalAudioDeviceStore(),
     this.liveSessionController,
     this.realtime,
     DesktopWindowController? windowController,

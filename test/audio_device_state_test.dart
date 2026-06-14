@@ -72,6 +72,54 @@ void main() {
     },
   );
 
+  test(
+    'audioDeviceListApplied follows system default input when none restored',
+    () {
+      const inputOne = _Device('mic_1', 'Mic 1', 'audioinput');
+      const inputTwo = _Device('mic_2', 'Mic 2', 'audioinput');
+
+      final patch = audioDeviceListApplied<_Device>(
+        devices: const [inputOne, inputTwo],
+        restoredInput: null,
+        restoredOutput: null,
+        hardwareInput: inputOne,
+        hardwareOutput: null,
+        currentInput: null,
+        currentOutput: null,
+        kindOf: _kindOf,
+        deviceIdOf: _deviceIdOf,
+        error: null,
+        systemDefaultInput: inputTwo,
+      );
+
+      // The system default sits ahead of the hardware/current device, so it is
+      // chosen even though the hardware reports mic_1.
+      expect(patch.selectedInput, inputTwo);
+    },
+  );
+
+  test('audioDeviceListApplied keeps restored input over system default', () {
+    const inputOne = _Device('mic_1', 'Mic 1', 'audioinput');
+    const inputTwo = _Device('mic_2', 'Mic 2', 'audioinput');
+
+    final patch = audioDeviceListApplied<_Device>(
+      devices: const [inputOne, inputTwo],
+      restoredInput: inputOne,
+      restoredOutput: null,
+      hardwareInput: null,
+      hardwareOutput: null,
+      currentInput: null,
+      currentOutput: null,
+      kindOf: _kindOf,
+      deviceIdOf: _deviceIdOf,
+      error: null,
+      systemDefaultInput: inputTwo,
+    );
+
+    // An explicit saved preference still wins over the OS default.
+    expect(patch.selectedInput, inputOne);
+  });
+
   test('audioDeviceSelectionStarted marks selected device busy', () {
     const input = _Device('mic_1', 'Mic', 'audioinput');
     const output = _Device('speaker_1', 'Speaker', 'audiooutput');

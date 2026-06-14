@@ -1,4 +1,5 @@
 import Cocoa
+import CoreAudio
 import CoreGraphics
 import FlutterMacOS
 
@@ -11,6 +12,7 @@ private let v2TitleBarHeight: CGFloat = 44
 private let screenThumbnailChannel = "gang_chat/screen_thumbnail"
 private let clipboardChannel = "gang_chat/clipboard"
 private let fileDropChannel = "gang_chat/file_drop"
+private let audioDevicesChannel = "gang_chat/audio_devices"
 private let appBackground = NSColor(
   red: CGFloat(0x14) / 255.0,
   green: CGFloat(0x17) / 255.0,
@@ -21,6 +23,8 @@ private let appBackground = NSColor(
 class MainFlutterWindow: NSWindow {
   private var resizeCursorActive = false
   private var fileDropMethodChannel: FlutterMethodChannel?
+  private var audioDevicesMethodChannel: FlutterMethodChannel?
+  private var defaultInputListenerBlock: AudioObjectPropertyListenerBlock?
 
   override func awakeFromNib() {
     alphaValue = 0
@@ -41,6 +45,7 @@ class MainFlutterWindow: NSWindow {
 
     registerScreenThumbnailChannel(flutterViewController)
     registerClipboardChannel(flutterViewController)
+    registerAudioDevicesChannel(flutterViewController)
     installFileDropTarget(flutterViewController)
     RegisterGeneratedPlugins(registry: flutterViewController)
 
@@ -66,6 +71,7 @@ class MainFlutterWindow: NSWindow {
 
   deinit {
     NotificationCenter.default.removeObserver(self)
+    removeDefaultInputListener()
   }
 
   // Centers the native traffic lights within the v2 title-bar band and insets
@@ -192,6 +198,243 @@ class MainFlutterWindow: NSWindow {
         result(FlutterMethodNotImplemented)
       }
     }
+  }
+
+  // Enumerates audio input devices and reports the system default on
+  // `gang_chat/audio_devices`.
+  //
+  // flutter_webrtc's CoreAudio audio device module lists zero input devices
+  // until WebRTC is actually recording (i.e. after publishing audio in a room),
+  // so its enumerateDevices() comes back empty in Settings before a room is
+  // joined. We sidestep that entirely by reading CoreAudio directly here.
+  //
+  // The deviceId we emit is the stringified CoreAudio AudioDeviceID integer
+  // (e.g. "87"). That is byte-for-byte what WebRTC's macOS RTCIODevice.deviceId
+  // resolves to (libwebrtc's audio_device_mac builds the guid as
+  // std::to_string(AudioDeviceID)), so the ids stay compatible with
+  // flutter_webrtc's selectAudioInput once the in-room ADM is populated.
+  //
+  // A CoreAudio property listener pushes `defaultInputDeviceChanged` whenever the
+  // user switches the default input in System Settings, letting the picker
+  // follow it live.
+  //
+  // Methods:
+  //   `enumerateInputs` -> [[deviceId: String, label: String, isDefault: Bool]]
+  //   `enumerateOutputs` -> [[deviceId: String, label: String, isDefault: Bool]]
+  //   `getDefaultInputDeviceId` -> String? (deviceId of the default mic)
+  //   `getDefaultOutputDeviceId` -> String? (deviceId of the default speaker)
+  //   `startListening` -> begins observing the default-device change event
+  // Events:
+  //   `defaultInputDeviceChanged` with argument String? (the new deviceId)
+  private func registerAudioDevicesChannel(_ flutterViewController: FlutterViewController) {
+    let channel = FlutterMethodChannel(
+      name: audioDevicesChannel,
+      binaryMessenger: flutterViewController.engine.binaryMessenger
+    )
+    audioDevicesMethodChannel = channel
+    channel.setMethodCallHandler { [weak self] call, result in
+      switch call.method {
+      case "enumerateInputs":
+        result(self?.enumerateInputDevices() ?? [])
+      case "enumerateOutputs":
+        result(self?.enumerateOutputDevices() ?? [])
+      case "getDefaultInputDeviceId":
+        result(self?.defaultInputDeviceId())
+      case "getDefaultOutputDeviceId":
+        result(self?.defaultOutputDeviceId())
+      case "startListening":
+        self?.installDefaultInputListener()
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  // All CoreAudio input devices (those exposing at least one input stream), each
+  // as {deviceId, label, isDefault}. deviceId is String(AudioDeviceID).
+  private func enumerateInputDevices() -> [[String: Any]] {
+    let defaultId = defaultInputAudioDeviceId()
+    var devices: [[String: Any]] = []
+    for id in allAudioDeviceIds() where deviceHasInputStreams(id) {
+      let label = coreAudioStringProperty(id, kAudioDevicePropertyDeviceNameCFString)
+        ?? "麦克风 \(id)"
+      devices.append([
+        "deviceId": String(id),
+        "label": label,
+        "isDefault": id == defaultId,
+      ])
+    }
+    return devices
+  }
+
+  // All CoreAudio output devices (those exposing at least one output stream),
+  // each as {deviceId, label, isDefault}. deviceId is String(AudioDeviceID).
+  private func enumerateOutputDevices() -> [[String: Any]] {
+    let defaultId = defaultOutputAudioDeviceId()
+    var devices: [[String: Any]] = []
+    for id in allAudioDeviceIds() where deviceHasOutputStreams(id) {
+      let label = coreAudioStringProperty(id, kAudioDevicePropertyDeviceNameCFString)
+        ?? "扬声器 \(id)"
+      devices.append([
+        "deviceId": String(id),
+        "label": label,
+        "isDefault": id == defaultId,
+      ])
+    }
+    return devices
+  }
+
+  private func defaultInputDeviceId() -> String? {
+    guard let id = defaultInputAudioDeviceId() else { return nil }
+    return String(id)
+  }
+
+  private func defaultOutputDeviceId() -> String? {
+    guard let id = defaultOutputAudioDeviceId() else { return nil }
+    return String(id)
+  }
+
+  // The AudioDeviceID the OS currently treats as the default input, or nil.
+  private func defaultInputAudioDeviceId() -> AudioDeviceID? {
+    return defaultAudioDeviceId(for: kAudioHardwarePropertyDefaultInputDevice)
+  }
+
+  // The AudioDeviceID the OS currently treats as the default output, or nil.
+  private func defaultOutputAudioDeviceId() -> AudioDeviceID? {
+    return defaultAudioDeviceId(for: kAudioHardwarePropertyDefaultOutputDevice)
+  }
+
+  private func defaultAudioDeviceId(
+    for selector: AudioObjectPropertySelector
+  ) -> AudioDeviceID? {
+    var address = AudioObjectPropertyAddress(
+      mSelector: selector,
+      mScope: kAudioObjectPropertyScopeGlobal,
+      mElement: kAudioObjectPropertyElementMain
+    )
+    var deviceId = AudioDeviceID(0)
+    var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+    let status = AudioObjectGetPropertyData(
+      AudioObjectID(kAudioObjectSystemObject),
+      &address,
+      0,
+      nil,
+      &size,
+      &deviceId
+    )
+    if status != noErr || deviceId == kAudioObjectUnknown { return nil }
+    return deviceId
+  }
+
+  private func allAudioDeviceIds() -> [AudioDeviceID] {
+    var address = AudioObjectPropertyAddress(
+      mSelector: kAudioHardwarePropertyDevices,
+      mScope: kAudioObjectPropertyScopeGlobal,
+      mElement: kAudioObjectPropertyElementMain
+    )
+    var size = UInt32(0)
+    guard
+      AudioObjectGetPropertyDataSize(
+        AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size
+      ) == noErr
+    else { return [] }
+    let count = Int(size) / MemoryLayout<AudioDeviceID>.size
+    guard count > 0 else { return [] }
+    var ids = [AudioDeviceID](repeating: 0, count: count)
+    guard
+      AudioObjectGetPropertyData(
+        AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &ids
+      ) == noErr
+    else { return [] }
+    return ids
+  }
+
+  // True when the device exposes at least one input stream (so it can be a mic).
+  private func deviceHasInputStreams(_ device: AudioDeviceID) -> Bool {
+    return deviceHasStreams(device, scope: kAudioObjectPropertyScopeInput)
+  }
+
+  // True when the device exposes at least one output stream (so it can play).
+  private func deviceHasOutputStreams(_ device: AudioDeviceID) -> Bool {
+    return deviceHasStreams(device, scope: kAudioObjectPropertyScopeOutput)
+  }
+
+  private func deviceHasStreams(
+    _ device: AudioDeviceID,
+    scope: AudioObjectPropertyScope
+  ) -> Bool {
+    var address = AudioObjectPropertyAddress(
+      mSelector: kAudioDevicePropertyStreams,
+      mScope: scope,
+      mElement: kAudioObjectPropertyElementMain
+    )
+    var size = UInt32(0)
+    guard
+      AudioObjectGetPropertyDataSize(device, &address, 0, nil, &size) == noErr
+    else { return false }
+    return size > 0
+  }
+
+  private func coreAudioStringProperty(
+    _ device: AudioDeviceID,
+    _ selector: AudioObjectPropertySelector
+  ) -> String? {
+    var address = AudioObjectPropertyAddress(
+      mSelector: selector,
+      mScope: kAudioObjectPropertyScopeGlobal,
+      mElement: kAudioObjectPropertyElementMain
+    )
+    var value: CFString = "" as CFString
+    var size = UInt32(MemoryLayout<CFString>.size)
+    let status = withUnsafeMutablePointer(to: &value) {
+      AudioObjectGetPropertyData(device, &address, 0, nil, &size, $0)
+    }
+    if status != noErr { return nil }
+    let string = value as String
+    return string.isEmpty ? nil : string
+  }
+
+
+  private func installDefaultInputListener() {
+    guard defaultInputListenerBlock == nil else { return }
+    var address = AudioObjectPropertyAddress(
+      mSelector: kAudioHardwarePropertyDefaultInputDevice,
+      mScope: kAudioObjectPropertyScopeGlobal,
+      mElement: kAudioObjectPropertyElementMain
+    )
+    let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+      guard let self = self else { return }
+      self.audioDevicesMethodChannel?.invokeMethod(
+        "defaultInputDeviceChanged",
+        arguments: self.defaultInputDeviceId()
+      )
+    }
+    let status = AudioObjectAddPropertyListenerBlock(
+      AudioObjectID(kAudioObjectSystemObject),
+      &address,
+      DispatchQueue.main,
+      block
+    )
+    if status == noErr {
+      defaultInputListenerBlock = block
+    }
+  }
+
+  private func removeDefaultInputListener() {
+    guard let block = defaultInputListenerBlock else { return }
+    var address = AudioObjectPropertyAddress(
+      mSelector: kAudioHardwarePropertyDefaultInputDevice,
+      mScope: kAudioObjectPropertyScopeGlobal,
+      mElement: kAudioObjectPropertyElementMain
+    )
+    AudioObjectRemovePropertyListenerBlock(
+      AudioObjectID(kAudioObjectSystemObject),
+      &address,
+      DispatchQueue.main,
+      block
+    )
+    defaultInputListenerBlock = nil
   }
 
   // Mirrors the Windows runner's `gang_chat/clipboard` channel so paste-to-send

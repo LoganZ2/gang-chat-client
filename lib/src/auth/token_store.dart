@@ -1,12 +1,19 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+/// Stores the auth refresh token and the last-used API base URL.
+///
+/// The refresh token is sensitive (it grants a logged-in session), so it stays
+/// in the OS keychain via flutter_secure_storage. The API base URL is not
+/// sensitive and lives in SharedPreferences so reading it never triggers a
+/// macOS keychain authorization prompt.
 class TokenStore {
   const TokenStore();
 
   static const _refreshTokenKey = 'gang.refreshToken';
   static const _apiBaseUrlKey = 'gang.apiBaseUrl';
 
-  final FlutterSecureStorage _storage = const FlutterSecureStorage(
+  FlutterSecureStorage get _storage => const FlutterSecureStorage(
     mOptions: MacOsOptions(usesDataProtectionKeychain: false),
   );
 
@@ -22,11 +29,13 @@ class TokenStore {
     return _storage.delete(key: _refreshTokenKey);
   }
 
-  Future<String?> readApiBaseUrl() {
-    return _storage.read(key: _apiBaseUrlKey);
+  Future<String?> readApiBaseUrl() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_apiBaseUrlKey);
   }
 
-  Future<void> writeApiBaseUrl(String baseUrl) {
-    return _storage.write(key: _apiBaseUrlKey, value: baseUrl);
+  Future<void> writeApiBaseUrl(String baseUrl) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_apiBaseUrlKey, baseUrl);
   }
 }

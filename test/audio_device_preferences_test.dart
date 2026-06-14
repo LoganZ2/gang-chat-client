@@ -61,6 +61,57 @@ void main() {
     },
   );
 
+  test(
+    'preferredStoredAudioDeviceFrom prefers stored, then system default, then '
+    'synthetic default',
+    () {
+      const devices = [
+        _Device('default', 'Default Mic', 'audioinput'),
+        _Device('mic_1', 'Desk Mic', 'audioinput'),
+        _Device('mic_2', 'Room Mic', 'audioinput'),
+      ];
+
+      // A saved preference still wins over the OS default.
+      expect(
+        preferredStoredAudioDeviceFrom(
+          devices,
+          kind: 'audioinput',
+          storedDeviceId: 'mic_1',
+          systemDefaultDeviceId: 'mic_2',
+          kindOf: _kindOf,
+          deviceIdOf: _deviceIdOf,
+        ),
+        devices[1],
+      );
+      // No saved preference: follow the system default the native channel
+      // reported, ahead of the synthetic "default" device.
+      expect(
+        preferredStoredAudioDeviceFrom(
+          devices,
+          kind: 'audioinput',
+          storedDeviceId: null,
+          systemDefaultDeviceId: 'mic_2',
+          kindOf: _kindOf,
+          deviceIdOf: _deviceIdOf,
+        ),
+        devices[2],
+      );
+      // No saved preference and no usable system default: fall back to the
+      // synthetic "default" device (the Windows path).
+      expect(
+        preferredStoredAudioDeviceFrom(
+          devices,
+          kind: 'audioinput',
+          storedDeviceId: null,
+          systemDefaultDeviceId: 'missing',
+          kindOf: _kindOf,
+          deviceIdOf: _deviceIdOf,
+        ),
+        devices[0],
+      );
+    },
+  );
+
   test('selectStoredAudioDeviceIfChanged skips selected devices', () async {
     const device = _Device('mic_1', 'Desk Mic', 'audioinput');
     var selects = 0;

@@ -3,10 +3,11 @@ import 'dart:async';
 import '../live/live_session.dart';
 import '../live/audio_device_restorer.dart';
 import '../live/livekit_url.dart';
+import '../live/mac_audio_devices.dart';
 import '../protocol/models.dart';
 import 'audio_device_store.dart';
 
-typedef AudioDeviceRestorer = Future<void> Function(AudioDeviceStore store);
+typedef AudioDeviceRestorer = Future<String?> Function(AudioDeviceStore store);
 
 class LiveSessionController {
   LiveSessionController({
@@ -18,7 +19,26 @@ class LiveSessionController {
        _audioDeviceRestorer =
            audioDeviceRestorer ??
            ((store) async {
-             await restoreStoredAudioDevices(store);
+             // On macOS the OS-selected mic is only known via the native
+             // channel; pass it so a room join follows the system default when
+             // the user has not pinned a device. Other platforms return null
+             // and fall back to the synthetic "default" device as before.
+             final systemDefaultInput = MacAudioDevices();
+             String? systemDefaultInputId;
+             try {
+               systemDefaultInputId =
+                   await systemDefaultInput.currentDeviceId();
+             } finally {
+               await systemDefaultInput.dispose();
+             }
+             final restored = await restoreStoredAudioDevices(
+               store,
+               systemDefaultInputId: systemDefaultInputId,
+             );
+             // The device the published mic should capture from: the resolved
+             // input (stored preference or system default), else null to leave
+             // LiveKit on the ADM's current device.
+             return restored.input?.deviceId ?? systemDefaultInputId;
            });
 
   final String apiBaseUrl;
@@ -123,7 +143,12 @@ class LiveSessionController {
       await session.setInputVolume(stored.inputVolume);
       await session.setOutputVolume(stored.outputVolume);
       await session.setMusicBoxVolume(stored.musicBoxVolume);
-      await _audioDeviceRestorer(audioDeviceStore);
+      // Capture the published mic from the device the restorer resolved (the
+      // user's pinned device, or the macOS system default). Null leaves LiveKit
+      // on the ADM's current device. Without this the publish path ignores the
+      // picker entirely, since defaultAudioCaptureOptions has no deviceId.
+      final inputDeviceId = await _audioDeviceRestorer(audioDeviceStore);
+      await session.setInputDeviceId(inputDeviceId);
     } catch (_) {
       // Joining voice should still work with LiveKit's current/default device
       // if a stored local preference cannot be applied.
