@@ -1089,10 +1089,15 @@ void main() {
     expect(notificationsRect.bottom, closeTo(createRect.bottom, 0.01));
     expect(settingsRect.top, closeTo(createRect.top, 0.01));
     expect(settingsRect.bottom, closeTo(createRect.bottom, 0.01));
-    expect(logoutRect.top, closeTo(createRect.top, 0.01));
-    expect(logoutRect.bottom, closeTo(createRect.bottom, 0.01));
-    expect(logoutRect.right, closeTo(userSummaryRect.right, 0.01));
-    expect(logoutRect.left - settingsRect.right, closeTo(8, 0.01));
+    // The logout control now lives inline in the top user summary bar, anchored
+    // to its right edge — not in the bottom footer alongside settings.
+    expect(logoutRect.top, greaterThanOrEqualTo(userSummaryRect.top - 0.01));
+    expect(
+      logoutRect.bottom,
+      lessThanOrEqualTo(userSummaryRect.bottom + 0.01),
+    );
+    expect(logoutRect.bottom, lessThan(createRect.top));
+    expect(logoutRect.right, lessThanOrEqualTo(userSummaryRect.right + 0.01));
 
     await tester.tap(find.byTooltip('设置'));
     await tester.pumpAndSettle();
@@ -1144,14 +1149,14 @@ void main() {
     expect(find.widgetWithText(ui.Button, '退出登录'), findsOneWidget);
     expect(
       tester
-          .widget<ui.PressableSurface>(
-            find.ancestor(
+          .widget<Icon>(
+            find.descendant(
               of: find.byTooltip('退出登录'),
-              matching: find.byType(ui.PressableSurface),
+              matching: find.byIcon(Icons.logout),
             ),
           )
-          .selected,
-      isTrue,
+          .color,
+      ui.UiColors.accent,
     );
 
     await tester.tap(find.widgetWithText(ui.Button, '取消'));
@@ -1160,14 +1165,14 @@ void main() {
     expect(find.text('确认退出当前账号？'), findsNothing);
     expect(
       tester
-          .widget<ui.PressableSurface>(
-            find.ancestor(
+          .widget<Icon>(
+            find.descendant(
               of: find.byTooltip('退出登录'),
-              matching: find.byType(ui.PressableSurface),
+              matching: find.byIcon(Icons.logout),
             ),
           )
-          .selected,
-      isFalse,
+          .color,
+      ui.UiColors.textMuted,
     );
 
     await tester.tap(find.byTooltip('退出登录'));

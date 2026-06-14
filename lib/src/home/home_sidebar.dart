@@ -90,7 +90,11 @@ class HomeSidebar extends StatelessWidget {
               return Column(
                 children: [
                   if (showSummary) ...[
-                    _UserSummaryBar(user: currentUser),
+                    _UserSummaryBar(
+                      user: currentUser,
+                      logoutActive: logoutActive,
+                      onLogout: onLogout,
+                    ),
                     SizedBox(height: showFooter ? 14 : 10),
                   ],
                   Expanded(child: _buildServerList()),
@@ -100,12 +104,10 @@ class HomeSidebar extends StatelessWidget {
                       settingsActive: settingsActive,
                       createRoomActive: createRoomActive,
                       notificationsActive: notificationsActive,
-                      logoutActive: logoutActive,
                       hasPendingNotifications: hasPendingNotifications,
                       onCreateRoom: onCreateRoom,
                       onOpenNotifications: onOpenNotifications,
                       onOpenSettings: onOpenSettings,
-                      onLogout: onLogout,
                     ),
                   ],
                 ],
@@ -160,23 +162,19 @@ class _SidebarFooter extends StatelessWidget {
     required this.settingsActive,
     required this.createRoomActive,
     required this.notificationsActive,
-    required this.logoutActive,
     required this.hasPendingNotifications,
     required this.onCreateRoom,
     required this.onOpenNotifications,
     required this.onOpenSettings,
-    required this.onLogout,
   });
 
   final bool settingsActive;
   final bool createRoomActive;
   final bool notificationsActive;
-  final bool logoutActive;
   final bool hasPendingNotifications;
   final VoidCallback onCreateRoom;
   final VoidCallback onOpenNotifications;
   final VoidCallback onOpenSettings;
-  final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
@@ -199,25 +197,12 @@ class _SidebarFooter extends StatelessWidget {
             onPressed: onOpenNotifications,
           ),
           const Spacer(),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ButtonIcon(
-                tooltip: '设置',
-                icon: const Icon(Icons.settings_outlined),
-                selected: settingsActive,
-                onPressed: onOpenSettings,
-                size: _footerButtonSize,
-              ),
-              const SizedBox(width: _footerButtonGap),
-              ButtonIcon(
-                tooltip: '退出登录',
-                icon: const Icon(Icons.logout),
-                selected: logoutActive,
-                onPressed: onLogout,
-                size: _footerButtonSize,
-              ),
-            ],
+          ButtonIcon(
+            tooltip: '设置',
+            icon: const Icon(Icons.settings_outlined),
+            selected: settingsActive,
+            onPressed: onOpenSettings,
+            size: _footerButtonSize,
           ),
         ],
       ),
@@ -272,9 +257,15 @@ class _NotificationFooterButton extends StatelessWidget {
 }
 
 class _UserSummaryBar extends StatelessWidget {
-  const _UserSummaryBar({required this.user});
+  const _UserSummaryBar({
+    required this.user,
+    required this.logoutActive,
+    required this.onLogout,
+  });
 
   final CurrentUser user;
+  final bool logoutActive;
+  final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
@@ -321,7 +312,53 @@ class _UserSummaryBar extends StatelessWidget {
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
+              _FlatIconButton(
+                tooltip: '退出登录',
+                icon: Icons.logout,
+                color: logoutActive ? UiColors.accent : UiColors.textMuted,
+                size: 30,
+                onPressed: onLogout,
+              ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A borderless, background-free icon button — just the glyph with a hover
+/// cursor and tooltip. Used for low-emphasis actions like logout that sit
+/// inline next to other content.
+class _FlatIconButton extends StatelessWidget {
+  const _FlatIconButton({
+    required this.tooltip,
+    required this.icon,
+    required this.color,
+    required this.size,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final Color color;
+  final double size;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onPressed,
+          child: SizedBox(
+            width: size,
+            height: size,
+            child: Icon(icon, color: color, size: size * 0.54),
           ),
         ),
       ),
