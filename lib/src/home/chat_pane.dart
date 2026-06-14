@@ -30,7 +30,8 @@ const _liveHeaderCardHeight = 70.0;
 const _headerActionButtonSize = 31.0;
 const _headerActionGap = 0.0;
 const _messageMaxWidth = 560.0;
-const _composerOverlayInset = 112.0;
+// Breathing room below the last message before the composer row begins.
+const _messageListBottomInset = 14.0;
 const _composerHorizontalInset = _chatFloatingEdgeInset;
 const _composerBottomInset = _chatFloatingEdgeInset;
 const _outgoingBubble = Color(0xFF1F352B);
@@ -53,6 +54,7 @@ class ChatPane extends StatelessWidget {
     required this.sending,
     required this.sendError,
     required this.composerController,
+    required this.composerPanelController,
     required this.stickerPanel,
     required this.voiceState,
     required this.composerAttachments,
@@ -91,6 +93,7 @@ class ChatPane extends StatelessWidget {
   final bool sending;
   final String? sendError;
   final TextEditingController composerController;
+  final ChatComposerController composerPanelController;
   final sticker_display.StickerPanelLoadState stickerPanel;
   final voice_display.VoiceRecorderState voiceState;
   final List<composer_attachment.ComposerAttachmentView> composerAttachments;
@@ -148,130 +151,55 @@ class ChatPane extends StatelessWidget {
             onSettingsPressed: onOpenRoomSettings,
           ),
           Expanded(
-            child: _ChatBody(
-              messageStage: (bottomInset) => _MessageStage(
-                roomId: room?.id ?? roomCard?.id,
-                currentUserId: currentUser.id,
-                roomReady: room != null,
-                loading: loading,
-                error: error,
-                messages: messages,
-                fileTransfers: fileTransfers,
-                fileDownloads: fileDownloads,
-                downloadActions: downloadActions,
-                voicePlaybackActions: voicePlaybackActions,
-                onRetry: onRetry,
-                bottomInset: bottomInset,
-                onResolveSenderProfile: onResolveSenderProfile,
-              ),
-              composer: SelectionContainer.disabled(
-                // The composer's text field drives its own selection and its
-                // panels (sticker grid, voice) are scrollable but not meant to
-                // be selectable. Detach it from the app-wide SelectionArea so
-                // showing/hiding a panel mid-selection can't trip the
-                // scrollable-selection assertion.
-                child: _ComposerDock(
-                  controller: composerController,
-                  sending: sending,
-                  sendError: sendError,
-                  stickerPanel: stickerPanel,
-                  voiceState: voiceState,
-                  attachments: composerAttachments,
-                  fileActionHighlighted: fileActionHighlighted,
-                  onSubmit: onSubmit,
-                  onSendSticker: onSendSticker,
-                  onOpenStickers: onLoadStickers,
-                  onRefreshStickers: onRefreshStickers,
-                  onStickerSourceChanged: onStickerSourceChanged,
-                  onStartVoice: onStartVoice,
-                  onSendVoice: onSendVoice,
-                  onCancelVoice: onCancelVoice,
-                  onPickFile: onPickFile,
-                  onPasteFiles: onPasteFiles,
-                  onRemoveAttachment: onRemoveAttachment,
-                  onRetryAttachment: onRetryAttachment,
-                  dropKey: composerDropKey,
-                ),
-              ),
+            child: _MessageStage(
+              roomId: room?.id ?? roomCard?.id,
+              currentUserId: currentUser.id,
+              roomReady: room != null,
+              loading: loading,
+              error: error,
+              messages: messages,
+              fileTransfers: fileTransfers,
+              fileDownloads: fileDownloads,
+              downloadActions: downloadActions,
+              voicePlaybackActions: voicePlaybackActions,
+              onRetry: onRetry,
+              bottomInset: _messageListBottomInset,
+              onResolveSenderProfile: onResolveSenderProfile,
+            ),
+          ),
+          SelectionContainer.disabled(
+            // The composer's text field drives its own selection and its
+            // panels (sticker grid, voice) are scrollable but not meant to
+            // be selectable. Detach it from the app-wide SelectionArea so
+            // showing/hiding a panel mid-selection can't trip the
+            // scrollable-selection assertion.
+            child: _ComposerDock(
+              controller: composerController,
+              composerController: composerPanelController,
+              sending: sending,
+              sendError: sendError,
+              stickerPanel: stickerPanel,
+              voiceState: voiceState,
+              attachments: composerAttachments,
+              fileActionHighlighted: fileActionHighlighted,
+              onSubmit: onSubmit,
+              onSendSticker: onSendSticker,
+              onOpenStickers: onLoadStickers,
+              onRefreshStickers: onRefreshStickers,
+              onStickerSourceChanged: onStickerSourceChanged,
+              onStartVoice: onStartVoice,
+              onSendVoice: onSendVoice,
+              onCancelVoice: onCancelVoice,
+              onPickFile: onPickFile,
+              onPasteFiles: onPasteFiles,
+              onRemoveAttachment: onRemoveAttachment,
+              onRetryAttachment: onRetryAttachment,
+              dropKey: composerDropKey,
             ),
           ),
         ],
       ),
     );
-  }
-}
-
-/// Lays the message list under the floating composer and keeps the list's
-/// bottom padding in sync with the composer's measured height, so the last
-/// messages can always scroll clear of it even as the composer grows (staged
-/// attachments, open panels).
-class _ChatBody extends StatefulWidget {
-  const _ChatBody({required this.messageStage, required this.composer});
-
-  final Widget Function(double bottomInset) messageStage;
-  final Widget composer;
-
-  @override
-  State<_ChatBody> createState() => _ChatBodyState();
-}
-
-class _ChatBodyState extends State<_ChatBody> {
-  // Falls back to the legacy fixed inset until the first measurement lands.
-  double _composerHeight = _composerOverlayInset;
-
-  void _onComposerHeight(double height) {
-    if (!mounted || height == _composerHeight) return;
-    // Defer to after layout: the size arrives mid-build of the Stack.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || height == _composerHeight) return;
-      setState(() => _composerHeight = height);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bottomInset = _composerHeight + _composerBottomInset + 12;
-    return Stack(
-      children: [
-        Positioned.fill(child: widget.messageStage(bottomInset)),
-        Positioned(
-          left: _composerHorizontalInset,
-          right: _composerHorizontalInset,
-          bottom: _composerBottomInset,
-          child: _MeasureHeight(
-            onChange: _onComposerHeight,
-            child: widget.composer,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Reports its child's rendered height after each layout. Used to feed the
-/// composer's height back into the message list's bottom padding.
-class _MeasureHeight extends StatefulWidget {
-  const _MeasureHeight({required this.onChange, required this.child});
-
-  final ValueChanged<double> onChange;
-  final Widget child;
-
-  @override
-  State<_MeasureHeight> createState() => _MeasureHeightState();
-}
-
-class _MeasureHeightState extends State<_MeasureHeight> {
-  final GlobalKey _key = GlobalKey();
-
-  void _report() {
-    final box = _key.currentContext?.findRenderObject() as RenderBox?;
-    if (box != null && box.hasSize) widget.onChange(box.size.height);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) => _report());
-    return KeyedSubtree(key: _key, child: widget.child);
   }
 }
 

@@ -7,6 +7,24 @@ import 'tokens.dart';
 
 enum ComposerPanelType { list, static }
 
+/// Lets an owner drive the composer's open panel imperatively — chiefly to
+/// retract a panel (e.g. the voice recorder) once its action completes, so the
+/// composer collapses back to the input without the user tapping again.
+class ChatComposerController extends ChangeNotifier {
+  bool _closeRequested = false;
+
+  bool get closeRequested => _closeRequested;
+
+  /// Asks the attached [ChatComposer] to close whatever panel is open.
+  void closePanel() {
+    _closeRequested = true;
+    notifyListeners();
+  }
+
+  void _consumeCloseRequest() => _closeRequested = false;
+}
+
+
 class ComposerAction {
   const ComposerAction({
     required this.id,
@@ -68,6 +86,7 @@ class ChatComposer extends StatefulWidget {
     super.key,
     required this.actions,
     this.controller,
+    this.composerController,
     this.hintText = '输入消息',
     this.minLines = 1,
     this.maxLines = 5,
@@ -79,6 +98,9 @@ class ChatComposer extends StatefulWidget {
 
   final List<ComposerAction> actions;
   final TextEditingController? controller;
+
+  /// Optional imperative handle for closing the open panel from outside.
+  final ChatComposerController? composerController;
   final String hintText;
   final int minLines;
   final int maxLines;
@@ -122,12 +144,19 @@ class _ChatComposerState extends State<ChatComposer> {
     _localController = widget.controller == null
         ? TextEditingController()
         : null;
+    widget.composerController?.addListener(_handleComposerControllerChanged);
     HardwareKeyboard.instance.addHandler(_handleKeyboardEvent);
   }
 
   @override
   void didUpdateWidget(ChatComposer oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.composerController != widget.composerController) {
+      oldWidget.composerController?.removeListener(
+        _handleComposerControllerChanged,
+      );
+      widget.composerController?.addListener(_handleComposerControllerChanged);
+    }
     if (oldWidget.controller == widget.controller) return;
 
     if (widget.controller == null) {
@@ -143,10 +172,20 @@ class _ChatComposerState extends State<ChatComposer> {
 
   @override
   void dispose() {
+    widget.composerController?.removeListener(_handleComposerControllerChanged);
     HardwareKeyboard.instance.removeHandler(_handleKeyboardEvent);
     _localController?.dispose();
     _inputFocusNode.dispose();
     super.dispose();
+  }
+
+  void _handleComposerControllerChanged() {
+    final controller = widget.composerController;
+    if (controller == null || !controller.closeRequested) return;
+    controller._consumeCloseRequest();
+    if (_openActionId != null) {
+      setState(() => _openActionId = null);
+    }
   }
 
   bool _handleKeyboardEvent(KeyEvent event) {

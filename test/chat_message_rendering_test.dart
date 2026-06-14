@@ -52,6 +52,7 @@ void main() {
           sending: false,
           sendError: null,
           composerController: controller,
+          composerPanelController: ui.ChatComposerController(),
           stickerPanel: const sticker_display.StickerPanelLoadState(),
           voiceState: const voice_display.VoiceRecorderState(),
           composerAttachments:
@@ -108,6 +109,23 @@ void main() {
     );
 
     expect(find.widgetWithText(SelectableText, 'copy this'), findsOneWidget);
+  });
+
+  testWidgets('pending message shows a spinner beside the 发送中 label', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        MessageBubbleForTest(
+          message: _message(type: 'text', body: 'sending soon', pending: true),
+          outgoing: true,
+          downloadActions: _downloadActions(),
+        ),
+      ),
+    );
+
+    expect(find.text('发送中'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 
   testWidgets('system role message renders below a centered timestamp', (
@@ -527,6 +545,7 @@ Widget _chatPane({
     sending: false,
     sendError: null,
     composerController: controller,
+    composerPanelController: ui.ChatComposerController(),
     stickerPanel: const sticker_display.StickerPanelLoadState(),
     voiceState: const voice_display.VoiceRecorderState(),
     composerAttachments: const <composer_attachment.ComposerAttachmentView>[],
@@ -556,6 +575,7 @@ Message _message({
   List<MessageAttachment> attachments = const [],
   DateTime? createdAt,
   String clientMessageId = 'client_1',
+  bool pending = false,
 }) {
   return Message(
     id: 'message_1',
@@ -572,6 +592,7 @@ Message _message({
     body: body,
     createdAt: createdAt ?? DateTime.utc(2026, 6, 11),
     attachments: attachments,
+    pending: pending,
   );
 }
 

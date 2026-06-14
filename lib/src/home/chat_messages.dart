@@ -1,5 +1,11 @@
 part of 'chat_pane.dart';
 
+/// How close (in logical pixels) to the bottom the reader must be for an
+/// incoming message from someone else to auto-scroll the list. Beyond this the
+/// reader is browsing history, so we leave their position alone.
+const double _autoScrollFollowThreshold = 120;
+
+
 /// Callbacks for file-attachment downloads, bundled so they can travel from
 /// [ChatPane] down to each [_FileAttachmentTile] without threading five
 /// separate parameters through every intermediate widget.
@@ -91,8 +97,8 @@ class _MessageStage extends StatefulWidget {
   final ChatFileDownloadActions downloadActions;
   final ChatVoicePlaybackActions voicePlaybackActions;
   final VoidCallback onRetry;
-  // Space reserved at the bottom of the list so the floating composer (which
-  // grows with staged files and open panels) never traps the last messages.
+  // Breathing room at the bottom of the list, between the last message and the
+  // composer row that now sits below it.
   final double bottomInset;
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
@@ -103,13 +109,76 @@ class _MessageStage extends StatefulWidget {
 
 class _MessageStageState extends State<_MessageStage> {
   bool _showDetailedTimestamps = false;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Land at the newest message when a room first opens with history.
+    _scrollToBottom(animated: false);
+  }
 
   @override
   void didUpdateWidget(covariant _MessageStage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.roomId != widget.roomId) {
       _showDetailedTimestamps = false;
+      // New room: snap straight to the latest message, no animation.
+      _scrollToBottom(animated: false);
+      return;
     }
+    if (_shouldFollowToBottom(oldWidget)) {
+      _scrollToBottom(animated: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  // Decides whether an incoming widget update introduced a new message worth
+  // following. We always chase our own outgoing messages (text, voice, files)
+  // to the bottom; for messages from others we only follow when the user is
+  // already reading the latest ones, so scrolling up through history isn't
+  // yanked back down.
+  bool _shouldFollowToBottom(_MessageStage oldWidget) {
+    final messages = widget.messages;
+    if (messages.isEmpty) return false;
+    final grew = messages.length > oldWidget.messages.length;
+    final lastChanged =
+        oldWidget.messages.isNotEmpty &&
+        messages.last.clientMessageId !=
+            oldWidget.messages.last.clientMessageId;
+    if (!grew && !lastChanged) return false;
+    if (messages.last.sender.id == widget.currentUserId) return true;
+    return _isNearBottom();
+  }
+
+  bool _isNearBottom() {
+    if (!_scrollController.hasClients) return true;
+    final position = _scrollController.position;
+    return position.maxScrollExtent - position.pixels <=
+        _autoScrollFollowThreshold;
+  }
+
+  void _scrollToBottom({required bool animated}) {
+    // Defer until after this frame lays out the (possibly taller) list so
+    // maxScrollExtent reflects the new content.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final target = _scrollController.position.maxScrollExtent;
+      if (animated) {
+        _scrollController.animateTo(
+          target,
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOut,
+        );
+      } else {
+        _scrollController.jumpTo(target);
+      }
+    });
   }
 
   void _toggleDetailedTimestamps() {
@@ -155,6 +224,7 @@ class _MessageStageState extends State<_MessageStage> {
 
     final now = DateTime.now();
     return ListView.separated(
+      controller: _scrollController,
       padding: EdgeInsets.fromLTRB(
         _chatHorizontalPadding,
         18,
@@ -560,11 +630,28 @@ class _MessageBubble extends StatelessWidget {
             },
             if (status != null) ...[
               const SizedBox(height: 7),
-              Text(
-                status,
-                style: UiTypography.label.copyWith(
-                  color: message.failed ? UiColors.danger : UiColors.textMuted,
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (message.pending && !message.failed) ...[
+                    const SizedBox.square(
+                      dimension: 11,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.6,
+                        color: UiColors.textMuted,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  Text(
+                    status,
+                    style: UiTypography.label.copyWith(
+                      color: message.failed
+                          ? UiColors.danger
+                          : UiColors.textMuted,
+                    ),
+                  ),
+                ],
               ),
             ],
           ],

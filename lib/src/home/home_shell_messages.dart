@@ -275,10 +275,18 @@ extension _HomeShellMessages on _HomeShellState {
 
   /// Upload and send the reviewed voice clip as a playable audio message,
   /// reusing the shared file transfer pipeline (pending bubble + transfer).
+  ///
+  /// Once the clip's bytes are read and the pending bubble is created we reset
+  /// the recorder and retract the voice panel, so the in-flight clip lives in
+  /// the message list (with its own pending spinner) instead of trapping the
+  /// composer on the send screen. Delivery success/failure is then reflected on
+  /// the bubble, mirroring how text and file messages behave.
   Future<void> _sendVoiceMessage() async {
     final room = _selectedRoom;
     final path = _voiceState.recordingPath;
     if (room == null || path == null || !_voiceState.canSend) return;
+
+    final duration = _voiceState.elapsed;
 
     _setHomeState(
       () => _voiceState = voice_display.voiceSendStarted(_voiceState),
@@ -289,6 +297,8 @@ extension _HomeShellMessages on _HomeShellState {
       bytes = await _voiceRecorder.readClip(path);
     } catch (error) {
       if (!mounted) return;
+      // Read failed before any bubble existed — keep the review panel open so
+      // the user can retry sending the same clip.
       _setHomeState(
         () => _voiceState = voice_display.voiceSendFailed(
           state: _voiceState,
@@ -297,6 +307,9 @@ extension _HomeShellMessages on _HomeShellState {
       );
       return;
     }
+
+    // Bytes are buffered in memory now; the clip file is no longer needed.
+    unawaited(_voiceRecorder.discardClip(path));
 
     final filename = voice_display.voiceMessageFilename(DateTime.now());
     String? clientMessageId;
@@ -307,20 +320,23 @@ extension _HomeShellMessages on _HomeShellState {
         filename: filename,
         sizeBytes: bytes.length,
         mimeType: voice_display.kVoiceMessageMimeType,
-        duration: _voiceState.elapsed,
+        duration: duration,
         readBytes: () async => bytes,
         onPending: (pending) {
           clientMessageId = pending.clientMessageId;
           if (!mounted) return;
-          _setHomeState(
-            () => _applyFileMessageStatePatch(
+          _setHomeState(() {
+            _applyFileMessageStatePatch(
               _messagesController.patchPendingFileMessage(
                 messages: _messages,
                 fileTransfers: _fileTransfers,
                 pending: pending,
               ),
-            ),
-          );
+            );
+            // The clip now lives as a pending bubble; retract the recorder.
+            _voiceState = voice_display.voiceSendSucceeded();
+          });
+          _composerPanelController.closePanel();
         },
         onProgress: (pending, {required sentBytes, required totalBytes}) {
           if (!mounted) return;
@@ -362,13 +378,12 @@ extension _HomeShellMessages on _HomeShellState {
           ),
         );
       }
-      _setHomeState(() => _voiceState = voice_display.voiceSendSucceeded());
-      unawaited(_voiceRecorder.discardClip(path));
       unawaited(_loadServers());
     } catch (error) {
       if (!mounted) return;
       final activeClientMessageId = clientMessageId;
       if (activeClientMessageId != null) {
+        // The pending bubble owns the failure now — surface "发送失败" on it.
         _setHomeState(
           () => _applyFileMessageStatePatch(
             _messagesController.patchFailedFileMessage(
@@ -379,15 +394,15 @@ extension _HomeShellMessages on _HomeShellState {
             ),
           ),
         );
+      } else {
+        // Failed before the bubble existed — fall back to the review panel.
+        _setHomeState(
+          () => _voiceState = voice_display.voiceSendFailed(
+            state: _voiceState,
+            failure: error,
+          ),
+        );
       }
-      // Keep the clip on disk and stay in review so the user can press send
-      // again to retry the upload.
-      _setHomeState(
-        () => _voiceState = voice_display.voiceSendFailed(
-          state: _voiceState,
-          failure: error,
-        ),
-      );
     }
   }
 
