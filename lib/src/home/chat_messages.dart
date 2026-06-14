@@ -110,6 +110,9 @@ class _MessageStage extends StatefulWidget {
 class _MessageStageState extends State<_MessageStage> {
   bool _showDetailedTimestamps = false;
   final ScrollController _scrollController = ScrollController();
+  // Guards the re-pin loop so overlapping requests don't stack up; the newest
+  // request wins by bumping this token.
+  int _scrollToBottomToken = 0;
 
   @override
   void initState() {
@@ -163,22 +166,49 @@ class _MessageStageState extends State<_MessageStage> {
         _autoScrollFollowThreshold;
   }
 
+  // Scrolls to the very bottom and keeps re-pinning across frames until the
+  // scroll extent stops growing. A single jump isn't enough: the list builds
+  // lazily, so reaching the current bottom lays out more (variable-height)
+  // bubbles below, which extends maxScrollExtent — without the re-pin we'd
+  // land halfway down. Once the extent settles, an animated request eases the
+  // final stretch; until then we snap, since there's no stable target to
+  // animate toward yet.
   void _scrollToBottom({required bool animated}) {
-    // Defer until after this frame lays out the (possibly taller) list so
-    // maxScrollExtent reflects the new content.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scrollController.hasClients) return;
-      final target = _scrollController.position.maxScrollExtent;
-      if (animated) {
-        _scrollController.animateTo(
-          target,
-          duration: const Duration(milliseconds: 240),
-          curve: Curves.easeOut,
-        );
-      } else {
+    final token = ++_scrollToBottomToken;
+    var lastExtent = double.negativeInfinity;
+
+    void pin() {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted ||
+            token != _scrollToBottomToken ||
+            !_scrollController.hasClients) {
+          return;
+        }
+        final position = _scrollController.position;
+        final target = position.maxScrollExtent;
+        final extentSettled = (target - lastExtent).abs() < 0.5;
+        lastExtent = target;
+        final atBottom = (target - position.pixels).abs() < 1;
+
+        if (extentSettled) {
+          if (atBottom) return;
+          if (animated) {
+            _scrollController.animateTo(
+              target,
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
+            );
+            return;
+          }
+        }
+        // Extent still growing (lazy build) or a non-animated request: snap to
+        // the current bottom and re-check next frame.
         _scrollController.jumpTo(target);
-      }
-    });
+        pin();
+      });
+    }
+
+    pin();
   }
 
   void _toggleDetailedTimestamps() {
