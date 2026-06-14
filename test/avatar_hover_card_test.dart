@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:client/src/protocol/models.dart';
 import 'package:client/src/ui/ui.dart';
 import 'package:client/src/home/chat_pane.dart';
@@ -146,5 +148,47 @@ void main() {
     expect(find.text('男'), findsNothing);
     expect(find.text('2 个共同房间'), findsOneWidget);
     expect(find.text('摸鱼大队'), findsOneWidget);
+  });
+
+  testWidgets('waits for resolved profile before showing the card', (
+    tester,
+  ) async {
+    const lightweight = UserSummary(
+      id: 'u1',
+      username: 'logan',
+      displayName: '加一',
+      avatarUrl: null,
+      defaultAvatarKey: 'blue-3',
+      isOnline: false,
+    );
+    final completer = Completer<UserSummary>();
+    var calls = 0;
+    Future<UserSummary> resolve(UserSummary sender) {
+      calls++;
+      return completer.future;
+    }
+
+    await tester.pumpWidget(
+      _host(
+        AvatarHoverCardForTest(user: lightweight, onResolveProfile: resolve),
+      ),
+    );
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await gesture.moveTo(tester.getCenter(find.byType(Avatar).first));
+    await tester.pump();
+
+    expect(calls, 1);
+    expect(find.text('@logan'), findsNothing);
+    expect(find.text('离线'), findsNothing);
+
+    completer.complete(_user);
+    await tester.pumpAndSettle();
+
+    expect(find.text('@logan'), findsOneWidget);
+    expect(find.text('在线'), findsOneWidget);
+    expect(find.text('离线'), findsNothing);
   });
 }

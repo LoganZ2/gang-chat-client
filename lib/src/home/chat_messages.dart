@@ -399,9 +399,9 @@ class _SystemMessageParts {
           ],
         ];
       case message_display.kSystemEventLiveJoined:
-        return [_SystemUserChip(user: subject), _text('进入了直播间')];
+        return [_SystemUserChip(user: subject), _text('进入了语音频道')];
       case message_display.kSystemEventLiveLeft:
-        return [_SystemUserChip(user: subject), _text('退出了直播间')];
+        return [_SystemUserChip(user: subject), _text('退出了语音频道')];
       case message_display.kSystemEventRoomRoleChanged:
         final actor = event.actor;
         final roleLabel = message_display.systemMessageRoleLabel(event.toRole);

@@ -261,7 +261,7 @@ void main() {
     expect(find.text('@kai'), findsNothing);
     expect(find.text('Alpha Room'), findsOneWidget);
     expect(find.text('Beta Room'), findsOneWidget);
-    expect(find.text('2 名成员 · 1 直播中'), findsOneWidget);
+    expect(find.text('2 名成员 · 1 语音'), findsOneWidget);
     expect(find.text('5 名成员'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
 
@@ -997,7 +997,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Riley'), findsNothing);
-    expect(find.text('2 名成员 · 1 直播中'), findsOneWidget);
+    expect(find.text('2 名成员 · 1 语音'), findsOneWidget);
 
     realtime.add(
       const RealtimeEvent(
@@ -1053,7 +1053,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Riley'), findsOneWidget);
-    expect(find.text('2 名成员 · 2 直播中'), findsOneWidget);
+    expect(find.text('2 名成员 · 2 语音'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

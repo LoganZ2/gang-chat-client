@@ -65,7 +65,7 @@ String roomSubtitle(RoomCard room) {
     final body = _nonEmpty(last.bodyPreview) ?? '消息';
     return '$sender · $body';
   }
-  return '${room.memberCount} 名成员 · $online 人在线 · $live 直播中';
+  return '${room.memberCount} 名成员 · $online 人在线 · $live 语音';
 }
 
 String roomSidebarSubtitle(RoomCard room) {
@@ -81,7 +81,7 @@ String roomSidebarSubtitle(RoomCard room) {
 
   final parts = ['${room.memberCount} 名成员'];
   if (room.liveParticipantCount > 0) {
-    parts.add('${room.liveParticipantCount} 直播中');
+    parts.add('${room.liveParticipantCount} 语音');
   }
   return parts.join(' · ');
 }

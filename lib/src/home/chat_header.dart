@@ -245,6 +245,6 @@ String _roomMeta({
   final online = onlineMemberCount ?? 0;
   if (online > 0) parts.add('$online 人在线');
   final live = liveParticipantCount ?? 0;
-  if (live > 0) parts.add('$live 直播中');
+  if (live > 0) parts.add('$live 语音');
   return parts.isEmpty ? '就绪' : parts.join(' - ');
 }

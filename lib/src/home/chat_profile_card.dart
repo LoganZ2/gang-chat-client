@@ -40,14 +40,35 @@ class _AvatarHoverCardState extends State<_AvatarHoverCard> {
 
   // Richer profile, fetched once on first open and reused afterwards.
   UserSummary? _resolved;
-  bool _resolving = false;
+  Future<void>? _resolveFuture;
+  bool _profileResolveCompleted = false;
 
   UserSummary get _displayUser => _resolved ?? widget.user;
+  bool get _wantsOpen => _pinned || _overAnchor || _overCard;
+  bool get _profileReady =>
+      widget.onResolveProfile == null ||
+      _resolved != null ||
+      _profileResolveCompleted;
 
   @override
   void dispose() {
     _closeTimer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AvatarHoverCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final userChanged = oldWidget.user.id != widget.user.id;
+    final resolverAdded =
+        oldWidget.onResolveProfile == null && widget.onResolveProfile != null;
+    if (!userChanged && !resolverAdded) {
+      return;
+    }
+    _resolved = null;
+    _resolveFuture = null;
+    _profileResolveCompleted = false;
+    if (_portal.isShowing) _portal.hide();
   }
 
   void _enterAnchor() {
@@ -72,7 +93,19 @@ class _AvatarHoverCardState extends State<_AvatarHoverCard> {
 
   void _open() {
     _closeTimer?.cancel();
-    _resolveProfile();
+    if (!_profileReady) {
+      unawaited(
+        _resolveProfile().then((_) {
+          if (!mounted || !_wantsOpen) return;
+          _showPortal();
+        }),
+      );
+      return;
+    }
+    _showPortal();
+  }
+
+  void _showPortal() {
     if (_portal.isShowing) return;
     _portal.show();
   }
@@ -91,19 +124,35 @@ class _AvatarHoverCardState extends State<_AvatarHoverCard> {
     if (_portal.isShowing) _portal.hide();
   }
 
-  Future<void> _resolveProfile() async {
+  Future<void> _resolveProfile() {
     final resolver = widget.onResolveProfile;
-    if (resolver == null || _resolved != null || _resolving) return;
-    _resolving = true;
-    try {
-      final profile = await resolver(widget.user);
-      if (!mounted) return;
-      setState(() => _resolved = profile);
-    } catch (_) {
-      // Keep showing the lightweight summary on failure.
-    } finally {
-      _resolving = false;
+    if (resolver == null || _profileResolveCompleted) {
+      return Future<void>.value();
     }
+    final existing = _resolveFuture;
+    if (existing != null) return existing;
+
+    final requestedUser = widget.user;
+    final future = () async {
+      try {
+        final profile = await resolver(requestedUser);
+        if (!mounted || widget.user.id != requestedUser.id) return;
+        setState(() {
+          _resolved = profile;
+          _profileResolveCompleted = true;
+        });
+      } catch (_) {
+        if (!mounted || widget.user.id != requestedUser.id) return;
+        // Keep showing the lightweight summary on failure.
+        setState(() => _profileResolveCompleted = true);
+      } finally {
+        if (mounted && widget.user.id == requestedUser.id) {
+          _resolveFuture = null;
+        }
+      }
+    }();
+    _resolveFuture = future;
+    return future;
   }
 
   void _scheduleClose() {

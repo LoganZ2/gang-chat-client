@@ -203,7 +203,7 @@ void main() {
           messages: [
             _message(
               type: 'system',
-              body: '进入了直播间',
+              body: '进入了语音频道',
               createdAt: createdAt,
               attachments: const [
                 MessageAttachment(
@@ -226,7 +226,7 @@ void main() {
 
     expect(find.text(brief), findsOneWidget);
     expect(find.text('Logan'), findsWidgets);
-    expect(find.text('进入了直播间'), findsOneWidget);
+    expect(find.text('进入了语音频道'), findsOneWidget);
     expect(find.text('hello after live join'), findsOneWidget);
   });
 
