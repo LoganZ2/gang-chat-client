@@ -252,6 +252,11 @@ class LiveSession extends ChangeNotifier {
   double _outputVolume = 1.0;
   double _musicBoxVolume = 1.0;
   bool _outputMuted = false;
+  // The deviceId to capture the mic from, in WebRTC's macOS format
+  // (stringified CoreAudio AudioDeviceID). Null means the ADM's current/default
+  // device. Applied when the mic track is published; a change while connected
+  // republishes the track on the new device.
+  String? _inputDeviceId;
 
   final Set<String> _speakingIdentities = <String>{};
   final Map<String, bool> _micMutedByIdentity = <String, bool>{};
@@ -375,7 +380,7 @@ class LiveSession extends ChangeNotifier {
     notifyListeners();
 
     final room = lk.Room(
-      roomOptions: const lk.RoomOptions(
+      roomOptions: lk.RoomOptions(
         // Adaptive stream sizes the subscribed quality to the rendering
         // widget's pixel size. When a screen share is viewed in the small
         // (non-fullscreen) stage, that requests a low-quality layer; combined
@@ -396,6 +401,7 @@ class LiveSession extends ChangeNotifier {
         // lit) and unmute is instant.
         defaultAudioCaptureOptions: lk.AudioCaptureOptions(
           stopAudioCaptureOnMute: false,
+          deviceId: _inputDeviceId,
         ),
         defaultVideoPublishOptions: lk.VideoPublishOptions(
           // The capture rate (ScreenShareCaptureOptions.maxFrameRate) only sets
@@ -470,6 +476,43 @@ class LiveSession extends ChangeNotifier {
   Future<void> setInputVolume(double volume) async {
     _inputVolume = normalizedAudioVolume(volume);
     await _applyInputVolume();
+  }
+
+  /// Select the microphone capture device. [deviceId] is WebRTC's macOS format
+  /// (stringified CoreAudio AudioDeviceID), or null for the system default. Takes
+  /// effect at the next publish; when already publishing, republishes the mic on
+  /// the new device, preserving the current mute state.
+  Future<void> setInputDeviceId(String? deviceId) async {
+    if (_inputDeviceId == deviceId) return;
+    _inputDeviceId = deviceId;
+    final local = _room?.localParticipant;
+    if (local == null) return;
+    // Republish only if a mic track exists; otherwise the new id is picked up
+    // by the next setMicrophoneEnabled(true).
+    final wasMuted = _isMicMuted(local);
+    final hasTrack = local.audioTrackPublications.isNotEmpty;
+    if (!hasTrack) return;
+    try {
+      await local.setMicrophoneEnabled(
+        false,
+        audioCaptureOptions: lk.AudioCaptureOptions(
+          stopAudioCaptureOnMute: false,
+          deviceId: _inputDeviceId,
+        ),
+      );
+      await local.setMicrophoneEnabled(
+        !wasMuted,
+        audioCaptureOptions: lk.AudioCaptureOptions(
+          stopAudioCaptureOnMute: false,
+          deviceId: _inputDeviceId,
+        ),
+      );
+      await _applyInputVolume();
+      _refreshAllMicStates();
+      notifyListeners();
+    } catch (_) {
+      // Selection is best-effort; keep the existing capture on failure.
+    }
   }
 
   Future<void> setOutputVolume(double volume) async {

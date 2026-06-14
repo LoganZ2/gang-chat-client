@@ -22,56 +22,6 @@ class AudioTestService {
     }
   }
 
-  /// Runs [action] while a microphone capture track is live, then tears it
-  /// down.
-  ///
-  /// macOS's CoreAudio audio device module only reports the full device list
-  /// once an audio capture unit has been instantiated. Creating a probe track
-  /// and disposing it *before* enumerating (as [ensureDeviceAccess] alone does)
-  /// leaves the module uninitialized, so the first `enumerateDevices()` in
-  /// Settings came back empty until a room had been joined and kept a mic track
-  /// open. Holding the track open across [action] mirrors that in-room state so
-  /// the devices are reported on the first pass.
-  ///
-  /// The module can still finish populating the list a beat after the capture
-  /// unit starts, so [retryWhile] (when provided) re-runs [action] — with the
-  /// probe track kept open — up to [maxAttempts] times, waiting [retryDelay]
-  /// between tries, until it returns false or the attempts are exhausted. This
-  /// keeps a transiently-empty first result from surfacing as "no devices".
-  ///
-  /// If the probe track can't be created (permission denied, no input device),
-  /// [action] still runs so output devices continue to surface.
-  Future<T> withCaptureSession<T>(
-    Future<T> Function() action, {
-    bool Function(T result)? retryWhile,
-    int maxAttempts = 5,
-    Duration retryDelay = const Duration(milliseconds: 150),
-  }) async {
-    lk.LocalAudioTrack? track;
-    try {
-      track = await lk.LocalAudioTrack.create();
-      await track.start();
-    } catch (_) {
-      // Fall through and enumerate without a live input track.
-    } finally {
-      _requestedDeviceAccess = true;
-    }
-    try {
-      var result = await action();
-      if (retryWhile != null) {
-        var attempt = 1;
-        while (attempt < maxAttempts && retryWhile(result)) {
-          await Future<void>.delayed(retryDelay);
-          result = await action();
-          attempt++;
-        }
-      }
-      return result;
-    } finally {
-      await _disposeTestTrack(track);
-    }
-  }
-
   Future<AudioTestHandle> startInputTest({
     required String? inputDeviceId,
     required double volume,

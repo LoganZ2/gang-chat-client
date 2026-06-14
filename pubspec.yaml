@@ -14,6 +14,11 @@ dependencies:
   # `flutter pub get`, then commit the pubspec.yaml + pubspec.lock together.
   cupertino_icons: 1.0.9
   flutter_secure_storage: 10.3.1
+  # Non-sensitive local preferences (server URL, audio device + volume choices)
+  # live here instead of the keychain so reading them never triggers a macOS
+  # keychain authorization prompt. Sensitive data (refresh token) stays in
+  # flutter_secure_storage.
+  shared_preferences: 2.5.5
   http: 1.6.0
   window_manager: 0.5.1
   livekit_client: 2.7.0
@@ -30,6 +35,8 @@ dependencies:
 
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+  integration_test:
     sdk: flutter
   flutter_lints: 6.0.0
 

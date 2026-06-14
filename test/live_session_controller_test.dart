@@ -19,6 +19,7 @@ void main() {
         audioDeviceStore: const _FakeAudioDeviceStore(),
         audioDeviceRestorer: (_) async {
           restoredDevices += 1;
+          return null;
         },
       );
 
@@ -41,7 +42,7 @@ void main() {
       apiBaseUrl: 'https://api.example.test/api/v1',
       session: session,
       audioDeviceStore: const _FakeAudioDeviceStore(),
-      audioDeviceRestorer: (_) async {},
+      audioDeviceRestorer: (_) async => null,
     );
 
     await controller.disconnect(timeout: const Duration(milliseconds: 1));
@@ -55,7 +56,7 @@ void main() {
       apiBaseUrl: 'https://api.example.test/api/v1',
       session: session,
       audioDeviceStore: const _FakeAudioDeviceStore(),
-      audioDeviceRestorer: (_) async {},
+      audioDeviceRestorer: (_) async => null,
     );
     var changes = 0;
     var removals = 0;
@@ -88,7 +89,7 @@ void main() {
       apiBaseUrl: 'https://api.example.test/api/v1',
       session: session,
       audioDeviceStore: const _FakeAudioDeviceStore(),
-      audioDeviceRestorer: (_) async {},
+      audioDeviceRestorer: (_) async => null,
     );
 
     await controller.setMicMuted(true);

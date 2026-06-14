@@ -3643,7 +3643,7 @@ class _FakeLiveSessionController extends LiveSessionController {
         apiBaseUrl: 'http://localhost:3000',
         audioDeviceStore: const _FakeAudioDeviceStore(),
         session: session,
-        audioDeviceRestorer: (_) async {},
+        audioDeviceRestorer: (_) async => null,
       );
 
   @override
