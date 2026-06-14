@@ -25,6 +25,7 @@ class MainFlutterWindow: NSWindow {
   private var fileDropMethodChannel: FlutterMethodChannel?
   private var audioDevicesMethodChannel: FlutterMethodChannel?
   private var defaultInputListenerBlock: AudioObjectPropertyListenerBlock?
+  private var defaultOutputListenerBlock: AudioObjectPropertyListenerBlock?
 
   override func awakeFromNib() {
     alphaValue = 0
@@ -72,6 +73,7 @@ class MainFlutterWindow: NSWindow {
   deinit {
     NotificationCenter.default.removeObserver(self)
     removeDefaultInputListener()
+    removeDefaultOutputListener()
   }
 
   // Centers the native traffic lights within the v2 title-bar band and insets
@@ -200,10 +202,10 @@ class MainFlutterWindow: NSWindow {
     }
   }
 
-  // Enumerates audio input devices and reports the system default on
+  // Enumerates audio devices and reports the system defaults on
   // `gang_chat/audio_devices`.
   //
-  // flutter_webrtc's CoreAudio audio device module lists zero input devices
+  // flutter_webrtc's CoreAudio audio device module lists zero audio devices
   // until WebRTC is actually recording (i.e. after publishing audio in a room),
   // so its enumerateDevices() comes back empty in Settings before a room is
   // joined. We sidestep that entirely by reading CoreAudio directly here.
@@ -212,11 +214,12 @@ class MainFlutterWindow: NSWindow {
   // (e.g. "87"). That is byte-for-byte what WebRTC's macOS RTCIODevice.deviceId
   // resolves to (libwebrtc's audio_device_mac builds the guid as
   // std::to_string(AudioDeviceID)), so the ids stay compatible with
-  // flutter_webrtc's selectAudioInput once the in-room ADM is populated.
+  // flutter_webrtc's selectAudioInput/selectAudioOutput once the in-room ADM is
+  // populated.
   //
-  // A CoreAudio property listener pushes `defaultInputDeviceChanged` whenever the
-  // user switches the default input in System Settings, letting the picker
-  // follow it live.
+  // CoreAudio property listeners push default-device changes whenever the user
+  // switches the default input/output in System Settings, letting the picker
+  // follow them live.
   //
   // Methods:
   //   `enumerateInputs` -> [[deviceId: String, label: String, isDefault: Bool]]
@@ -226,6 +229,7 @@ class MainFlutterWindow: NSWindow {
   //   `startListening` -> begins observing the default-device change event
   // Events:
   //   `defaultInputDeviceChanged` with argument String? (the new deviceId)
+  //   `defaultOutputDeviceChanged` with argument String? (the new deviceId)
   private func registerAudioDevicesChannel(_ flutterViewController: FlutterViewController) {
     let channel = FlutterMethodChannel(
       name: audioDevicesChannel,
@@ -244,6 +248,7 @@ class MainFlutterWindow: NSWindow {
         result(self?.defaultOutputDeviceId())
       case "startListening":
         self?.installDefaultInputListener()
+        self?.installDefaultOutputListener()
         result(nil)
       default:
         result(FlutterMethodNotImplemented)
@@ -435,6 +440,47 @@ class MainFlutterWindow: NSWindow {
       block
     )
     defaultInputListenerBlock = nil
+  }
+
+  private func installDefaultOutputListener() {
+    guard defaultOutputListenerBlock == nil else { return }
+    var address = AudioObjectPropertyAddress(
+      mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+      mScope: kAudioObjectPropertyScopeGlobal,
+      mElement: kAudioObjectPropertyElementMain
+    )
+    let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+      guard let self = self else { return }
+      self.audioDevicesMethodChannel?.invokeMethod(
+        "defaultOutputDeviceChanged",
+        arguments: self.defaultOutputDeviceId()
+      )
+    }
+    let status = AudioObjectAddPropertyListenerBlock(
+      AudioObjectID(kAudioObjectSystemObject),
+      &address,
+      DispatchQueue.main,
+      block
+    )
+    if status == noErr {
+      defaultOutputListenerBlock = block
+    }
+  }
+
+  private func removeDefaultOutputListener() {
+    guard let block = defaultOutputListenerBlock else { return }
+    var address = AudioObjectPropertyAddress(
+      mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+      mScope: kAudioObjectPropertyScopeGlobal,
+      mElement: kAudioObjectPropertyElementMain
+    )
+    AudioObjectRemovePropertyListenerBlock(
+      AudioObjectID(kAudioObjectSystemObject),
+      &address,
+      DispatchQueue.main,
+      block
+    )
+    defaultOutputListenerBlock = nil
   }
 
   // Mirrors the Windows runner's `gang_chat/clipboard` channel so paste-to-send

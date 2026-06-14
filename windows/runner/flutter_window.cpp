@@ -1,13 +1,20 @@
 #include "flutter_window.h"
 
+#include <propkeydef.h>
+#include <functiondiscoverykeys_devpkey.h>
 #include <flutter/standard_method_codec.h>
+#include <mmdeviceapi.h>
+#include <propsys.h>
 #include <shellapi.h>
 #include <wincodec.h>
 
 #include <cstdint>
 #include <cstring>
+#include <functional>
+#include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "flutter/generated_plugin_registrant.h"
@@ -16,13 +23,23 @@ namespace {
 
 constexpr char kClipboardChannelName[] = "gang_chat/clipboard";
 constexpr char kFileDropChannelName[] = "gang_chat/file_drop";
+constexpr char kAudioDevicesChannelName[] = "gang_chat/audio_devices";
 constexpr char kReadFilePathsMethod[] = "readFilePaths";
 constexpr char kReadImageFileMethod[] = "readImageFile";
 constexpr char kDropFilesMethod[] = "dropFiles";
+constexpr char kEnumerateInputsMethod[] = "enumerateInputs";
+constexpr char kEnumerateOutputsMethod[] = "enumerateOutputs";
+constexpr char kDefaultInputDeviceIdMethod[] = "getDefaultInputDeviceId";
+constexpr char kDefaultOutputDeviceIdMethod[] = "getDefaultOutputDeviceId";
+constexpr char kStartListeningMethod[] = "startListening";
+constexpr char kDefaultInputDeviceChangedMethod[] = "defaultInputDeviceChanged";
+constexpr char kDefaultOutputDeviceChangedMethod[] =
+    "defaultOutputDeviceChanged";
 constexpr wchar_t kFileDropWindowProp[] = L"GangChatFileDropWindow";
 constexpr wchar_t kFileDropOriginalProcProp[] =
     L"GangChatFileDropOriginalProc";
 constexpr DWORD kBiAlphaBitFields = 6;
+constexpr UINT kAudioDefaultDeviceChangedMessage = WM_APP + 0x4A2;
 
 template <typename T>
 void SafeRelease(T*& value) {
@@ -58,6 +75,219 @@ bool EnsureComInitialized(bool* initialized_here) {
     return true;
   }
   return result == RPC_E_CHANGED_MODE;
+}
+
+class ScopedComInitialization {
+ public:
+  ScopedComInitialization() : ok_(EnsureComInitialized(&initialized_here_)) {}
+
+  ~ScopedComInitialization() {
+    if (initialized_here_) {
+      CoUninitialize();
+    }
+  }
+
+  bool ok() const { return ok_; }
+
+ private:
+  bool initialized_here_ = false;
+  bool ok_ = false;
+};
+
+struct AudioDeviceChange {
+  AudioDeviceChange(EDataFlow flow, std::string device_id)
+      : flow(flow), device_id(std::move(device_id)) {}
+
+  EDataFlow flow;
+  std::string device_id;
+};
+
+class AudioDeviceNotificationClient final : public IMMNotificationClient {
+ public:
+  explicit AudioDeviceNotificationClient(
+      std::function<void(EDataFlow, std::string)> on_default_changed)
+      : on_default_changed_(std::move(on_default_changed)) {}
+
+  ULONG STDMETHODCALLTYPE AddRef() override {
+    return static_cast<ULONG>(InterlockedIncrement(&ref_count_));
+  }
+
+  ULONG STDMETHODCALLTYPE Release() override {
+    const LONG count = InterlockedDecrement(&ref_count_);
+    if (count == 0) {
+      delete this;
+    }
+    return static_cast<ULONG>(count);
+  }
+
+  HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** object) override {
+    if (!object) {
+      return E_POINTER;
+    }
+    if (riid == __uuidof(IUnknown) ||
+        riid == __uuidof(IMMNotificationClient)) {
+      *object = static_cast<IMMNotificationClient*>(this);
+      AddRef();
+      return S_OK;
+    }
+    *object = nullptr;
+    return E_NOINTERFACE;
+  }
+
+  HRESULT STDMETHODCALLTYPE OnDefaultDeviceChanged(
+      EDataFlow flow,
+      ERole role,
+      LPCWSTR default_device_id) override {
+    if (role == eConsole && (flow == eCapture || flow == eRender)) {
+      on_default_changed_(flow, WideToUtf8(default_device_id));
+    }
+    return S_OK;
+  }
+
+  HRESULT STDMETHODCALLTYPE OnDeviceAdded(LPCWSTR device_id) override {
+    return S_OK;
+  }
+
+  HRESULT STDMETHODCALLTYPE OnDeviceRemoved(LPCWSTR device_id) override {
+    return S_OK;
+  }
+
+  HRESULT STDMETHODCALLTYPE OnDeviceStateChanged(LPCWSTR device_id,
+                                                 DWORD new_state) override {
+    return S_OK;
+  }
+
+  HRESULT STDMETHODCALLTYPE OnPropertyValueChanged(
+      LPCWSTR device_id,
+      const PROPERTYKEY key) override {
+    return S_OK;
+  }
+
+ private:
+  volatile LONG ref_count_ = 1;
+  std::function<void(EDataFlow, std::string)> on_default_changed_;
+};
+
+std::optional<std::string> AudioEndpointId(IMMDevice* device) {
+  if (!device) {
+    return std::nullopt;
+  }
+  wchar_t* raw_id = nullptr;
+  if (FAILED(device->GetId(&raw_id)) || !raw_id) {
+    return std::nullopt;
+  }
+  const std::string device_id = WideToUtf8(raw_id);
+  CoTaskMemFree(raw_id);
+  if (device_id.empty()) {
+    return std::nullopt;
+  }
+  return device_id;
+}
+
+std::string AudioEndpointFriendlyName(IMMDevice* device,
+                                      const std::string& fallback) {
+  if (!device) {
+    return fallback;
+  }
+
+  IPropertyStore* properties = nullptr;
+  PROPVARIANT name;
+  PropVariantInit(&name);
+  std::string label;
+  if (SUCCEEDED(device->OpenPropertyStore(STGM_READ, &properties)) &&
+      SUCCEEDED(properties->GetValue(PKEY_Device_FriendlyName, &name)) &&
+      name.vt == VT_LPWSTR) {
+    label = WideToUtf8(name.pwszVal);
+  }
+
+  PropVariantClear(&name);
+  SafeRelease(properties);
+  return label.empty() ? fallback : label;
+}
+
+std::optional<std::string> DefaultAudioEndpointIdFromEnumerator(
+    IMMDeviceEnumerator* enumerator,
+    EDataFlow flow) {
+  if (!enumerator) {
+    return std::nullopt;
+  }
+
+  IMMDevice* device = nullptr;
+  std::optional<std::string> result;
+  if (SUCCEEDED(enumerator->GetDefaultAudioEndpoint(flow, eConsole, &device))) {
+    result = AudioEndpointId(device);
+  }
+  SafeRelease(device);
+  return result;
+}
+
+std::optional<std::string> DefaultAudioEndpointId(EDataFlow flow) {
+  ScopedComInitialization com;
+  if (!com.ok()) {
+    return std::nullopt;
+  }
+
+  IMMDeviceEnumerator* enumerator = nullptr;
+  std::optional<std::string> result;
+  if (SUCCEEDED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr,
+                                 CLSCTX_ALL, IID_PPV_ARGS(&enumerator)))) {
+    result = DefaultAudioEndpointIdFromEnumerator(enumerator, flow);
+  }
+  SafeRelease(enumerator);
+  return result;
+}
+
+flutter::EncodableValue NullableStringValue(
+    const std::optional<std::string>& value) {
+  return value && !value->empty() ? flutter::EncodableValue(*value)
+                                  : flutter::EncodableValue();
+}
+
+flutter::EncodableList EnumerateAudioEndpoints(EDataFlow flow,
+                                               const std::string& fallback) {
+  flutter::EncodableList devices;
+  ScopedComInitialization com;
+  if (!com.ok()) {
+    return devices;
+  }
+
+  IMMDeviceEnumerator* enumerator = nullptr;
+  IMMDeviceCollection* collection = nullptr;
+  if (FAILED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr,
+                              CLSCTX_ALL, IID_PPV_ARGS(&enumerator))) ||
+      FAILED(enumerator->EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE,
+                                            &collection))) {
+    SafeRelease(collection);
+    SafeRelease(enumerator);
+    return devices;
+  }
+
+  const auto default_id = DefaultAudioEndpointIdFromEnumerator(enumerator, flow);
+  UINT count = 0;
+  if (SUCCEEDED(collection->GetCount(&count))) {
+    for (UINT i = 0; i < count; ++i) {
+      IMMDevice* device = nullptr;
+      if (FAILED(collection->Item(i, &device))) {
+        continue;
+      }
+      const auto device_id = AudioEndpointId(device);
+      if (device_id) {
+        flutter::EncodableMap entry;
+        entry[flutter::EncodableValue("deviceId")] =
+            flutter::EncodableValue(*device_id);
+        entry[flutter::EncodableValue("label")] = flutter::EncodableValue(
+            AudioEndpointFriendlyName(device, fallback + " " + *device_id));
+        entry[flutter::EncodableValue("isDefault")] =
+            flutter::EncodableValue(default_id && *default_id == *device_id);
+        devices.emplace_back(entry);
+      }
+      SafeRelease(device);
+    }
+  }
+
+  SafeRelease(collection);
+  SafeRelease(enumerator);
+  return devices;
 }
 
 size_t DibPixelOffset(const BITMAPINFOHEADER* header, size_t total_size) {
@@ -374,6 +604,99 @@ FlutterWindow::FlutterWindow(const flutter::DartProject& project)
 
 FlutterWindow::~FlutterWindow() {}
 
+void FlutterWindow::RegisterAudioDevicesChannel() {
+  audio_devices_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(), kAudioDevicesChannelName,
+          &flutter::StandardMethodCodec::GetInstance());
+  audio_devices_channel_->SetMethodCallHandler(
+      [this](
+          const flutter::MethodCall<flutter::EncodableValue>& call,
+          std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
+              result) {
+        if (call.method_name() == kEnumerateInputsMethod) {
+          result->Success(EnumerateAudioEndpoints(eCapture, "Microphone"));
+          return;
+        }
+        if (call.method_name() == kEnumerateOutputsMethod) {
+          result->Success(EnumerateAudioEndpoints(eRender, "Speaker"));
+          return;
+        }
+        if (call.method_name() == kDefaultInputDeviceIdMethod) {
+          result->Success(NullableStringValue(DefaultAudioEndpointId(eCapture)));
+          return;
+        }
+        if (call.method_name() == kDefaultOutputDeviceIdMethod) {
+          result->Success(NullableStringValue(DefaultAudioEndpointId(eRender)));
+          return;
+        }
+        if (call.method_name() == kStartListeningMethod) {
+          EnsureAudioDeviceNotifications();
+          result->Success(flutter::EncodableValue());
+          return;
+        }
+        result->NotImplemented();
+      });
+}
+
+bool FlutterWindow::EnsureAudioDeviceNotifications() {
+  if (audio_device_enumerator_ && audio_device_notification_client_) {
+    return true;
+  }
+
+  if (!audio_device_enumerator_) {
+    bool initialized_here = false;
+    if (!EnsureComInitialized(&initialized_here)) {
+      return false;
+    }
+    if (initialized_here) {
+      audio_com_initialized_here_ = true;
+    }
+    if (FAILED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr,
+                                CLSCTX_ALL,
+                                IID_PPV_ARGS(&audio_device_enumerator_)))) {
+      if (initialized_here && audio_com_initialized_here_) {
+        CoUninitialize();
+        audio_com_initialized_here_ = false;
+      }
+      return false;
+    }
+  }
+
+  if (!audio_device_notification_client_) {
+    auto* client = new AudioDeviceNotificationClient(
+        [this](EDataFlow flow, std::string device_id) {
+          auto* change =
+              new AudioDeviceChange(flow, std::move(device_id));
+          if (!PostMessage(GetHandle(), kAudioDefaultDeviceChangedMessage, 0,
+                           reinterpret_cast<LPARAM>(change))) {
+            delete change;
+          }
+        });
+    if (FAILED(audio_device_enumerator_->RegisterEndpointNotificationCallback(
+            client))) {
+      client->Release();
+      return false;
+    }
+    audio_device_notification_client_ = client;
+  }
+
+  return true;
+}
+
+void FlutterWindow::DetachAudioDeviceNotifications() {
+  if (audio_device_enumerator_ && audio_device_notification_client_) {
+    audio_device_enumerator_->UnregisterEndpointNotificationCallback(
+        audio_device_notification_client_);
+  }
+  SafeRelease(audio_device_notification_client_);
+  SafeRelease(audio_device_enumerator_);
+  if (audio_com_initialized_here_) {
+    CoUninitialize();
+    audio_com_initialized_here_ = false;
+  }
+}
+
 void FlutterWindow::AttachFileDropTarget(HWND child_window) {
   DragAcceptFiles(GetHandle(), TRUE);
   if (!child_window) {
@@ -473,6 +796,7 @@ bool FlutterWindow::OnCreate() {
         result->NotImplemented();
       });
   clipboard_channel_ = std::move(clipboard_channel);
+  RegisterAudioDevicesChannel();
   file_drop_channel_ =
       std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
           flutter_controller_->engine()->messenger(), kFileDropChannelName,
@@ -495,8 +819,10 @@ bool FlutterWindow::OnCreate() {
 
 void FlutterWindow::OnDestroy() {
   if (flutter_controller_) {
+    DetachAudioDeviceNotifications();
     DetachFileDropTarget();
     file_drop_channel_ = nullptr;
+    audio_devices_channel_ = nullptr;
     clipboard_channel_ = nullptr;
     flutter_controller_ = nullptr;
   }
@@ -508,6 +834,22 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  if (message == kAudioDefaultDeviceChangedMessage) {
+    std::unique_ptr<AudioDeviceChange> change(
+        reinterpret_cast<AudioDeviceChange*>(lparam));
+    if (change && audio_devices_channel_) {
+      const char* method = change->flow == eCapture
+                               ? kDefaultInputDeviceChangedMethod
+                               : kDefaultOutputDeviceChangedMethod;
+      auto argument = change->device_id.empty()
+                          ? std::make_unique<flutter::EncodableValue>()
+                          : std::make_unique<flutter::EncodableValue>(
+                                change->device_id);
+      audio_devices_channel_->InvokeMethod(method, std::move(argument));
+    }
+    return 0;
+  }
+
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =

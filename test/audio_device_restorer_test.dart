@@ -39,16 +39,50 @@ void main() {
       expect(service.selectedOutput, speaker);
     },
   );
+
+  test(
+    'restoreStoredAudioDevices falls back to system default output',
+    () async {
+      const speakerOne = AudioDeviceInfo(
+        deviceId: 'speaker_1',
+        label: 'Speaker 1',
+        kind: 'audiooutput',
+        groupId: 'group_speaker_1',
+      );
+      const speakerTwo = AudioDeviceInfo(
+        deviceId: 'speaker_2',
+        label: 'Speaker 2',
+        kind: 'audiooutput',
+        groupId: 'group_speaker_2',
+      );
+      final service = _FakeLiveAudioDeviceService(
+        devices: const [speakerOne, speakerTwo],
+        selectedOutput: speakerOne,
+      );
+
+      final restored = await restoreStoredAudioDevices(
+        const _FakeAudioDeviceStore(outputDeviceId: 'missing_output'),
+        audioDevices: service,
+        systemDefaultOutputId: 'speaker_2',
+      );
+
+      expect(restored.output, speakerTwo);
+      expect(service.outputSelects, 1);
+      expect(service.selectedOutput, speakerTwo);
+    },
+  );
 }
 
 class _FakeAudioDeviceStore extends AudioDeviceStore {
-  const _FakeAudioDeviceStore();
+  const _FakeAudioDeviceStore({this.outputDeviceId = 'speaker_1'});
+
+  final String? outputDeviceId;
 
   @override
   Future<StoredAudioDevices> read() async {
-    return const StoredAudioDevices(
+    return StoredAudioDevices(
       inputDeviceId: 'missing_input',
-      outputDeviceId: 'speaker_1',
+      outputDeviceId: outputDeviceId,
     );
   }
 }

@@ -1,17 +1,15 @@
 import 'package:livekit_client/livekit_client.dart' as lk;
 
 import '../app/audio_device_info.dart';
-import 'mac_audio_devices.dart';
+import 'system_audio_devices.dart';
 
 class LiveAudioDeviceService {
   const LiveAudioDeviceService();
 
-  // macOS-only CoreAudio access. flutter_webrtc enumerates zero audio inputs
-  // until WebRTC is recording in a room, so on macOS we merge the native input
-  // list in here; off macOS this is a no-op (returns empty) and the WebRTC list
-  // is used verbatim. Static so the const constructor and all call sites share
-  // one instance.
-  static final MacAudioDevices _mac = MacAudioDevices();
+  // Desktop native audio access. macOS needs native enumeration before a room is
+  // joined; Windows uses the same channel for OS default endpoint ids and can
+  // also contribute native devices if WebRTC omits any.
+  static final SystemAudioDevices _systemAudio = SystemAudioDevices();
 
   Stream<List<AudioDeviceInfo>> get devicesChanged {
     // Re-merge native devices on every hardware change so a hotplug doesn't wipe
@@ -36,8 +34,8 @@ class LiveAudioDeviceService {
     List<AudioDeviceInfo> webrtc,
   ) async {
     final native = [
-      ...await _mac.enumerateInputs(),
-      ...await _mac.enumerateOutputs(),
+      ...await _systemAudio.enumerateInputs(),
+      ...await _systemAudio.enumerateOutputs(),
     ];
     if (native.isEmpty) return webrtc;
     final seen = webrtc.map((d) => '${d.kind}:${d.deviceId}').toSet();

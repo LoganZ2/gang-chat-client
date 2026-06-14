@@ -11,6 +11,9 @@
 
 #include "win32_window.h"
 
+struct IMMDeviceEnumerator;
+struct IMMNotificationClient;
+
 // A window that does nothing but host a Flutter view.
 class FlutterWindow : public Win32Window {
  public:
@@ -42,9 +45,20 @@ class FlutterWindow : public Win32Window {
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
       file_drop_channel_;
 
+  // Native desktop audio bridge used by Settings to follow system defaults.
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
+      audio_devices_channel_;
+
+  IMMDeviceEnumerator* audio_device_enumerator_ = nullptr;
+  IMMNotificationClient* audio_device_notification_client_ = nullptr;
+  bool audio_com_initialized_here_ = false;
+
   HWND file_drop_child_window_ = nullptr;
   WNDPROC original_child_proc_ = nullptr;
 
+  void RegisterAudioDevicesChannel();
+  bool EnsureAudioDeviceNotifications();
+  void DetachAudioDeviceNotifications();
   void AttachFileDropTarget(HWND child_window);
   void DetachFileDropTarget();
 };

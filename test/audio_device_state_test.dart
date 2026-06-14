@@ -120,6 +120,51 @@ void main() {
     expect(patch.selectedInput, inputOne);
   });
 
+  test(
+    'audioDeviceListApplied follows system default output when none restored',
+    () {
+      const outputOne = _Device('speaker_1', 'Speaker 1', 'audiooutput');
+      const outputTwo = _Device('speaker_2', 'Speaker 2', 'audiooutput');
+
+      final patch = audioDeviceListApplied<_Device>(
+        devices: const [outputOne, outputTwo],
+        restoredInput: null,
+        restoredOutput: null,
+        hardwareInput: null,
+        hardwareOutput: outputOne,
+        currentInput: null,
+        currentOutput: null,
+        kindOf: _kindOf,
+        deviceIdOf: _deviceIdOf,
+        error: null,
+        systemDefaultOutput: outputTwo,
+      );
+
+      expect(patch.selectedOutput, outputTwo);
+    },
+  );
+
+  test('audioDeviceListApplied keeps restored output over system default', () {
+    const outputOne = _Device('speaker_1', 'Speaker 1', 'audiooutput');
+    const outputTwo = _Device('speaker_2', 'Speaker 2', 'audiooutput');
+
+    final patch = audioDeviceListApplied<_Device>(
+      devices: const [outputOne, outputTwo],
+      restoredInput: null,
+      restoredOutput: outputOne,
+      hardwareInput: null,
+      hardwareOutput: null,
+      currentInput: null,
+      currentOutput: null,
+      kindOf: _kindOf,
+      deviceIdOf: _deviceIdOf,
+      error: null,
+      systemDefaultOutput: outputTwo,
+    );
+
+    expect(patch.selectedOutput, outputOne);
+  });
+
   test('audioDeviceSelectionStarted marks selected device busy', () {
     const input = _Device('mic_1', 'Mic', 'audioinput');
     const output = _Device('speaker_1', 'Speaker', 'audiooutput');

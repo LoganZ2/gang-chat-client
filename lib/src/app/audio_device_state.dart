@@ -130,17 +130,15 @@ AudioDeviceListPatch<T> audioDeviceListApplied<T>({
   required AudioDeviceIdOf<T> deviceIdOf,
   required String? error,
   T? systemDefaultInput,
+  T? systemDefaultOutput,
 }) {
   final inputs = audioDevicesByKind(devices, 'audioinput', kindOf: kindOf);
   final outputs = audioDevicesByKind(devices, 'audiooutput', kindOf: kindOf);
   return AudioDeviceListPatch(
     inputs: inputs,
     outputs: outputs,
-    // [systemDefaultInput] sits between the saved preference and the hardware/
-    // current device so that, absent an explicit choice, the picker follows the
-    // OS default. On Windows this is null (the synthetic "default" device is
-    // already captured by [restoredInput]); on macOS, where no such device is
-    // enumerated, it carries the OS default reported by the native channel.
+    // System defaults sit between the saved preference and the hardware/current
+    // device so that, absent an explicit choice, the picker follows the OS.
     selectedInput: selectedAudioDeviceFrom(
       inputs,
       [restoredInput, systemDefaultInput, hardwareInput, currentInput],
@@ -149,7 +147,7 @@ AudioDeviceListPatch<T> audioDeviceListApplied<T>({
     ),
     selectedOutput: selectedAudioDeviceFrom(
       outputs,
-      [restoredOutput, hardwareOutput, currentOutput],
+      [restoredOutput, systemDefaultOutput, hardwareOutput, currentOutput],
       kindOf: kindOf,
       deviceIdOf: deviceIdOf,
     ),

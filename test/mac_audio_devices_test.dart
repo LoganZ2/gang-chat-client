@@ -1,24 +1,20 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:client/src/live/mac_audio_devices.dart';
+import 'package:client/src/live/system_audio_devices.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const channelName = 'gang_chat/audio_devices';
-  final messenger = TestDefaultBinaryMessengerBinding
-      .instance
-      .defaultBinaryMessenger;
+  final messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
 
   tearDown(() {
-    messenger.setMockMethodCallHandler(
-      const MethodChannel(channelName),
-      null,
-    );
+    messenger.setMockMethodCallHandler(const MethodChannel(channelName), null);
   });
 
-  test('currentDeviceId returns the native default input id', () async {
+  test('currentInputDeviceId returns the native default input id', () async {
     messenger.setMockMethodCallHandler(const MethodChannel(channelName), (
       call,
     ) async {
@@ -26,23 +22,39 @@ void main() {
       return null;
     });
 
-    final service = MacAudioDevices();
+    final service = SystemAudioDevices(supported: true);
     addTearDown(service.dispose);
 
+    expect(await service.currentInputDeviceId(), 'mic_2');
     expect(await service.currentDeviceId(), 'mic_2');
   });
 
-  test('currentDeviceId swallows native failures', () async {
+  test('currentOutputDeviceId returns the native default output id', () async {
+    messenger.setMockMethodCallHandler(const MethodChannel(channelName), (
+      call,
+    ) async {
+      if (call.method == 'getDefaultOutputDeviceId') return 'speaker_2';
+      return null;
+    });
+
+    final service = SystemAudioDevices(supported: true);
+    addTearDown(service.dispose);
+
+    expect(await service.currentOutputDeviceId(), 'speaker_2');
+  });
+
+  test('current device queries swallow native failures', () async {
     messenger.setMockMethodCallHandler(const MethodChannel(channelName), (
       call,
     ) async {
       throw PlatformException(code: 'unavailable');
     });
 
-    final service = MacAudioDevices();
+    final service = SystemAudioDevices(supported: true);
     addTearDown(service.dispose);
 
-    expect(await service.currentDeviceId(), isNull);
+    expect(await service.currentInputDeviceId(), isNull);
+    expect(await service.currentOutputDeviceId(), isNull);
   });
 
   test('enumerateInputs maps the native list to audioinput devices', () async {
@@ -60,7 +72,7 @@ void main() {
       return null;
     });
 
-    final service = MacAudioDevices();
+    final service = SystemAudioDevices(supported: true);
     addTearDown(service.dispose);
 
     final inputs = await service.enumerateInputs();
@@ -76,35 +88,38 @@ void main() {
       throw PlatformException(code: 'unavailable');
     });
 
-    final service = MacAudioDevices();
+    final service = SystemAudioDevices(supported: true);
     addTearDown(service.dispose);
 
     expect(await service.enumerateInputs(), isEmpty);
   });
 
-  test('enumerateOutputs maps the native list to audiooutput devices', () async {
-    messenger.setMockMethodCallHandler(const MethodChannel(channelName), (
-      call,
-    ) async {
-      if (call.method == 'enumerateOutputs') {
-        return [
-          {'deviceId': '54', 'label': '内建扬声器', 'isDefault': true},
-          {'deviceId': '61', 'label': 'USB Speaker', 'isDefault': false},
-          // Entries without a deviceId are dropped.
-          {'deviceId': '', 'label': 'broken', 'isDefault': false},
-        ];
-      }
-      return null;
-    });
+  test(
+    'enumerateOutputs maps the native list to audiooutput devices',
+    () async {
+      messenger.setMockMethodCallHandler(const MethodChannel(channelName), (
+        call,
+      ) async {
+        if (call.method == 'enumerateOutputs') {
+          return [
+            {'deviceId': '54', 'label': '内建扬声器', 'isDefault': true},
+            {'deviceId': '61', 'label': 'USB Speaker', 'isDefault': false},
+            // Entries without a deviceId are dropped.
+            {'deviceId': '', 'label': 'broken', 'isDefault': false},
+          ];
+        }
+        return null;
+      });
 
-    final service = MacAudioDevices();
-    addTearDown(service.dispose);
+      final service = SystemAudioDevices(supported: true);
+      addTearDown(service.dispose);
 
-    final outputs = await service.enumerateOutputs();
-    expect(outputs.map((d) => d.deviceId), ['54', '61']);
-    expect(outputs.map((d) => d.label), ['内建扬声器', 'USB Speaker']);
-    expect(outputs.every((d) => d.kind == 'audiooutput'), isTrue);
-  });
+      final outputs = await service.enumerateOutputs();
+      expect(outputs.map((d) => d.deviceId), ['54', '61']);
+      expect(outputs.map((d) => d.label), ['内建扬声器', 'USB Speaker']);
+      expect(outputs.every((d) => d.kind == 'audiooutput'), isTrue);
+    },
+  );
 
   test('enumerateOutputs returns empty when the native side fails', () async {
     messenger.setMockMethodCallHandler(const MethodChannel(channelName), (
@@ -113,13 +128,13 @@ void main() {
       throw PlatformException(code: 'unavailable');
     });
 
-    final service = MacAudioDevices();
+    final service = SystemAudioDevices(supported: true);
     addTearDown(service.dispose);
 
     expect(await service.enumerateOutputs(), isEmpty);
   });
 
-  test('changes emits the new default when the native side notifies', () async {
+  test('inputChanges emits the new default when native notifies', () async {
     final startCalls = <String>[];
     messenger.setMockMethodCallHandler(const MethodChannel(channelName), (
       call,
@@ -128,11 +143,11 @@ void main() {
       return null;
     });
 
-    final service = MacAudioDevices();
+    final service = SystemAudioDevices(supported: true);
     addTearDown(service.dispose);
 
     final emissions = <String?>[];
-    final sub = service.changes.listen(emissions.add);
+    final sub = service.inputChanges.listen(emissions.add);
     addTearDown(sub.cancel);
 
     // Subscribing asks the native side to start observing.
@@ -149,5 +164,30 @@ void main() {
     );
 
     expect(emissions, ['mic_3']);
+  });
+
+  test('outputChanges emits the new default when native notifies', () async {
+    messenger.setMockMethodCallHandler(const MethodChannel(channelName), (
+      call,
+    ) async {
+      return null;
+    });
+
+    final service = SystemAudioDevices(supported: true);
+    addTearDown(service.dispose);
+
+    final emissions = <String?>[];
+    final sub = service.outputChanges.listen(emissions.add);
+    addTearDown(sub.cancel);
+
+    await messenger.handlePlatformMessage(
+      channelName,
+      const StandardMethodCodec().encodeMethodCall(
+        const MethodCall('defaultOutputDeviceChanged', 'speaker_3'),
+      ),
+      (_) {},
+    );
+
+    expect(emissions, ['speaker_3']);
   });
 }
