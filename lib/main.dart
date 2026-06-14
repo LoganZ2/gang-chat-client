@@ -7,11 +7,13 @@ import 'src/auth/token_store.dart';
 import 'src/config/app_config.dart';
 import 'src/shell/desktop_window_controller.dart';
 import 'src/shell/gang_app.dart';
+import 'src/shell/windows_key_event_guard.dart';
 
 export 'src/shell/gang_app.dart' show GangApp;
 
 Future<void> main(List<String> args) async {
   final binding = WidgetsFlutterBinding.ensureInitialized();
+  installWindowsAltKeyEventGuard();
 
   final config = await AppConfig.load();
   _installConfiguredHostProxyBypass(config);

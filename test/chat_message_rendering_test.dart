@@ -433,6 +433,37 @@ void main() {
     expect(longWidth, closeTo(voice_display.kVoiceWaveformMaxWidth, 0.01));
   });
 
+  testWidgets('voice duration labels keep a consistent trailing gap', (
+    tester,
+  ) async {
+    Future<double> renderTrailingGap(Duration duration, String label) async {
+      await tester.pumpWidget(
+        _host(
+          MessageBubbleForTest(
+            message: _voiceMessage(duration: duration),
+            downloadActions: _downloadActions(),
+          ),
+        ),
+      );
+      final bodyRight = tester
+          .getRect(find.byKey(const ValueKey('voice-body')))
+          .right;
+      final labelRight = tester.getRect(find.text(label)).right;
+      return bodyRight - labelRight;
+    }
+
+    final secondsGap = await renderTrailingGap(
+      const Duration(seconds: 2),
+      '2"',
+    );
+    final minutesGap = await renderTrailingGap(
+      const Duration(seconds: 65),
+      '1\'05"',
+    );
+
+    expect(secondsGap, closeTo(minutesGap, 0.01));
+  });
+
   testWidgets('attachment bubbles keep sender and time outside the bubble', (
     tester,
   ) async {

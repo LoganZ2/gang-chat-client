@@ -819,6 +819,7 @@ class _VoiceBody extends StatelessWidget {
           onTap: canPlay ? togglePlayback : null,
           behavior: HitTestBehavior.opaque,
           child: ConstrainedBox(
+            key: const ValueKey('voice-body'),
             constraints: const BoxConstraints(minWidth: 150, maxWidth: 304),
             child: Row(
               mainAxisSize: MainAxisSize.min,

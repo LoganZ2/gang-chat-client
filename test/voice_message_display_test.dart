@@ -125,7 +125,7 @@ void main() {
   });
 
   test('waveform width grows with duration up to a cap', () {
-    expect(kVoiceWaveformMinWidth, 48);
+    expect(kVoiceWaveformMinWidth, 96);
     expect(voiceWaveformWidth(null), kVoiceWaveformMinWidth);
     expect(voiceWaveformWidth(Duration.zero), kVoiceWaveformMinWidth);
     expect(

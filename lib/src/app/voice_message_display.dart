@@ -193,7 +193,7 @@ String _formatVoiceDurationLabel(int totalSeconds) {
   return "$minutes'${seconds.toString().padLeft(2, '0')}$secondsMark";
 }
 
-const double kVoiceWaveformMinWidth = 48;
+const double kVoiceWaveformMinWidth = 96;
 const double kVoiceWaveformMaxWidth = 160;
 
 double voiceWaveformWidth(Duration? duration) {
