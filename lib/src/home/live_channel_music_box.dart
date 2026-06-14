@@ -1,5 +1,15 @@
 part of 'live_channel_pane.dart';
 
+/// Below this docked height the fixed controls (header + vinyl + volume) crowd
+/// out the body, so the console switches to a scrollable layout instead of
+/// overflowing.
+const double _musicBoxMinComfortableHeight = 440;
+
+/// The body's fixed height inside the compact, scrollable layout — enough to
+/// show the search field plus a few result/queue rows.
+const double _musicBoxCompactBodyHeight = 240;
+
+
 /// The in-pane music box console: a spinning vinyl for the current track, a
 /// progress bar with transport controls, the queue, and a search-to-queue
 /// field. Audio is delivered separately via the LiveKit session; this is purely
@@ -57,39 +67,67 @@ class LiveMusicBoxPanel extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _MusicBoxHeader(usage: state.usage, onClose: onClose),
-            const SizedBox(height: 16),
-            _MusicBoxNowPlaying(
+        // The panel is docked at full stage height. When the stage is short the
+        // fixed controls (header + vinyl + volume) no longer leave room for the
+        // body, so rather than overflow we let the whole console scroll and give
+        // the body its own usable slice.
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final tallEnough =
+                constraints.maxHeight >= _musicBoxMinComfortableHeight;
+            final body = _MusicBoxBody(
               state: state,
-              onTogglePlayback: onTogglePlayback,
-              onSkip: onSkip,
-            ),
-            const SizedBox(height: 14),
-            _MusicBoxVolume(
-              initialVolume: volume,
-              onChanged: onVolumeChanged,
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: _MusicBoxBody(
-                state: state,
-                searchController: searchController,
-                searchResults: searchResults,
-                searching: searching,
-                searchError: searchError,
-                source: source,
-                onQueueResult: onQueueResult,
-                onRemoveItem: onRemoveItem,
-                onSourceChanged: onSourceChanged,
+              searchController: searchController,
+              searchResults: searchResults,
+              searching: searching,
+              searchError: searchError,
+              source: source,
+              onQueueResult: onQueueResult,
+              onRemoveItem: onRemoveItem,
+              onSourceChanged: onSourceChanged,
+            );
+
+            if (tallEnough) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ..._controls(),
+                  Expanded(child: body),
+                ],
+              );
+            }
+
+            return SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ..._controls(),
+                  // Give the body a fixed, scrollable slice so its internal
+                  // search/queue lists stay usable inside the outer scroll view.
+                  SizedBox(height: _musicBoxCompactBodyHeight, child: body),
+                ],
               ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
+  }
+
+  // The fixed control stack shared by both the roomy and compact layouts.
+  List<Widget> _controls() {
+    return [
+      _MusicBoxHeader(usage: state.usage, onClose: onClose),
+      const SizedBox(height: 16),
+      _MusicBoxNowPlaying(
+        state: state,
+        onTogglePlayback: onTogglePlayback,
+        onSkip: onSkip,
+      ),
+      const SizedBox(height: 14),
+      _MusicBoxVolume(initialVolume: volume, onChanged: onVolumeChanged),
+      const SizedBox(height: 16),
+    ];
   }
 }
 
