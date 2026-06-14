@@ -100,6 +100,8 @@ class _HomeShellState extends State<HomeShell> {
   late AuthenticatedAppServices _services;
   late CurrentUser _currentUser;
   final TextEditingController _composerController = TextEditingController();
+  final ChatComposerController _composerPanelController =
+      ChatComposerController();
   final TextEditingController _titleSearchController = TextEditingController();
   final GlobalKey _composerDropKey = GlobalKey();
   final Object _searchTapRegionGroup = Object();
@@ -303,6 +305,7 @@ class _HomeShellState extends State<HomeShell> {
     _titleSearchController.removeListener(_handleTitleSearchChanged);
     _titleSearchController.dispose();
     _composerController.dispose();
+    _composerPanelController.dispose();
     _voicePlaybackService.state.removeListener(_handleVoicePlaybackChanged);
     unawaited(_voicePlaybackService.dispose());
     _cancelActiveDownloads();

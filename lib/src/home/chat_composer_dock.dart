@@ -7,6 +7,7 @@ const _voicePanelHeight = 150.0;
 class _ComposerDock extends StatelessWidget {
   const _ComposerDock({
     required this.controller,
+    required this.composerController,
     required this.sending,
     required this.sendError,
     required this.stickerPanel,
@@ -29,6 +30,7 @@ class _ComposerDock extends StatelessWidget {
   });
 
   final TextEditingController controller;
+  final ChatComposerController composerController;
   final bool sending;
   final String? sendError;
   final sticker_display.StickerPanelLoadState stickerPanel;
@@ -54,91 +56,95 @@ class _ComposerDock extends StatelessWidget {
     return SafeArea(
       top: false,
       minimum: EdgeInsets.zero,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (sendError != null) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
-              child: Text(
-                sendError!,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: UiTypography.label.copyWith(color: UiColors.danger),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          _composerHorizontalInset,
+          0,
+          _composerHorizontalInset,
+          _composerBottomInset,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (sendError != null) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
+                child: Text(
+                  sendError!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: UiTypography.label.copyWith(color: UiColors.danger),
+                ),
               ),
+            ],
+            ChatComposer(
+              key: dropKey,
+              controller: controller,
+              composerController: composerController,
+              hintText: '写点什么…',
+              maxLines: 5,
+              onSubmitted: onSubmit,
+              onPasteFiles: onPasteFiles,
+              attachments: attachments.isEmpty
+                  ? null
+                  : _ComposerAttachmentStrip(
+                      attachments: attachments,
+                      onRemove: onRemoveAttachment,
+                      onRetry: onRetryAttachment,
+                    ),
+              actions: [
+                ComposerAction(
+                  id: 'stickers',
+                  icon: Icons.emoji_emotions_outlined,
+                  label: '表情',
+                  onPressed: onOpenStickers,
+                  panel: ComposerPanel.static(
+                    height: _stickerPanelHeight,
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                    child: _StickerPanel(
+                      state: stickerPanel,
+                      onSendSticker: onSendSticker,
+                      onRefresh: onRefreshStickers,
+                      onSourceChanged: onStickerSourceChanged,
+                    ),
+                  ),
+                ),
+                ComposerAction(
+                  id: 'voice',
+                  icon: Icons.mic_none,
+                  label: '语音',
+                  onPressed: onCancelVoice,
+                  panel: ComposerPanel.static(
+                    height: _voicePanelHeight,
+                    child: _VoicePanel(
+                      state: voiceState,
+                      onStart: onStartVoice,
+                      onSend: onSendVoice,
+                      onCancel: onCancelVoice,
+                    ),
+                  ),
+                ),
+                ComposerAction(
+                  id: 'file',
+                  icon: Icons.attach_file,
+                  label: '文件',
+                  selected: fileActionHighlighted,
+                  onPressed: onPickFile,
+                ),
+                ComposerAction(
+                  id: 'send',
+                  icon: Icons.send_rounded,
+                  label: '发送',
+                  tooltip: sending ? '发送中' : '发送',
+                  tone: ButtonTone.primary,
+                  alignment: ComposerActionAlignment.trailing,
+                  onPressed: () => onSubmit(controller.text),
+                ),
+              ],
             ),
           ],
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: KeyedSubtree(
-              key: dropKey,
-              child: ChatComposer(
-                controller: controller,
-                hintText: '写点什么…',
-                maxLines: 5,
-                onSubmitted: onSubmit,
-                onPasteFiles: onPasteFiles,
-                attachments: attachments.isEmpty
-                    ? null
-                    : _ComposerAttachmentStrip(
-                        attachments: attachments,
-                        onRemove: onRemoveAttachment,
-                        onRetry: onRetryAttachment,
-                      ),
-                actions: [
-                  ComposerAction(
-                    id: 'stickers',
-                    icon: Icons.emoji_emotions_outlined,
-                    label: '表情',
-                    onPressed: onOpenStickers,
-                    panel: ComposerPanel.static(
-                      height: _stickerPanelHeight,
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                      child: _StickerPanel(
-                        state: stickerPanel,
-                        onSendSticker: onSendSticker,
-                        onRefresh: onRefreshStickers,
-                        onSourceChanged: onStickerSourceChanged,
-                      ),
-                    ),
-                  ),
-                  ComposerAction(
-                    id: 'voice',
-                    icon: Icons.mic_none,
-                    label: '语音',
-                    onPressed: onCancelVoice,
-                    panel: ComposerPanel.static(
-                      height: _voicePanelHeight,
-                      child: _VoicePanel(
-                        state: voiceState,
-                        onStart: onStartVoice,
-                        onSend: onSendVoice,
-                        onCancel: onCancelVoice,
-                      ),
-                    ),
-                  ),
-                  ComposerAction(
-                    id: 'file',
-                    icon: Icons.attach_file,
-                    label: '文件',
-                    selected: fileActionHighlighted,
-                    onPressed: onPickFile,
-                  ),
-                  ComposerAction(
-                    id: 'send',
-                    icon: Icons.send_rounded,
-                    label: '发送',
-                    tooltip: sending ? '发送中' : '发送',
-                    tone: ButtonTone.primary,
-                    alignment: ComposerActionAlignment.trailing,
-                    onPressed: () => onSubmit(controller.text),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

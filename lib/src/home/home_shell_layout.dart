@@ -162,6 +162,7 @@ extension _HomeShellLayout on _HomeShellState {
       sending: _sending,
       sendError: _sendError,
       composerController: _composerController,
+      composerPanelController: _composerPanelController,
       stickerPanel: _stickerPanelState,
       voiceState: _voiceState,
       composerAttachments: _stagedAttachmentViews,
