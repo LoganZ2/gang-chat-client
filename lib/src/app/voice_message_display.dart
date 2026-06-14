@@ -128,13 +128,10 @@ VoiceRecorderState voiceSendFailed({
   );
 }
 
-/// `m:ss` for the composer timer. Minutes are not zero-padded so a short clip
-/// reads "0:04" rather than "00:04".
+/// Compact voice duration label. Minutes use `'` and seconds use `"`.
 String formatVoiceDuration(Duration duration) {
   final clamped = duration.isNegative ? Duration.zero : duration;
-  final minutes = clamped.inMinutes;
-  final seconds = clamped.inSeconds % 60;
-  return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  return _formatVoiceDurationLabel(clamped.inSeconds);
 }
 
 /// Filename for an outgoing voice clip. Voice messages ride the regular file
@@ -185,10 +182,15 @@ String formatVoiceBubbleDuration(Duration? duration) {
   if (duration == null) return '';
   final clamped = duration.isNegative ? Duration.zero : duration;
   final totalSeconds = ((clamped.inMilliseconds + 999) ~/ 1000).clamp(0, 9999);
-  if (totalSeconds < 60) return '${totalSeconds}s';
+  return _formatVoiceDurationLabel(totalSeconds);
+}
+
+String _formatVoiceDurationLabel(int totalSeconds) {
+  const secondsMark = '"';
+  if (totalSeconds < 60) return '$totalSeconds$secondsMark';
   final minutes = totalSeconds ~/ 60;
   final seconds = totalSeconds % 60;
-  return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  return "$minutes'${seconds.toString().padLeft(2, '0')}$secondsMark";
 }
 
 const double kVoiceWaveformMinWidth = 48;

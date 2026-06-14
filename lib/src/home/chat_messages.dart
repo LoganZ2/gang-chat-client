@@ -5,7 +5,6 @@ part of 'chat_pane.dart';
 /// reader is browsing history, so we leave their position alone.
 const double _autoScrollFollowThreshold = 120;
 
-
 /// Callbacks for file-attachment downloads, bundled so they can travel from
 /// [ChatPane] down to each [_FileAttachmentTile] without threading five
 /// separate parameters through every intermediate widget.
@@ -820,7 +819,7 @@ class _VoiceBody extends StatelessWidget {
           onTap: canPlay ? togglePlayback : null,
           behavior: HitTestBehavior.opaque,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 150, maxWidth: 280),
+            constraints: const BoxConstraints(minWidth: 150, maxWidth: 304),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [

@@ -71,6 +71,9 @@ String roomSubtitle(RoomCard room) {
 String roomSidebarSubtitle(RoomCard room) {
   final last = room.lastMessage;
   if (last != null) {
+    if (last.type == 'system') {
+      return '[系统] ${_systemLastMessagePreview(last)}';
+    }
     final sender = _nonEmpty(last.senderDisplayName) ?? '用户';
     final body = _nonEmpty(last.bodyPreview) ?? '消息';
     return '$sender · $body';
@@ -81,6 +84,14 @@ String roomSidebarSubtitle(RoomCard room) {
     parts.add('${room.liveParticipantCount} 直播中');
   }
   return parts.join(' · ');
+}
+
+String _systemLastMessagePreview(LastMessagePreview last) {
+  final sender = _nonEmpty(last.senderDisplayName);
+  final body = _nonEmpty(last.bodyPreview);
+  final parts = [?sender, ?body];
+  if (parts.isEmpty) return '系统消息';
+  return parts.join(' ');
 }
 
 String roomSidebarLastMessageTime(RoomCard room, {DateTime? now}) {

@@ -376,7 +376,7 @@ void main() {
       ),
     );
 
-    expect(find.text('15s'), findsOneWidget);
+    expect(find.text('15"'), findsOneWidget);
     expect(
       tester.getSize(find.byKey(const ValueKey('voice-waveform'))).width,
       closeTo(

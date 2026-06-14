@@ -34,6 +34,20 @@ void main() {
       ),
       'Logan · hello',
     );
+    expect(
+      roomSidebarSubtitle(
+        _roomCard(
+          lastMessage: LastMessagePreview(
+            id: 'message_2',
+            type: 'system',
+            senderDisplayName: 'Logan',
+            bodyPreview: '加入了房间',
+            createdAt: DateTime.utc(2026, 6, 4),
+          ),
+        ),
+      ),
+      '[系统] Logan 加入了房间',
+    );
   });
 
   test('room sidebar latest message time follows compact chat rules', () {

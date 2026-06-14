@@ -557,9 +557,11 @@ class LastMessagePreview {
     required this.senderDisplayName,
     required this.bodyPreview,
     required this.createdAt,
+    this.type = 'text',
   });
 
   final String id;
+  final String type;
   final String senderDisplayName;
   final String bodyPreview;
   final DateTime createdAt;
@@ -567,6 +569,7 @@ class LastMessagePreview {
   factory LastMessagePreview.fromJson(Map<String, Object?> json) {
     return LastMessagePreview(
       id: json['id']! as String,
+      type: json['type'] as String? ?? 'text',
       senderDisplayName: json['sender_display_name']! as String,
       bodyPreview: json['body_preview']! as String,
       createdAt: DateTime.parse(json['created_at']! as String),

@@ -7,9 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 Widget _host(Widget child) {
   return MaterialApp(
     home: Scaffold(
-      body: Center(
-        child: SizedBox(width: 360, child: child),
-      ),
+      body: Center(child: SizedBox(width: 360, child: child)),
     ),
   );
 }
@@ -58,7 +56,7 @@ void main() {
       ),
     );
 
-    expect(find.text('0:07'), findsOneWidget);
+    expect(find.text('7"'), findsOneWidget);
     expect(find.byIcon(Icons.send_rounded), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.send_rounded));
@@ -86,7 +84,7 @@ void main() {
       ),
     );
 
-    expect(find.text('0:12'), findsOneWidget);
+    expect(find.text('12"'), findsOneWidget);
     expect(find.byIcon(Icons.send_rounded), findsOneWidget);
     expect(find.byIcon(Icons.delete_outline), findsOneWidget);
     expect(find.text('点击发送或取消'), findsOneWidget);

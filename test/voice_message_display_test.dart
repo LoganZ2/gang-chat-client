@@ -98,15 +98,15 @@ void main() {
     expect(voiceRecordingReachedLimit(kVoiceRecordingMaxDuration), isTrue);
   });
 
-  test('duration formats as m:ss without zero-padded minutes', () {
-    expect(formatVoiceDuration(Duration.zero), '0:00');
-    expect(formatVoiceDuration(const Duration(seconds: 4)), '0:04');
-    expect(formatVoiceDuration(const Duration(seconds: 65)), '1:05');
+  test('duration formats with minute and second marks', () {
+    expect(formatVoiceDuration(Duration.zero), '0"');
+    expect(formatVoiceDuration(const Duration(seconds: 4)), '4"');
+    expect(formatVoiceDuration(const Duration(seconds: 65)), '1\'05"');
     expect(
       formatVoiceDuration(const Duration(minutes: 12, seconds: 9)),
-      '12:09',
+      '12\'09"',
     );
-    expect(formatVoiceDuration(const Duration(seconds: -3)), '0:00');
+    expect(formatVoiceDuration(const Duration(seconds: -3)), '0"');
   });
 
   test('voice filename carries an audio extension and timestamp', () {
@@ -116,12 +116,12 @@ void main() {
     expect(kVoiceMessageMimeType, 'audio/mp4');
   });
 
-  test('bubble duration uses compact seconds and minute labels', () {
+  test('bubble duration uses marked seconds and minutes', () {
     expect(formatVoiceBubbleDuration(null), '');
-    expect(formatVoiceBubbleDuration(Duration.zero), '0s');
-    expect(formatVoiceBubbleDuration(const Duration(milliseconds: 1200)), '2s');
-    expect(formatVoiceBubbleDuration(const Duration(seconds: 15)), '15s');
-    expect(formatVoiceBubbleDuration(const Duration(seconds: 65)), '1:05');
+    expect(formatVoiceBubbleDuration(Duration.zero), '0"');
+    expect(formatVoiceBubbleDuration(const Duration(milliseconds: 1200)), '2"');
+    expect(formatVoiceBubbleDuration(const Duration(seconds: 15)), '15"');
+    expect(formatVoiceBubbleDuration(const Duration(seconds: 65)), '1\'05"');
   });
 
   test('waveform width grows with duration up to a cap', () {
