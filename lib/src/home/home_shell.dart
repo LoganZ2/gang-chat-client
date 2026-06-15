@@ -386,10 +386,8 @@ class _HomeShellState extends State<HomeShell> {
                         searchController: _titleSearchController,
                         searchTapRegionGroup: _searchTapRegionGroup,
                         searchQuery: _searchQuery,
-                        activeSearchCategory: _activeSearchCategory,
                         onActivateSearch: _activateSearch,
                         onSearchTapOutside: _collapseSearch,
-                        onClearSearchCategory: _clearSearchCategory,
                         onClearSearchQuery: _clearSearchQuery,
                       ),
                       Expanded(

@@ -36,10 +36,8 @@ class _HomeTitleBar extends StatefulWidget {
     required this.searchController,
     required this.searchTapRegionGroup,
     required this.searchQuery,
-    required this.activeSearchCategory,
     required this.onActivateSearch,
     required this.onSearchTapOutside,
-    required this.onClearSearchCategory,
     required this.onClearSearchQuery,
   });
 
@@ -47,10 +45,8 @@ class _HomeTitleBar extends StatefulWidget {
   final TextEditingController searchController;
   final Object searchTapRegionGroup;
   final String searchQuery;
-  final search_display.GlobalSearchCategory? activeSearchCategory;
   final VoidCallback onActivateSearch;
   final VoidCallback onSearchTapOutside;
-  final VoidCallback onClearSearchCategory;
   final VoidCallback onClearSearchQuery;
 
   @override
@@ -160,9 +156,7 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
                         child: _TitleSearchField(
                           controller: widget.searchController,
                           query: widget.searchQuery,
-                          activeCategory: widget.activeSearchCategory,
                           onActivated: widget.onActivateSearch,
-                          onClearCategory: widget.onClearSearchCategory,
                           onClearQuery: widget.onClearSearchQuery,
                         ),
                       ),
@@ -183,17 +177,13 @@ class _TitleSearchField extends StatefulWidget {
   const _TitleSearchField({
     required this.controller,
     required this.query,
-    required this.activeCategory,
     required this.onActivated,
-    required this.onClearCategory,
     required this.onClearQuery,
   });
 
   final TextEditingController controller;
   final String query;
-  final search_display.GlobalSearchCategory? activeCategory;
   final VoidCallback onActivated;
-  final VoidCallback onClearCategory;
   final VoidCallback onClearQuery;
 
   @override
@@ -242,18 +232,6 @@ class _TitleSearchFieldState extends State<_TitleSearchField> {
       child: Row(
         children: [
           Icon(Icons.search, size: 16, color: accent),
-          if (widget.activeCategory != null) ...[
-            const SizedBox(width: 7),
-            _SearchFieldFilterChip(
-              key: ValueKey(
-                'search-field-filter-${widget.activeCategory!.name}',
-              ),
-              label: search_display.globalSearchCategoryLabel(
-                widget.activeCategory!,
-              ),
-              onClear: widget.onClearCategory,
-            ),
-          ],
           const SizedBox(width: 8),
           Expanded(
             child: TextField(
@@ -288,57 +266,6 @@ class _TitleSearchFieldState extends State<_TitleSearchField> {
             ),
           ],
         ],
-      ),
-    );
-  }
-}
-
-class _SearchFieldFilterChip extends StatelessWidget {
-  const _SearchFieldFilterChip({
-    super.key,
-    required this.label,
-    required this.onClear,
-  });
-
-  final String label;
-  final VoidCallback onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: UiColors.selected,
-        borderRadius: BorderRadius.circular(UiRadii.sm),
-        border: Border.all(color: UiColors.selectedBorder),
-      ),
-      child: SizedBox(
-        height: 21,
-        child: Padding(
-          padding: const EdgeInsets.only(left: 7, right: 4),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: UiTypography.label.copyWith(
-                  color: UiColors.accent,
-                  fontSize: 11,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Tooltip(
-                message: '关闭筛选',
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: onClear,
-                  child: Icon(Icons.close, size: 12, color: UiColors.accent),
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

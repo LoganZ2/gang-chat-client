@@ -85,10 +85,6 @@ extension _HomeShellSearch on _HomeShellState {
     });
   }
 
-  void _clearSearchCategory() {
-    _setHomeState(() => _activeSearchCategory = null);
-  }
-
   void _clearSearchQuery() {
     _titleSearchController.clear();
   }

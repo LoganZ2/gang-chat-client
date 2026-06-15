@@ -304,7 +304,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('authenticated home shell search tag filters sidebar rooms', (
+  testWidgets('authenticated home shell search category filters sidebar rooms', (
     WidgetTester tester,
   ) async {
     final requestedPaths = <String>[];
@@ -349,52 +349,35 @@ void main() {
 
     expect(requestedPaths, contains('/api/v1/rooms/server-public/join'));
 
-    await tester.tap(find.text('我的房间 1').first);
+    // Selecting the 我的房间 category filters the sidebar to matching rooms.
+    await tester.tap(find.byKey(const ValueKey('search-category-myRooms')));
     await tester.pumpAndSettle();
 
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('home-title-search')),
-        matching: find.text('我的房间'),
-      ),
-      findsOneWidget,
-    );
     expect(find.text('Beta Room'), findsWidgets);
     expect(find.text('Alpha Room'), findsNothing);
 
+    // The active category persists across query edits.
     await tester.enterText(searchField, 'Beta update');
     await tester.pump(const Duration(milliseconds: 320));
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('search-field-filter-myRooms')),
-      findsOneWidget,
-    );
     expect(find.text('Beta Room'), findsWidgets);
     expect(find.text('Alpha Room'), findsNothing);
 
+    // Re-tapping the active category clears it and restores the full sidebar.
     await tester.tap(find.byKey(const ValueKey('search-category-myRooms')));
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('search-field-filter-myRooms')),
-      findsNothing,
-    );
     expect(find.text('Alpha Room'), findsOneWidget);
     expect(find.text('Beta Room'), findsWidgets);
 
-    await tester.tap(find.byKey(const ValueKey('search-category-myRooms')));
-    await tester.pumpAndSettle();
+    // Closing the dropdown hides the results panel; reopening restores it.
     await tester.tapAt(const Offset(740, 100));
     await tester.pumpAndSettle();
 
     expect(
       find.byKey(const ValueKey('home-title-search-results')),
       findsNothing,
-    );
-    expect(
-      find.byKey(const ValueKey('search-field-filter-myRooms')),
-      findsOneWidget,
     );
 
     await tester.tap(searchField);
@@ -404,9 +387,6 @@ void main() {
       find.byKey(const ValueKey('home-title-search-results')),
       findsOneWidget,
     );
-
-    await tester.tap(find.byTooltip('关闭筛选'));
-    await tester.pumpAndSettle();
 
     expect(find.text('Alpha Room'), findsOneWidget);
     expect(find.text('Beta Room'), findsWidgets);
