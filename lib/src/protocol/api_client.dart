@@ -246,6 +246,8 @@ abstract interface class GangApi {
     required String userId,
   });
 
+  Future<UserSummary> getUserProfile(String userId);
+
   Future<RoomInvite> inviteMember({
     required String roomId,
     required String userId,
@@ -1142,6 +1144,18 @@ class GangApiClient implements GangApi {
     return RoomMemberProfile.fromJson(
       decoded['profile']! as Map<String, Object?>,
     );
+  }
+
+  @override
+  Future<UserSummary> getUserProfile(String userId) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.get(
+        _uri('/users/$userId/profile'),
+        headers: _headers(token),
+      );
+    }, retryTransientFailures: true);
+    final profile = decoded['profile']! as Map<String, Object?>;
+    return UserSummary.fromJson(profile['user']! as Map<String, Object?>);
   }
 
   @override

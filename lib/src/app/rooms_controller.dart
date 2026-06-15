@@ -614,6 +614,10 @@ class RoomsController {
     return api.getRoomMemberProfile(roomId: roomId, userId: userId);
   }
 
+  Future<UserSummary> getUserProfile(String userId) {
+    return api.getUserProfile(userId);
+  }
+
   Future<RoomDetail> createRoom({
     required String name,
     String? description,

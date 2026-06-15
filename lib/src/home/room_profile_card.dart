@@ -5,6 +5,9 @@ import '../protocol/models.dart';
 import '../ui/ui.dart';
 import 'hover_card_anchor.dart';
 
+typedef RoomProfileResolver = Future<PublicRoom> Function(PublicRoom room);
+typedef UserProfileResolver = Future<UserSummary> Function(UserSummary user);
+
 class RoomHoverCard extends StatefulWidget {
   const RoomHoverCard({
     super.key,
@@ -12,13 +15,15 @@ class RoomHoverCard extends StatefulWidget {
     required this.currentUser,
     required this.child,
     this.onResolveRoom,
+    this.onResolveUserProfile,
     this.onEnterRoom,
   });
 
   final PublicRoom room;
   final CurrentUser currentUser;
   final Widget child;
-  final Future<PublicRoom> Function(PublicRoom room)? onResolveRoom;
+  final RoomProfileResolver? onResolveRoom;
+  final UserProfileResolver? onResolveUserProfile;
   final ValueChanged<PublicRoom>? onEnterRoom;
 
   @override
@@ -28,31 +33,23 @@ class RoomHoverCard extends StatefulWidget {
 class _RoomHoverCardState extends State<RoomHoverCard> {
   PublicRoom? _resolved;
   Future<void>? _resolveFuture;
-  bool _roomResolveCompleted = false;
 
   PublicRoom get _displayRoom => _resolved ?? widget.room;
-  bool get _roomReady =>
-      widget.onResolveRoom == null ||
-      _resolved != null ||
-      _roomResolveCompleted;
 
   @override
   void didUpdateWidget(covariant RoomHoverCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     final roomChanged = oldWidget.room.id != widget.room.id;
-    final resolverAdded =
-        oldWidget.onResolveRoom == null && widget.onResolveRoom != null;
-    if (!roomChanged && !resolverAdded) return;
+    final resolverPresenceChanged =
+        (oldWidget.onResolveRoom == null) != (widget.onResolveRoom == null);
+    if (!roomChanged && !resolverPresenceChanged) return;
     _resolved = null;
     _resolveFuture = null;
-    _roomResolveCompleted = false;
   }
 
   Future<void> _resolveRoom() {
     final resolver = widget.onResolveRoom;
-    if (resolver == null || _roomResolveCompleted) {
-      return Future<void>.value();
-    }
+    if (resolver == null) return Future<void>.value();
     final existing = _resolveFuture;
     if (existing != null) return existing;
 
@@ -61,13 +58,12 @@ class _RoomHoverCardState extends State<RoomHoverCard> {
       try {
         final room = await resolver(requestedRoom);
         if (!mounted || widget.room.id != requestedRoom.id) return;
-        setState(() {
-          _resolved = room;
-          _roomResolveCompleted = true;
-        });
+        setState(() => _resolved = room);
       } catch (_) {
         if (!mounted || widget.room.id != requestedRoom.id) return;
-        setState(() => _roomResolveCompleted = true);
+        // Fall back to the current lightweight summary instead of keeping a
+        // previously resolved card that may now be stale.
+        setState(() => _resolved = null);
       } finally {
         if (mounted && widget.room.id == requestedRoom.id) {
           _resolveFuture = null;
@@ -81,11 +77,17 @@ class _RoomHoverCardState extends State<RoomHoverCard> {
   @override
   Widget build(BuildContext context) {
     return HoverCardAnchor(
-      resetKey: Object.hash(widget.room.id, widget.onResolveRoom != null),
-      onBeforeOpen: _roomReady ? null : _resolveRoom,
+      resetKey: Object.hash(
+        widget.room.id,
+        widget.onResolveRoom != null,
+        widget.onResolveUserProfile != null,
+      ),
+      onBeforeOpen: widget.onResolveRoom == null ? null : _resolveRoom,
       cardBuilder: (context) => _RoomProfileCard(
         room: _displayRoom,
         currentUser: widget.currentUser,
+        onResolveRoomProfile: widget.onResolveRoom,
+        onResolveUserProfile: widget.onResolveUserProfile,
         onEnterRoom: widget.onEnterRoom,
       ),
       child: widget.child,
@@ -100,6 +102,7 @@ class UserHoverCard extends StatefulWidget {
     required this.child,
     this.currentUser,
     this.onResolveProfile,
+    this.onResolveRoomProfile,
     this.onEnterCommonRoom,
   });
 
@@ -107,9 +110,10 @@ class UserHoverCard extends StatefulWidget {
   final Widget child;
   final CurrentUser? currentUser;
 
-  /// Lazily fetches a richer profile (gender, common rooms) the first time the
+  /// Fetches a richer, up-to-date profile (gender, common rooms) before the
   /// card opens. When null the card shows only the supplied summary.
-  final Future<UserSummary> Function(UserSummary user)? onResolveProfile;
+  final UserProfileResolver? onResolveProfile;
+  final RoomProfileResolver? onResolveRoomProfile;
   final ValueChanged<PublicRoom>? onEnterCommonRoom;
 
   @override
@@ -119,31 +123,28 @@ class UserHoverCard extends StatefulWidget {
 class _UserHoverCardState extends State<UserHoverCard> {
   UserSummary? _resolved;
   Future<void>? _resolveFuture;
-  bool _profileResolveCompleted = false;
 
   UserSummary get _displayUser => _resolved ?? widget.user;
-  bool get _profileReady =>
-      widget.onResolveProfile == null ||
-      _resolved != null ||
-      _profileResolveCompleted;
 
   @override
   void didUpdateWidget(covariant UserHoverCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     final userChanged = oldWidget.user.id != widget.user.id;
-    final resolverAdded =
-        oldWidget.onResolveProfile == null && widget.onResolveProfile != null;
-    if (!userChanged && !resolverAdded) return;
+    final currentUserChanged =
+        oldWidget.currentUser?.id != widget.currentUser?.id;
+    final resolverPresenceChanged =
+        (oldWidget.onResolveProfile == null) !=
+        (widget.onResolveProfile == null);
+    if (!userChanged && !currentUserChanged && !resolverPresenceChanged) {
+      return;
+    }
     _resolved = null;
     _resolveFuture = null;
-    _profileResolveCompleted = false;
   }
 
   Future<void> _resolveProfile() {
     final resolver = widget.onResolveProfile;
-    if (resolver == null || _profileResolveCompleted) {
-      return Future<void>.value();
-    }
+    if (resolver == null) return Future<void>.value();
     final existing = _resolveFuture;
     if (existing != null) return existing;
 
@@ -152,14 +153,11 @@ class _UserHoverCardState extends State<UserHoverCard> {
       try {
         final profile = await resolver(requestedUser);
         if (!mounted || widget.user.id != requestedUser.id) return;
-        setState(() {
-          _resolved = profile;
-          _profileResolveCompleted = true;
-        });
+        setState(() => _resolved = profile);
       } catch (_) {
         if (!mounted || widget.user.id != requestedUser.id) return;
-        // Keep showing the lightweight summary on failure.
-        setState(() => _profileResolveCompleted = true);
+        // Keep showing the current lightweight summary on failure.
+        setState(() => _resolved = null);
       } finally {
         if (mounted && widget.user.id == requestedUser.id) {
           _resolveFuture = null;
@@ -176,12 +174,15 @@ class _UserHoverCardState extends State<UserHoverCard> {
       resetKey: Object.hash(
         widget.user.id,
         widget.onResolveProfile != null,
+        widget.onResolveRoomProfile != null,
         widget.currentUser?.id,
       ),
-      onBeforeOpen: _profileReady ? null : _resolveProfile,
+      onBeforeOpen: widget.onResolveProfile == null ? null : _resolveProfile,
       cardBuilder: (context) => _UserProfileCard(
         user: _displayUser,
         currentUser: widget.currentUser,
+        onResolveUserProfile: widget.onResolveProfile,
+        onResolveRoomProfile: widget.onResolveRoomProfile,
         onEnterCommonRoom: widget.onEnterCommonRoom,
       ),
       child: widget.child,
@@ -193,11 +194,15 @@ class _UserProfileCard extends StatelessWidget {
   const _UserProfileCard({
     required this.user,
     this.currentUser,
+    this.onResolveUserProfile,
+    this.onResolveRoomProfile,
     this.onEnterCommonRoom,
   });
 
   final UserSummary user;
   final CurrentUser? currentUser;
+  final UserProfileResolver? onResolveUserProfile;
+  final RoomProfileResolver? onResolveRoomProfile;
   final ValueChanged<PublicRoom>? onEnterCommonRoom;
 
   @override
@@ -310,6 +315,8 @@ class _UserProfileCard extends StatelessWidget {
                     child: _UserCommonRoomRow(
                       room: room,
                       currentUser: currentUser,
+                      onResolveUserProfile: onResolveUserProfile,
+                      onResolveRoomProfile: onResolveRoomProfile,
                       onEnterRoom: onEnterCommonRoom,
                     ),
                   ),
@@ -341,11 +348,15 @@ class _UserCommonRoomRow extends StatelessWidget {
   const _UserCommonRoomRow({
     required this.room,
     required this.currentUser,
+    required this.onResolveUserProfile,
+    required this.onResolveRoomProfile,
     required this.onEnterRoom,
   });
 
   final UserCommonRoom room;
   final CurrentUser? currentUser;
+  final UserProfileResolver? onResolveUserProfile;
+  final RoomProfileResolver? onResolveRoomProfile;
   final ValueChanged<PublicRoom>? onEnterRoom;
 
   @override
@@ -363,6 +374,8 @@ class _UserCommonRoomRow extends StatelessWidget {
         : RoomHoverCard(
             room: publicRoom,
             currentUser: currentUser!,
+            onResolveRoom: onResolveRoomProfile,
+            onResolveUserProfile: onResolveUserProfile,
             onEnterRoom: onEnterRoom,
             child: avatar,
           );
@@ -391,11 +404,15 @@ class _RoomProfileCard extends StatelessWidget {
   const _RoomProfileCard({
     required this.room,
     required this.currentUser,
+    this.onResolveRoomProfile,
+    this.onResolveUserProfile,
     this.onEnterRoom,
   });
 
   final PublicRoom room;
   final CurrentUser currentUser;
+  final RoomProfileResolver? onResolveRoomProfile;
+  final UserProfileResolver? onResolveUserProfile;
   final ValueChanged<PublicRoom>? onEnterRoom;
 
   @override
@@ -491,6 +508,8 @@ class _RoomProfileCard extends StatelessWidget {
               name: room_display.userPrimaryName(creator),
               profileUser: creator,
               currentUser: currentUser,
+              onResolveUserProfile: onResolveUserProfile,
+              onResolveRoomProfile: onResolveRoomProfile,
               onEnterCommonRoom: onEnterRoom,
             ),
           ],
@@ -545,6 +564,8 @@ class _RoomCardPersonRow extends StatelessWidget {
     required this.name,
     this.profileUser,
     this.currentUser,
+    this.onResolveUserProfile,
+    this.onResolveRoomProfile,
     this.onEnterCommonRoom,
     this.trailing,
   });
@@ -555,6 +576,8 @@ class _RoomCardPersonRow extends StatelessWidget {
   final String name;
   final UserSummary? profileUser;
   final CurrentUser? currentUser;
+  final UserProfileResolver? onResolveUserProfile;
+  final RoomProfileResolver? onResolveRoomProfile;
   final ValueChanged<PublicRoom>? onEnterCommonRoom;
   final Widget? trailing;
 
@@ -572,6 +595,8 @@ class _RoomCardPersonRow extends StatelessWidget {
         : UserHoverCard(
             user: profileUser!,
             currentUser: currentUser,
+            onResolveProfile: onResolveUserProfile,
+            onResolveRoomProfile: onResolveRoomProfile,
             onEnterCommonRoom: onEnterCommonRoom,
             child: avatar,
           );
@@ -647,11 +672,15 @@ class RoomHoverCardForTest extends StatelessWidget {
     super.key,
     required this.room,
     required this.currentUser,
+    this.onResolveRoom,
+    this.onResolveUserProfile,
     this.onEnterRoom,
   });
 
   final PublicRoom room;
   final CurrentUser currentUser;
+  final RoomProfileResolver? onResolveRoom;
+  final UserProfileResolver? onResolveUserProfile;
   final ValueChanged<PublicRoom>? onEnterRoom;
 
   @override
@@ -659,6 +688,8 @@ class RoomHoverCardForTest extends StatelessWidget {
     return RoomHoverCard(
       room: room,
       currentUser: currentUser,
+      onResolveRoom: onResolveRoom,
+      onResolveUserProfile: onResolveUserProfile,
       onEnterRoom: onEnterRoom,
       child: Avatar(label: room.name, size: 34),
     );

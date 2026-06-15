@@ -16,7 +16,7 @@ extension _HomeShellRoomActions on _HomeShellState {
       );
       resolved = profile.user.mergeMissing(sender);
     } catch (_) {
-      // Legacy responses only carry the lightweight summary; keep what we have.
+      resolved = await _resolveUserProfile(sender);
     }
     final withRole = room_display.roomUserInfoProfile(
       user: resolved,

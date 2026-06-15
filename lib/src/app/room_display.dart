@@ -198,6 +198,27 @@ String roomDisplayName(RoomDetail room) {
   return '$remark (${room.name})';
 }
 
+PublicRoom publicRoomFromRoomDetail(RoomDetail room) {
+  return PublicRoom(
+    id: room.id,
+    rid: room.rid,
+    name: roomDisplayName(room),
+    avatarUrl: room.avatarUrl,
+    defaultAvatarKey: room.defaultAvatarKey,
+    visibility: room.visibility,
+    joinPolicy: room.joinPolicy,
+    description: room.description,
+    memberCount: room.memberCount,
+    onlineMemberCount: room.onlineMemberCount,
+    liveParticipantCount: room.live.participantCount,
+    joined: true,
+    joinState: 'joined',
+    createdBy: room.createdBy,
+    personalProfile: room.personalProfile,
+    myMembership: room.myMembership,
+  );
+}
+
 String roomMemberSummary(RoomDetail room) {
   return '${room.memberCount} 名成员 · ${room.onlineMemberCount} 人在线';
 }

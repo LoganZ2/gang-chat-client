@@ -149,6 +149,108 @@ void main() {
     expect(find.text('@creator'), findsOneWidget);
   });
 
+  testWidgets('room profile creator card waits for the latest user profile', (
+    tester,
+  ) async {
+    var resolveCalls = 0;
+    await tester.pumpWidget(
+      _host(
+        RoomHoverCardForTest(
+          room: _joinedRoom,
+          currentUser: _currentUser,
+          onResolveUserProfile: (user) async {
+            resolveCalls += 1;
+            return user.copyWith(
+              displayName: 'Fresh Creator',
+              bio: 'Latest status',
+              isOnline: true,
+            );
+          },
+        ),
+      ),
+    );
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+
+    await gesture.moveTo(tester.getCenter(find.byType(Avatar).first));
+    await tester.pumpAndSettle();
+
+    final creatorAvatar = find.byWidgetPredicate(
+      (widget) => widget is Avatar && widget.label == 'Room Creator',
+    );
+    await gesture.moveTo(tester.getCenter(creatorAvatar));
+    await tester.pumpAndSettle();
+
+    expect(resolveCalls, 1);
+    expect(find.text('Fresh Creator'), findsOneWidget);
+    expect(find.text('Latest status'), findsOneWidget);
+    expect(find.text('在线'), findsOneWidget);
+  });
+
+  testWidgets('refreshes the resolved room profile each time the card opens', (
+    tester,
+  ) async {
+    var resolveCalls = 0;
+    await tester.pumpWidget(
+      _host(
+        RoomHoverCardForTest(
+          room: _joinedRoom,
+          currentUser: _currentUser,
+          onResolveRoom: (room) async {
+            resolveCalls += 1;
+            return PublicRoom(
+              id: room.id,
+              rid: room.rid,
+              name: 'Fresh Room $resolveCalls',
+              description: 'Fresh description $resolveCalls',
+              avatarUrl: null,
+              defaultAvatarKey: room.defaultAvatarKey,
+              visibility: room.visibility,
+              joinPolicy: room.joinPolicy,
+              memberCount: 12 + resolveCalls,
+              onlineMemberCount: 3,
+              liveParticipantCount: 1,
+              joined: true,
+              joinState: 'joined',
+              createdBy: room.createdBy,
+              personalProfile: room.personalProfile,
+              myMembership: room.myMembership,
+            );
+          },
+        ),
+      ),
+    );
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+
+    final avatarCenter = tester.getCenter(find.byType(Avatar).first);
+    await gesture.moveTo(avatarCenter);
+    await tester.pumpAndSettle();
+
+    expect(resolveCalls, 1);
+    expect(find.text('Fresh Room 1'), findsOneWidget);
+    expect(find.text('Fresh description 1'), findsOneWidget);
+    expect(find.text('13 名成员'), findsOneWidget);
+
+    await gesture.moveTo(const Offset(5, 5));
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
+    expect(find.text('Fresh Room 1'), findsNothing);
+
+    await gesture.moveTo(avatarCenter);
+    await tester.pumpAndSettle();
+
+    expect(resolveCalls, 2);
+    expect(find.text('Fresh Room 1'), findsNothing);
+    expect(find.text('Fresh Room 2'), findsOneWidget);
+    expect(find.text('Fresh description 2'), findsOneWidget);
+    expect(find.text('14 名成员'), findsOneWidget);
+  });
+
   testWidgets('notification user avatar opens a user profile card', (
     tester,
   ) async {

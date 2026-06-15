@@ -466,6 +466,55 @@ void main() {
     api.close();
   });
 
+  test('getUserProfile calls the global profile endpoint', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/api/v1/users/user_2/profile');
+        expect(request.headers['authorization'], 'Bearer token');
+
+        return http.Response(
+          jsonEncode({
+            'profile': {
+              'user': {
+                'id': 'user_2',
+                'uid': '1000002',
+                'username': 'bob',
+                'display_name': 'Bob',
+                'avatar_url': '/global.png',
+                'default_avatar_key': 'blue-2',
+                'bio': 'Global profile',
+                'is_online': true,
+                'common_rooms': [
+                  {
+                    'id': 'room_2',
+                    'rid': '900002',
+                    'name': 'Ops',
+                    'default_avatar_key': 'room-2',
+                    'visibility': 'private',
+                    'room_role': 'admin',
+                  },
+                ],
+              },
+            },
+          }),
+          200,
+        );
+      }),
+    );
+
+    final profile = await api.getUserProfile('user_2');
+
+    expect(profile.username, 'bob');
+    expect(profile.bio, 'Global profile');
+    expect(profile.isOnline, isTrue);
+    expect(profile.commonRooms.single.name, 'Ops');
+    expect(profile.commonRooms.single.roomRole, 'admin');
+    api.close();
+  });
+
   test(
     'searchUsers calls the user search endpoint and parses summaries',
     () async {

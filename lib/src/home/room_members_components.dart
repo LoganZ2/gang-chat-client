@@ -108,6 +108,7 @@ class _MemberRow extends StatelessWidget {
     required this.query,
     required this.busy,
     required this.onResolveProfile,
+    required this.onResolveRoomProfile,
     required this.onSetAdmin,
     required this.onUnsetAdmin,
     required this.onRemoveMember,
@@ -122,6 +123,7 @@ class _MemberRow extends StatelessWidget {
   final String query;
   final bool busy;
   final Future<UserSummary> Function(UserSummary user) onResolveProfile;
+  final RoomProfileResolver onResolveRoomProfile;
   final VoidCallback onSetAdmin;
   final VoidCallback onUnsetAdmin;
   final VoidCallback onRemoveMember;
@@ -151,6 +153,7 @@ class _MemberRow extends StatelessWidget {
               user: member.user,
               currentUser: currentUser,
               onResolveProfile: onResolveProfile,
+              onResolveRoomProfile: onResolveRoomProfile,
               child: avatar,
             ),
             const SizedBox(width: 10),
@@ -234,6 +237,8 @@ class _InviteSection extends StatelessWidget {
     required this.busyUserIds,
     required this.error,
     required this.enabled,
+    required this.onResolveProfile,
+    required this.onResolveRoomProfile,
     required this.onInvite,
   });
 
@@ -247,6 +252,8 @@ class _InviteSection extends StatelessWidget {
   final Set<String> busyUserIds;
   final String? error;
   final bool enabled;
+  final Future<UserSummary> Function(UserSummary user) onResolveProfile;
+  final RoomProfileResolver onResolveRoomProfile;
   final ValueChanged<UserSummary> onInvite;
 
   @override
@@ -300,6 +307,8 @@ class _InviteSection extends StatelessWidget {
                     pending: candidate.pending,
                     busy: candidate.busy,
                     enabled: enabled,
+                    onResolveProfile: onResolveProfile,
+                    onResolveRoomProfile: onResolveRoomProfile,
                     onInvite: () => onInvite(candidate.user),
                   ),
                   if (candidate != candidates.take(4).last)
@@ -322,6 +331,8 @@ class _InviteUserRow extends StatelessWidget {
     required this.pending,
     required this.busy,
     required this.enabled,
+    required this.onResolveProfile,
+    required this.onResolveRoomProfile,
     required this.onInvite,
   });
 
@@ -332,6 +343,8 @@ class _InviteUserRow extends StatelessWidget {
   final bool pending;
   final bool busy;
   final bool enabled;
+  final Future<UserSummary> Function(UserSummary user) onResolveProfile;
+  final RoomProfileResolver onResolveRoomProfile;
   final VoidCallback onInvite;
 
   @override
@@ -344,6 +357,8 @@ class _InviteUserRow extends StatelessWidget {
           UserHoverCard(
             user: user,
             currentUser: currentUser,
+            onResolveProfile: onResolveProfile,
+            onResolveRoomProfile: onResolveRoomProfile,
             child: Avatar(
               label: room_display.userPrimaryName(user),
               imageUrl: AppConfigScope.of(
@@ -382,6 +397,8 @@ class _JoinRequestsSection extends StatelessWidget {
     required this.busyRequestIds,
     required this.activeDetailRequestId,
     required this.error,
+    required this.onResolveProfile,
+    required this.onResolveRoomProfile,
     required this.onDetail,
     required this.onApprove,
     required this.onReject,
@@ -392,6 +409,8 @@ class _JoinRequestsSection extends StatelessWidget {
   final Set<String> busyRequestIds;
   final String? activeDetailRequestId;
   final String? error;
+  final Future<UserSummary> Function(UserSummary user) onResolveProfile;
+  final RoomProfileResolver onResolveRoomProfile;
   final ValueChanged<JoinRequest> onDetail;
   final ValueChanged<JoinRequest> onApprove;
   final ValueChanged<JoinRequest> onReject;
@@ -424,6 +443,8 @@ class _JoinRequestsSection extends StatelessWidget {
                     currentUser: currentUser,
                     busy: busyRequestIds.contains(request.id),
                     detailActive: activeDetailRequestId == request.id,
+                    onResolveProfile: onResolveProfile,
+                    onResolveRoomProfile: onResolveRoomProfile,
                     onDetail: () => onDetail(request),
                     onApprove: () => onApprove(request),
                     onReject: () => onReject(request),
@@ -444,6 +465,8 @@ class _JoinRequestRow extends StatelessWidget {
     required this.currentUser,
     required this.busy,
     required this.detailActive,
+    required this.onResolveProfile,
+    required this.onResolveRoomProfile,
     required this.onDetail,
     required this.onApprove,
     required this.onReject,
@@ -453,6 +476,8 @@ class _JoinRequestRow extends StatelessWidget {
   final CurrentUser currentUser;
   final bool busy;
   final bool detailActive;
+  final Future<UserSummary> Function(UserSummary user) onResolveProfile;
+  final RoomProfileResolver onResolveRoomProfile;
   final VoidCallback onDetail;
   final VoidCallback onApprove;
   final VoidCallback onReject;
@@ -466,6 +491,8 @@ class _JoinRequestRow extends StatelessWidget {
           UserHoverCard(
             user: request.user,
             currentUser: currentUser,
+            onResolveProfile: onResolveProfile,
+            onResolveRoomProfile: onResolveRoomProfile,
             child: Avatar(
               label: room_display.userPrimaryName(request.user),
               imageUrl: AppConfigScope.of(
@@ -527,10 +554,14 @@ class _JoinRequestDetailsDialog extends StatelessWidget {
   const _JoinRequestDetailsDialog({
     required this.request,
     required this.currentUser,
+    required this.onResolveProfile,
+    required this.onResolveRoomProfile,
   });
 
   final JoinRequest request;
   final CurrentUser currentUser;
+  final Future<UserSummary> Function(UserSummary user) onResolveProfile;
+  final RoomProfileResolver onResolveRoomProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -552,6 +583,8 @@ class _JoinRequestDetailsDialog extends StatelessWidget {
             child: _JoinRequestSourceContent(
               request: request,
               currentUser: currentUser,
+              onResolveProfile: onResolveProfile,
+              onResolveRoomProfile: onResolveRoomProfile,
             ),
           ),
           const SizedBox(height: 14),
@@ -597,10 +630,14 @@ class _JoinRequestSourceContent extends StatelessWidget {
   const _JoinRequestSourceContent({
     required this.request,
     required this.currentUser,
+    required this.onResolveProfile,
+    required this.onResolveRoomProfile,
   });
 
   final JoinRequest request;
   final CurrentUser currentUser;
+  final Future<UserSummary> Function(UserSummary user) onResolveProfile;
+  final RoomProfileResolver onResolveRoomProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -619,6 +656,8 @@ class _JoinRequestSourceContent extends StatelessWidget {
           _JoinRequestInviterSourceLine(
             user: inviter,
             currentUser: currentUser,
+            onResolveProfile: onResolveProfile,
+            onResolveRoomProfile: onResolveRoomProfile,
           ),
           if (inviter != request.inviters.last) const SizedBox(height: 6),
         ],
@@ -631,10 +670,14 @@ class _JoinRequestInviterSourceLine extends StatelessWidget {
   const _JoinRequestInviterSourceLine({
     required this.user,
     required this.currentUser,
+    required this.onResolveProfile,
+    required this.onResolveRoomProfile,
   });
 
   final UserSummary user;
   final CurrentUser currentUser;
+  final Future<UserSummary> Function(UserSummary user) onResolveProfile;
+  final RoomProfileResolver onResolveRoomProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -643,6 +686,8 @@ class _JoinRequestInviterSourceLine extends StatelessWidget {
         UserHoverCard(
           user: user,
           currentUser: currentUser,
+          onResolveProfile: onResolveProfile,
+          onResolveRoomProfile: onResolveRoomProfile,
           child: Avatar(
             label: room_display.userPrimaryName(user),
             imageUrl: AppConfigScope.of(

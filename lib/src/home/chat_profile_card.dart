@@ -7,6 +7,7 @@ class _AvatarHoverCard extends StatelessWidget {
     required this.currentUser,
     required this.child,
     this.onResolveProfile,
+    this.onResolveRoomProfile,
   });
 
   final UserSummary user;
@@ -16,6 +17,7 @@ class _AvatarHoverCard extends StatelessWidget {
   /// Lazily fetches a richer profile (gender, common rooms) the first time the
   /// card opens. When null the card shows only the message summary.
   final Future<UserSummary> Function(UserSummary sender)? onResolveProfile;
+  final RoomProfileResolver? onResolveRoomProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -23,6 +25,7 @@ class _AvatarHoverCard extends StatelessWidget {
       user: user,
       currentUser: currentUser,
       onResolveProfile: onResolveProfile,
+      onResolveRoomProfile: onResolveRoomProfile,
       child: child,
     );
   }
@@ -37,11 +40,13 @@ class AvatarHoverCardForTest extends StatelessWidget {
     required this.user,
     this.currentUser = _avatarHoverCardTestCurrentUser,
     this.onResolveProfile,
+    this.onResolveRoomProfile,
   });
 
   final UserSummary user;
   final CurrentUser currentUser;
   final Future<UserSummary> Function(UserSummary sender)? onResolveProfile;
+  final RoomProfileResolver? onResolveRoomProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -49,6 +54,7 @@ class AvatarHoverCardForTest extends StatelessWidget {
       user: user,
       currentUser: currentUser,
       onResolveProfile: onResolveProfile,
+      onResolveRoomProfile: onResolveRoomProfile,
       child: Avatar(label: _senderName(user), size: 32),
     );
   }

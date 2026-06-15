@@ -98,6 +98,7 @@ class _MessageStage extends StatefulWidget {
     required this.onRetry,
     required this.bottomInset,
     this.onResolveSenderProfile,
+    this.onResolveRoomProfile,
   });
 
   final String? roomId;
@@ -117,6 +118,7 @@ class _MessageStage extends StatefulWidget {
   final double bottomInset;
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
+  final RoomProfileResolver? onResolveRoomProfile;
 
   @override
   State<_MessageStage> createState() => _MessageStageState();
@@ -442,6 +444,7 @@ class _MessageStageState extends State<_MessageStage> {
                 voicePlaybackActions: widget.voicePlaybackActions,
                 imagePreviewActions: widget.imagePreviewActions,
                 onResolveSenderProfile: widget.onResolveSenderProfile,
+                onResolveRoomProfile: widget.onResolveRoomProfile,
               ),
           ],
         );
@@ -717,6 +720,7 @@ class _MessageRow extends StatelessWidget {
     required this.voicePlaybackActions,
     required this.imagePreviewActions,
     this.onResolveSenderProfile,
+    this.onResolveRoomProfile,
   });
 
   final Message message;
@@ -729,6 +733,7 @@ class _MessageRow extends StatelessWidget {
   final ChatImagePreviewActions imagePreviewActions;
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
+  final RoomProfileResolver? onResolveRoomProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -789,6 +794,7 @@ class _MessageRow extends StatelessWidget {
       user: message.sender,
       currentUser: currentUser,
       onResolveProfile: onResolveSenderProfile,
+      onResolveRoomProfile: onResolveRoomProfile,
       child: avatar,
     );
 

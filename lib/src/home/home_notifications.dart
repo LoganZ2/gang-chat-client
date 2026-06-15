@@ -27,6 +27,8 @@ class HomeNotificationsPane extends StatefulWidget {
     required this.onWithdrawApplication,
     required this.currentUser,
     required this.onOpenRoom,
+    this.onResolveRoomProfile,
+    this.onResolveRoomUserProfile,
   });
 
   final List<RoomInvite> invites;
@@ -41,6 +43,9 @@ class HomeNotificationsPane extends StatefulWidget {
   final RoomInviteReviewCallback onReviewInvite;
   final RoomApplicationWithdrawCallback onWithdrawApplication;
   final ValueChanged<PublicRoom> onOpenRoom;
+  final RoomProfileResolver? onResolveRoomProfile;
+  final Future<UserSummary> Function(String roomId, UserSummary user)?
+  onResolveRoomUserProfile;
 
   @override
   State<HomeNotificationsPane> createState() => _HomeNotificationsPaneState();
@@ -141,6 +146,8 @@ class _HomeNotificationsPaneState extends State<HomeNotificationsPane> {
         onWithdrawApplication: widget.onWithdrawApplication,
         currentUser: widget.currentUser,
         onOpenRoom: widget.onOpenRoom,
+        onResolveRoomProfile: widget.onResolveRoomProfile,
+        onResolveRoomUserProfile: widget.onResolveRoomUserProfile,
       ),
     );
   }
@@ -161,6 +168,8 @@ class _NotificationsBody extends StatelessWidget {
     required this.onWithdrawApplication,
     required this.currentUser,
     required this.onOpenRoom,
+    required this.onResolveRoomProfile,
+    required this.onResolveRoomUserProfile,
   });
 
   final List<RoomNotificationItem> items;
@@ -176,6 +185,9 @@ class _NotificationsBody extends StatelessWidget {
   final RoomInviteReviewCallback onReviewInvite;
   final RoomApplicationWithdrawCallback onWithdrawApplication;
   final ValueChanged<PublicRoom> onOpenRoom;
+  final RoomProfileResolver? onResolveRoomProfile;
+  final Future<UserSummary> Function(String roomId, UserSummary user)?
+  onResolveRoomUserProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -228,6 +240,8 @@ class _NotificationsBody extends StatelessWidget {
             onReviewInvite: onReviewInvite,
             currentUser: currentUser,
             onOpenRoom: onOpenRoom,
+            onResolveRoomProfile: onResolveRoomProfile,
+            onResolveRoomUserProfile: onResolveRoomUserProfile,
           ),
           RoomNotificationItemType.applicationRequested =>
             _RoomApplicationRequestNotificationRow(
@@ -238,6 +252,8 @@ class _NotificationsBody extends StatelessWidget {
               onWithdrawApplication: onWithdrawApplication,
               currentUser: currentUser,
               onOpenRoom: onOpenRoom,
+              onResolveRoomProfile: onResolveRoomProfile,
+              onResolveRoomUserProfile: onResolveRoomUserProfile,
             ),
           RoomNotificationItemType.applicationReviewed =>
             _RoomApplicationReviewNotificationRow(
@@ -245,6 +261,8 @@ class _NotificationsBody extends StatelessWidget {
               query: query,
               currentUser: currentUser,
               onOpenRoom: onOpenRoom,
+              onResolveRoomProfile: onResolveRoomProfile,
+              onResolveRoomUserProfile: onResolveRoomUserProfile,
             ),
         };
       },
@@ -261,6 +279,8 @@ class _RoomInviteNotificationRow extends StatelessWidget {
     required this.onReviewInvite,
     required this.currentUser,
     required this.onOpenRoom,
+    required this.onResolveRoomProfile,
+    required this.onResolveRoomUserProfile,
   });
 
   final RoomInvite invite;
@@ -270,6 +290,9 @@ class _RoomInviteNotificationRow extends StatelessWidget {
   final RoomInviteReviewCallback onReviewInvite;
   final CurrentUser currentUser;
   final ValueChanged<PublicRoom> onOpenRoom;
+  final RoomProfileResolver? onResolveRoomProfile;
+  final Future<UserSummary> Function(String roomId, UserSummary user)?
+  onResolveRoomUserProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -306,6 +329,10 @@ class _RoomInviteNotificationRow extends StatelessWidget {
         ? UserHoverCard(
             user: inviter,
             currentUser: currentUser,
+            onResolveProfile: onResolveRoomUserProfile == null
+                ? null
+                : (user) => onResolveRoomUserProfile!(room.id, user),
+            onResolveRoomProfile: onResolveRoomProfile,
             onEnterCommonRoom: onOpenRoom,
             child: inviterAvatar,
           )
@@ -385,6 +412,8 @@ class _RoomInviteNotificationRow extends StatelessWidget {
                       query: query,
                       roomExists: invite.roomExists,
                       currentUser: currentUser,
+                      onResolveRoomProfile: onResolveRoomProfile,
+                      onResolveRoomUserProfile: onResolveRoomUserProfile,
                       onOpenRoom: onOpenRoom,
                     ),
                   ),
@@ -427,6 +456,8 @@ class _RoomApplicationRequestNotificationRow extends StatelessWidget {
     required this.onWithdrawApplication,
     required this.currentUser,
     required this.onOpenRoom,
+    required this.onResolveRoomProfile,
+    required this.onResolveRoomUserProfile,
   });
 
   final RoomApplication application;
@@ -436,6 +467,9 @@ class _RoomApplicationRequestNotificationRow extends StatelessWidget {
   final RoomApplicationWithdrawCallback onWithdrawApplication;
   final CurrentUser currentUser;
   final ValueChanged<PublicRoom> onOpenRoom;
+  final RoomProfileResolver? onResolveRoomProfile;
+  final Future<UserSummary> Function(String roomId, UserSummary user)?
+  onResolveRoomUserProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -489,6 +523,8 @@ class _RoomApplicationRequestNotificationRow extends StatelessWidget {
                 query: query,
                 roomExists: true,
                 currentUser: currentUser,
+                onResolveRoomProfile: onResolveRoomProfile,
+                onResolveRoomUserProfile: onResolveRoomUserProfile,
                 onOpenRoom: onOpenRoom,
               ),
             ),
@@ -526,12 +562,17 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
     required this.query,
     required this.currentUser,
     required this.onOpenRoom,
+    required this.onResolveRoomProfile,
+    required this.onResolveRoomUserProfile,
   });
 
   final RoomApplication application;
   final String query;
   final CurrentUser currentUser;
   final ValueChanged<PublicRoom> onOpenRoom;
+  final RoomProfileResolver? onResolveRoomProfile;
+  final Future<UserSummary> Function(String roomId, UserSummary user)?
+  onResolveRoomUserProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -571,6 +612,10 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
         ? UserHoverCard(
             user: reviewer,
             currentUser: currentUser,
+            onResolveProfile: onResolveRoomUserProfile == null
+                ? null
+                : (user) => onResolveRoomUserProfile!(room.id, user),
+            onResolveRoomProfile: onResolveRoomProfile,
             onEnterCommonRoom: onOpenRoom,
             child: reviewerAvatar,
           )
@@ -655,6 +700,8 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
                       query: query,
                       roomExists: true,
                       currentUser: currentUser,
+                      onResolveRoomProfile: onResolveRoomProfile,
+                      onResolveRoomUserProfile: onResolveRoomUserProfile,
                       onOpenRoom: onOpenRoom,
                     ),
                   ),
@@ -710,6 +757,8 @@ class _InlineRoomTarget extends StatelessWidget {
     required this.roomExists,
     required this.currentUser,
     required this.onOpenRoom,
+    required this.onResolveRoomProfile,
+    required this.onResolveRoomUserProfile,
   });
 
   final PublicRoom room;
@@ -718,6 +767,9 @@ class _InlineRoomTarget extends StatelessWidget {
   final bool roomExists;
   final CurrentUser currentUser;
   final ValueChanged<PublicRoom> onOpenRoom;
+  final RoomProfileResolver? onResolveRoomProfile;
+  final Future<UserSummary> Function(String roomId, UserSummary user)?
+  onResolveRoomUserProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -744,6 +796,10 @@ class _InlineRoomTarget extends StatelessWidget {
         ? RoomHoverCard(
             room: room,
             currentUser: currentUser,
+            onResolveRoom: onResolveRoomProfile,
+            onResolveUserProfile: onResolveRoomUserProfile == null
+                ? null
+                : (user) => onResolveRoomUserProfile!(room.id, user),
             onEnterRoom: room.joined ? onOpenRoom : null,
             child: avatar,
           )

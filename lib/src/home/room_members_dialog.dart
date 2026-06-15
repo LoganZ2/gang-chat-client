@@ -277,6 +277,8 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
         builder: (context) => _JoinRequestDetailsDialog(
           request: request,
           currentUser: widget.currentUser,
+          onResolveProfile: _resolveMemberProfile,
+          onResolveRoomProfile: _resolveRoomProfile,
         ),
       );
     } finally {
@@ -424,11 +426,29 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
   }
 
   Future<UserSummary> _resolveMemberProfile(UserSummary user) async {
-    final profile = await widget.controller.getRoomMemberProfile(
-      roomId: _room.id,
-      userId: user.id,
-    );
-    return profile.user;
+    try {
+      final profile = await widget.controller.getRoomMemberProfile(
+        roomId: _room.id,
+        userId: user.id,
+      );
+      return profile.user.mergeMissing(user);
+    } catch (_) {
+      return _resolveUserProfile(user);
+    }
+  }
+
+  Future<UserSummary> _resolveUserProfile(UserSummary user) async {
+    try {
+      final profile = await widget.controller.getUserProfile(user.id);
+      return profile.mergeMissing(user);
+    } catch (_) {
+      return user;
+    }
+  }
+
+  Future<PublicRoom> _resolveRoomProfile(PublicRoom room) async {
+    final detail = await widget.controller.getRoom(room.id);
+    return room_display.publicRoomFromRoomDetail(detail);
   }
 
   List<RoomMember> _visibleMembers() {
@@ -497,6 +517,8 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
             busyUserIds: _busyInviteUserIds,
             error: _inviteError,
             enabled: _canInviteMembers,
+            onResolveProfile: _resolveUserProfile,
+            onResolveRoomProfile: _resolveRoomProfile,
             onInvite: _invite,
           ),
           if (_canReviewRequests)
@@ -506,6 +528,8 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
               busyRequestIds: _busyRequestIds,
               activeDetailRequestId: _activeJoinRequestDetailId,
               error: _requestError,
+              onResolveProfile: _resolveMemberProfile,
+              onResolveRoomProfile: _resolveRoomProfile,
               onDetail: _showJoinRequestDetails,
               onApprove: (request) => _reviewRequest(request, true),
               onReject: (request) => _reviewRequest(request, false),
@@ -557,6 +581,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
           query: _memberQuery,
           busy: _busyMemberIds.contains(member.user.id),
           onResolveProfile: _resolveMemberProfile,
+          onResolveRoomProfile: _resolveRoomProfile,
           onSetAdmin: () => _setMemberRole(member, 'admin'),
           onUnsetAdmin: () => _setMemberRole(member, 'member'),
           onRemoveMember: () => _removeMember(member),

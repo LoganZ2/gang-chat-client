@@ -48,6 +48,8 @@ extension _HomeShellLayout on _HomeShellState {
         onRefresh: () => unawaited(_loadNotifications()),
         onReviewInvite: _reviewNotificationInvite,
         onWithdrawApplication: _withdrawNotificationApplication,
+        onResolveRoomProfile: _resolveRoomProfile,
+        onResolveRoomUserProfile: _resolveRoomUserProfile,
         onOpenRoom: _openNotificationRoom,
       );
     }
@@ -190,6 +192,7 @@ extension _HomeShellLayout on _HomeShellState {
       onOpenRoomMembers: () => unawaited(_openRoomMembers()),
       onOpenRoomSettings: () => unawaited(_openRoomSettings()),
       onResolveSenderProfile: _resolveSenderProfile,
+      onResolveRoomProfile: _resolveRoomProfile,
       composerDropKey: _composerDropKey,
     );
   }

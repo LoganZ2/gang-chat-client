@@ -97,9 +97,33 @@ extension _HomeShellSearch on _HomeShellState {
     _selectServer(room, openContent: narrow);
   }
 
-  Future<PublicRoom> _resolveSearchRoomProfile(RoomCard room) async {
+  Future<PublicRoom> _resolveRoomProfile(PublicRoom room) async {
     final detail = await _roomsController.getRoom(room.id);
-    return _publicRoomFromRoomDetail(detail);
+    return room_display.publicRoomFromRoomDetail(detail);
+  }
+
+  Future<UserSummary> _resolveRoomUserProfile(
+    String roomId,
+    UserSummary user,
+  ) async {
+    try {
+      final profile = await _roomsController.getRoomMemberProfile(
+        roomId: roomId,
+        userId: user.id,
+      );
+      return profile.user.mergeMissing(user);
+    } catch (_) {
+      return _resolveUserProfile(user);
+    }
+  }
+
+  Future<UserSummary> _resolveUserProfile(UserSummary user) async {
+    try {
+      final profile = await _roomsController.getUserProfile(user.id);
+      return profile.mergeMissing(user);
+    } catch (_) {
+      return user;
+    }
   }
 
   Future<void> _handlePublicRoomSearchAction(PublicRoom room) async {
@@ -271,27 +295,6 @@ extension _HomeShellSearch on _HomeShellState {
       lastMessage: null,
       unreadCount: 0,
       updatedAt: DateTime.now().toUtc(),
-    );
-  }
-
-  PublicRoom _publicRoomFromRoomDetail(RoomDetail room) {
-    return PublicRoom(
-      id: room.id,
-      rid: room.rid,
-      name: room_display.roomDisplayName(room),
-      avatarUrl: room.avatarUrl,
-      defaultAvatarKey: room.defaultAvatarKey,
-      visibility: room.visibility,
-      joinPolicy: room.joinPolicy,
-      description: room.description,
-      memberCount: room.memberCount,
-      onlineMemberCount: room.onlineMemberCount,
-      liveParticipantCount: room.live.participantCount,
-      joined: true,
-      joinState: 'joined',
-      createdBy: room.createdBy,
-      personalProfile: room.personalProfile,
-      myMembership: room.myMembership,
     );
   }
 

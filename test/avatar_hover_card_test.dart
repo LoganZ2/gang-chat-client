@@ -112,6 +112,55 @@ void main() {
     expect(find.text('RID: R1'), findsOneWidget);
   });
 
+  testWidgets('common room avatar waits for the latest room profile', (
+    tester,
+  ) async {
+    var resolveCalls = 0;
+    await tester.pumpWidget(
+      _host(
+        AvatarHoverCardForTest(
+          user: _user,
+          onResolveRoomProfile: (room) async {
+            resolveCalls += 1;
+            return PublicRoom(
+              id: room.id,
+              rid: room.rid,
+              name: 'Fresh Room',
+              avatarUrl: null,
+              defaultAvatarKey: 'room-1',
+              visibility: 'private',
+              joinPolicy: 'closed',
+              description: 'Latest room summary',
+              memberCount: 9,
+              onlineMemberCount: 3,
+              liveParticipantCount: 0,
+              joined: true,
+              joinState: 'joined',
+            );
+          },
+        ),
+      ),
+    );
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+
+    await gesture.moveTo(tester.getCenter(find.byType(Avatar).first));
+    await tester.pumpAndSettle();
+
+    final commonRoomAvatar = find.byWidgetPredicate(
+      (widget) => widget is Avatar && widget.label == '摸鱼大队',
+    );
+    await gesture.moveTo(tester.getCenter(commonRoomAvatar));
+    await tester.pumpAndSettle();
+
+    expect(resolveCalls, 1);
+    expect(find.text('Fresh Room'), findsOneWidget);
+    expect(find.text('Latest room summary'), findsOneWidget);
+    expect(find.text('9 名成员'), findsOneWidget);
+  });
+
   testWidgets('tap opens the profile card until an outside tap', (
     tester,
   ) async {
@@ -136,7 +185,7 @@ void main() {
     expect(find.text('@logan'), findsNothing);
   });
 
-  testWidgets('lazily resolves gender and common rooms on first hover', (
+  testWidgets('resolves gender and common rooms before opening', (
     tester,
   ) async {
     // The message summary lacks gender/common rooms; the resolver supplies them.
@@ -170,6 +219,58 @@ void main() {
     expect(find.text('男'), findsNothing);
     expect(find.text('2 个共同房间'), findsOneWidget);
     expect(find.text('摸鱼大队'), findsOneWidget);
+  });
+
+  testWidgets('refreshes the resolved profile each time the card opens', (
+    tester,
+  ) async {
+    const lightweight = UserSummary(
+      id: 'u1',
+      username: 'logan',
+      displayName: 'Initial User',
+      avatarUrl: null,
+      defaultAvatarKey: 'blue-3',
+    );
+    var calls = 0;
+    Future<UserSummary> resolve(UserSummary sender) async {
+      calls += 1;
+      return sender.copyWith(
+        displayName: 'Fresh User $calls',
+        bio: 'Fresh bio $calls',
+        isOnline: calls.isEven,
+      );
+    }
+
+    await tester.pumpWidget(
+      _host(
+        AvatarHoverCardForTest(user: lightweight, onResolveProfile: resolve),
+      ),
+    );
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+
+    final avatarCenter = tester.getCenter(find.byType(Avatar).first);
+    await gesture.moveTo(avatarCenter);
+    await tester.pumpAndSettle();
+
+    expect(calls, 1);
+    expect(find.text('Fresh User 1'), findsOneWidget);
+    expect(find.text('Fresh bio 1'), findsOneWidget);
+
+    await gesture.moveTo(const Offset(5, 5));
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
+    expect(find.text('Fresh User 1'), findsNothing);
+
+    await gesture.moveTo(avatarCenter);
+    await tester.pumpAndSettle();
+
+    expect(calls, 2);
+    expect(find.text('Fresh User 1'), findsNothing);
+    expect(find.text('Fresh User 2'), findsOneWidget);
+    expect(find.text('Fresh bio 2'), findsOneWidget);
   });
 
   testWidgets('waits for resolved profile before showing the card', (

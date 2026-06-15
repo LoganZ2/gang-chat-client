@@ -287,7 +287,8 @@ class _TitleSearchResultsPanel extends StatelessWidget {
     required this.pendingPublicRoomIds,
     required this.onCategorySelected,
     required this.onMyRoomSelected,
-    required this.onResolveMyRoomProfile,
+    required this.onResolveRoomProfile,
+    required this.onResolveRoomUserProfile,
     required this.onPublicRoomAction,
     required this.onMessageSelected,
     required this.onFileSelected,
@@ -303,7 +304,9 @@ class _TitleSearchResultsPanel extends StatelessWidget {
   final Set<String> pendingPublicRoomIds;
   final ValueChanged<search_display.GlobalSearchCategory> onCategorySelected;
   final ValueChanged<RoomCard> onMyRoomSelected;
-  final Future<PublicRoom> Function(RoomCard room) onResolveMyRoomProfile;
+  final RoomProfileResolver onResolveRoomProfile;
+  final Future<UserSummary> Function(String roomId, UserSummary user)
+  onResolveRoomUserProfile;
   final ValueChanged<PublicRoom> onPublicRoomAction;
   final ValueChanged<MessageSearchResult> onMessageSelected;
   final ValueChanged<MessageSearchResult> onFileSelected;
@@ -425,7 +428,9 @@ class _TitleSearchResultsPanel extends StatelessWidget {
           leading: RoomHoverCard(
             room: _publicRoomFromRoomCard(room),
             currentUser: currentUser,
-            onResolveRoom: (_) => onResolveMyRoomProfile(room),
+            onResolveRoom: onResolveRoomProfile,
+            onResolveUserProfile: (user) =>
+                onResolveRoomUserProfile(room.id, user),
             onEnterRoom: (_) => onMyRoomSelected(room),
             child: Avatar(
               label: room.displayName,
@@ -468,6 +473,9 @@ class _TitleSearchResultsPanel extends StatelessWidget {
                 leading: RoomHoverCard(
                   room: candidate.room,
                   currentUser: currentUser,
+                  onResolveRoom: onResolveRoomProfile,
+                  onResolveUserProfile: (user) =>
+                      onResolveRoomUserProfile(candidate.room.id, user),
                   onEnterRoom: candidate.room.joined
                       ? onPublicRoomAction
                       : null,

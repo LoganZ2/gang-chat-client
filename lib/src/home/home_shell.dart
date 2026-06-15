@@ -437,7 +437,8 @@ class _HomeShellState extends State<HomeShell> {
                         pendingPublicRoomIds: _searchPendingPublicRoomIds,
                         onCategorySelected: _selectSearchCategory,
                         onMyRoomSelected: _openSearchRoom,
-                        onResolveMyRoomProfile: _resolveSearchRoomProfile,
+                        onResolveRoomProfile: _resolveRoomProfile,
+                        onResolveRoomUserProfile: _resolveRoomUserProfile,
                         onPublicRoomAction: (room) =>
                             unawaited(_handlePublicRoomSearchAction(room)),
                         onMessageSelected: _openMessageSearchResult,
