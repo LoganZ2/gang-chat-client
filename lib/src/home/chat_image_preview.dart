@@ -219,6 +219,10 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
       onTap: () {},
       child: InteractiveViewer(
         maxScale: 5,
+        // Let the zoomed image pan freely and don't clip it to the viewport,
+        // so scaling isn't confined to the image's original on-screen edges.
+        boundaryMargin: const EdgeInsets.all(double.infinity),
+        clipBehavior: Clip.none,
         child: Image.network(
           widget.imageUrl,
           fit: BoxFit.contain,
