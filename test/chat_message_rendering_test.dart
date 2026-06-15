@@ -98,6 +98,89 @@ void main() {
     expect(find.text(secondDetailed), findsNothing);
   });
 
+  testWidgets('chat pane hides the composer until the room is ready', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      _host(
+        _chatPane(controller: controller, messages: const [], loading: true),
+      ),
+    );
+
+    expect(find.byType(CircularProgressIndicator), findsAtLeastNWidgets(1));
+    expect(find.byType(ui.ChatComposer), findsNothing);
+  });
+
+  testWidgets('chat pane opens directly at the latest message', (tester) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    final messages = _textMessages(60);
+
+    await tester.pumpWidget(
+      _host(
+        _chatPane(
+          controller: controller,
+          room: _roomDetail,
+          messages: messages,
+        ),
+        height: 420,
+      ),
+    );
+
+    final composerRect = tester.getRect(find.byType(ui.ChatComposer));
+    final latestRect = tester.getRect(find.text('Message 59'));
+
+    expect(latestRect.bottom, lessThanOrEqualTo(composerRect.top));
+    expect(find.byKey(const ValueKey('chat-jump-to-latest')), findsNothing);
+  });
+
+  testWidgets('latest message button appears away from bottom and jumps back', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    final messages = _textMessages(80);
+
+    await tester.pumpWidget(
+      _host(
+        _chatPane(
+          controller: controller,
+          room: _roomDetail,
+          messages: messages,
+        ),
+        height: 420,
+      ),
+    );
+
+    final scrollable = tester.state<ScrollableState>(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('chat-message-list')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
+    await tester.pump();
+
+    final latestButton = find.byKey(const ValueKey('chat-jump-to-latest'));
+    expect(latestButton, findsOneWidget);
+    expect(find.text('最新消息'), findsNothing);
+    expect(tester.getSize(latestButton), const Size(34, 34));
+
+    await tester.tap(latestButton);
+    await tester.pumpAndSettle();
+
+    expect(
+      scrollable.position.pixels,
+      closeTo(scrollable.position.minScrollExtent, 0.01),
+    );
+    expect(find.byKey(const ValueKey('chat-jump-to-latest')), findsNothing);
+  });
+
   testWidgets('text message body is selectable for copy', (tester) async {
     await tester.pumpWidget(
       _host(
@@ -542,7 +625,7 @@ void main() {
   });
 }
 
-Widget _host(Widget child) {
+Widget _host(Widget child, {double? height}) {
   return MaterialApp(
     theme: ui.uiTheme(),
     home: AppConfigScope(
@@ -551,7 +634,9 @@ Widget _host(Widget child) {
         assetBaseUrl: 'https://assets.test',
       ),
       child: Scaffold(
-        body: Center(child: SizedBox(width: 600, child: child)),
+        body: Center(
+          child: SizedBox(width: 600, height: height, child: child),
+        ),
       ),
     ),
   );
@@ -560,18 +645,20 @@ Widget _host(Widget child) {
 Widget _chatPane({
   required TextEditingController controller,
   required List<Message> messages,
+  RoomDetail? room,
+  bool loading = false,
 }) {
   return ChatPane(
     currentUser: _currentUser,
     roomCard: _roomCard,
-    room: null,
+    room: room,
     live: null,
     messages: messages,
     fileTransfers: const {},
     fileDownloads: const {},
     downloadActions: _downloadActions(),
     voicePlaybackActions: const ChatVoicePlaybackActions.disabled(),
-    loading: false,
+    loading: loading,
     error: null,
     sending: false,
     sendError: null,
@@ -598,6 +685,18 @@ Widget _chatPane({
     onOpenRoomMembers: () {},
     onOpenRoomSettings: () {},
   );
+}
+
+List<Message> _textMessages(int count) {
+  return [
+    for (var index = 0; index < count; index++)
+      _message(
+        type: 'text',
+        body: 'Message $index',
+        clientMessageId: 'client_$index',
+        createdAt: DateTime.utc(2026, 6, 11, 9).add(Duration(minutes: index)),
+      ),
+  ];
 }
 
 Message _message({
@@ -693,6 +792,26 @@ final _roomCard = RoomCard(
   lastMessage: null,
   unreadCount: 0,
   updatedAt: DateTime(2026, 6, 12),
+);
+
+final _roomDetail = RoomDetail(
+  id: 'room_1',
+  name: 'Test room',
+  avatarUrl: null,
+  defaultAvatarKey: 'room-1',
+  memberCount: 2,
+  myMembership: RoomMembership(
+    joinedAt: DateTime.utc(2026, 6, 4),
+    role: 'member',
+  ),
+  live: LiveState(
+    roomId: 'room_1',
+    participantCount: 0,
+    participants: const [],
+    updatedAt: DateTime.utc(2026, 6, 4),
+  ),
+  createdAt: DateTime.utc(2026, 6, 4),
+  updatedAt: DateTime.utc(2026, 6, 4),
 );
 
 ChatFileDownloadActions _downloadActions() {

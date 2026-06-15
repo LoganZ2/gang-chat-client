@@ -135,7 +135,7 @@ class _LiveControlBar extends StatelessWidget {
                   else
                     ...controls,
                   ButtonIcon(
-                    tooltip: '收起直播频道',
+                    tooltip: '收起语音频道',
                     icon: const Icon(Icons.keyboard_arrow_up),
                     onPressed: onCollapse,
                     size: _controlButtonSize,
@@ -166,7 +166,7 @@ class _LiveControlBar extends StatelessWidget {
               const SizedBox(width: 10),
             ],
             ButtonIcon(
-              tooltip: '收起直播频道',
+              tooltip: '收起语音频道',
               icon: const Icon(Icons.keyboard_arrow_up),
               onPressed: onCollapse,
               size: _controlButtonSize,

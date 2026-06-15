@@ -5,7 +5,7 @@ import 'package:client/src/protocol/models.dart';
 
 void main() {
   test('roomMemberPresenceLabel exposes reusable display labels', () {
-    expect(roomMemberPresenceLabel(RoomMemberPresence.live), '语音频道');
+    expect(roomMemberPresenceLabel(RoomMemberPresence.live), '语音');
     expect(roomMemberPresenceLabel(RoomMemberPresence.online), '在线');
     expect(roomMemberPresenceLabel(RoomMemberPresence.offline), '离线');
   });

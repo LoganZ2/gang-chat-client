@@ -4,6 +4,7 @@ part of 'chat_pane.dart';
 /// incoming message from someone else to auto-scroll the list. Beyond this the
 /// reader is browsing history, so we leave their position alone.
 const double _autoScrollFollowThreshold = 120;
+const _messageListCacheExtent = ScrollCacheExtent.pixels(1200);
 
 /// Callbacks for file-attachment downloads, bundled so they can travel from
 /// [ChatPane] down to each [_FileAttachmentTile] without threading five
@@ -70,6 +71,7 @@ class ChatVoicePlaybackActions {
 
 class _MessageStage extends StatefulWidget {
   const _MessageStage({
+    super.key,
     required this.roomId,
     required this.currentUserId,
     required this.roomReady,
@@ -108,16 +110,16 @@ class _MessageStage extends StatefulWidget {
 
 class _MessageStageState extends State<_MessageStage> {
   bool _showDetailedTimestamps = false;
+  bool _showLatestButton = false;
   final ScrollController _scrollController = ScrollController();
-  // Guards the re-pin loop so overlapping requests don't stack up; the newest
+  // Guards queued scroll requests so overlapping requests don't stack up; the newest
   // request wins by bumping this token.
   int _scrollToBottomToken = 0;
 
   @override
   void initState() {
     super.initState();
-    // Land at the newest message when a room first opens with history.
-    _scrollToBottom(animated: false);
+    _scrollController.addListener(_handleScrollChanged);
   }
 
   @override
@@ -125,6 +127,7 @@ class _MessageStageState extends State<_MessageStage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.roomId != widget.roomId) {
       _showDetailedTimestamps = false;
+      _showLatestButton = false;
       // New room: snap straight to the latest message, no animation.
       _scrollToBottom(animated: false);
       return;
@@ -136,6 +139,7 @@ class _MessageStageState extends State<_MessageStage> {
 
   @override
   void dispose() {
+    _scrollController.removeListener(_handleScrollChanged);
     _scrollController.dispose();
     super.dispose();
   }
@@ -160,54 +164,59 @@ class _MessageStageState extends State<_MessageStage> {
 
   bool _isNearBottom() {
     if (!_scrollController.hasClients) return true;
-    final position = _scrollController.position;
-    return position.maxScrollExtent - position.pixels <=
-        _autoScrollFollowThreshold;
+    return _distanceFromBottom() <= _autoScrollFollowThreshold;
   }
 
-  // Scrolls to the very bottom and keeps re-pinning across frames until the
-  // scroll extent stops growing. A single jump isn't enough: the list builds
-  // lazily, so reaching the current bottom lays out more (variable-height)
-  // bubbles below, which extends maxScrollExtent — without the re-pin we'd
-  // land halfway down. Once the extent settles, an animated request eases the
-  // final stretch; until then we snap, since there's no stable target to
-  // animate toward yet.
+  double _distanceFromBottom() {
+    final position = _scrollController.position;
+    return math.max(0, position.pixels - position.minScrollExtent);
+  }
+
+  void _handleScrollChanged() {
+    _syncLatestButtonVisibility();
+  }
+
+  void _syncLatestButtonVisibility() {
+    if (!_scrollController.hasClients) return;
+    final next = !_isNearBottom();
+    if (next == _showLatestButton) return;
+    setState(() => _showLatestButton = next);
+  }
+
+  // The list is reversed, so the latest message lives at the minimum scroll
+  // extent. New rooms can render directly at the final bottom position instead
+  // of painting history first and jumping on the next frame.
   void _scrollToBottom({required bool animated}) {
     final token = ++_scrollToBottomToken;
-    var lastExtent = double.negativeInfinity;
-
-    void pin() {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted ||
-            token != _scrollToBottomToken ||
-            !_scrollController.hasClients) {
-          return;
-        }
-        final position = _scrollController.position;
-        final target = position.maxScrollExtent;
-        final extentSettled = (target - lastExtent).abs() < 0.5;
-        lastExtent = target;
-        final atBottom = (target - position.pixels).abs() < 1;
-
-        if (extentSettled) {
-          if (atBottom) return;
-          if (animated) {
-            _scrollController.animateTo(
-              target,
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOut,
-            );
-            return;
-          }
-        }
-        // Extent still growing (lazy build) or a non-animated request: snap to
-        // the current bottom and re-check next frame.
-        _scrollController.jumpTo(target);
-        pin();
-      });
-    }
-
-    pin();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          token != _scrollToBottomToken ||
+          !_scrollController.hasClients) {
+        return;
+      }
+      final position = _scrollController.position;
+      final target = position.minScrollExtent;
+      if ((position.pixels - target).abs() < 1) {
+        _syncLatestButtonVisibility();
+        return;
+      }
+      if (animated) {
+        unawaited(
+          _scrollController
+              .animateTo(
+                target,
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+              )
+              .whenComplete(() {
+                if (mounted) _syncLatestButtonVisibility();
+              }),
+        );
+        return;
+      }
+      _scrollController.jumpTo(target);
+      _syncLatestButtonVisibility();
+    });
   }
 
   void _toggleDetailedTimestamps() {
@@ -252,8 +261,12 @@ class _MessageStageState extends State<_MessageStage> {
     }
 
     final now = DateTime.now();
-    return ListView.separated(
+    final list = ListView.separated(
+      key: const ValueKey('chat-message-list'),
       controller: _scrollController,
+      reverse: true,
+      physics: const ClampingScrollPhysics(),
+      scrollCacheExtent: _messageListCacheExtent,
       padding: EdgeInsets.fromLTRB(
         _chatHorizontalPadding,
         18,
@@ -263,9 +276,12 @@ class _MessageStageState extends State<_MessageStage> {
       itemCount: widget.messages.length,
       separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
-        final message = widget.messages[index];
+        final chronologicalIndex = widget.messages.length - 1 - index;
+        final message = widget.messages[chronologicalIndex];
         final systemEvent = message_display.systemMessageEvent(message);
-        final previous = index == 0 ? null : widget.messages[index - 1];
+        final previous = chronologicalIndex == 0
+            ? null
+            : widget.messages[chronologicalIndex - 1];
         final showTimestamp = message_display.shouldShowChatTimestamp(
           current: message.createdAt,
           previous: previous?.createdAt,
@@ -299,6 +315,46 @@ class _MessageStageState extends State<_MessageStage> {
           ],
         );
       },
+    );
+
+    return Stack(
+      children: [
+        Positioned.fill(child: list),
+        Positioned(
+          right: _chatFloatingEdgeInset,
+          bottom: 12,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 120),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            child: _showLatestButton
+                ? PressableSurface(
+                    key: const ValueKey('chat-jump-to-latest'),
+                    width: 34,
+                    height: 34,
+                    hoverLift: 0,
+                    baseDepth: 0,
+                    backgroundColor: UiColors.selected,
+                    selectedBackgroundColor: UiColors.selected,
+                    pressedBackgroundColor: const Color(0xFF14211B),
+                    borderColor: UiColors.selectedBorder,
+                    selectedBorderColor: UiColors.selectedBorder,
+                    tooltip: '跳到最新消息',
+                    onPressed: () => _scrollToBottom(animated: true),
+                    child: const Center(
+                      child: Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        color: UiColors.accent,
+                        size: 18,
+                      ),
+                    ),
+                  )
+                : const SizedBox.shrink(
+                    key: ValueKey('chat-jump-to-latest-hidden'),
+                  ),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 
 import '../app/file_display.dart' as file_display;
 import '../app/file_transfer_state.dart';
@@ -132,6 +133,10 @@ class ChatPane extends StatelessWidget {
         live?.participantCount ??
         room?.live.participantCount ??
         roomCard?.liveParticipantCount;
+    final roomReady = room != null;
+    final stageKey = ValueKey(
+      'message-stage-${room?.id ?? roomCard?.id ?? 'none'}',
+    );
 
     return ColoredBox(
       color: UiColors.background,
@@ -152,9 +157,10 @@ class ChatPane extends StatelessWidget {
           ),
           Expanded(
             child: _MessageStage(
+              key: stageKey,
               roomId: room?.id ?? roomCard?.id,
               currentUserId: currentUser.id,
-              roomReady: room != null,
+              roomReady: roomReady,
               loading: loading,
               error: error,
               messages: messages,
@@ -167,36 +173,37 @@ class ChatPane extends StatelessWidget {
               onResolveSenderProfile: onResolveSenderProfile,
             ),
           ),
-          SelectionContainer.disabled(
-            // The composer's text field drives its own selection and its
-            // panels (sticker grid, voice) are scrollable but not meant to
-            // be selectable. Detach it from the app-wide SelectionArea so
-            // showing/hiding a panel mid-selection can't trip the
-            // scrollable-selection assertion.
-            child: _ComposerDock(
-              controller: composerController,
-              composerController: composerPanelController,
-              sending: sending,
-              sendError: sendError,
-              stickerPanel: stickerPanel,
-              voiceState: voiceState,
-              attachments: composerAttachments,
-              fileActionHighlighted: fileActionHighlighted,
-              onSubmit: onSubmit,
-              onSendSticker: onSendSticker,
-              onOpenStickers: onLoadStickers,
-              onRefreshStickers: onRefreshStickers,
-              onStickerSourceChanged: onStickerSourceChanged,
-              onStartVoice: onStartVoice,
-              onSendVoice: onSendVoice,
-              onCancelVoice: onCancelVoice,
-              onPickFile: onPickFile,
-              onPasteFiles: onPasteFiles,
-              onRemoveAttachment: onRemoveAttachment,
-              onRetryAttachment: onRetryAttachment,
-              dropKey: composerDropKey,
+          if (roomReady)
+            SelectionContainer.disabled(
+              // The composer's text field drives its own selection and its
+              // panels (sticker grid, voice) are scrollable but not meant to
+              // be selectable. Detach it from the app-wide SelectionArea so
+              // showing/hiding a panel mid-selection can't trip the
+              // scrollable-selection assertion.
+              child: _ComposerDock(
+                controller: composerController,
+                composerController: composerPanelController,
+                sending: sending,
+                sendError: sendError,
+                stickerPanel: stickerPanel,
+                voiceState: voiceState,
+                attachments: composerAttachments,
+                fileActionHighlighted: fileActionHighlighted,
+                onSubmit: onSubmit,
+                onSendSticker: onSendSticker,
+                onOpenStickers: onLoadStickers,
+                onRefreshStickers: onRefreshStickers,
+                onStickerSourceChanged: onStickerSourceChanged,
+                onStartVoice: onStartVoice,
+                onSendVoice: onSendVoice,
+                onCancelVoice: onCancelVoice,
+                onPickFile: onPickFile,
+                onPasteFiles: onPasteFiles,
+                onRemoveAttachment: onRemoveAttachment,
+                onRetryAttachment: onRetryAttachment,
+                dropKey: composerDropKey,
+              ),
             ),
-          ),
         ],
       ),
     );

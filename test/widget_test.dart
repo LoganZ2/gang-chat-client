@@ -261,7 +261,7 @@ void main() {
     expect(find.text('@kai'), findsNothing);
     expect(find.text('Alpha Room'), findsOneWidget);
     expect(find.text('Beta Room'), findsOneWidget);
-    expect(find.text('2 名成员 · 1 语音'), findsOneWidget);
+    expect(find.text('2 名成员 · 1 人语音'), findsOneWidget);
     expect(find.text('5 名成员'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
 
@@ -710,12 +710,12 @@ void main() {
     await tester.tap(find.text('Alpha Room'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('进入直播频道'));
+    await tester.tap(find.text('进入语音频道'));
     await tester.pumpAndSettle();
 
     expect(find.text('Morgan'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '加入'), findsOneWidget);
-    expect(find.byTooltip('收起直播频道'), findsOneWidget);
+    expect(find.byTooltip('收起语音频道'), findsOneWidget);
     expect(find.byTooltip('已加入语音'), findsNothing);
 
     await tester.tap(find.widgetWithText(ui.Button, '加入'));
@@ -763,7 +763,7 @@ void main() {
     expect(find.widgetWithText(ui.Button, '加入'), findsOneWidget);
     expect(find.byTooltip('已加入语音'), findsNothing);
 
-    await tester.tap(find.byTooltip('收起直播频道'));
+    await tester.tap(find.byTooltip('收起语音频道'));
     await tester.pumpAndSettle();
 
     expect(find.text('Kai (you)'), findsNothing);
@@ -993,11 +993,11 @@ void main() {
 
     await tester.tap(find.text('Alpha Room'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('进入直播频道'));
+    await tester.tap(find.text('进入语音频道'));
     await tester.pumpAndSettle();
 
     expect(find.text('Riley'), findsNothing);
-    expect(find.text('2 名成员 · 1 语音'), findsOneWidget);
+    expect(find.text('2 名成员 · 1 人语音'), findsOneWidget);
 
     realtime.add(
       const RealtimeEvent(
@@ -1053,7 +1053,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Riley'), findsOneWidget);
-    expect(find.text('2 名成员 · 2 语音'), findsOneWidget);
+    expect(find.text('2 名成员 · 2 人语音'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -1276,7 +1276,7 @@ void main() {
 
       expect(find.text('Beta Room'), findsNothing);
       expect(find.byTooltip('Show servers'), findsNothing);
-      expect(find.text('进入直播频道'), findsOneWidget);
+      expect(find.text('进入语音频道'), findsOneWidget);
       expect(find.text('Hello from Morgan'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },

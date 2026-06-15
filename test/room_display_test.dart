@@ -5,7 +5,7 @@ import 'package:client/src/protocol/models.dart';
 
 void main() {
   test('roomSubtitle includes last message preview when present', () {
-    expect(roomSubtitle(_roomCard()), '8 名成员 · 3 人在线 · 2 语音');
+    expect(roomSubtitle(_roomCard()), '8 名成员 · 3 人在线 · 2 人语音');
 
     expect(
       roomSubtitle(
@@ -20,7 +20,7 @@ void main() {
       ),
       'Logan · hello',
     );
-    expect(roomSidebarSubtitle(_roomCard()), '8 名成员 · 2 语音');
+    expect(roomSidebarSubtitle(_roomCard()), '8 名成员 · 2 人语音');
     expect(
       roomSidebarSubtitle(
         _roomCard(

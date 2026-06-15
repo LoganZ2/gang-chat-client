@@ -372,7 +372,7 @@ RoomMemberManagementPatch transferCreatorFailed({
 
 String roomMemberPresenceLabel(RoomMemberPresence presence) {
   return switch (presence) {
-    RoomMemberPresence.live => '语音频道',
+    RoomMemberPresence.live => '语音',
     RoomMemberPresence.online => '在线',
     RoomMemberPresence.offline => '离线',
   };

@@ -98,7 +98,7 @@ class _LiveChannelHeaderCard extends StatelessWidget {
       selectedBorderColor: UiColors.selectedBorder,
       selected: liveActive,
       padding: const EdgeInsets.symmetric(horizontal: 10),
-      tooltip: '进入直播频道',
+      tooltip: '进入语音频道',
       onPressed: onPressed,
       child: Row(
         children: [
@@ -126,7 +126,7 @@ class _LiveChannelHeaderCard extends StatelessWidget {
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        '进入直播频道',
+                        '进入语音频道',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: UiTypography.label.copyWith(
@@ -245,6 +245,6 @@ String _roomMeta({
   final online = onlineMemberCount ?? 0;
   if (online > 0) parts.add('$online 人在线');
   final live = liveParticipantCount ?? 0;
-  if (live > 0) parts.add('$live 语音');
-  return parts.isEmpty ? '就绪' : parts.join(' - ');
+  if (live > 0) parts.add('$live 人语音');
+  return parts.isEmpty ? '就绪' : parts.join(' · ');
 }
