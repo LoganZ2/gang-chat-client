@@ -8,6 +8,9 @@ enum RoomNotificationItemType {
   applicationReviewed,
 }
 
+const missingRoomNotificationRoomLabel = '不存在';
+const missingRoomNotificationRoomAvatarKey = 'graphite-2';
+
 class RoomNotificationItem {
   const RoomNotificationItem._({
     required this.type,
@@ -200,6 +203,30 @@ String roomInviteTimestampLabel(DateTime value) {
       '${local.minute.toString().padLeft(2, '0')}';
 }
 
+String roomNotificationRoomLabel(PublicRoom room, {required bool roomExists}) {
+  return roomExists ? room.name : missingRoomNotificationRoomLabel;
+}
+
+String? roomNotificationRoomAvatarUrl(
+  PublicRoom room, {
+  required bool roomExists,
+}) {
+  return roomExists ? room.avatarUrl : null;
+}
+
+String roomNotificationRoomAvatarKey(
+  PublicRoom room, {
+  required bool roomExists,
+}) {
+  return roomExists
+      ? room.defaultAvatarKey
+      : missingRoomNotificationRoomAvatarKey;
+}
+
+bool roomNotificationRoomCardEnabled({required bool roomExists}) {
+  return roomExists;
+}
+
 List<RoomNotificationItem> roomNotificationsForView({
   required Iterable<RoomInvite> invites,
   required Iterable<RoomApplication> applications,
@@ -313,7 +340,7 @@ String _roomInviteSearchText(RoomInvite invite) {
     values,
     isInvalidPendingRoomInvite(invite) ? '已失效 invalid' : null,
   );
-  _addSearchValue(values, invite.roomExists ? null : '房间已不存在 room missing');
+  _addSearchValue(values, invite.roomExists ? null : '不存在 房间已不存在 room missing');
   _addSearchValue(values, roomInviteTimestampLabel(invite.createdAt));
   if (invite.updatedAt != null) {
     _addSearchValue(values, roomInviteTimestampLabel(invite.updatedAt!));

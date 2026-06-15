@@ -13,6 +13,7 @@ import '../app/sticker_display.dart' as sticker_display;
 import '../app/voice_message_display.dart' as voice_display;
 import '../protocol/models.dart';
 import '../ui/ui.dart';
+import 'hover_card_anchor.dart';
 
 part 'chat_header.dart';
 part 'chat_messages.dart';

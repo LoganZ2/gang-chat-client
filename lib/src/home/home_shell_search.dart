@@ -257,6 +257,7 @@ extension _HomeShellSearch on _HomeShellState {
       rid: room.rid,
       name: room.name,
       visibility: room.visibility,
+      description: room.description,
       avatarUrl: room.avatarUrl,
       defaultAvatarKey: room.defaultAvatarKey,
       memberCount: room.memberCount,

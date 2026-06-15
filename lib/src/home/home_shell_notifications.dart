@@ -27,6 +27,12 @@ extension _HomeShellNotifications on _HomeShellState {
     });
   }
 
+  void _openNotificationRoom(PublicRoom room) {
+    if (!room.joined) return;
+    final narrow = MediaQuery.sizeOf(context).width < narrowBreakpoint;
+    _selectServer(_roomCardForPublicRoom(room), openContent: narrow);
+  }
+
   Future<void> _loadNotifications({bool silent = false}) async {
     if (!silent) {
       _setHomeState(() {

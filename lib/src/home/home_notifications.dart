@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../app/room_notifications.dart';
 import '../protocol/models.dart';
 import '../ui/ui.dart';
+import 'room_profile_card.dart';
 
 typedef RoomInviteReviewCallback =
     Future<void> Function(RoomInvite invite, bool accept);
@@ -24,10 +25,13 @@ class HomeNotificationsPane extends StatefulWidget {
     required this.onRefresh,
     required this.onReviewInvite,
     required this.onWithdrawApplication,
+    required this.currentUser,
+    required this.onOpenRoom,
   });
 
   final List<RoomInvite> invites;
   final List<RoomApplication> applications;
+  final CurrentUser currentUser;
   final bool loading;
   final String? error;
   final String? busyInviteId;
@@ -36,6 +40,7 @@ class HomeNotificationsPane extends StatefulWidget {
   final VoidCallback onRefresh;
   final RoomInviteReviewCallback onReviewInvite;
   final RoomApplicationWithdrawCallback onWithdrawApplication;
+  final ValueChanged<PublicRoom> onOpenRoom;
 
   @override
   State<HomeNotificationsPane> createState() => _HomeNotificationsPaneState();
@@ -134,6 +139,8 @@ class _HomeNotificationsPaneState extends State<HomeNotificationsPane> {
         onRefresh: widget.onRefresh,
         onReviewInvite: widget.onReviewInvite,
         onWithdrawApplication: widget.onWithdrawApplication,
+        currentUser: widget.currentUser,
+        onOpenRoom: widget.onOpenRoom,
       ),
     );
   }
@@ -152,9 +159,12 @@ class _NotificationsBody extends StatelessWidget {
     required this.onRefresh,
     required this.onReviewInvite,
     required this.onWithdrawApplication,
+    required this.currentUser,
+    required this.onOpenRoom,
   });
 
   final List<RoomNotificationItem> items;
+  final CurrentUser currentUser;
   final bool loading;
   final String? error;
   final int rawNotificationCount;
@@ -165,6 +175,7 @@ class _NotificationsBody extends StatelessWidget {
   final VoidCallback onRefresh;
   final RoomInviteReviewCallback onReviewInvite;
   final RoomApplicationWithdrawCallback onWithdrawApplication;
+  final ValueChanged<PublicRoom> onOpenRoom;
 
   @override
   Widget build(BuildContext context) {
@@ -215,6 +226,8 @@ class _NotificationsBody extends StatelessWidget {
             busy: busyInviteId == item.invite!.id,
             busyInviteId: busyInviteId,
             onReviewInvite: onReviewInvite,
+            currentUser: currentUser,
+            onOpenRoom: onOpenRoom,
           ),
           RoomNotificationItemType.applicationRequested =>
             _RoomApplicationRequestNotificationRow(
@@ -223,11 +236,15 @@ class _NotificationsBody extends StatelessWidget {
               busy: busyApplicationId == item.application!.id,
               busyApplicationId: busyApplicationId,
               onWithdrawApplication: onWithdrawApplication,
+              currentUser: currentUser,
+              onOpenRoom: onOpenRoom,
             ),
           RoomNotificationItemType.applicationReviewed =>
             _RoomApplicationReviewNotificationRow(
               application: item.application!,
               query: query,
+              currentUser: currentUser,
+              onOpenRoom: onOpenRoom,
             ),
         };
       },
@@ -242,6 +259,8 @@ class _RoomInviteNotificationRow extends StatelessWidget {
     required this.busy,
     required this.busyInviteId,
     required this.onReviewInvite,
+    required this.currentUser,
+    required this.onOpenRoom,
   });
 
   final RoomInvite invite;
@@ -249,6 +268,8 @@ class _RoomInviteNotificationRow extends StatelessWidget {
   final bool busy;
   final String? busyInviteId;
   final RoomInviteReviewCallback onReviewInvite;
+  final CurrentUser currentUser;
+  final ValueChanged<PublicRoom> onOpenRoom;
 
   @override
   Widget build(BuildContext context) {
@@ -339,6 +360,9 @@ class _RoomInviteNotificationRow extends StatelessWidget {
                       room: room,
                       inviteId: invite.id,
                       query: query,
+                      roomExists: invite.roomExists,
+                      currentUser: currentUser,
+                      onOpenRoom: onOpenRoom,
                     ),
                   ),
                 ],
@@ -378,6 +402,8 @@ class _RoomApplicationRequestNotificationRow extends StatelessWidget {
     required this.busy,
     required this.busyApplicationId,
     required this.onWithdrawApplication,
+    required this.currentUser,
+    required this.onOpenRoom,
   });
 
   final RoomApplication application;
@@ -385,6 +411,8 @@ class _RoomApplicationRequestNotificationRow extends StatelessWidget {
   final bool busy;
   final String? busyApplicationId;
   final RoomApplicationWithdrawCallback onWithdrawApplication;
+  final CurrentUser currentUser;
+  final ValueChanged<PublicRoom> onOpenRoom;
 
   @override
   Widget build(BuildContext context) {
@@ -436,6 +464,9 @@ class _RoomApplicationRequestNotificationRow extends StatelessWidget {
                 room: room,
                 inviteId: 'application-${application.id}',
                 query: query,
+                roomExists: true,
+                currentUser: currentUser,
+                onOpenRoom: onOpenRoom,
               ),
             ),
             const SizedBox(width: 12),
@@ -470,10 +501,14 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
   const _RoomApplicationReviewNotificationRow({
     required this.application,
     required this.query,
+    required this.currentUser,
+    required this.onOpenRoom,
   });
 
   final RoomApplication application;
   final String query;
+  final CurrentUser currentUser;
+  final ValueChanged<PublicRoom> onOpenRoom;
 
   @override
   Widget build(BuildContext context) {
@@ -572,6 +607,9 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
                       room: room,
                       inviteId: 'application-reviewed-${application.id}',
                       query: query,
+                      roomExists: true,
+                      currentUser: currentUser,
+                      onOpenRoom: onOpenRoom,
                     ),
                   ),
                 ],
@@ -623,29 +661,50 @@ class _InlineRoomTarget extends StatelessWidget {
     required this.room,
     required this.inviteId,
     required this.query,
+    required this.roomExists,
+    required this.currentUser,
+    required this.onOpenRoom,
   });
 
   final PublicRoom room;
   final String inviteId;
   final String query;
+  final bool roomExists;
+  final CurrentUser currentUser;
+  final ValueChanged<PublicRoom> onOpenRoom;
 
   @override
   Widget build(BuildContext context) {
     final config = AppConfigScope.of(context);
+    final roomLabel = roomNotificationRoomLabel(room, roomExists: roomExists);
+    final avatar = Avatar(
+      key: ValueKey('notification-room-avatar-$inviteId'),
+      label: roomLabel,
+      imageUrl: config.resolveAssetUrl(
+        roomNotificationRoomAvatarUrl(room, roomExists: roomExists),
+      ),
+      defaultAvatarKey: roomNotificationRoomAvatarKey(
+        room,
+        roomExists: roomExists,
+      ),
+      size: 34,
+    );
+    final avatarTarget = roomNotificationRoomCardEnabled(roomExists: roomExists)
+        ? RoomHoverCard(
+            room: room,
+            currentUser: currentUser,
+            onEnterRoom: room.joined ? onOpenRoom : null,
+            child: avatar,
+          )
+        : avatar;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Avatar(
-          key: ValueKey('notification-room-avatar-$inviteId'),
-          label: room.name,
-          imageUrl: config.resolveAssetUrl(room.avatarUrl),
-          defaultAvatarKey: room.defaultAvatarKey,
-          size: 34,
-        ),
+        avatarTarget,
         const SizedBox(width: 5),
         Flexible(
           child: HighlightedText(
-            text: room.name,
+            text: roomLabel,
             query: query,
             key: ValueKey('notification-room-name-$inviteId'),
             maxLines: 1,

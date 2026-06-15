@@ -37,6 +37,7 @@ extension _HomeShellLayout on _HomeShellState {
       return HomeNotificationsPane(
         invites: _notificationInvites,
         applications: _notificationApplications,
+        currentUser: _currentUser,
         loading: _loadingNotifications,
         error: _notificationError,
         busyInviteId: _busyNotificationInviteId,
@@ -45,6 +46,7 @@ extension _HomeShellLayout on _HomeShellState {
         onRefresh: () => unawaited(_loadNotifications()),
         onReviewInvite: _reviewNotificationInvite,
         onWithdrawApplication: _withdrawNotificationApplication,
+        onOpenRoom: _openNotificationRoom,
       );
     }
 

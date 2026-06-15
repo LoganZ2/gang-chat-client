@@ -692,6 +692,10 @@ class PublicRoom {
     required this.joined,
     required this.joinState,
     this.onlineMemberCount = 0,
+    this.description = '',
+    this.createdBy,
+    this.personalProfile = const RoomPersonalProfile(),
+    this.myMembership,
   });
 
   final String id;
@@ -701,11 +705,15 @@ class PublicRoom {
   final String defaultAvatarKey;
   final String visibility;
   final String joinPolicy;
+  final String description;
   final int memberCount;
   final int onlineMemberCount;
   final int liveParticipantCount;
   final bool joined;
   final String joinState;
+  final UserSummary? createdBy;
+  final RoomPersonalProfile personalProfile;
+  final RoomMembership? myMembership;
 
   factory PublicRoom.fromJson(Map<String, Object?> json) {
     return PublicRoom(
@@ -716,6 +724,8 @@ class PublicRoom {
       defaultAvatarKey: json['default_avatar_key'] as String? ?? 'room-1',
       visibility: json['visibility'] as String? ?? 'public',
       joinPolicy: json['join_policy'] as String? ?? 'approval_required',
+      description:
+          _stringFromJson(json, const ['description', 'intro', 'bio']) ?? '',
       memberCount: json['member_count'] as int? ?? 0,
       onlineMemberCount:
           _intFromJson(json, const ['online_member_count', 'online_count']) ??
@@ -723,6 +733,17 @@ class PublicRoom {
       liveParticipantCount: json['live_participant_count'] as int? ?? 0,
       joined: json['joined'] as bool? ?? false,
       joinState: json['join_state'] as String? ?? 'none',
+      createdBy: _nullableMap(json['created_by']) == null
+          ? null
+          : UserSummary.fromJson(_nullableMap(json['created_by'])!),
+      personalProfile: RoomPersonalProfile.fromJson(
+        _nullableMap(json['personal_profile']) ??
+            _nullableMap(json['my_room_profile']) ??
+            _nullableMap(json['room_profile']),
+      ),
+      myMembership: _nullableMap(json['my_membership']) == null
+          ? null
+          : RoomMembership.fromJson(_nullableMap(json['my_membership'])!),
     );
   }
 
@@ -741,11 +762,15 @@ class PublicRoom {
       defaultAvatarKey: defaultAvatarKey,
       visibility: visibility,
       joinPolicy: joinPolicy,
+      description: description,
       memberCount: memberCount ?? this.memberCount,
       onlineMemberCount: onlineMemberCount ?? this.onlineMemberCount,
       liveParticipantCount: liveParticipantCount ?? this.liveParticipantCount,
       joined: joined ?? this.joined,
       joinState: joinState ?? this.joinState,
+      createdBy: createdBy,
+      personalProfile: personalProfile,
+      myMembership: myMembership,
     );
   }
 }

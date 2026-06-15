@@ -679,8 +679,8 @@ void main() {
               _roomInviteJson(
                 status: 'pending',
                 roomExists: false,
-                invalidReason: 'room_missing',
                 inviterRoomRole: 'left',
+                invalidReason: 'room_missing',
               ),
             ],
             'next_cursor': null,
@@ -696,6 +696,38 @@ void main() {
     expect(invites.single.roomExists, isFalse);
     expect(invites.single.invalidReason, 'room_missing');
     expect(invites.single.inviter.roomRole, 'left');
+    api.close();
+  });
+
+  test('room invite notification parses room profile card fields', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/api/v1/room-invites');
+
+        return http.Response(
+          jsonEncode({
+            'invites': [
+              _roomInviteJson(roomJoined: true, includeViewerRoomInfo: true),
+            ],
+            'next_cursor': null,
+          }),
+          200,
+        );
+      }),
+    );
+
+    final invites = await api.listRoomInvites(status: 'all');
+    final room = invites.single.room;
+
+    expect(room.description, 'Invite room bio');
+    expect(room.createdBy?.id, 'user_1');
+    expect(room.personalProfile.displayName, 'Alice in Room');
+    expect(room.personalProfile.avatarUrl, '/room-alice.png');
+    expect(room.personalProfile.defaultAvatarKey, 'green-2');
+    expect(room.myMembership?.role, 'member');
     api.close();
   });
 
@@ -2137,38 +2169,40 @@ void main() {
     api.close();
   });
 
-  test('queueMusicBoxTrack posts the track body and returns the snapshot',
-      () async {
-    final api = GangApiClient(
-      baseUrl: 'http://example.test/api/v1',
-      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
-      httpClient: MockClient((request) async {
-        expect(request.method, 'POST');
-        expect(request.url.path, '/api/v1/rooms/room_1/music-box/queue');
-        expect(jsonDecode(request.body) as Map<String, Object?>, {
-          'source': 'netease',
-          'track_id': 't9',
-          'title': '晴天',
-          'artist': '周杰伦',
-        });
-        return http.Response(
-          jsonEncode({'enabled': true, 'queue': [], 'usage': {}}),
-          200,
-        );
-      }),
-    );
+  test(
+    'queueMusicBoxTrack posts the track body and returns the snapshot',
+    () async {
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          expect(request.method, 'POST');
+          expect(request.url.path, '/api/v1/rooms/room_1/music-box/queue');
+          expect(jsonDecode(request.body) as Map<String, Object?>, {
+            'source': 'netease',
+            'track_id': 't9',
+            'title': '晴天',
+            'artist': '周杰伦',
+          });
+          return http.Response(
+            jsonEncode({'enabled': true, 'queue': [], 'usage': {}}),
+            200,
+          );
+        }),
+      );
 
-    final state = await api.queueMusicBoxTrack(
-      roomId: 'room_1',
-      trackId: 't9',
-      title: '晴天',
-      source: 'netease',
-      artist: '周杰伦',
-    );
+      final state = await api.queueMusicBoxTrack(
+        roomId: 'room_1',
+        trackId: 't9',
+        title: '晴天',
+        source: 'netease',
+        artist: '周杰伦',
+      );
 
-    expect(state.enabled, isTrue);
-    api.close();
-  });
+      expect(state.enabled, isTrue);
+      api.close();
+    },
+  );
 
   test('controlMusicBox posts the action', () async {
     final api = GangApiClient(
@@ -2199,10 +2233,7 @@ void main() {
       accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
       httpClient: MockClient((request) async {
         expect(request.method, 'DELETE');
-        expect(
-          request.url.path,
-          '/api/v1/rooms/room_1/music-box/queue/item_1',
-        );
+        expect(request.url.path, '/api/v1/rooms/room_1/music-box/queue/item_1');
         return http.Response(
           jsonEncode({'enabled': true, 'queue': [], 'usage': {}}),
           200,
@@ -2225,6 +2256,8 @@ Map<String, Object?> _roomInviteJson({
   bool roomExists = true,
   String? invalidReason,
   String inviterRoomRole = 'owner',
+  bool roomJoined = false,
+  bool includeViewerRoomInfo = false,
 }) {
   return {
     'id': 'rinv_1',
@@ -2237,14 +2270,35 @@ Map<String, Object?> _roomInviteJson({
       'id': 'room_1',
       'rid': '900001',
       'name': 'Invite Room',
+      'description': 'Invite room bio',
       'avatar_url': null,
       'default_avatar_key': 'room-1',
       'visibility': 'private',
       'join_policy': 'closed',
       'member_count': 1,
+      'online_member_count': 1,
       'live_participant_count': 0,
-      'joined': false,
-      'join_state': 'none',
+      'joined': roomJoined,
+      'join_state': roomJoined ? 'joined' : 'none',
+      'created_by': {
+        'id': 'user_1',
+        'uid': '1000001',
+        'username': 'alice',
+        'display_name': 'Alice',
+        'avatar_url': null,
+        'default_avatar_key': 'blue-3',
+      },
+      if (includeViewerRoomInfo) ...{
+        'personal_profile': {
+          'display_name': 'Alice in Room',
+          'avatar_url': '/room-alice.png',
+          'default_avatar_key': 'green-2',
+        },
+        'my_membership': {
+          'joined_at': '2026-05-31T14:00:00Z',
+          'role': 'member',
+        },
+      },
     },
     'inviter': {
       'id': 'user_1',

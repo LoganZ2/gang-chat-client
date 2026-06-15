@@ -158,6 +158,46 @@ void main() {
     );
   });
 
+  test('deleted notification rooms display as missing room targets', () {
+    final deleted = _invite(
+      'deleted',
+      roomName: 'Deleted Room',
+      roomExists: false,
+      invalidReason: 'room_missing',
+    );
+
+    expect(
+      roomNotificationRoomLabel(deleted.room, roomExists: deleted.roomExists),
+      '不存在',
+    );
+    expect(
+      roomNotificationRoomAvatarUrl(
+        deleted.room,
+        roomExists: deleted.roomExists,
+      ),
+      isNull,
+    );
+    expect(
+      roomNotificationRoomAvatarKey(
+        deleted.room,
+        roomExists: deleted.roomExists,
+      ),
+      'graphite-2',
+    );
+    expect(
+      roomNotificationRoomCardEnabled(roomExists: deleted.roomExists),
+      isFalse,
+    );
+    expect(
+      roomInviteNotificationsForView(
+        invites: [deleted],
+        query: '不存在',
+        filter: RoomNotificationFilter.all,
+      ),
+      [deleted],
+    );
+  });
+
   test('room notifications combine invites and applications for view', () {
     final pendingInvite = _invite(
       'pending_invite',

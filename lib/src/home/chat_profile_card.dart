@@ -1,12 +1,6 @@
 part of 'chat_pane.dart';
 
-const double _profileCardWidth = 248;
-const double _profileCardGap = 10;
-
-/// Wraps a message avatar so hovering it reveals a floating profile card
-/// anchored beside the avatar. The card itself is hoverable, and a short close
-/// delay bridges the gap between avatar and card so moving the cursor across
-/// the gap keeps it open.
+/// Wraps a message avatar so hovering it reveals a floating profile card.
 class _AvatarHoverCard extends StatefulWidget {
   const _AvatarHoverCard({
     required this.user,
@@ -26,35 +20,16 @@ class _AvatarHoverCard extends StatefulWidget {
 }
 
 class _AvatarHoverCardState extends State<_AvatarHoverCard> {
-  final GlobalKey _anchorKey = GlobalKey();
-  final OverlayPortalController _portal = OverlayPortalController();
-  final Object _tapRegionGroup = Object();
-
-  // Hover is tracked separately for the avatar and the card; the card stays
-  // open while either is hovered. The timer gives the cursor a grace period to
-  // cross the gap between them.
-  bool _overAnchor = false;
-  bool _overCard = false;
-  bool _pinned = false;
-  Timer? _closeTimer;
-
   // Richer profile, fetched once on first open and reused afterwards.
   UserSummary? _resolved;
   Future<void>? _resolveFuture;
   bool _profileResolveCompleted = false;
 
   UserSummary get _displayUser => _resolved ?? widget.user;
-  bool get _wantsOpen => _pinned || _overAnchor || _overCard;
   bool get _profileReady =>
       widget.onResolveProfile == null ||
       _resolved != null ||
       _profileResolveCompleted;
-
-  @override
-  void dispose() {
-    _closeTimer?.cancel();
-    super.dispose();
-  }
 
   @override
   void didUpdateWidget(covariant _AvatarHoverCard oldWidget) {
@@ -68,60 +43,6 @@ class _AvatarHoverCardState extends State<_AvatarHoverCard> {
     _resolved = null;
     _resolveFuture = null;
     _profileResolveCompleted = false;
-    if (_portal.isShowing) _portal.hide();
-  }
-
-  void _enterAnchor() {
-    _overAnchor = true;
-    _open();
-  }
-
-  void _exitAnchor() {
-    _overAnchor = false;
-    _scheduleClose();
-  }
-
-  void _enterCard() {
-    _overCard = true;
-    _closeTimer?.cancel();
-  }
-
-  void _exitCard() {
-    _overCard = false;
-    _scheduleClose();
-  }
-
-  void _open() {
-    _closeTimer?.cancel();
-    if (!_profileReady) {
-      unawaited(
-        _resolveProfile().then((_) {
-          if (!mounted || !_wantsOpen) return;
-          _showPortal();
-        }),
-      );
-      return;
-    }
-    _showPortal();
-  }
-
-  void _showPortal() {
-    if (_portal.isShowing) return;
-    _portal.show();
-  }
-
-  void _pinOpen() {
-    _pinned = true;
-    _open();
-  }
-
-  void _dismissPinned() {
-    if (!_pinned && !_portal.isShowing) return;
-    _pinned = false;
-    _overAnchor = false;
-    _overCard = false;
-    _closeTimer?.cancel();
-    if (_portal.isShowing) _portal.hide();
   }
 
   Future<void> _resolveProfile() {
@@ -155,73 +76,13 @@ class _AvatarHoverCardState extends State<_AvatarHoverCard> {
     return future;
   }
 
-  void _scheduleClose() {
-    if (_pinned) return;
-    _closeTimer?.cancel();
-    _closeTimer = Timer(const Duration(milliseconds: 120), () {
-      if (!mounted || _pinned || _overAnchor || _overCard) return;
-      if (_portal.isShowing) _portal.hide();
-    });
-  }
-
-  Rect? _anchorRectInOverlay() {
-    final anchorBox = _anchorKey.currentContext?.findRenderObject();
-    final overlayBox = Overlay.maybeOf(context)?.context.findRenderObject();
-    if (anchorBox is! RenderBox ||
-        overlayBox is! RenderBox ||
-        !anchorBox.hasSize ||
-        !overlayBox.hasSize) {
-      return null;
-    }
-    final topLeft = anchorBox.localToGlobal(Offset.zero, ancestor: overlayBox);
-    return topLeft & anchorBox.size;
-  }
-
   @override
   Widget build(BuildContext context) {
-    return OverlayPortal(
-      controller: _portal,
-      overlayChildBuilder: (context) {
-        return Positioned.fill(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final anchorRect = _anchorRectInOverlay();
-              if (anchorRect == null) return const SizedBox.shrink();
-              return CustomSingleChildLayout(
-                delegate: _ProfileCardLayoutDelegate(
-                  anchorRect: anchorRect,
-                  gap: _profileCardGap,
-                  cardWidth: _profileCardWidth,
-                ),
-                child: TapRegion(
-                  groupId: _tapRegionGroup,
-                  onTapOutside: (_) => _dismissPinned(),
-                  child: MouseRegion(
-                    onEnter: (_) => _enterCard(),
-                    onExit: (_) => _exitCard(),
-                    child: AnchoredPanel(
-                      width: _profileCardWidth,
-                      child: _ProfileCard(user: _displayUser),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        );
-      },
-      child: TapRegion(
-        groupId: _tapRegionGroup,
-        child: GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTap: _pinOpen,
-          child: MouseRegion(
-            onEnter: (_) => _enterAnchor(),
-            onExit: (_) => _exitAnchor(),
-            child: KeyedSubtree(key: _anchorKey, child: widget.child),
-          ),
-        ),
-      ),
+    return HoverCardAnchor(
+      resetKey: Object.hash(widget.user.id, widget.onResolveProfile != null),
+      onBeforeOpen: _profileReady ? null : _resolveProfile,
+      cardBuilder: (context) => _ProfileCard(user: _displayUser),
+      child: widget.child,
     );
   }
 }
@@ -385,50 +246,6 @@ class _ProfileCard extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-/// Places the profile card beside the avatar: to the right when there's room,
-/// otherwise to the left. Vertically it tracks the avatar's top edge, clamped
-/// so the card never spills outside the overlay.
-class _ProfileCardLayoutDelegate extends SingleChildLayoutDelegate {
-  const _ProfileCardLayoutDelegate({
-    required this.anchorRect,
-    required this.gap,
-    required this.cardWidth,
-  });
-
-  final Rect anchorRect;
-  final double gap;
-  final double cardWidth;
-
-  @override
-  BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
-    return BoxConstraints.loose(
-      constraints.biggest,
-    ).copyWith(minWidth: cardWidth, maxWidth: cardWidth);
-  }
-
-  @override
-  Offset getPositionForChild(Size size, Size childSize) {
-    final spaceRight = size.width - anchorRect.right - gap;
-    final placeRight = spaceRight >= childSize.width;
-    final rawLeft = placeRight
-        ? anchorRect.right + gap
-        : anchorRect.left - gap - childSize.width;
-    final maxLeft = math.max(0.0, size.width - childSize.width);
-    final left = rawLeft.clamp(0.0, maxLeft).toDouble();
-
-    final maxTop = math.max(0.0, size.height - childSize.height);
-    final top = anchorRect.top.clamp(0.0, maxTop).toDouble();
-    return Offset(left, top);
-  }
-
-  @override
-  bool shouldRelayout(_ProfileCardLayoutDelegate oldDelegate) {
-    return oldDelegate.anchorRect != anchorRect ||
-        oldDelegate.gap != gap ||
-        oldDelegate.cardWidth != cardWidth;
   }
 }
 
