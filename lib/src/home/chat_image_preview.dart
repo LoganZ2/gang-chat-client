@@ -10,6 +10,7 @@ class ChatImagePreviewActions {
     required this.onSaveAs,
     required this.onCopyToClipboard,
     this.onSaveSticker,
+    this.onSaveRoomSticker,
   });
 
   /// A no-op bundle for tests and previews where the actions aren't exercised.
@@ -17,7 +18,8 @@ class ChatImagePreviewActions {
     : onDownload = _noopWithName,
       onSaveAs = _noopWithName,
       onCopyToClipboard = _noopWithUrl,
-      onSaveSticker = null;
+      onSaveSticker = null,
+      onSaveRoomSticker = null;
 
   /// Save the image at [url] straight to the user's Downloads folder, using
   /// [suggestedName] as the filename. Throws on failure.
@@ -34,6 +36,12 @@ class ChatImagePreviewActions {
   /// the API is unavailable. Throws on failure.
   final Future<void> Function(Message message, MessageAttachment attachment)?
   onSaveSticker;
+
+  /// Add a sticker message's sticker to the current room's sticker pack. Null
+  /// unless the source is a savable sticker and the current user can administer
+  /// the room. Throws on failure.
+  final Future<void> Function(Message message, MessageAttachment attachment)?
+  onSaveRoomSticker;
 }
 
 Future<void> _noopWithName(String url, String suggestedName) async {}
@@ -96,7 +104,7 @@ class _ImagePreviewOverlay extends StatefulWidget {
   State<_ImagePreviewOverlay> createState() => _ImagePreviewOverlayState();
 }
 
-enum _PreviewAction { download, saveAs, copy, saveSticker }
+enum _PreviewAction { download, saveAs, copy, saveSticker, saveRoomSticker }
 
 class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
   _PreviewAction? _busy;
@@ -105,6 +113,9 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
 
   bool get _canSaveSticker =>
       widget.stickerSource != null && widget.actions.onSaveSticker != null;
+
+  bool get _canSaveRoomSticker =>
+      widget.stickerSource != null && widget.actions.onSaveRoomSticker != null;
 
   Future<void> _run(
     _PreviewAction action,
@@ -320,6 +331,28 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
                         source.attachment,
                       ),
                       successMessage: '已保存到我的表情',
+                    );
+                  }
+                : null,
+            backgroundColor: const Color(0x66000000),
+          ),
+        ],
+        if (_canSaveRoomSticker) ...[
+          const SizedBox(width: 10),
+          ButtonIcon(
+            icon: const Icon(Icons.library_add_outlined),
+            tooltip: '加入房间表情包',
+            loading: _busy == _PreviewAction.saveRoomSticker,
+            onPressed: _busy == null
+                ? () {
+                    final source = widget.stickerSource!;
+                    _run(
+                      _PreviewAction.saveRoomSticker,
+                      () => widget.actions.onSaveRoomSticker!(
+                        source.message,
+                        source.attachment,
+                      ),
+                      successMessage: '已加入房间表情包',
                     );
                   }
                 : null,

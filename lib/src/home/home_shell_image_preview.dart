@@ -6,11 +6,15 @@ part of 'home_shell.dart';
 /// personal stickers.
 extension _HomeShellImagePreview on _HomeShellState {
   ChatImagePreviewActions get _imagePreviewActions {
+    // The "加入房间表情包" action only makes sense when the current user can
+    // administer the room whose messages are on screen.
+    final canManageRoomStickers = _selectedRoom?.isAdmin ?? false;
     return ChatImagePreviewActions(
       onDownload: _previewDownloadToDownloads,
       onSaveAs: _previewSaveAs,
       onCopyToClipboard: _previewCopyToClipboard,
       onSaveSticker: _previewSaveSticker,
+      onSaveRoomSticker: canManageRoomStickers ? _previewSaveRoomSticker : null,
     );
   }
 
@@ -87,6 +91,26 @@ extension _HomeShellImagePreview on _HomeShellState {
       roomId: message.roomId,
       stickerId: stickerId,
       targetScope: 'personal',
+      userId: _currentUser.id,
+    );
+  }
+
+  Future<void> _previewSaveRoomSticker(
+    Message message,
+    MessageAttachment attachment,
+  ) async {
+    final stickerId = attachment.stickerId;
+    if (stickerId == null || stickerId.isEmpty) {
+      throw Exception('该表情无法保存');
+    }
+    final room = _selectedRoom;
+    if (room == null || !room.isAdmin) {
+      throw Exception('没有权限管理房间表情');
+    }
+    await _stickerPacksController.saveSticker(
+      roomId: room.id,
+      stickerId: stickerId,
+      targetScope: 'room',
       userId: _currentUser.id,
     );
   }
