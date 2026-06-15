@@ -168,7 +168,14 @@ void main() {
 
     expect(
       roomNotificationRoomLabel(deleted.room, roomExists: deleted.roomExists),
-      '不存在',
+      '房间不存在',
+    );
+    expect(
+      roomNotificationRoomAvatarLabel(
+        deleted.room,
+        roomExists: deleted.roomExists,
+      ),
+      '空',
     );
     expect(
       roomNotificationRoomAvatarUrl(
@@ -191,10 +198,91 @@ void main() {
     expect(
       roomInviteNotificationsForView(
         invites: [deleted],
+        query: '房间不存在',
+        filter: RoomNotificationFilter.all,
+      ),
+      [deleted],
+    );
+    expect(
+      roomInviteNotificationsForView(
+        invites: [deleted],
         query: '不存在',
         filter: RoomNotificationFilter.all,
       ),
       [deleted],
+    );
+  });
+
+  test('deleted notification users display as missing user targets', () {
+    final deletedInviter = _invite(
+      'deleted_inviter',
+      inviter: _user(
+        'deleted_inviter',
+        displayName: 'Deleted Inviter',
+        roomRole: 'left',
+      ),
+      inviterExists: false,
+      invalidReason: 'inviter_deleted',
+    );
+    final deletedReviewer = _application(
+      'deleted_reviewer',
+      status: 'approved',
+      reviewedAt: DateTime.utc(2026, 6, 7, 8),
+      reviewer: _user(
+        'deleted_reviewer',
+        displayName: 'Deleted Reviewer',
+        roomRole: 'owner',
+      ),
+      reviewerExists: false,
+    );
+
+    expect(
+      roomNotificationUserLabel(
+        deletedInviter.inviter,
+        userExists: deletedInviter.inviterExists,
+      ),
+      '用户不存在',
+    );
+    expect(
+      roomNotificationUserAvatarLabel(
+        deletedInviter.inviter,
+        userExists: deletedInviter.inviterExists,
+      ),
+      '空',
+    );
+    expect(
+      roomNotificationUserAvatarUrl(
+        deletedInviter.inviter,
+        userExists: deletedInviter.inviterExists,
+      ),
+      isNull,
+    );
+    expect(
+      roomNotificationUserAvatarKey(
+        deletedInviter.inviter,
+        userExists: deletedInviter.inviterExists,
+      ),
+      'graphite-2',
+    );
+    expect(
+      roomInviteNotificationsForView(
+        invites: [deletedInviter],
+        query: '用户不存在',
+        filter: RoomNotificationFilter.all,
+      ),
+      [deletedInviter],
+    );
+    expect(
+      roomNotificationsForView(
+        invites: const [],
+        applications: [deletedReviewer],
+        query: '用户不存在',
+        filter: RoomNotificationFilter.all,
+      ).map((item) => item.id),
+      [
+        'application-reviewed:deleted_reviewer',
+        'application-requested:deleted_reviewer',
+      ],
     );
   });
 
@@ -391,6 +479,7 @@ RoomInvite _invite(
   String joinPolicy = 'closed',
   UserSummary? inviter,
   bool roomExists = true,
+  bool inviterExists = true,
   String? invalidReason,
 }) {
   return RoomInvite(
@@ -413,6 +502,7 @@ RoomInvite _invite(
     inviter: inviter ?? _user('inviter_$id', roomRole: 'owner'),
     createdAt: createdAt ?? DateTime.utc(2026, 6, 5, 12),
     roomExists: roomExists,
+    inviterExists: inviterExists,
     invalidReason: invalidReason,
   );
 }
@@ -426,6 +516,7 @@ RoomApplication _application(
   String roomName = 'Application Room',
   String roomRid = 'A-1',
   UserSummary? reviewer,
+  bool reviewerExists = true,
 }) {
   return RoomApplication(
     id: id,
@@ -448,6 +539,7 @@ RoomApplication _application(
     updatedAt: updatedAt ?? DateTime.utc(2026, 6, 5, 12),
     reviewedAt: reviewedAt,
     reviewer: reviewer,
+    reviewerExists: reviewerExists,
   );
 }
 

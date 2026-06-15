@@ -109,6 +109,9 @@ class _RoomProfileCard extends StatelessWidget {
                 active: room.joined,
               ),
               StatusBadge(label: room_display.visibilityLabel(room.visibility)),
+              StatusBadge(
+                label: room_display.roomJoinPolicyLabel(room.joinPolicy),
+              ),
             ],
           ),
           if (description != null) ...[
@@ -148,6 +151,15 @@ class _RoomProfileCard extends StatelessWidget {
               name: myName,
               trailing: StatusBadge(label: myRole),
             ),
+          ],
+          const SizedBox(height: UiSpacing.sm),
+          Text(
+            'RID: $rid',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: UiTypography.label.copyWith(color: UiColors.textMuted),
+          ),
+          if (joined) ...[
             const SizedBox(height: UiSpacing.md),
             Center(
               child: Button(
@@ -162,13 +174,6 @@ class _RoomProfileCard extends StatelessWidget {
               ),
             ),
           ],
-          const SizedBox(height: UiSpacing.sm),
-          Text(
-            'RID: $rid',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: UiTypography.label.copyWith(color: UiColors.textMuted),
-          ),
         ],
       ),
     );

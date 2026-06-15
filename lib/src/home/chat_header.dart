@@ -8,7 +8,6 @@ class _RoomHeader extends StatelessWidget {
     required this.memberCount,
     required this.onlineMemberCount,
     required this.liveParticipantCount,
-    required this.loading,
     required this.onLivePressed,
     required this.onMembersPressed,
     required this.onSettingsPressed,
@@ -20,7 +19,6 @@ class _RoomHeader extends StatelessWidget {
   final int? memberCount;
   final int? onlineMemberCount;
   final int? liveParticipantCount;
-  final bool loading;
   final VoidCallback onLivePressed;
   final VoidCallback onMembersPressed;
   final VoidCallback onSettingsPressed;
@@ -53,7 +51,6 @@ class _RoomHeader extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             _RoomHeaderActions(
-              loading: loading,
               onMembersPressed: onMembersPressed,
               onSettingsPressed: onSettingsPressed,
             ),
@@ -155,12 +152,10 @@ class _LiveChannelHeaderCard extends StatelessWidget {
 
 class _RoomHeaderActions extends StatelessWidget {
   const _RoomHeaderActions({
-    required this.loading,
     required this.onMembersPressed,
     required this.onSettingsPressed,
   });
 
-  final bool loading;
   final VoidCallback onMembersPressed;
   final VoidCallback onSettingsPressed;
 
@@ -168,37 +163,20 @@ class _RoomHeaderActions extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: _headerActionButtonSize,
-      child: Stack(
-        alignment: Alignment.topCenter,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _HeaderIconButton(
-                tooltip: '房间成员',
-                icon: Icons.groups_outlined,
-                onPressed: onMembersPressed,
-              ),
-              const SizedBox(height: _headerActionGap),
-              _HeaderIconButton(
-                tooltip: '房间操作',
-                icon: Icons.more_horiz,
-                onPressed: onSettingsPressed,
-              ),
-            ],
+          _HeaderIconButton(
+            tooltip: '房间成员',
+            icon: Icons.groups_outlined,
+            onPressed: onMembersPressed,
           ),
-          if (loading)
-            const Positioned(
-              top: 0,
-              right: 0,
-              child: SizedBox.square(
-                dimension: 12,
-                child: CircularProgressIndicator(
-                  strokeWidth: 1.6,
-                  color: UiColors.accent,
-                ),
-              ),
-            ),
+          const SizedBox(height: _headerActionGap),
+          _HeaderIconButton(
+            tooltip: '房间操作',
+            icon: Icons.more_horiz,
+            onPressed: onSettingsPressed,
+          ),
         ],
       ),
     );

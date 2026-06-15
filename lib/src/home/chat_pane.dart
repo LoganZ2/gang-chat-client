@@ -151,7 +151,6 @@ class ChatPane extends StatelessWidget {
             onlineMemberCount:
                 room?.onlineMemberCount ?? roomCard?.onlineMemberCount,
             liveParticipantCount: liveParticipantCount,
-            loading: loading,
             onLivePressed: onOpenLiveChannel,
             onMembersPressed: onOpenRoomMembers,
             onSettingsPressed: onOpenRoomSettings,

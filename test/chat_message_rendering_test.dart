@@ -110,7 +110,7 @@ void main() {
       ),
     );
 
-    expect(find.byType(CircularProgressIndicator), findsAtLeastNWidgets(1));
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
     expect(find.byType(ui.ChatComposer), findsNothing);
   });
 

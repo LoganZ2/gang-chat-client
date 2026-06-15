@@ -95,7 +95,12 @@ void main() {
     expect(find.text('我的房间内信息'), findsOneWidget);
     expect(find.text('Current In Room'), findsOneWidget);
     expect(find.text('管理员'), findsOneWidget);
+    expect(find.text('关闭'), findsOneWidget);
     expect(find.text('RID: R10001'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('进入房间')).dy,
+      greaterThan(tester.getTopLeft(find.text('RID: R10001')).dy),
+    );
 
     await tester.tap(find.text('进入房间'));
     await tester.pumpAndSettle();
@@ -166,7 +171,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('不存在'), findsOneWidget);
+    expect(find.text('房间不存在'), findsOneWidget);
+    expect(find.text('空'), findsOneWidget);
     expect(find.text('Deleted Room'), findsNothing);
 
     final avatarFinder = find.byKey(
@@ -184,5 +190,63 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Deleted Room'), findsNothing);
     expect(find.text('RID: R404'), findsNothing);
+  });
+
+  testWidgets('deleted notification users display missing user placeholders', (
+    tester,
+  ) async {
+    final invite = RoomInvite(
+      id: 'invite_deleted_user',
+      status: 'pending',
+      room: PublicRoom(
+        id: 'room_1',
+        rid: 'R100',
+        name: 'Invite Room',
+        avatarUrl: null,
+        defaultAvatarKey: 'room-2',
+        visibility: 'private',
+        joinPolicy: 'closed',
+        memberCount: 2,
+        onlineMemberCount: 0,
+        liveParticipantCount: 0,
+        joined: false,
+        joinState: 'none',
+      ),
+      inviter: const UserSummary(
+        id: 'user_deleted',
+        username: 'deleted',
+        displayName: 'Deleted User',
+        avatarUrl: '/deleted-user.png',
+        defaultAvatarKey: 'blue-3',
+        roomRole: 'left',
+      ),
+      createdAt: DateTime.utc(2026, 6, 1),
+      inviterExists: false,
+      invalidReason: 'inviter_deleted',
+    );
+
+    await tester.pumpWidget(
+      _host(
+        HomeNotificationsPane(
+          invites: [invite],
+          applications: const [],
+          loading: false,
+          error: null,
+          busyInviteId: null,
+          busyApplicationId: null,
+          currentUser: _currentUser,
+          onClose: () {},
+          onRefresh: () {},
+          onReviewInvite: (_, _) async {},
+          onWithdrawApplication: (_) async {},
+          onOpenRoom: (_) {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('用户不存在'), findsOneWidget);
+    expect(find.text('空'), findsOneWidget);
+    expect(find.text('Deleted User'), findsNothing);
   });
 }

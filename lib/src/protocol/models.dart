@@ -1118,6 +1118,7 @@ class RoomInvite {
     required this.inviter,
     required this.createdAt,
     this.roomExists = true,
+    this.inviterExists = true,
     this.invalidReason,
     this.updatedAt,
   });
@@ -1128,6 +1129,7 @@ class RoomInvite {
   final UserSummary inviter;
   final DateTime createdAt;
   final bool roomExists;
+  final bool inviterExists;
   final String? invalidReason;
   final DateTime? updatedAt;
 
@@ -1141,6 +1143,7 @@ class RoomInvite {
           _parseDateTime(json['created_at']) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       roomExists: json['room_exists'] as bool? ?? true,
+      inviterExists: json['inviter_exists'] as bool? ?? true,
       invalidReason: _stringFromJson(json, const ['invalid_reason']),
       updatedAt: _parseDateTime(json['updated_at']),
     );
@@ -1157,6 +1160,7 @@ class RoomApplication {
     this.reason = '',
     this.reviewedAt,
     this.reviewer,
+    this.reviewerExists = true,
   });
 
   final String id;
@@ -1167,6 +1171,7 @@ class RoomApplication {
   final DateTime updatedAt;
   final DateTime? reviewedAt;
   final UserSummary? reviewer;
+  final bool reviewerExists;
 
   factory RoomApplication.fromJson(Map<String, Object?> json) {
     return RoomApplication(
@@ -1184,6 +1189,7 @@ class RoomApplication {
       reviewer: _nullableMap(json['reviewer']) == null
           ? null
           : UserSummary.fromJson(_nullableMap(json['reviewer'])!),
+      reviewerExists: json['reviewer_exists'] as bool? ?? true,
     );
   }
 }

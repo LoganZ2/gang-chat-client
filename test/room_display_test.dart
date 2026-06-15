@@ -357,6 +357,10 @@ void main() {
     expect(normalizeRoomJoinPolicy('allow_anyone'), 'open');
     expect(normalizeRoomJoinPolicy('deny_all'), 'closed');
     expect(normalizeRoomJoinPolicy('unknown'), 'approval_required');
+    expect(roomJoinPolicyLabel('open'), '开放');
+    expect(roomJoinPolicyLabel('approval_required'), '需审批');
+    expect(roomJoinPolicyLabel('closed'), '关闭');
+    expect(roomJoinPolicyLabel('unknown'), '需审批');
   });
 
   test('public room join action helpers reflect state', () {

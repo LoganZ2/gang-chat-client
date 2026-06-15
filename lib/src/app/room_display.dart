@@ -270,6 +270,14 @@ String visibilityLabel(String value) {
   };
 }
 
+String roomJoinPolicyLabel(String value) {
+  return switch (normalizeRoomJoinPolicy(value)) {
+    'open' => '开放',
+    'closed' => '关闭',
+    _ => '需审批',
+  };
+}
+
 String? commonRoomMeta(UserCommonRoom room) {
   final roomDisplayName = _nonEmpty(room.roomDisplayName);
   final roleLabel = roomRoleLabelFromValue(room.roomRole);

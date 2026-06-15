@@ -275,7 +275,14 @@ class _RoomInviteNotificationRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final room = invite.room;
     final inviter = invite.inviter;
-    final inviterName = _displayName(inviter);
+    final inviterName = roomNotificationUserLabel(
+      inviter,
+      userExists: invite.inviterExists,
+    );
+    final inviterAvatarLabel = roomNotificationUserAvatarLabel(
+      inviter,
+      userExists: invite.inviterExists,
+    );
     final role = roomInviteRoleLabel(inviter);
     final time = roomInviteTimestampLabel(invite.createdAt);
     final invalid = isInvalidPendingRoomInvite(invite);
@@ -307,11 +314,17 @@ class _RoomInviteNotificationRow extends StatelessWidget {
             const SizedBox(width: 10),
             Avatar(
               key: ValueKey('notification-inviter-avatar-${invite.id}'),
-              label: inviterName,
-              imageUrl: AppConfigScope.of(
-                context,
-              ).resolveAssetUrl(inviter.avatarUrl),
-              defaultAvatarKey: inviter.defaultAvatarKey,
+              label: inviterAvatarLabel,
+              imageUrl: AppConfigScope.of(context).resolveAssetUrl(
+                roomNotificationUserAvatarUrl(
+                  inviter,
+                  userExists: invite.inviterExists,
+                ),
+              ),
+              defaultAvatarKey: roomNotificationUserAvatarKey(
+                inviter,
+                userExists: invite.inviterExists,
+              ),
               size: 34,
             ),
             const SizedBox(width: 8),
@@ -514,7 +527,14 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final room = application.room;
     final reviewer = application.reviewer!;
-    final reviewerName = _displayName(reviewer);
+    final reviewerName = roomNotificationUserLabel(
+      reviewer,
+      userExists: application.reviewerExists,
+    );
+    final reviewerAvatarLabel = roomNotificationUserAvatarLabel(
+      reviewer,
+      userExists: application.reviewerExists,
+    );
     final role = roomInviteRoleLabel(reviewer);
     final time = roomInviteTimestampLabel(
       application.reviewedAt ?? application.updatedAt,
@@ -547,11 +567,17 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
               key: ValueKey(
                 'notification-application-reviewer-avatar-${application.id}',
               ),
-              label: reviewerName,
-              imageUrl: AppConfigScope.of(
-                context,
-              ).resolveAssetUrl(reviewer.avatarUrl),
-              defaultAvatarKey: reviewer.defaultAvatarKey,
+              label: reviewerAvatarLabel,
+              imageUrl: AppConfigScope.of(context).resolveAssetUrl(
+                roomNotificationUserAvatarUrl(
+                  reviewer,
+                  userExists: application.reviewerExists,
+                ),
+              ),
+              defaultAvatarKey: roomNotificationUserAvatarKey(
+                reviewer,
+                userExists: application.reviewerExists,
+              ),
               size: 34,
             ),
             const SizedBox(width: 8),
@@ -677,9 +703,13 @@ class _InlineRoomTarget extends StatelessWidget {
   Widget build(BuildContext context) {
     final config = AppConfigScope.of(context);
     final roomLabel = roomNotificationRoomLabel(room, roomExists: roomExists);
+    final roomAvatarLabel = roomNotificationRoomAvatarLabel(
+      room,
+      roomExists: roomExists,
+    );
     final avatar = Avatar(
       key: ValueKey('notification-room-avatar-$inviteId'),
-      label: roomLabel,
+      label: roomAvatarLabel,
       imageUrl: config.resolveAssetUrl(
         roomNotificationRoomAvatarUrl(room, roomExists: roomExists),
       ),
@@ -1026,12 +1056,4 @@ String _emptyTitle({
     RoomNotificationFilter.applications => '暂无申请',
     RoomNotificationFilter.roomNotifications => '暂无房间通知',
   };
-}
-
-String _displayName(UserSummary user) {
-  final roomName = user.roomDisplayName?.trim();
-  if (roomName != null && roomName.isNotEmpty) return roomName;
-  final displayName = user.displayName.trim();
-  if (displayName.isNotEmpty) return displayName;
-  return user.username;
 }

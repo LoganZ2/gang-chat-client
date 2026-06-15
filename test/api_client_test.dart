@@ -679,6 +679,7 @@ void main() {
               _roomInviteJson(
                 status: 'pending',
                 roomExists: false,
+                inviterExists: false,
                 inviterRoomRole: 'left',
                 invalidReason: 'room_missing',
               ),
@@ -694,6 +695,7 @@ void main() {
 
     expect(invites.single.status, 'pending');
     expect(invites.single.roomExists, isFalse);
+    expect(invites.single.inviterExists, isFalse);
     expect(invites.single.invalidReason, 'room_missing');
     expect(invites.single.inviter.roomRole, 'left');
     api.close();
@@ -842,9 +844,37 @@ void main() {
       expect(applications.single.reviewer?.roomRole, 'owner');
       expect(applications.single.reviewedAt, isNotNull);
       expect(applications.single.reason, 'Hi team');
+      expect(applications.single.reviewerExists, isTrue);
       api.close();
     },
   );
+
+  test('room application notification parses missing reviewer state', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/api/v1/room-applications');
+
+        return http.Response(
+          jsonEncode({
+            'applications': [
+              _roomApplicationJson(status: 'approved', reviewerExists: false),
+            ],
+            'next_cursor': null,
+          }),
+          200,
+        );
+      }),
+    );
+
+    final applications = await api.listRoomApplications(status: 'all');
+
+    expect(applications.single.reviewerExists, isFalse);
+    expect(applications.single.reviewer?.displayName, 'Alice');
+    api.close();
+  });
 
   test(
     'withdrawRoomApplication sends withdraw decision and parses result',
@@ -2256,6 +2286,7 @@ Map<String, Object?> _roomInviteJson({
   bool roomExists = true,
   String? invalidReason,
   String inviterRoomRole = 'owner',
+  bool inviterExists = true,
   bool roomJoined = false,
   bool includeViewerRoomInfo = false,
 }) {
@@ -2265,6 +2296,7 @@ Map<String, Object?> _roomInviteJson({
     'created_at': '2026-05-31T13:00:00Z',
     'updated_at': '2026-05-31T13:00:00Z',
     'room_exists': roomExists,
+    'inviter_exists': inviterExists,
     'invalid_reason': invalidReason,
     'room': {
       'id': 'room_1',
@@ -2316,6 +2348,7 @@ Map<String, Object?> _roomInviteJson({
 Map<String, Object?> _roomApplicationJson({
   String status = 'pending',
   String reason = '',
+  bool reviewerExists = true,
 }) {
   final reviewed = status == 'approved' || status == 'rejected';
   return {
@@ -2326,6 +2359,7 @@ Map<String, Object?> _roomApplicationJson({
     'updated_at': '2026-05-31T13:00:00Z',
     'reviewed_at': reviewed ? '2026-05-31T13:00:00Z' : null,
     'room': _roomInviteJson()['room'],
+    'reviewer_exists': reviewerExists,
     'reviewer': reviewed
         ? {
             'id': 'user_1',

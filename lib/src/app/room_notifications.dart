@@ -8,8 +8,12 @@ enum RoomNotificationItemType {
   applicationReviewed,
 }
 
-const missingRoomNotificationRoomLabel = '不存在';
+const missingRoomNotificationRoomLabel = '房间不存在';
+const missingRoomNotificationRoomAvatarLabel = '空';
 const missingRoomNotificationRoomAvatarKey = 'graphite-2';
+const missingRoomNotificationUserLabel = '用户不存在';
+const missingRoomNotificationUserAvatarLabel = '空';
+const missingRoomNotificationUserAvatarKey = 'graphite-2';
 
 class RoomNotificationItem {
   const RoomNotificationItem._({
@@ -207,6 +211,13 @@ String roomNotificationRoomLabel(PublicRoom room, {required bool roomExists}) {
   return roomExists ? room.name : missingRoomNotificationRoomLabel;
 }
 
+String roomNotificationRoomAvatarLabel(
+  PublicRoom room, {
+  required bool roomExists,
+}) {
+  return roomExists ? room.name : missingRoomNotificationRoomAvatarLabel;
+}
+
 String? roomNotificationRoomAvatarUrl(
   PublicRoom room, {
   required bool roomExists,
@@ -225,6 +236,40 @@ String roomNotificationRoomAvatarKey(
 
 bool roomNotificationRoomCardEnabled({required bool roomExists}) {
   return roomExists;
+}
+
+String roomNotificationUserLabel(UserSummary user, {required bool userExists}) {
+  if (!userExists) return missingRoomNotificationUserLabel;
+  final roomName = user.roomDisplayName?.trim();
+  if (roomName != null && roomName.isNotEmpty) return roomName;
+  final displayName = user.displayName.trim();
+  if (displayName.isNotEmpty) return displayName;
+  return user.username;
+}
+
+String roomNotificationUserAvatarLabel(
+  UserSummary user, {
+  required bool userExists,
+}) {
+  return userExists
+      ? roomNotificationUserLabel(user, userExists: userExists)
+      : missingRoomNotificationUserAvatarLabel;
+}
+
+String? roomNotificationUserAvatarUrl(
+  UserSummary user, {
+  required bool userExists,
+}) {
+  return userExists ? user.avatarUrl : null;
+}
+
+String roomNotificationUserAvatarKey(
+  UserSummary user, {
+  required bool userExists,
+}) {
+  return userExists
+      ? user.defaultAvatarKey
+      : missingRoomNotificationUserAvatarKey;
 }
 
 List<RoomNotificationItem> roomNotificationsForView({
@@ -335,12 +380,23 @@ String _roomInviteSearchText(RoomInvite invite) {
   _addSearchValue(values, invite.status);
   _addSearchValue(values, invite.room.joined ? '已加入 joined' : '未加入 not joined');
   _addSearchValue(values, roomInviteRoleLabel(invite.inviter));
+  _addSearchValue(
+    values,
+    invite.inviterExists
+        ? null
+        : '$missingRoomNotificationUserLabel 不存在 用户已不存在 user missing',
+  );
   _addSearchValue(values, invite.invalidReason);
   _addSearchValue(
     values,
     isInvalidPendingRoomInvite(invite) ? '已失效 invalid' : null,
   );
-  _addSearchValue(values, invite.roomExists ? null : '不存在 房间已不存在 room missing');
+  _addSearchValue(
+    values,
+    invite.roomExists
+        ? null
+        : '$missingRoomNotificationRoomLabel 不存在 房间已不存在 room missing',
+  );
   _addSearchValue(values, roomInviteTimestampLabel(invite.createdAt));
   if (invite.updatedAt != null) {
     _addSearchValue(values, roomInviteTimestampLabel(invite.updatedAt!));
@@ -371,6 +427,12 @@ String _roomApplicationSearchText(RoomApplication application) {
   if (reviewer != null) {
     _addUserSearchValues(values, reviewer);
     _addSearchValue(values, roomInviteRoleLabel(reviewer));
+    _addSearchValue(
+      values,
+      application.reviewerExists
+          ? null
+          : '$missingRoomNotificationUserLabel 不存在 用户已不存在 user missing',
+    );
   }
   return values.join('\n');
 }
