@@ -149,6 +149,7 @@ extension _HomeShellLayout on _HomeShellState {
         onCancel: _cancelDownload,
         onDismiss: _dismissDownload,
       ),
+      imagePreviewActions: _imagePreviewActions,
       voicePlaybackActions: ChatVoicePlaybackActions(
         activeMessageId: _voicePlayback.playing
             ? _voicePlayback.activeMessageId

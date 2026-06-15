@@ -497,6 +497,8 @@ class MainFlutterWindow: NSWindow {
         result(self.readClipboardFilePaths())
       case "readImageFile":
         result(self.readClipboardImageFile())
+      case "writeImageFile":
+        result(self.writeClipboardImageFile(call.arguments))
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -541,6 +543,35 @@ class MainFlutterWindow: NSWindow {
       "filename": "clipboard-image.png",
       "mime_type": "image/png",
     ]
+  }
+
+  // Writes raw image bytes onto the general pasteboard so they can be pasted
+  // into other apps. The bytes (any format NSImage can decode, typically PNG)
+  // are normalized to both PNG and TIFF representations to maximize the set of
+  // apps that accept the paste. Returns false on malformed input.
+  private func writeClipboardImageFile(_ arguments: Any?) -> Bool {
+    guard
+      let args = arguments as? [String: Any],
+      let typed = args["bytes"] as? FlutterStandardTypedData
+    else {
+      return false
+    }
+    let data = typed.data
+    guard !data.isEmpty, let image = NSImage(data: data) else { return false }
+
+    let pasteboard = NSPasteboard.general
+    pasteboard.clearContents()
+
+    // Writing the NSImage covers most consumers; also attach an explicit PNG
+    // representation for apps that look for it specifically.
+    var wrote = pasteboard.writeObjects([image])
+    if let tiff = image.tiffRepresentation,
+      let rep = NSBitmapImageRep(data: tiff),
+      let png = rep.representation(using: .png, properties: [:]) {
+      pasteboard.setData(png, forType: .png)
+      wrote = true
+    }
+    return wrote
   }
 
   // Adds a transparent overlay over the Flutter view that accepts file drags

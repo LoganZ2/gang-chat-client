@@ -1,8 +1,10 @@
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:io' show Directory, File, Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../app/audio_device_store.dart';
@@ -56,6 +58,7 @@ part 'home_shell_live_actions.dart';
 part 'home_shell_music_box.dart';
 part 'home_shell_messages.dart';
 part 'home_shell_downloads.dart';
+part 'home_shell_image_preview.dart';
 part 'home_shell_notifications.dart';
 part 'home_shell_search.dart';
 part 'home_shell_layout.dart';
