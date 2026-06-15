@@ -17,6 +17,7 @@ class SegmentedControl<T> extends StatefulWidget {
     required this.value,
     required this.onChanged,
     this.expanded = false,
+    this.height = 36,
   });
 
   final List<Segment<T>> segments;
@@ -24,19 +25,20 @@ class SegmentedControl<T> extends StatefulWidget {
   final ValueChanged<T> onChanged;
   final bool expanded;
 
+  /// Height of each segment. Defaults to 36; shrink for denser layouts.
+  final double height;
+
   @override
   State<SegmentedControl<T>> createState() => _SegmentedControlState<T>();
 }
 
 class _SegmentedControlState<T> extends State<SegmentedControl<T>> {
-  static const double _segmentHeight = 36;
   static const double _segmentPadding = 12;
   static const double _iconSize = 15;
   static const double _iconGap = 6;
   static const double _hoverLift = 0;
   static const double _baseDepth = 5;
   static const double _contentLift = 2;
-  static const double _trackHeight = _segmentHeight;
   static const Duration _duration = Duration(milliseconds: 180);
 
   int? _hoveredIndex;
@@ -88,7 +90,7 @@ class _SegmentedControlState<T> extends State<SegmentedControl<T>> {
 
         return SizedBox(
           width: widget.expanded ? double.infinity : width,
-          height: _segmentHeight + _hoverLift + _baseDepth,
+          height: widget.height + _hoverLift + _baseDepth,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
@@ -96,7 +98,7 @@ class _SegmentedControlState<T> extends State<SegmentedControl<T>> {
                 left: 0,
                 right: 0,
                 bottom: 0,
-                height: _trackHeight,
+                height: widget.height,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     color: UiColors.surfacePressed,
@@ -111,8 +113,8 @@ class _SegmentedControlState<T> extends State<SegmentedControl<T>> {
                 left: selectedLeft,
                 top: 0,
                 width: segmentWidths[selectedIndex],
-                height: _segmentHeight + _hoverLift + _baseDepth,
-                child: _SegmentThumb(capTop: capTop),
+                height: widget.height + _hoverLift + _baseDepth,
+                child: _SegmentThumb(capTop: capTop, height: widget.height),
               ),
               Positioned.fill(
                 child: Row(
@@ -120,11 +122,12 @@ class _SegmentedControlState<T> extends State<SegmentedControl<T>> {
                     for (var index = 0; index < widget.segments.length; index++)
                       SizedBox(
                         width: segmentWidths[index],
-                        height: _segmentHeight + _baseDepth,
+                        height: widget.height + _baseDepth,
                         child: _SegmentHitTarget(
                           segment: widget.segments[index],
                           selected: index == selectedIndex,
                           hovered: index == _hoveredIndex,
+                          height: widget.height,
                           capTop: index == selectedIndex
                               ? capTop - _contentLift
                               : _baseDepth - _contentLift,
@@ -191,9 +194,10 @@ class _SegmentedControlState<T> extends State<SegmentedControl<T>> {
 }
 
 class _SegmentThumb extends StatelessWidget {
-  const _SegmentThumb({required this.capTop});
+  const _SegmentThumb({required this.capTop, required this.height});
 
   final double capTop;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
@@ -220,7 +224,7 @@ class _SegmentThumb extends StatelessWidget {
           left: 0,
           right: 0,
           top: capTop,
-          height: _SegmentedControlState._segmentHeight,
+          height: height,
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: UiColors.selected,
@@ -240,6 +244,7 @@ class _SegmentHitTarget<T> extends StatelessWidget {
     required this.selected,
     required this.hovered,
     required this.capTop,
+    required this.height,
     required this.onHoverChanged,
     required this.onPressedChanged,
     required this.onTap,
@@ -249,6 +254,7 @@ class _SegmentHitTarget<T> extends StatelessWidget {
   final bool selected;
   final bool hovered;
   final double capTop;
+  final double height;
   final ValueChanged<bool> onHoverChanged;
   final ValueChanged<bool> onPressedChanged;
   final VoidCallback onTap;
@@ -274,7 +280,7 @@ class _SegmentHitTarget<T> extends StatelessWidget {
           duration: const Duration(milliseconds: 140),
           curve: Curves.easeOutCubic,
           transform: Matrix4.translationValues(0, capTop, 0),
-          height: _SegmentedControlState._segmentHeight,
+          height: height,
           padding: const EdgeInsets.symmetric(
             horizontal: _SegmentedControlState._segmentPadding,
           ),

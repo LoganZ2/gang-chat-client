@@ -7,6 +7,17 @@ const double _autoScrollFollowThreshold = 120;
 const double _chatMessageListTopPadding = 18;
 const _messageListCacheExtent = ScrollCacheExtent.pixels(1200);
 
+/// A remembered scroll position for one room's message list. The list widget is
+/// torn down and rebuilt whenever the pane swaps (e.g. opening the live
+/// channel and coming back), so we stash the last position here keyed by room
+/// id and restore it on the next mount instead of snapping to the bottom.
+class _ScrollAnchor {
+  const _ScrollAnchor({required this.offset, required this.atBottom});
+
+  final double offset;
+  final bool atBottom;
+}
+
 /// Callbacks for file-attachment downloads, bundled so they can travel from
 /// [ChatPane] down to each [_FileAttachmentTile] without threading five
 /// separate parameters through every intermediate widget.
@@ -110,9 +121,13 @@ class _MessageStage extends StatefulWidget {
 }
 
 class _MessageStageState extends State<_MessageStage> {
+  // Last known scroll position per room, surviving widget teardown when the
+  // pane swaps (live channel, settings, etc.). Static so it outlives the State.
+  static final Map<String, _ScrollAnchor> _scrollAnchors = {};
+
   bool _showDetailedTimestamps = false;
   bool _showLatestButton = false;
-  final ScrollController _scrollController = ScrollController();
+  late final ScrollController _scrollController;
   final GlobalKey _messageListKey = GlobalKey();
   final GlobalKey _oldestMessageKey = GlobalKey();
   double _underflowBottomSpacer = 0;
@@ -125,7 +140,20 @@ class _MessageStageState extends State<_MessageStage> {
   @override
   void initState() {
     super.initState();
+    // Seed the controller with the remembered offset so the very first layout
+    // lands in place — restoring via a post-frame jump would render one frame
+    // pinned to the latest message first, which reads as a flash.
+    final anchor = _anchorForRoom(widget.roomId);
+    final restoring = anchor != null && !anchor.atBottom;
+    _scrollController = ScrollController(
+      initialScrollOffset: restoring ? anchor.offset : 0,
+    );
     _scrollController.addListener(_handleScrollChanged);
+    // If we're not restoring a browsed-history position, land at the newest
+    // message when the room first opens.
+    if (!restoring) {
+      _scrollToBottom(animated: false);
+    }
   }
 
   @override
@@ -136,8 +164,13 @@ class _MessageStageState extends State<_MessageStage> {
       _showLatestButton = false;
       _underflowBottomSpacer = 0;
       _messageListReady = false;
-      // New room: snap straight to the latest message, no animation.
-      _scrollToBottom(animated: false);
+      // New room: restore its remembered position, or snap to latest.
+      final anchor = _anchorForRoom(widget.roomId);
+      if (anchor != null && !anchor.atBottom) {
+        _restoreScroll(anchor.offset);
+      } else {
+        _scrollToBottom(animated: false);
+      }
       return;
     }
     if (oldWidget.messages.length != widget.messages.length ||
@@ -154,9 +187,45 @@ class _MessageStageState extends State<_MessageStage> {
 
   @override
   void dispose() {
+    _rememberScrollPosition();
     _scrollController.removeListener(_handleScrollChanged);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  _ScrollAnchor? _anchorForRoom(String? roomId) {
+    if (roomId == null) return null;
+    return _scrollAnchors[roomId];
+  }
+
+  // Records the live scroll offset (and whether it's pinned to the latest
+  // message) so a later remount can restore it. The list is reversed, so the
+  // newest message sits at the minimum scroll extent — "at bottom" means the
+  // offset is within the follow threshold of it. Called on every scroll and on
+  // dispose.
+  void _rememberScrollPosition() {
+    final roomId = widget.roomId;
+    if (roomId == null || !_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    _scrollAnchors[roomId] = _ScrollAnchor(
+      offset: position.pixels,
+      atBottom: _distanceFromBottom() <= _autoScrollFollowThreshold,
+    );
+  }
+
+  // Restores a remembered offset once the list has laid out, clamped to the
+  // current scroll extent in case the content shrank while we were away.
+  void _restoreScroll(double offset) {
+    final token = ++_scrollToBottomToken;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          token != _scrollToBottomToken ||
+          !_scrollController.hasClients) {
+        return;
+      }
+      final position = _scrollController.position;
+      _scrollController.jumpTo(offset.clamp(0.0, position.maxScrollExtent));
+    });
   }
 
   // Decides whether an incoming widget update introduced a new message worth
@@ -188,6 +257,7 @@ class _MessageStageState extends State<_MessageStage> {
   }
 
   void _handleScrollChanged() {
+    _rememberScrollPosition();
     _syncLatestButtonVisibility();
   }
 

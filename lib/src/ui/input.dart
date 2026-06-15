@@ -35,6 +35,7 @@ class Input extends StatefulWidget {
     this.onChanged,
     this.style = UiTypography.body,
     this.hintStyle = const TextStyle(color: UiColors.textMuted),
+    this.height = defaultHeight,
   });
 
   static const double defaultHeight = 40;
@@ -56,6 +57,10 @@ class Input extends StatefulWidget {
   final ValueChanged<String>? onChanged;
   final TextStyle style;
   final TextStyle hintStyle;
+
+  /// The collapsed (single-line) height of the field. Defaults to
+  /// [defaultHeight]; callers can shrink it for tighter, denser layouts.
+  final double height;
 
   @override
   State<Input> createState() => _InputState();
@@ -154,7 +159,7 @@ class _InputState extends State<Input> {
     final focused = _effectiveFocusNode.hasFocus;
     final suffix = _effectiveSuffix();
     final content = ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: Input.defaultHeight),
+      constraints: BoxConstraints(minHeight: widget.height),
       child: TextField(
         controller: _effectiveController,
         focusNode: _effectiveFocusNode,
@@ -294,7 +299,7 @@ class _InputState extends State<Input> {
     final lineHeight = painter.preferredLineHeight;
     final verticalPadding = math.max(
       0.0,
-      (Input.defaultHeight - lineHeight) / 2,
+      (widget.height - lineHeight) / 2,
     );
     final textOffset = math.min(_inputTextVerticalOffset, verticalPadding);
     return EdgeInsets.fromLTRB(

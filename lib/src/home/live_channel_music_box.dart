@@ -3,11 +3,15 @@ part of 'live_channel_pane.dart';
 /// Below this docked height the fixed controls (header + vinyl + volume) crowd
 /// out the body, so the console switches to a scrollable layout instead of
 /// overflowing.
-const double _musicBoxMinComfortableHeight = 440;
+const double _musicBoxMinComfortableHeight = 400;
 
 /// The body's fixed height inside the compact, scrollable layout — enough to
 /// show the search field plus a few result/queue rows.
-const double _musicBoxCompactBodyHeight = 240;
+const double _musicBoxCompactBodyHeight = 220;
+
+/// The search field / queue-toggle button height — slimmer than the app-wide
+/// [Input.defaultHeight] to keep the docked panel dense.
+const double _musicBoxSearchFieldHeight = 30;
 
 
 /// The in-pane music box console: a spinning vinyl for the current track, a
@@ -66,7 +70,7 @@ class LiveMusicBoxPanel extends StatelessWidget {
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(11),
         // The panel is docked at full stage height. When the stage is short the
         // fixed controls (header + vinyl + volume) no longer leave room for the
         // body, so rather than overflow we let the whole console scroll and give
@@ -118,15 +122,15 @@ class LiveMusicBoxPanel extends StatelessWidget {
   List<Widget> _controls() {
     return [
       _MusicBoxHeader(usage: state.usage, onClose: onClose),
-      const SizedBox(height: 16),
+      const SizedBox(height: 8),
       _MusicBoxNowPlaying(
         state: state,
         onTogglePlayback: onTogglePlayback,
         onSkip: onSkip,
       ),
-      const SizedBox(height: 14),
+      const SizedBox(height: 7),
       _MusicBoxVolume(initialVolume: volume, onChanged: onVolumeChanged),
-      const SizedBox(height: 16),
+      const SizedBox(height: 9),
     ];
   }
 }
@@ -142,13 +146,13 @@ class _MusicBoxHeader extends StatelessWidget {
     final hint = music_box_display.musicBoxUsageHint(usage);
     return Row(
       children: [
-        const Icon(Icons.library_music, size: 18, color: UiColors.accent),
+        const Icon(Icons.library_music, size: 16, color: UiColors.accent),
         const SizedBox(width: 8),
         const Text(
           '音乐盒',
           style: TextStyle(
             color: UiColors.text,
-            fontSize: 15,
+            fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -169,7 +173,7 @@ class _MusicBoxHeader extends StatelessWidget {
           tooltip: '收起',
           icon: const Icon(Icons.close),
           onPressed: onClose,
-          size: 28,
+          size: 26,
         ),
       ],
     );
@@ -199,7 +203,7 @@ class _MusicBoxNowPlaying extends StatelessWidget {
     return Row(
       children: [
         _VinylRecord(spinning: spinning, label: current?.title),
-        const SizedBox(width: 14),
+        const SizedBox(width: 11),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -211,7 +215,7 @@ class _MusicBoxNowPlaying extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: current == null ? UiColors.textMuted : UiColors.text,
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -224,7 +228,7 @@ class _MusicBoxNowPlaying extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: UiColors.textSecondary,
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -247,14 +251,14 @@ class _MusicBoxNowPlaying extends StatelessWidget {
                     ),
                     tone: ButtonTone.primary,
                     onPressed: hasQueue ? onTogglePlayback : null,
-                    size: 40,
+                    size: 30,
                   ),
                   const SizedBox(width: 8),
                   ButtonIcon(
                     tooltip: '下一首',
                     icon: const Icon(Icons.skip_next),
                     onPressed: hasQueue ? onSkip : null,
-                    size: 40,
+                    size: 30,
                   ),
                 ],
               ),
@@ -284,7 +288,7 @@ class _MusicBoxVolume extends StatefulWidget {
 
 class _MusicBoxVolumeState extends State<_MusicBoxVolume> {
   // The collapsed square size / pill height.
-  static const _size = 32.0;
+  static const _size = 24.0;
   // The width the slider tail expands to on hover.
   static const _sliderExtent = 110.0;
   static const _gap = 10.0;
@@ -470,7 +474,7 @@ class _VolumeIconButton extends StatelessWidget {
 /// freezes its current angle when paused/stopped — an at-a-glance read of
 /// whether the music box is playing.
 class _VinylRecord extends StatefulWidget {
-  const _VinylRecord({required this.spinning, this.label, this.size = 64});
+  const _VinylRecord({required this.spinning, this.label, this.size = 40});
 
   final bool spinning;
   final String? label;
@@ -670,6 +674,7 @@ class _MusicBoxBodyState extends State<_MusicBoxBody> {
                 prefixIcon: Icons.search,
                 showClearButton: true,
                 maxLines: 1,
+                height: _musicBoxSearchFieldHeight,
               ),
             ),
             const SizedBox(width: 8),
@@ -678,7 +683,7 @@ class _MusicBoxBodyState extends State<_MusicBoxBody> {
               icon: const Icon(Icons.queue_music),
               selected: _showQueue,
               onPressed: () => setState(() => _showQueue = !_showQueue),
-              size: Input.defaultHeight,
+              size: _musicBoxSearchFieldHeight,
             ),
           ],
         ),
@@ -687,6 +692,7 @@ class _MusicBoxBodyState extends State<_MusicBoxBody> {
           const SizedBox(height: 10),
           SegmentedControl<String>(
             expanded: true,
+            height: _musicBoxSearchFieldHeight,
             value: widget.source,
             segments: [
               for (final source in music_box_display.musicBoxSources)
@@ -767,7 +773,7 @@ class _MusicBoxQueueTile extends StatelessWidget {
         item.status == MusicBoxQueueItemStatus.downloading;
     return PressableSurface(
       width: double.infinity,
-      height: 56,
+      height: 50,
       hoverLift: 2,
       baseDepth: 4,
       interactive: false,
@@ -934,7 +940,7 @@ class _MusicBoxSearchTile extends StatelessWidget {
     final artists = music_box_display.musicBoxArtistsLabel(result.artists);
     return PressableSurface(
       width: double.infinity,
-      height: 56,
+      height: 50,
       hoverLift: 2,
       baseDepth: 4,
       backgroundColor: UiColors.surfaceLow,

@@ -17,10 +17,13 @@ const _paneTopInset = _paneEdgeInset;
 const _liveRoomRadius = UiRadii.md;
 const _liveRoomPadding = 18.0;
 // Width of the right-docked music box panel (search + queue) when expanded.
-const _musicBoxPanelWidth = 340.0;
+const _musicBoxPanelWidth = 270.0;
 const _memberCardWidth = 154.0;
 const _memberCardHeight = 126.0;
 const _controlButtonSize = 44.0;
+// How far the docked music box panel extends below the stage's bottom edge,
+// reaching down over the control-bar gap to align with the control bar.
+const _musicBoxPanelBottomDrop = 16.0 + _controlButtonSize;
 const _liveRoomBackground = UiColors.surfaceLow;
 const _liveRoomBorder = UiColors.border;
 const _memberSpeakingBackground = Color(0xFF252A34);
@@ -199,6 +202,7 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                 const SizedBox(height: 16),
                 Expanded(
                   child: Stack(
+                    clipBehavior: Clip.none,
                     children: [
                       Positioned.fill(
                         child: Column(
@@ -241,7 +245,10 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                         Positioned(
                           top: 0,
                           right: 0,
-                          bottom: 0,
+                          // Extend the panel down past the stage's bottom edge,
+                          // over the control-bar gap, so it lines up roughly
+                          // with the control bar below.
+                          bottom: -(_musicBoxPanelBottomDrop),
                           child: SizedBox(
                             width: _musicBoxPanelWidth,
                             child: LiveMusicBoxPanel(
