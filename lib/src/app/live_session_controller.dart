@@ -103,6 +103,20 @@ class LiveSessionController {
     }
   }
 
+  int get screenShareMaxHeight => session.screenShareMaxHeight;
+
+  /// Apply and persist the screen-share resolution cap. Takes effect on the
+  /// next share, and re-scales the current share live when one is running.
+  Future<void> setScreenShareMaxHeight(int height) async {
+    await session.setScreenShareMaxHeight(height);
+    try {
+      await audioDeviceStore.writeScreenShareMaxHeight(height);
+    } catch (_) {
+      // A failed persist shouldn't undo the live change; it just won't survive
+      // the next launch.
+    }
+  }
+
   Future<void> setOutputMuted(bool muted) => session.setOutputMuted(muted);
 
   Future<void> connectWithRetry(
@@ -142,6 +156,7 @@ class LiveSessionController {
       await session.setInputVolume(stored.inputVolume);
       await session.setOutputVolume(stored.outputVolume);
       await session.setMusicBoxVolume(stored.musicBoxVolume);
+      await session.setScreenShareMaxHeight(stored.screenShareMaxHeight);
       // Capture the published mic from the device the restorer resolved (the
       // user's pinned device, or the macOS system default). Null leaves LiveKit
       // on the ADM's current device. Without this the publish path ignores the

@@ -21,6 +21,7 @@ import '../app/sticker_uploads.dart';
 import '../live/audio_device_restorer.dart';
 import '../live/audio_device_service.dart';
 import '../live/audio_test_service.dart';
+import '../live/screen_share_quality.dart';
 import '../live/system_audio_devices.dart';
 import '../protocol/api_client.dart';
 import '../protocol/models.dart';
@@ -63,6 +64,7 @@ class SettingsPage extends StatefulWidget {
     this.onUserUpdated,
     this.onDeviceSelected,
     this.onVolumeChanged,
+    this.onScreenShareMaxHeightChanged,
     this.onAccountDeleted,
     this.onClose,
   });
@@ -83,6 +85,10 @@ class SettingsPage extends StatefulWidget {
   final ValueChanged<CurrentUser>? onUserUpdated;
   final void Function(String kind, String deviceId)? onDeviceSelected;
   final void Function(String kind, double volume)? onVolumeChanged;
+
+  /// Fired when the user picks a screen-share resolution, so a live session can
+  /// re-scale immediately. The choice is also persisted to [audioDeviceStore].
+  final ValueChanged<int>? onScreenShareMaxHeightChanged;
   final Future<void> Function()? onAccountDeleted;
   final VoidCallback? onClose;
 
@@ -149,6 +155,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _testingInput = false;
   bool _testingOutput = false;
   bool _voiceInitialized = false;
+  int _screenShareMaxHeight = defaultScreenShareMaxHeight;
   String? _error;
   bool _loading = false;
   String _language = 'zh-Hans';
@@ -1952,7 +1959,16 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() => _applyAudioVolumePatch(patch));
       widget.onVolumeChanged?.call('audioinput', patch.inputVolume);
       widget.onVolumeChanged?.call('audiooutput', patch.outputVolume);
+      setState(() => _screenShareMaxHeight = stored.screenShareMaxHeight);
     } catch (_) {}
+  }
+
+  Future<void> _setScreenShareMaxHeight(int height) async {
+    final normalized = normalizedScreenShareMaxHeight(height);
+    if (_screenShareMaxHeight == normalized) return;
+    setState(() => _screenShareMaxHeight = normalized);
+    widget.onScreenShareMaxHeightChanged?.call(normalized);
+    unawaited(widget.audioDeviceStore.writeScreenShareMaxHeight(normalized));
   }
 
   Future<void> _loadDevices() async {
@@ -2951,6 +2967,18 @@ class _SettingsPageState extends State<SettingsPage> {
                 disabled: _audioOutputs.isEmpty,
                 onVolumeChanged: (value) => unawaited(_setOutputVolume(value)),
                 onToggleTest: _toggleOutputTest,
+              ),
+            ),
+          ],
+        ),
+        _SettingsGroup(
+          title: '屏幕共享',
+          children: [
+            _SettingsSubPanel(
+              child: _ScreenShareResolutionSection(
+                selectedHeight: _screenShareMaxHeight,
+                onSelect: (height) =>
+                    unawaited(_setScreenShareMaxHeight(height)),
               ),
             ),
           ],

@@ -230,6 +230,111 @@ class _LevelMeter extends StatelessWidget {
   }
 }
 
+class _ScreenShareResolutionSection extends StatelessWidget {
+  const _ScreenShareResolutionSection({
+    required this.selectedHeight,
+    required this.onSelect,
+  });
+
+  final int selectedHeight;
+  final ValueChanged<int> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = normalizedScreenShareMaxHeight(selectedHeight);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.screen_share_outlined, color: _cyan, size: 18),
+            const SizedBox(width: 9),
+            const Text(
+              '屏幕共享分辨率',
+              style: TextStyle(
+                color: _textPrimary,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          '更低的分辨率可以节省上行带宽。1080p 按原始分辨率发送(最高 1080p)。',
+          style: TextStyle(color: _textSecondary, fontSize: 13, height: 1.4),
+        ),
+        const SizedBox(height: 12),
+        Column(
+          children: [
+            for (final height in screenShareHeightOptions)
+              _ScreenShareResolutionRow(
+                label: screenShareHeightLabel(height),
+                selected: height == selected,
+                onTap: () => onSelect(height),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ScreenShareResolutionRow extends StatelessWidget {
+  const _ScreenShareResolutionRow({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableSurface(
+      onPressed: onTap,
+      height: 50,
+      width: double.infinity,
+      selected: selected,
+      backgroundColor: _primaryDarkLow,
+      selectedBackgroundColor: UiColors.selected,
+      pressedBackgroundColor: _primaryDark,
+      borderColor: _borderColor,
+      selectedBorderColor: UiColors.selectedBorder,
+      hoverLift: 3,
+      pressDepth: 3,
+      baseDepth: 5,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: selected ? _textPrimary : _textSecondary,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          if (selected)
+            const Icon(Icons.check, color: _cyan, size: 18)
+          else
+            const Icon(
+              Icons.high_quality_outlined,
+              color: _textMuted,
+              size: 18,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _DeviceRow extends StatelessWidget {
   const _DeviceRow({
     required this.device,

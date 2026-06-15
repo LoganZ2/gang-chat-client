@@ -40,4 +40,10 @@ class AudioDeviceStore {
       'AudioDeviceStore.writeMusicBoxVolume must be implemented.',
     );
   }
+
+  Future<void> writeScreenShareMaxHeight(int height) {
+    throw UnimplementedError(
+      'AudioDeviceStore.writeScreenShareMaxHeight must be implemented.',
+    );
+  }
 }

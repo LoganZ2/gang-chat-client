@@ -8,6 +8,7 @@ import 'package:livekit_client/livekit_client.dart' as lk;
 
 import '../app/audio_levels.dart';
 import '../protocol/models.dart' show musicBoxBotIdentity;
+import 'screen_share_quality.dart';
 
 /// A capturable desktop source (a whole screen or a single window), used to
 /// populate the screen-share picker. Wraps flutter_webrtc's source so the UI
@@ -258,6 +259,11 @@ class LiveSession extends ChangeNotifier {
   // republishes the track on the new device.
   String? _inputDeviceId;
 
+  // Target max height (px) for the local screen share — one of
+  // [screenShareHeightOptions]. Defaults to native (1080 cap). Applied at the
+  // next share; a change while sharing re-scales the live publication.
+  int _screenShareMaxHeight = defaultScreenShareMaxHeight;
+
   final Set<String> _speakingIdentities = <String>{};
   final Map<String, bool> _micMutedByIdentity = <String, bool>{};
 
@@ -290,6 +296,9 @@ class LiveSession extends ChangeNotifier {
   /// independent of [outputVolume] (which covers every other remote speaker).
   double get musicBoxVolume => _musicBoxVolume;
   bool get outputMuted => _outputMuted;
+
+  /// Target max height (px) for the local screen share.
+  int get screenShareMaxHeight => _screenShareMaxHeight;
 
   /// Whether the local microphone is muted according to the LiveKit track
   /// itself (server-side mutes by an admin are reflected here, unlike a
@@ -549,13 +558,15 @@ class LiveSession extends ChangeNotifier {
       // ScreenCaptureKit, which samples at the display's native resolution and
       // ignores params.dimensions — so dimensions here only bounds non-SCKit
       // platforms. The encoding (and defaultVideoPublishOptions in connect())
-      // still governs what viewers receive. Keep both at 1080p60.
+      // still governs what viewers receive. To cap resolution on macOS we scale
+      // the published encoding down after publishing (_applyScreenShareScale).
+      final target = screenShareResolutionForHeight(_screenShareMaxHeight);
       final options = lk.ScreenShareCaptureOptions(
         sourceId: sourceId,
         maxFrameRate: 60.0,
-        params: const lk.VideoParameters(
-          dimensions: lk.VideoDimensionsPresets.h1080_169,
-          encoding: lk.VideoEncoding(
+        params: lk.VideoParameters(
+          dimensions: lk.VideoDimensions(target.width, target.height),
+          encoding: const lk.VideoEncoding(
             maxFramerate: 60,
             maxBitrate: 16000 * 1000,
           ),
@@ -566,12 +577,80 @@ class LiveSession extends ChangeNotifier {
         screenShareCaptureOptions: options,
       );
       _screenSharing = true;
+      await _applyScreenShareScale();
     } else {
       await local.setScreenShareEnabled(false);
       _screenSharing = false;
     }
     notifyListeners();
     return _screenSharing;
+  }
+
+  /// Set the target max height for the local screen share. Persists in-session;
+  /// re-scales the live publication immediately when a share is running.
+  Future<void> setScreenShareMaxHeight(int height) async {
+    final normalized = normalizedScreenShareMaxHeight(height);
+    if (_screenShareMaxHeight == normalized) return;
+    _screenShareMaxHeight = normalized;
+    if (_screenSharing) {
+      await _applyScreenShareScale();
+    }
+    notifyListeners();
+  }
+
+  /// Scale the published screen-share encoding so it is sent at no more than
+  /// [_screenShareMaxHeight]. macOS captures at the display's native resolution
+  /// (ScreenCaptureKit ignores capture dimensions), so the encoder's
+  /// `scaleResolutionDownBy` is the only lever that actually reduces the pixels
+  /// we send. Best-effort: a missing sender or stats leaves the share unscaled.
+  Future<void> _applyScreenShareScale() async {
+    final local = _room?.localParticipant;
+    if (local == null) return;
+    final pub = local.getTrackPublicationBySource(
+      lk.TrackSource.screenShareVideo,
+    );
+    final track = pub?.track;
+    if (track is! lk.LocalVideoTrack) return;
+    final sender = track.sender;
+    if (sender == null) return;
+
+    // The source height we're capturing. getSenderStats() reports the encoded
+    // frame size once frames flow; until then fall back to the configured
+    // target so we never scale up.
+    var sourceHeight = _screenShareMaxHeight;
+    try {
+      final stats = await track.getSenderStats();
+      for (final s in stats) {
+        final h = s.frameHeight;
+        if (h != null && h > sourceHeight) sourceHeight = h.toInt();
+      }
+    } catch (_) {
+      // No stats yet; the next call (or capture-side dimensions on
+      // Windows/Linux) handles it.
+    }
+
+    final scale = screenShareScaleDownBy(
+      sourceHeight: sourceHeight,
+      targetHeight: _screenShareMaxHeight,
+    );
+    try {
+      final params = sender.parameters;
+      final encodings = params.encodings;
+      if (encodings == null || encodings.isEmpty) return;
+      var changed = false;
+      for (final encoding in encodings) {
+        if (encoding.scaleResolutionDownBy != scale) {
+          encoding.scaleResolutionDownBy = scale;
+          changed = true;
+        }
+      }
+      if (changed) {
+        params.encodings = encodings;
+        await sender.setParameters(params);
+      }
+    } catch (_) {
+      // setParameters is best-effort; a failure leaves the prior scale in place.
+    }
   }
 
   /// Start or stop the local camera. Returns the resulting state. Throws if

@@ -19,6 +19,8 @@ extension _HomeShellLayout on _HomeShellState {
         currentUser: _currentUser,
         onUserUpdated: _handleUserUpdated,
         onAccountDeleted: _logout,
+        onScreenShareMaxHeightChanged: (height) =>
+            unawaited(_liveSessionController.setScreenShareMaxHeight(height)),
         onClose: _closeSettings,
       );
     }

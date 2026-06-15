@@ -1,5 +1,6 @@
 import 'audio_device_display.dart';
 import 'audio_levels.dart';
+import '../live/screen_share_quality.dart';
 
 class StoredAudioDevices {
   const StoredAudioDevices({
@@ -8,6 +9,7 @@ class StoredAudioDevices {
     this.inputVolume = 1.0,
     this.outputVolume = 1.0,
     this.musicBoxVolume = 1.0,
+    this.screenShareMaxHeight = defaultScreenShareMaxHeight,
   });
 
   final String? inputDeviceId;
@@ -19,12 +21,18 @@ class StoredAudioDevices {
   /// [outputVolume] — it scales only the `__musicbox__` participant.
   final double musicBoxVolume;
 
+  /// Target max height (px) for the local screen share — one of
+  /// [screenShareHeightOptions]. [defaultScreenShareMaxHeight] sends at native
+  /// resolution; lower values cap what we publish to save bandwidth.
+  final int screenShareMaxHeight;
+
   bool get isEmpty =>
       (inputDeviceId == null || inputDeviceId!.isEmpty) &&
       (outputDeviceId == null || outputDeviceId!.isEmpty) &&
       inputVolume == 1.0 &&
       outputVolume == 1.0 &&
-      musicBoxVolume == 1.0;
+      musicBoxVolume == 1.0 &&
+      screenShareMaxHeight == defaultScreenShareMaxHeight;
 }
 
 class RestoredAudioDevices<T> {

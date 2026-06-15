@@ -2,6 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app/audio_device_store.dart';
 import '../app/audio_levels.dart';
+import '../live/screen_share_quality.dart';
 
 /// Persists audio device + volume preferences in [SharedPreferences].
 ///
@@ -18,6 +19,7 @@ class LocalAudioDeviceStore extends AudioDeviceStore {
   static const _inputVolumeKey = 'gang.audioInputVolume';
   static const _outputVolumeKey = 'gang.audioOutputVolume';
   static const _musicBoxVolumeKey = 'gang.musicBoxVolume';
+  static const _screenShareMaxHeightKey = 'gang.screenShareMaxHeight';
 
   @override
   Future<StoredAudioDevices> read() async {
@@ -32,6 +34,9 @@ class LocalAudioDeviceStore extends AudioDeviceStore {
       inputVolume: _readVolume(prefs, _inputVolumeKey),
       outputVolume: _readVolume(prefs, _outputVolumeKey),
       musicBoxVolume: _readVolume(prefs, _musicBoxVolumeKey),
+      screenShareMaxHeight: normalizedScreenShareMaxHeight(
+        prefs.getInt(_screenShareMaxHeightKey),
+      ),
     );
   }
 
@@ -63,6 +68,15 @@ class LocalAudioDeviceStore extends AudioDeviceStore {
   Future<void> writeMusicBoxVolume(double volume) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_musicBoxVolumeKey, normalizedAudioVolume(volume));
+  }
+
+  @override
+  Future<void> writeScreenShareMaxHeight(int height) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(
+      _screenShareMaxHeightKey,
+      normalizedScreenShareMaxHeight(height),
+    );
   }
 
   double _readVolume(SharedPreferences prefs, String key) {

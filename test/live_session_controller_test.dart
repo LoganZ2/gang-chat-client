@@ -107,6 +107,40 @@ void main() {
     expect(session.inputVolumes, [0.4]);
     expect(session.outputVolumes, [0.6]);
   });
+
+  test(
+    'setScreenShareMaxHeight applies to the session and persists',
+    () async {
+      final session = _FakeLiveSession();
+      final store = _RecordingAudioDeviceStore();
+      final controller = LiveSessionController(
+        apiBaseUrl: 'https://api.example.test/api/v1',
+        session: session,
+        audioDeviceStore: store,
+        audioDeviceRestorer: (_) async => null,
+      );
+
+      await controller.setScreenShareMaxHeight(720);
+
+      expect(session.screenShareMaxHeights, [720]);
+      expect(store.screenShareWrites, [720]);
+    },
+  );
+
+  test('connectWithRetry restores the stored screen-share height', () async {
+    final session = _FakeLiveSession();
+    final store = _RecordingAudioDeviceStore(storedScreenShareMaxHeight: 480);
+    final controller = LiveSessionController(
+      apiBaseUrl: 'https://api.example.test/api/v1',
+      session: session,
+      audioDeviceStore: store,
+      audioDeviceRestorer: (_) async => null,
+    );
+
+    await controller.connectWithRetry(_liveJoinResult);
+
+    expect(session.screenShareMaxHeights, [480]);
+  });
 }
 
 class _FakeAudioDeviceStore extends AudioDeviceStore {
@@ -195,6 +229,34 @@ class _FakeLiveSession extends LiveSession {
     screenShareEnables.add(enabled);
     screenShareSourceIds.add(sourceId);
     return enabled;
+  }
+
+  final screenShareMaxHeights = <int>[];
+
+  @override
+  Future<void> setScreenShareMaxHeight(int height) async {
+    screenShareMaxHeights.add(height);
+  }
+}
+
+class _RecordingAudioDeviceStore extends AudioDeviceStore {
+  _RecordingAudioDeviceStore({this.storedScreenShareMaxHeight = 1080});
+
+  final int storedScreenShareMaxHeight;
+  final screenShareWrites = <int>[];
+
+  @override
+  Future<StoredAudioDevices> read() async {
+    return StoredAudioDevices(
+      inputVolume: 0.35,
+      outputVolume: 0.75,
+      screenShareMaxHeight: storedScreenShareMaxHeight,
+    );
+  }
+
+  @override
+  Future<void> writeScreenShareMaxHeight(int height) async {
+    screenShareWrites.add(height);
   }
 }
 
