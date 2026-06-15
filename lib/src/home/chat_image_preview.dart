@@ -249,95 +249,80 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
   }
 
   Widget _buildActionBar() {
-    return Wrap(
-      alignment: WrapAlignment.center,
-      spacing: 10,
-      runSpacing: 10,
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        _PreviewActionButton(
-          icon: Icons.download_rounded,
-          label: '下载',
+        ButtonIcon(
+          icon: const Icon(Icons.download_rounded),
+          tooltip: '下载',
           loading: _busy == _PreviewAction.download,
-          enabled: _busy == null,
-          onPressed: () => _run(
-            _PreviewAction.download,
-            () => widget.actions.onDownload(
-              widget.imageUrl,
-              widget.suggestedName,
-            ),
-            successMessage: '已保存到下载文件夹',
-          ),
+          onPressed: _busy == null
+              ? () => _run(
+                  _PreviewAction.download,
+                  () => widget.actions.onDownload(
+                    widget.imageUrl,
+                    widget.suggestedName,
+                  ),
+                  successMessage: '已保存到下载文件夹',
+                )
+              : null,
+          backgroundColor: const Color(0x66000000),
         ),
-        _PreviewActionButton(
-          icon: Icons.save_alt_rounded,
-          label: '另存为',
+        const SizedBox(width: 10),
+        ButtonIcon(
+          icon: const Icon(Icons.save_alt_rounded),
+          tooltip: '另存为',
           loading: _busy == _PreviewAction.saveAs,
-          enabled: _busy == null,
-          onPressed: () => _run(
-            _PreviewAction.saveAs,
-            () => widget.actions.onSaveAs(
-              widget.imageUrl,
-              widget.suggestedName,
-            ),
-            successMessage: '已保存',
-          ),
+          onPressed: _busy == null
+              ? () => _run(
+                  _PreviewAction.saveAs,
+                  () => widget.actions.onSaveAs(
+                    widget.imageUrl,
+                    widget.suggestedName,
+                  ),
+                  successMessage: '已保存',
+                )
+              : null,
+          backgroundColor: const Color(0x66000000),
         ),
-        _PreviewActionButton(
-          icon: Icons.copy_rounded,
-          label: '复制到剪贴板',
+        const SizedBox(width: 10),
+        ButtonIcon(
+          icon: const Icon(Icons.copy_rounded),
+          tooltip: '复制到剪贴板',
           loading: _busy == _PreviewAction.copy,
-          enabled: _busy == null,
-          onPressed: () => _run(
-            _PreviewAction.copy,
-            () => widget.actions.onCopyToClipboard(widget.imageUrl),
-            successMessage: '已复制到剪贴板',
-          ),
+          onPressed: _busy == null
+              ? () => _run(
+                  _PreviewAction.copy,
+                  () => widget.actions.onCopyToClipboard(widget.imageUrl),
+                  successMessage: '已复制到剪贴板',
+                )
+              : null,
+          backgroundColor: const Color(0x66000000),
         ),
-        if (_canSaveSticker)
-          _PreviewActionButton(
-            icon: Icons.add_reaction_outlined,
-            label: '保存到我的表情',
+        if (_canSaveSticker) ...[
+          const SizedBox(width: 10),
+          ButtonIcon(
+            icon: const Icon(Icons.add_reaction_outlined),
+            tooltip: '保存到我的表情',
             loading: _busy == _PreviewAction.saveSticker,
-            enabled: _busy == null,
-            onPressed: () {
-              final source = widget.stickerSource!;
-              _run(
-                _PreviewAction.saveSticker,
-                () => widget.actions.onSaveSticker!(
-                  source.message,
-                  source.attachment,
-                ),
-                successMessage: '已保存到我的表情',
-              );
-            },
+            onPressed: _busy == null
+                ? () {
+                    final source = widget.stickerSource!;
+                    _run(
+                      _PreviewAction.saveSticker,
+                      () => widget.actions.onSaveSticker!(
+                        source.message,
+                        source.attachment,
+                      ),
+                      successMessage: '已保存到我的表情',
+                    );
+                  }
+                : null,
+            backgroundColor: const Color(0x66000000),
           ),
+        ],
       ],
-    );
-  }
-}
-
-class _PreviewActionButton extends StatelessWidget {
-  const _PreviewActionButton({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-    required this.loading,
-    required this.enabled,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onPressed;
-  final bool loading;
-  final bool enabled;
-
-  @override
-  Widget build(BuildContext context) {
-    return Button(
-      icon: Icon(icon, size: 18),
-      onPressed: enabled ? onPressed : null,
-      loading: loading,
-      child: Text(label),
     );
   }
 }
