@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 
 import '../app/file_display.dart' as file_display;
 import '../app/file_transfer_state.dart';
@@ -18,6 +19,7 @@ part 'chat_header.dart';
 part 'chat_messages.dart';
 part 'chat_composer_dock.dart';
 part 'chat_profile_card.dart';
+part 'chat_image_preview.dart';
 
 const _chatHeaderHeight = 111.0;
 const _chatHorizontalPadding = 18.0;
@@ -50,6 +52,7 @@ class ChatPane extends StatelessWidget {
     required this.fileDownloads,
     required this.downloadActions,
     required this.voicePlaybackActions,
+    required this.imagePreviewActions,
     required this.loading,
     required this.error,
     required this.sending,
@@ -89,6 +92,7 @@ class ChatPane extends StatelessWidget {
   final Map<String, FileTransferState> fileDownloads;
   final ChatFileDownloadActions downloadActions;
   final ChatVoicePlaybackActions voicePlaybackActions;
+  final ChatImagePreviewActions imagePreviewActions;
   final bool loading;
   final String? error;
   final bool sending;
@@ -168,6 +172,7 @@ class ChatPane extends StatelessWidget {
               fileDownloads: fileDownloads,
               downloadActions: downloadActions,
               voicePlaybackActions: voicePlaybackActions,
+              imagePreviewActions: imagePreviewActions,
               onRetry: onRetry,
               bottomInset: _messageListBottomInset,
               onResolveSenderProfile: onResolveSenderProfile,

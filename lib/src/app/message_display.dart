@@ -219,6 +219,22 @@ String stickerAttachmentTitle(MessageAttachment attachment) {
   return '表情';
 }
 
+/// A safe filename to seed the sticker image preview's download/save-as. Uses
+/// the asset's own filename when present, otherwise derives one from the
+/// sticker name and the asset's mime type.
+String stickerPreviewFilename(MessageAttachment attachment) {
+  final assetFilename = attachment.asset?.filename?.trim();
+  if (assetFilename != null && assetFilename.isNotEmpty) return assetFilename;
+  final mimeType = attachment.asset?.mimeType ?? 'image/png';
+  final ext = imageExtensionForMimeType(mimeType);
+  final rawName = stickerAttachmentTitle(attachment);
+  final safeName = rawName
+      .replaceAll(RegExp(r'[\\/:*?"<>|\s]+'), '_')
+      .replaceAll(RegExp(r'_+'), '_');
+  final stem = safeName.isEmpty || safeName == '_' ? 'sticker' : safeName;
+  return '$stem.$ext';
+}
+
 String? messageDeliveryStatusText(Message message) {
   if (message.failed) return '发送失败';
   if (message.pending) return '发送中';

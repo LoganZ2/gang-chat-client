@@ -178,6 +178,11 @@ String _imageExtensionForMimeType(String mimeType) {
   };
 }
 
+/// The file extension (without a leading dot) appropriate for an image of the
+/// given [mimeType], e.g. `image/jpeg` -> `jpg`. Defaults to `png`.
+String imageExtensionForMimeType(String mimeType) =>
+    _imageExtensionForMimeType(mimeType);
+
 String fileAttachmentTitle(MessageAttachment attachment) {
   final explicitName = attachment.name?.trim();
   if (explicitName != null && explicitName.isNotEmpty) return explicitName;

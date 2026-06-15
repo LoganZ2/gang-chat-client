@@ -15,6 +15,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "flutter/generated_plugin_registrant.h"
@@ -26,6 +27,7 @@ constexpr char kFileDropChannelName[] = "gang_chat/file_drop";
 constexpr char kAudioDevicesChannelName[] = "gang_chat/audio_devices";
 constexpr char kReadFilePathsMethod[] = "readFilePaths";
 constexpr char kReadImageFileMethod[] = "readImageFile";
+constexpr char kWriteImageFileMethod[] = "writeImageFile";
 constexpr char kDropFilesMethod[] = "dropFiles";
 constexpr char kEnumerateInputsMethod[] = "enumerateInputs";
 constexpr char kEnumerateOutputsMethod[] = "enumerateOutputs";
@@ -530,6 +532,111 @@ std::optional<std::vector<uint8_t>> ReadClipboardImagePng(HWND owner) {
   return result;
 }
 
+// Writes encoded image bytes (PNG/JPEG/etc., anything WIC can decode) onto the
+// clipboard as a CF_DIB so other apps can paste it. Returns false on malformed
+// input or if the clipboard can't be opened.
+bool WriteClipboardImage(HWND owner, const std::vector<uint8_t>& bytes) {
+  if (bytes.empty()) {
+    return false;
+  }
+
+  bool com_initialized_here = false;
+  if (!EnsureComInitialized(&com_initialized_here)) {
+    return false;
+  }
+
+  IWICImagingFactory* factory = nullptr;
+  IStream* input_stream = nullptr;
+  IWICBitmapDecoder* decoder = nullptr;
+  IWICBitmapFrameDecode* frame = nullptr;
+  IWICFormatConverter* converter = nullptr;
+  HGLOBAL dib = nullptr;
+  bool success = false;
+
+  // Build a packed DIB (BITMAPINFOHEADER + 32bpp BGRA pixels, top-down) in a
+  // movable global the clipboard takes ownership of on success.
+  if (SUCCEEDED(CoCreateInstance(CLSID_WICImagingFactory, nullptr,
+                                 CLSCTX_INPROC_SERVER,
+                                 IID_PPV_ARGS(&factory))) &&
+      SUCCEEDED(CreateStreamOnHGlobal(nullptr, TRUE, &input_stream))) {
+    ULONG written = 0;
+    if (SUCCEEDED(input_stream->Write(bytes.data(),
+                                      static_cast<ULONG>(bytes.size()),
+                                      &written)) &&
+        written == bytes.size()) {
+      LARGE_INTEGER zero = {};
+      input_stream->Seek(zero, STREAM_SEEK_SET, nullptr);
+      if (SUCCEEDED(factory->CreateDecoderFromStream(
+              input_stream, nullptr, WICDecodeMetadataCacheOnLoad, &decoder)) &&
+          SUCCEEDED(decoder->GetFrame(0, &frame)) &&
+          SUCCEEDED(factory->CreateFormatConverter(&converter)) &&
+          SUCCEEDED(converter->Initialize(
+              frame, GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone,
+              nullptr, 0.0, WICBitmapPaletteTypeCustom))) {
+        UINT width = 0;
+        UINT height = 0;
+        if (SUCCEEDED(converter->GetSize(&width, &height)) && width > 0 &&
+            height > 0) {
+          const UINT stride = width * 4;
+          const UINT pixels_size = stride * height;
+          const SIZE_T dib_size = sizeof(BITMAPINFOHEADER) + pixels_size;
+          dib = GlobalAlloc(GMEM_MOVEABLE, dib_size);
+          if (dib) {
+            void* dib_data = GlobalLock(dib);
+            if (dib_data) {
+              BITMAPINFOHEADER* header =
+                  static_cast<BITMAPINFOHEADER*>(dib_data);
+              ZeroMemory(header, sizeof(BITMAPINFOHEADER));
+              header->biSize = sizeof(BITMAPINFOHEADER);
+              header->biWidth = static_cast<LONG>(width);
+              // Negative height => top-down rows, matching WIC's layout.
+              header->biHeight = -static_cast<LONG>(height);
+              header->biPlanes = 1;
+              header->biBitCount = 32;
+              header->biCompression = BI_RGB;
+              header->biSizeImage = pixels_size;
+              BYTE* pixels =
+                  static_cast<BYTE*>(dib_data) + sizeof(BITMAPINFOHEADER);
+              WICRect rect = {0, 0, static_cast<INT>(width),
+                              static_cast<INT>(height)};
+              if (SUCCEEDED(converter->CopyPixels(&rect, stride, pixels_size,
+                                                  pixels))) {
+                success = true;
+              }
+              GlobalUnlock(dib);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (success && OpenClipboard(owner)) {
+    if (EmptyClipboard() && SetClipboardData(CF_DIB, dib)) {
+      // Clipboard now owns the global; don't free it below.
+      dib = nullptr;
+    } else {
+      success = false;
+    }
+    CloseClipboard();
+  } else {
+    success = false;
+  }
+
+  if (dib) {
+    GlobalFree(dib);
+  }
+  SafeRelease(converter);
+  SafeRelease(frame);
+  SafeRelease(decoder);
+  SafeRelease(input_stream);
+  SafeRelease(factory);
+  if (com_initialized_here) {
+    CoUninitialize();
+  }
+  return success;
+}
+
 flutter::EncodableList ReadDropFilePaths(HDROP drop) {
   flutter::EncodableList paths;
   if (!drop) {
@@ -791,6 +898,28 @@ bool FlutterWindow::OnCreate() {
           image_file[flutter::EncodableValue("bytes")] =
               flutter::EncodableValue(*bytes);
           result->Success(flutter::EncodableValue(image_file));
+          return;
+        }
+        if (call.method_name() == kWriteImageFileMethod) {
+          const auto* args =
+              std::get_if<flutter::EncodableMap>(call.arguments());
+          if (!args) {
+            result->Success(flutter::EncodableValue(false));
+            return;
+          }
+          const auto it = args->find(flutter::EncodableValue("bytes"));
+          if (it == args->end()) {
+            result->Success(flutter::EncodableValue(false));
+            return;
+          }
+          const auto* bytes =
+              std::get_if<std::vector<uint8_t>>(&it->second);
+          if (!bytes) {
+            result->Success(flutter::EncodableValue(false));
+            return;
+          }
+          const bool ok = WriteClipboardImage(GetHandle(), *bytes);
+          result->Success(flutter::EncodableValue(ok));
           return;
         }
         result->NotImplemented();

@@ -47,6 +47,7 @@ void main() {
           fileDownloads: const {},
           downloadActions: _downloadActions(),
           voicePlaybackActions: const ChatVoicePlaybackActions.disabled(),
+          imagePreviewActions: _imagePreviewActions(),
           loading: false,
           error: null,
           sending: false,
@@ -685,6 +686,7 @@ Widget _chatPane({
     fileDownloads: const {},
     downloadActions: _downloadActions(),
     voicePlaybackActions: const ChatVoicePlaybackActions.disabled(),
+    imagePreviewActions: _imagePreviewActions(),
     loading: loading,
     error: null,
     sending: false,
@@ -849,4 +851,8 @@ ChatFileDownloadActions _downloadActions() {
     onCancel: (_) {},
     onDismiss: (_) {},
   );
+}
+
+ChatImagePreviewActions _imagePreviewActions() {
+  return ChatImagePreviewActions.disabled();
 }

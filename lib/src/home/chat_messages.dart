@@ -94,6 +94,7 @@ class _MessageStage extends StatefulWidget {
     required this.fileDownloads,
     required this.downloadActions,
     required this.voicePlaybackActions,
+    required this.imagePreviewActions,
     required this.onRetry,
     required this.bottomInset,
     this.onResolveSenderProfile,
@@ -109,6 +110,7 @@ class _MessageStage extends StatefulWidget {
   final Map<String, FileTransferState> fileDownloads;
   final ChatFileDownloadActions downloadActions;
   final ChatVoicePlaybackActions voicePlaybackActions;
+  final ChatImagePreviewActions imagePreviewActions;
   final VoidCallback onRetry;
   // Breathing room at the bottom of the list, between the last message and the
   // composer row that now sits below it.
@@ -437,6 +439,7 @@ class _MessageStageState extends State<_MessageStage> {
                 fileDownloads: widget.fileDownloads,
                 downloadActions: widget.downloadActions,
                 voicePlaybackActions: widget.voicePlaybackActions,
+                imagePreviewActions: widget.imagePreviewActions,
                 onResolveSenderProfile: widget.onResolveSenderProfile,
               ),
           ],
@@ -710,6 +713,7 @@ class _MessageRow extends StatelessWidget {
     required this.fileDownloads,
     required this.downloadActions,
     required this.voicePlaybackActions,
+    required this.imagePreviewActions,
     this.onResolveSenderProfile,
   });
 
@@ -719,6 +723,7 @@ class _MessageRow extends StatelessWidget {
   final Map<String, FileTransferState> fileDownloads;
   final ChatFileDownloadActions downloadActions;
   final ChatVoicePlaybackActions voicePlaybackActions;
+  final ChatImagePreviewActions imagePreviewActions;
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
 
@@ -759,6 +764,7 @@ class _MessageRow extends StatelessWidget {
               fileDownloads: fileDownloads,
               downloadActions: downloadActions,
               voicePlaybackActions: voicePlaybackActions,
+              imagePreviewActions: imagePreviewActions,
             ),
           ),
         ],
@@ -804,6 +810,7 @@ class _MessageBubble extends StatelessWidget {
     required this.fileDownloads,
     required this.downloadActions,
     required this.voicePlaybackActions,
+    required this.imagePreviewActions,
   });
 
   final Message message;
@@ -812,6 +819,7 @@ class _MessageBubble extends StatelessWidget {
   final Map<String, FileTransferState> fileDownloads;
   final ChatFileDownloadActions downloadActions;
   final ChatVoicePlaybackActions voicePlaybackActions;
+  final ChatImagePreviewActions imagePreviewActions;
 
   @override
   Widget build(BuildContext context) {
@@ -834,7 +842,9 @@ class _MessageBubble extends StatelessWidget {
           children: [
             switch (contentKind) {
               message_display.MessageContentKind.sticker => _StickerBody(
+                message: message,
                 attachment: message.stickerAttachment!,
+                imagePreviewActions: imagePreviewActions,
               ),
               message_display.MessageContentKind.voice => _VoiceBody(
                 message: message,
@@ -847,6 +857,7 @@ class _MessageBubble extends StatelessWidget {
                 transfer: transfer,
                 fileDownloads: fileDownloads,
                 downloadActions: downloadActions,
+                imagePreviewActions: imagePreviewActions,
               ),
               message_display.MessageContentKind.text => _TextBody(
                 body: message.body,
@@ -901,18 +912,25 @@ class _TextBody extends StatelessWidget {
 }
 
 class _StickerBody extends StatelessWidget {
-  const _StickerBody({required this.attachment});
+  const _StickerBody({
+    required this.message,
+    required this.attachment,
+    required this.imagePreviewActions,
+  });
 
+  final Message message;
   final MessageAttachment attachment;
+  final ChatImagePreviewActions imagePreviewActions;
 
   @override
   Widget build(BuildContext context) {
     final asset = attachment.asset;
+    final config = AppConfigScope.of(context);
     final imageUrl = asset == null
         ? null
-        : AppConfigScope.of(
-            context,
-          ).resolveAssetUrl(asset.thumbnailUrl ?? asset.url);
+        : config.resolveAssetUrl(asset.thumbnailUrl ?? asset.url);
+    // The preview shows the full-resolution sticker, not the thumbnail.
+    final previewUrl = asset == null ? null : config.resolveAssetUrl(asset.url);
     final name = message_display.stickerAttachmentTitle(attachment);
     final image = imageUrl != null && imageUrl.isNotEmpty
         ? ClipRRect(
@@ -928,10 +946,32 @@ class _StickerBody extends StatelessWidget {
           )
         : _StickerFallback(name: name);
 
+    final tappablePreviewUrl = previewUrl != null && previewUrl.isNotEmpty
+        ? previewUrl
+        : (imageUrl != null && imageUrl.isNotEmpty ? imageUrl : null);
+
     return Tooltip(
       message: name,
       waitDuration: const Duration(milliseconds: 350),
-      child: image,
+      child: tappablePreviewUrl == null
+          ? image
+          : MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                onTap: () => showChatImagePreview(
+                  context,
+                  imageUrl: tappablePreviewUrl,
+                  suggestedName: message_display.stickerPreviewFilename(
+                    attachment,
+                  ),
+                  actions: imagePreviewActions,
+                  stickerSource: attachment.stickerId != null
+                      ? (message: message, attachment: attachment)
+                      : null,
+                ),
+                child: image,
+              ),
+            ),
     );
   }
 }
@@ -1164,6 +1204,7 @@ class _FileBody extends StatelessWidget {
     required this.transfer,
     required this.fileDownloads,
     required this.downloadActions,
+    required this.imagePreviewActions,
   });
 
   final Message message;
@@ -1171,6 +1212,7 @@ class _FileBody extends StatelessWidget {
   final FileTransferState? transfer;
   final Map<String, FileTransferState> fileDownloads;
   final ChatFileDownloadActions downloadActions;
+  final ChatImagePreviewActions imagePreviewActions;
 
   @override
   Widget build(BuildContext context) {
@@ -1200,6 +1242,7 @@ class _FileBody extends StatelessWidget {
               downloads: fileDownloads,
             ),
             downloadActions: downloadActions,
+            imagePreviewActions: imagePreviewActions,
           ),
         ],
         if (showBody) ...[
@@ -1219,6 +1262,7 @@ class _FileAttachmentTile extends StatelessWidget {
     required this.index,
     required this.slot,
     required this.downloadActions,
+    required this.imagePreviewActions,
   });
 
   final Message message;
@@ -1227,6 +1271,7 @@ class _FileAttachmentTile extends StatelessWidget {
   final int index;
   final file_display.FileAttachmentTransferSlot slot;
   final ChatFileDownloadActions downloadActions;
+  final ChatImagePreviewActions imagePreviewActions;
 
   @override
   Widget build(BuildContext context) {
@@ -1284,6 +1329,17 @@ class _FileAttachmentTile extends StatelessWidget {
                 title: title,
                 width: previewSize.width,
                 height: previewSize.height,
+                onTap: () {
+                  final fullUrl = (resolvedUrl != null && resolvedUrl.isNotEmpty)
+                      ? resolvedUrl
+                      : previewUrl;
+                  showChatImagePreview(
+                    context,
+                    imageUrl: fullUrl,
+                    suggestedName: title,
+                    actions: imagePreviewActions,
+                  );
+                },
               ),
               const SizedBox(height: 10),
             ],
@@ -1373,16 +1429,18 @@ class _FileImagePreview extends StatelessWidget {
     required this.title,
     required this.width,
     required this.height,
+    this.onTap,
   });
 
   final String url;
   final String title;
   final double width;
   final double height;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
+    final preview = ClipRRect(
       borderRadius: BorderRadius.circular(UiRadii.sm),
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -1414,6 +1472,12 @@ class _FileImagePreview extends StatelessWidget {
           ),
         ),
       ),
+    );
+
+    if (onTap == null) return preview;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(onTap: onTap, child: preview),
     );
   }
 }
@@ -1522,6 +1586,7 @@ class MessageBubbleForTest extends StatelessWidget {
         fileDownloads: fileDownloads,
         downloadActions: downloadActions,
         voicePlaybackActions: voicePlaybackActions,
+        imagePreviewActions: ChatImagePreviewActions.disabled(),
       ),
     );
   }
