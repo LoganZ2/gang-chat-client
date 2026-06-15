@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:client/src/live/audio_output_rebinder.dart';
 import 'package:client/src/live/live_session.dart';
 
 void main() {
@@ -125,5 +126,67 @@ void main() {
     expect(sourceIdUpdates, hasLength(1));
     expect(sourceIdUpdates.single, same(thumbnail));
     expect(cachedScreenSourceThumbnailForTest('screen:0'), same(thumbnail));
+  });
+
+  test('session starts the output rebinder while connected', () async {
+    final changes = StreamController<void>.broadcast();
+    addTearDown(changes.close);
+    final selected = <String>[];
+
+    AudioOutputRebinder? built;
+    final session = LiveSession(
+      outputRebinderFactory: (s) {
+        built = AudioOutputRebinder(
+          deviceChanges: changes.stream,
+          currentOutputDeviceId: () async => 'speaker_1',
+          selectOutput: (id) async => selected.add(id),
+          onRebound: () async {},
+          debounce: const Duration(milliseconds: 10),
+        );
+        return built;
+      },
+    );
+    addTearDown(session.dispose);
+
+    session.debugStartOutputRebinder();
+    changes.add(null);
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+
+    // The rebinder built by the factory is live and reacting to device flips.
+    expect(built, isNotNull);
+    expect(selected, ['speaker_1']);
+  });
+
+  test('session stops the output rebinder so flips stop rebinding', () async {
+    final changes = StreamController<void>.broadcast();
+    addTearDown(changes.close);
+    var selects = 0;
+
+    final session = LiveSession(
+      outputRebinderFactory: (s) => AudioOutputRebinder(
+        deviceChanges: changes.stream,
+        currentOutputDeviceId: () async => 'speaker_1',
+        selectOutput: (_) async => selects += 1,
+        onRebound: () async {},
+        debounce: const Duration(milliseconds: 10),
+      ),
+    );
+    addTearDown(session.dispose);
+
+    session.debugStartOutputRebinder();
+    session.debugStopOutputRebinder();
+    changes.add(null);
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+
+    expect(selects, 0);
+  });
+
+  test('a null factory disables output rebinding (non-macOS)', () async {
+    final session = LiveSession(outputRebinderFactory: (_) => null);
+    addTearDown(session.dispose);
+
+    // Should be a no-op rather than throwing when there's nothing to rebind.
+    session.debugStartOutputRebinder();
+    session.debugStopOutputRebinder();
   });
 }

@@ -8,7 +8,9 @@ import 'package:livekit_client/livekit_client.dart' as lk;
 
 import '../app/audio_levels.dart';
 import '../protocol/models.dart' show musicBoxBotIdentity;
+import 'audio_output_rebinder.dart';
 import 'screen_share_quality.dart';
+import 'system_audio_devices.dart';
 
 /// A capturable desktop source (a whole screen or a single window), used to
 /// populate the screen-share picker. Wraps flutter_webrtc's source so the UI
@@ -241,7 +243,19 @@ class LiveVideoTrack {
 /// participant's [lk.Participant.identity] matches `UserSummary.id` from the
 /// protocol layer. The UI uses that as the join key.
 class LiveSession extends ChangeNotifier {
-  LiveSession();
+  /// [outputRebinderFactory] builds the recovery hook that re-routes WebRTC
+  /// audio output after macOS swaps the default endpoint (e.g. a Bluetooth
+  /// headset flipping its A2DP/HFP profile when the mic opens or closes). It
+  /// is started while connected and stopped on disconnect; null disables the
+  /// recovery (tests, non-macOS). The default wires a real macOS rebinder.
+  LiveSession({AudioOutputRebinder? Function(LiveSession session)?
+      outputRebinderFactory})
+    : _outputRebinderFactory =
+          outputRebinderFactory ?? _defaultOutputRebinderFactory;
+
+  final AudioOutputRebinder? Function(LiveSession session)
+      _outputRebinderFactory;
+  AudioOutputRebinder? _outputRebinder;
 
   lk.Room? _room;
   lk.CancelListenFunc? _cancelEvents;
@@ -452,9 +466,11 @@ class LiveSession extends ChangeNotifier {
       await _applyOutputVolume();
       await _applyMusicBoxVolume();
       _refreshAllMicStates();
+      _startOutputRebinder();
     } catch (e) {
       await _cancelEvents?.call();
       _cancelEvents = null;
+      _stopOutputRebinder();
       try {
         await room.dispose();
       } catch (_) {}
@@ -732,6 +748,7 @@ class LiveSession extends ChangeNotifier {
     final room = _room;
     final cancel = _cancelEvents;
     _cancelEvents = null;
+    _stopOutputRebinder();
     _room = null;
     _roomName = null;
     _connecting = false;
@@ -760,6 +777,7 @@ class LiveSession extends ChangeNotifier {
     final room = _room;
     final cancel = _cancelEvents;
     _cancelEvents = null;
+    _stopOutputRebinder();
     _room = null;
     _roomName = null;
     _screenSharing = false;
@@ -926,6 +944,55 @@ class LiveSession extends ChangeNotifier {
       }
     }
   }
+
+  // Re-bind WebRTC's audio output to the live default endpoint and re-apply
+  // every track volume. Invoked by [_outputRebinder] after macOS swaps the
+  // default output (the Bluetooth A2DP/HFP profile flip), where WebRTC would
+  // otherwise keep rendering into the torn-down endpoint as noise.
+  Future<void> _reapplyAudioRouting() async {
+    if (_room == null) return;
+    await _applyOutputVolume();
+    await _applyMusicBoxVolume();
+  }
+
+  void _startOutputRebinder() {
+    _stopOutputRebinder();
+    final rebinder = _outputRebinderFactory(this);
+    _outputRebinder = rebinder;
+    rebinder?.start();
+  }
+
+  void _stopOutputRebinder() {
+    final rebinder = _outputRebinder;
+    _outputRebinder = null;
+    if (rebinder != null) unawaited(rebinder.stop());
+  }
+
+  /// Drives the output-rebinder lifecycle without a live LiveKit connection, so
+  /// the macOS A2DP/HFP recovery wiring can be exercised in tests. Production
+  /// code reaches these through [connect]/[disconnect].
+  @visibleForTesting
+  void debugStartOutputRebinder() => _startOutputRebinder();
+
+  @visibleForTesting
+  void debugStopOutputRebinder() => _stopOutputRebinder();
+}
+
+// Default macOS recovery for the Bluetooth A2DP/HFP profile flip: re-select the
+// current system default output on each WebRTC device-change so the CoreAudio
+// ADM rebuilds its playout unit against the live endpoint, then re-apply
+// volumes. Returns null off macOS, where the flip doesn't apply.
+AudioOutputRebinder? _defaultOutputRebinderFactory(LiveSession session) {
+  if (kIsWeb || !Platform.isMacOS) return null;
+  final systemAudio = SystemAudioDevices();
+  return AudioOutputRebinder(
+    deviceChanges: lk.Hardware.instance.onDeviceChange.stream.map((_) {}),
+    currentOutputDeviceId: systemAudio.currentOutputDeviceId,
+    selectOutput: (deviceId) async {
+      await rtc.Helper.selectAudioOutput(deviceId);
+    },
+    onRebound: session._reapplyAudioRouting,
+  );
 }
 
 class LiveSessionConnectException implements Exception {
