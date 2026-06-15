@@ -200,6 +200,12 @@ extension _HomeShellLiveActions on _HomeShellState {
           ),
         ),
       );
+      // Join with the microphone live by default. The server seeds new
+      // participants as muted, so unmute through the normal patch path (which
+      // syncs LiveKit, the server, and the UI) unless the user can't publish.
+      if (_micMuted && !_voiceBlocked) {
+        await _patchLiveState(micMuted: false);
+      }
     } catch (error) {
       if (mounted) _setHomeState(() => _roomError = error.toString());
     } finally {
