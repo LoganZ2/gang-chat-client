@@ -11,6 +11,7 @@ class RoomMembersDialog extends StatefulWidget {
     this.embedded = false,
     this.onClose,
     this.onChanged,
+    this.onOpenRoom,
   });
 
   final RoomsController controller;
@@ -25,6 +26,7 @@ class RoomMembersDialog extends StatefulWidget {
   final bool embedded;
   final VoidCallback? onClose;
   final VoidCallback? onChanged;
+  final ValueChanged<PublicRoom>? onOpenRoom;
 
   @override
   State<RoomMembersDialog> createState() => _RoomMembersDialogState();
@@ -279,6 +281,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
           currentUser: widget.currentUser,
           onResolveProfile: _resolveMemberProfile,
           onResolveRoomProfile: _resolveRoomProfile,
+          onOpenRoom: widget.onOpenRoom,
         ),
       );
     } finally {
@@ -519,6 +522,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
             enabled: _canInviteMembers,
             onResolveProfile: _resolveUserProfile,
             onResolveRoomProfile: _resolveRoomProfile,
+            onOpenRoom: widget.onOpenRoom,
             onInvite: _invite,
           ),
           if (_canReviewRequests)
@@ -530,6 +534,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
               error: _requestError,
               onResolveProfile: _resolveMemberProfile,
               onResolveRoomProfile: _resolveRoomProfile,
+              onOpenRoom: widget.onOpenRoom,
               onDetail: _showJoinRequestDetails,
               onApprove: (request) => _reviewRequest(request, true),
               onReject: (request) => _reviewRequest(request, false),
@@ -582,6 +587,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
           busy: _busyMemberIds.contains(member.user.id),
           onResolveProfile: _resolveMemberProfile,
           onResolveRoomProfile: _resolveRoomProfile,
+          onOpenRoom: widget.onOpenRoom,
           onSetAdmin: () => _setMemberRole(member, 'admin'),
           onUnsetAdmin: () => _setMemberRole(member, 'member'),
           onRemoveMember: () => _removeMember(member),

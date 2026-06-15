@@ -45,6 +45,7 @@ import '../shell/voice_playback_service.dart';
 import '../ui/ui.dart';
 import 'chat_pane.dart';
 import 'home_content.dart';
+import 'hover_card_anchor.dart';
 import 'home_notifications.dart';
 import 'home_sidebar.dart';
 import 'live_channel_pane.dart';
@@ -426,23 +427,27 @@ class _HomeShellState extends State<HomeShell> {
                     child: TapRegion(
                       key: const ValueKey('home-title-search-results'),
                       groupId: _searchTapRegionGroup,
-                      child: _TitleSearchResultsPanel(
-                        query: _searchQuery,
-                        results: _searchResults,
-                        loading: _searching,
-                        error: _searchError,
-                        currentUser: widget.app.currentUser,
-                        activeCategory: _activeSearchCategory,
-                        busyPublicRoomId: _busySearchPublicRoomId,
-                        pendingPublicRoomIds: _searchPendingPublicRoomIds,
-                        onCategorySelected: _selectSearchCategory,
-                        onMyRoomSelected: _openSearchRoom,
-                        onResolveRoomProfile: _resolveRoomProfile,
-                        onResolveRoomUserProfile: _resolveRoomUserProfile,
-                        onPublicRoomAction: (room) =>
-                            unawaited(_handlePublicRoomSearchAction(room)),
-                        onMessageSelected: _openMessageSearchResult,
-                        onFileSelected: _openMessageSearchResult,
+                      child: HoverCardTapRegionScope(
+                        tapRegionGroup: _searchTapRegionGroup,
+                        child: _TitleSearchResultsPanel(
+                          query: _searchQuery,
+                          results: _searchResults,
+                          loading: _searching,
+                          error: _searchError,
+                          currentUser: widget.app.currentUser,
+                          activeCategory: _activeSearchCategory,
+                          busyPublicRoomId: _busySearchPublicRoomId,
+                          pendingPublicRoomIds: _searchPendingPublicRoomIds,
+                          onCategorySelected: _selectSearchCategory,
+                          onMyRoomSelected: _openSearchRoom,
+                          onProfileRoomSelected: _openSearchProfileRoom,
+                          onResolveRoomProfile: _resolveRoomProfile,
+                          onResolveRoomUserProfile: _resolveRoomUserProfile,
+                          onPublicRoomAction: (room) =>
+                              unawaited(_handlePublicRoomSearchAction(room)),
+                          onMessageSelected: _openMessageSearchResult,
+                          onFileSelected: _openMessageSearchResult,
+                        ),
                       ),
                     ),
                   ),

@@ -10,6 +10,26 @@ const double hoverCardDefaultGap = 10;
 
 typedef HoverCardBuilder = Widget Function(BuildContext context);
 
+class HoverCardTapRegionScope extends InheritedWidget {
+  const HoverCardTapRegionScope({
+    super.key,
+    required this.tapRegionGroup,
+    required super.child,
+  });
+
+  final Object tapRegionGroup;
+
+  static HoverCardTapRegionScope? maybeOf(BuildContext context) {
+    return context
+        .dependOnInheritedWidgetOfExactType<HoverCardTapRegionScope>();
+  }
+
+  @override
+  bool updateShouldNotify(HoverCardTapRegionScope oldWidget) {
+    return tapRegionGroup != oldWidget.tapRegionGroup;
+  }
+}
+
 /// Shared hover/tap shell for small profile cards anchored to an avatar.
 class HoverCardAnchor extends StatefulWidget {
   const HoverCardAnchor({
@@ -38,15 +58,51 @@ class HoverCardAnchor extends StatefulWidget {
 class _HoverCardAnchorState extends State<HoverCardAnchor> {
   final GlobalKey _anchorKey = GlobalKey();
   final OverlayPortalController _portal = OverlayPortalController();
-  final Object _tapRegionGroup = Object();
+  final Object _rootTapRegionGroup = Object();
 
+  late final _HoverCardCoordinator _coordinator;
+  _HoverCardCoordinator? _parentCoordinator;
+  Object? _inheritedTapRegionGroup;
   bool _overAnchor = false;
   bool _overCard = false;
   bool _pinned = false;
+  bool _portalVisible = false;
+  bool _advertisedActiveToParent = false;
   Timer? _closeTimer;
   Future<void>? _openFuture;
 
-  bool get _wantsOpen => _pinned || _overAnchor || _overCard;
+  Object get _tapRegionGroup => _inheritedTapRegionGroup ?? _rootTapRegionGroup;
+
+  bool get _wantsOpen =>
+      _pinned || _overAnchor || _overCard || _coordinator.hasActiveDescendants;
+
+  bool get _keepsParentOpen =>
+      _wantsOpen || _portalVisible || _openFuture != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _coordinator = _HoverCardCoordinator(_handleDescendantActivityChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final chainScope = _HoverCardChainScope.maybeOf(context);
+    final nextParent = chainScope?.coordinator;
+    if (nextParent != _parentCoordinator) {
+      if (_advertisedActiveToParent) {
+        _parentCoordinator?.setDescendantActive(this, false);
+        _advertisedActiveToParent = false;
+      }
+      _parentCoordinator?.releaseOpenChild(this);
+      _parentCoordinator = nextParent;
+    }
+    final tapRegionScope = HoverCardTapRegionScope.maybeOf(context);
+    _inheritedTapRegionGroup =
+        chainScope?.tapRegionGroup ?? tapRegionScope?.tapRegionGroup;
+    _syncParentActivity();
+  }
 
   @override
   void didUpdateWidget(covariant HoverCardAnchor oldWidget) {
@@ -57,6 +113,11 @@ class _HoverCardAnchorState extends State<HoverCardAnchor> {
 
   @override
   void dispose() {
+    if (_advertisedActiveToParent) {
+      _parentCoordinator?.setDescendantActive(this, false);
+      _advertisedActiveToParent = false;
+    }
+    _parentCoordinator?.releaseOpenChild(this);
     _closeTimer?.cancel();
     super.dispose();
   }
@@ -64,20 +125,24 @@ class _HoverCardAnchorState extends State<HoverCardAnchor> {
   void _enterAnchor() {
     _overAnchor = true;
     _open();
+    _syncParentActivity();
   }
 
   void _exitAnchor() {
     _overAnchor = false;
+    _syncParentActivity();
     _scheduleClose();
   }
 
   void _enterCard() {
     _overCard = true;
     _closeTimer?.cancel();
+    _syncParentActivity();
   }
 
   void _exitCard() {
     _overCard = false;
+    _syncParentActivity();
     _scheduleClose();
   }
 
@@ -93,23 +158,29 @@ class _HoverCardAnchorState extends State<HoverCardAnchor> {
 
     final future = Future<void>.sync(beforeOpen);
     _openFuture = future;
+    _syncParentActivity();
     unawaited(
       future.catchError((_) {}).whenComplete(() {
         if (!mounted || _openFuture != future) return;
         _openFuture = null;
         if (_wantsOpen) _showPortal();
+        _syncParentActivity();
       }),
     );
   }
 
   void _showPortal() {
-    if (_portal.isShowing) return;
+    _parentCoordinator?.showOnlyChild(this);
+    if (_portalVisible && _portal.isShowing) return;
+    _portalVisible = true;
     _portal.show();
+    _syncParentActivity();
   }
 
   void _pinOpen() {
     _pinned = true;
     _open();
+    _syncParentActivity();
   }
 
   void _dismiss() {
@@ -117,16 +188,50 @@ class _HoverCardAnchorState extends State<HoverCardAnchor> {
     _overAnchor = false;
     _overCard = false;
     _closeTimer?.cancel();
+    _portalVisible = false;
+    _parentCoordinator?.releaseOpenChild(this);
     if (_portal.isShowing) _portal.hide();
+    _syncParentActivity();
+  }
+
+  void _dismissFromPeer() {
+    _pinned = false;
+    _overAnchor = false;
+    _overCard = false;
+    _closeTimer?.cancel();
+    _portalVisible = false;
+    if (_portal.isShowing) _portal.hide();
+    _syncParentActivity();
   }
 
   void _scheduleClose() {
     if (_pinned) return;
     _closeTimer?.cancel();
     _closeTimer = Timer(widget.closeDelay, () {
-      if (!mounted || _pinned || _overAnchor || _overCard) return;
+      if (!mounted || _wantsOpen) return;
+      _portalVisible = false;
       if (_portal.isShowing) _portal.hide();
+      _syncParentActivity();
     });
+  }
+
+  void _handleDescendantActivityChanged() {
+    if (!mounted) return;
+    if (_coordinator.hasActiveDescendants) {
+      _closeTimer?.cancel();
+    } else {
+      _scheduleClose();
+    }
+    _syncParentActivity();
+  }
+
+  void _syncParentActivity() {
+    final parent = _parentCoordinator;
+    if (parent == null) return;
+    final active = _keepsParentOpen;
+    if (active == _advertisedActiveToParent) return;
+    parent.setDescendantActive(this, active);
+    _advertisedActiveToParent = active;
   }
 
   Rect? _anchorRectInOverlay() {
@@ -166,7 +271,11 @@ class _HoverCardAnchorState extends State<HoverCardAnchor> {
                     onExit: (_) => _exitCard(),
                     child: AnchoredPanel(
                       width: widget.cardWidth,
-                      child: widget.cardBuilder(context),
+                      child: _HoverCardChainScope(
+                        coordinator: _coordinator,
+                        tapRegionGroup: _tapRegionGroup,
+                        child: Builder(builder: widget.cardBuilder),
+                      ),
                     ),
                   ),
                 ),
@@ -188,6 +297,56 @@ class _HoverCardAnchorState extends State<HoverCardAnchor> {
         ),
       ),
     );
+  }
+}
+
+class _HoverCardCoordinator {
+  _HoverCardCoordinator(this.onChanged);
+
+  final VoidCallback onChanged;
+  final Set<Object> _activeDescendants = <Object>{};
+  _HoverCardAnchorState? _openChild;
+
+  bool get hasActiveDescendants => _activeDescendants.isNotEmpty;
+
+  void setDescendantActive(Object token, bool active) {
+    final changed = active
+        ? _activeDescendants.add(token)
+        : _activeDescendants.remove(token);
+    if (changed) onChanged();
+  }
+
+  void showOnlyChild(_HoverCardAnchorState child) {
+    final previous = _openChild;
+    if (previous != null && previous != child) {
+      previous._dismissFromPeer();
+    }
+    _openChild = child;
+  }
+
+  void releaseOpenChild(_HoverCardAnchorState child) {
+    if (_openChild == child) _openChild = null;
+  }
+}
+
+class _HoverCardChainScope extends InheritedWidget {
+  const _HoverCardChainScope({
+    required this.coordinator,
+    required this.tapRegionGroup,
+    required super.child,
+  });
+
+  final _HoverCardCoordinator coordinator;
+  final Object tapRegionGroup;
+
+  static _HoverCardChainScope? maybeOf(BuildContext context) {
+    return context.dependOnInheritedWidgetOfExactType<_HoverCardChainScope>();
+  }
+
+  @override
+  bool updateShouldNotify(_HoverCardChainScope oldWidget) {
+    return coordinator != oldWidget.coordinator ||
+        tapRegionGroup != oldWidget.tapRegionGroup;
   }
 }
 

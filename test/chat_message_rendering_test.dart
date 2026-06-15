@@ -8,6 +8,7 @@ import 'package:client/src/home/chat_pane.dart';
 import 'package:client/src/protocol/models.dart';
 import 'package:client/src/ui/app_config_scope.dart';
 import 'package:client/src/ui/ui.dart' as ui;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -587,6 +588,55 @@ void main() {
     expect(secondsGap, closeTo(minutesGap, 0.01));
   });
 
+  testWidgets('message sender profile can enter a common room', (tester) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    PublicRoom? openedRoom;
+    const sender = UserSummary(
+      id: 'user_1',
+      username: 'logan',
+      displayName: 'Logan',
+      avatarUrl: null,
+      defaultAvatarKey: 'blue-3',
+      commonRooms: [
+        UserCommonRoom(id: 'room_common', rid: 'R200', name: 'Common room'),
+      ],
+    );
+
+    await tester.pumpWidget(
+      _host(
+        _chatPane(
+          controller: controller,
+          room: _roomDetail,
+          messages: [_message(type: 'text', body: 'hello', sender: sender)],
+          onEnterProfileRoom: (room) => openedRoom = room,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+
+    final senderAvatar = find.byWidgetPredicate(
+      (widget) => widget is ui.Avatar && widget.label == 'Logan',
+    );
+    await gesture.moveTo(tester.getCenter(senderAvatar.first));
+    await tester.pumpAndSettle();
+
+    final commonRoomAvatar = find.byWidgetPredicate(
+      (widget) => widget is ui.Avatar && widget.label == 'Common room',
+    );
+    await gesture.moveTo(tester.getCenter(commonRoomAvatar));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('进入房间'));
+    await tester.pumpAndSettle();
+
+    expect(openedRoom?.id, 'room_common');
+  });
+
   testWidgets('attachment bubbles keep sender and time outside the bubble', (
     tester,
   ) async {
@@ -687,6 +737,7 @@ Widget _chatPane({
   required List<Message> messages,
   RoomDetail? room,
   bool loading = false,
+  ValueChanged<PublicRoom>? onEnterProfileRoom,
 }) {
   return ChatPane(
     currentUser: _currentUser,
@@ -725,6 +776,7 @@ Widget _chatPane({
     onOpenLiveChannel: () {},
     onOpenRoomMembers: () {},
     onOpenRoomSettings: () {},
+    onEnterProfileRoom: onEnterProfileRoom,
   );
 }
 
@@ -747,17 +799,18 @@ Message _message({
   DateTime? createdAt,
   String clientMessageId = 'client_1',
   bool pending = false,
+  UserSummary sender = const UserSummary(
+    id: 'user_1',
+    username: 'logan',
+    displayName: 'Logan',
+    avatarUrl: null,
+    defaultAvatarKey: 'blue-3',
+  ),
 }) {
   return Message(
     id: 'message_1',
     roomId: 'room_1',
-    sender: const UserSummary(
-      id: 'user_1',
-      username: 'logan',
-      displayName: 'Logan',
-      avatarUrl: null,
-      defaultAvatarKey: 'blue-3',
-    ),
+    sender: sender,
     clientMessageId: clientMessageId,
     type: type,
     body: body,

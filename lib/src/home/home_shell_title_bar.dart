@@ -287,6 +287,7 @@ class _TitleSearchResultsPanel extends StatelessWidget {
     required this.pendingPublicRoomIds,
     required this.onCategorySelected,
     required this.onMyRoomSelected,
+    required this.onProfileRoomSelected,
     required this.onResolveRoomProfile,
     required this.onResolveRoomUserProfile,
     required this.onPublicRoomAction,
@@ -304,6 +305,7 @@ class _TitleSearchResultsPanel extends StatelessWidget {
   final Set<String> pendingPublicRoomIds;
   final ValueChanged<search_display.GlobalSearchCategory> onCategorySelected;
   final ValueChanged<RoomCard> onMyRoomSelected;
+  final ValueChanged<PublicRoom> onProfileRoomSelected;
   final RoomProfileResolver onResolveRoomProfile;
   final Future<UserSummary> Function(String roomId, UserSummary user)
   onResolveRoomUserProfile;
@@ -431,7 +433,7 @@ class _TitleSearchResultsPanel extends StatelessWidget {
             onResolveRoom: onResolveRoomProfile,
             onResolveUserProfile: (user) =>
                 onResolveRoomUserProfile(room.id, user),
-            onEnterRoom: (_) => onMyRoomSelected(room),
+            onEnterRoom: onProfileRoomSelected,
             child: Avatar(
               label: room.displayName,
               imageUrl: AppConfigScope.of(
@@ -477,7 +479,7 @@ class _TitleSearchResultsPanel extends StatelessWidget {
                   onResolveUserProfile: (user) =>
                       onResolveRoomUserProfile(candidate.room.id, user),
                   onEnterRoom: candidate.room.joined
-                      ? onPublicRoomAction
+                      ? onProfileRoomSelected
                       : null,
                   child: Avatar(
                     label: candidate.room.name,

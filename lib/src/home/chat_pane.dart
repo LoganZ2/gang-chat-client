@@ -81,6 +81,7 @@ class ChatPane extends StatelessWidget {
     required this.onOpenRoomSettings,
     this.onResolveSenderProfile,
     this.onResolveRoomProfile,
+    this.onEnterProfileRoom,
     this.composerDropKey,
   });
 
@@ -127,6 +128,7 @@ class ChatPane extends StatelessWidget {
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
   final RoomProfileResolver? onResolveRoomProfile;
+  final ValueChanged<PublicRoom>? onEnterProfileRoom;
   final Key? composerDropKey;
 
   @override
@@ -178,6 +180,7 @@ class ChatPane extends StatelessWidget {
               bottomInset: _messageListBottomInset,
               onResolveSenderProfile: onResolveSenderProfile,
               onResolveRoomProfile: onResolveRoomProfile,
+              onEnterProfileRoom: onEnterProfileRoom,
             ),
           ),
           if (roomReady)

@@ -99,6 +99,7 @@ class _MessageStage extends StatefulWidget {
     required this.bottomInset,
     this.onResolveSenderProfile,
     this.onResolveRoomProfile,
+    this.onEnterProfileRoom,
   });
 
   final String? roomId;
@@ -119,6 +120,7 @@ class _MessageStage extends StatefulWidget {
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
   final RoomProfileResolver? onResolveRoomProfile;
+  final ValueChanged<PublicRoom>? onEnterProfileRoom;
 
   @override
   State<_MessageStage> createState() => _MessageStageState();
@@ -445,6 +447,7 @@ class _MessageStageState extends State<_MessageStage> {
                 imagePreviewActions: widget.imagePreviewActions,
                 onResolveSenderProfile: widget.onResolveSenderProfile,
                 onResolveRoomProfile: widget.onResolveRoomProfile,
+                onEnterProfileRoom: widget.onEnterProfileRoom,
               ),
           ],
         );
@@ -721,6 +724,7 @@ class _MessageRow extends StatelessWidget {
     required this.imagePreviewActions,
     this.onResolveSenderProfile,
     this.onResolveRoomProfile,
+    this.onEnterProfileRoom,
   });
 
   final Message message;
@@ -734,6 +738,7 @@ class _MessageRow extends StatelessWidget {
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
   final RoomProfileResolver? onResolveRoomProfile;
+  final ValueChanged<PublicRoom>? onEnterProfileRoom;
 
   @override
   Widget build(BuildContext context) {
@@ -795,6 +800,7 @@ class _MessageRow extends StatelessWidget {
       currentUser: currentUser,
       onResolveProfile: onResolveSenderProfile,
       onResolveRoomProfile: onResolveRoomProfile,
+      onEnterCommonRoom: onEnterProfileRoom,
       child: avatar,
     );
 

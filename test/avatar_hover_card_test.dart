@@ -112,6 +112,108 @@ void main() {
     expect(find.text('RID: R1'), findsOneWidget);
   });
 
+  testWidgets('nested room card keeps the parent user card open', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_host(const AvatarHoverCardForTest(user: _user)));
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+
+    await gesture.moveTo(tester.getCenter(find.byType(Avatar).first));
+    await tester.pumpAndSettle();
+    expect(find.text('@logan'), findsOneWidget);
+
+    final commonRoomAvatar = find.byWidgetPredicate(
+      (widget) => widget is Avatar && widget.label == '摸鱼大队',
+    );
+    await gesture.moveTo(tester.getCenter(commonRoomAvatar));
+    await tester.pumpAndSettle();
+    expect(find.text('RID: R1'), findsOneWidget);
+
+    await gesture.moveTo(tester.getCenter(find.text('RID: R1')));
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
+
+    expect(find.text('@logan'), findsOneWidget);
+    expect(find.text('RID: R1'), findsOneWidget);
+  });
+
+  testWidgets('nested room enter button invokes the common room callback', (
+    tester,
+  ) async {
+    PublicRoom? openedRoom;
+    await tester.pumpWidget(
+      _host(
+        AvatarHoverCardForTest(
+          user: _user,
+          onEnterCommonRoom: (room) => openedRoom = room,
+        ),
+      ),
+    );
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+
+    await gesture.moveTo(tester.getCenter(find.byType(Avatar).first));
+    await tester.pumpAndSettle();
+
+    final commonRoomAvatar = find.byWidgetPredicate(
+      (widget) => widget is Avatar && widget.label == '摸鱼大队',
+    );
+    await gesture.moveTo(tester.getCenter(commonRoomAvatar));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('进入房间'));
+    await tester.pumpAndSettle();
+
+    expect(openedRoom?.id, 'r1');
+  });
+
+  testWidgets('opening another common room closes the previous room card', (
+    tester,
+  ) async {
+    const siblingUser = UserSummary(
+      id: 'u1',
+      username: 'logan',
+      displayName: 'Logan',
+      avatarUrl: null,
+      defaultAvatarKey: 'blue-3',
+      commonRooms: [
+        UserCommonRoom(id: 'r1', rid: 'R1', name: 'Room One'),
+        UserCommonRoom(id: 'r2', rid: 'R2', name: 'Room Two'),
+      ],
+    );
+    await tester.pumpWidget(
+      _host(const AvatarHoverCardForTest(user: siblingUser)),
+    );
+
+    await tester.tap(find.byType(Avatar).first);
+    await tester.pumpAndSettle();
+    expect(find.text('@logan'), findsOneWidget);
+
+    final firstCommonRoomAvatar = find.byWidgetPredicate(
+      (widget) => widget is Avatar && widget.label == 'Room One',
+    );
+    final secondCommonRoomAvatar = find.byWidgetPredicate(
+      (widget) => widget is Avatar && widget.label == 'Room Two',
+    );
+    expect(firstCommonRoomAvatar, findsOneWidget);
+    expect(secondCommonRoomAvatar, findsOneWidget);
+
+    await tester.tap(firstCommonRoomAvatar);
+    await tester.pumpAndSettle();
+    expect(find.text('RID: R1'), findsOneWidget);
+
+    await tester.tap(secondCommonRoomAvatar);
+    await tester.pumpAndSettle();
+    expect(find.text('@logan'), findsOneWidget);
+    expect(find.text('RID: R1'), findsNothing);
+    expect(find.text('RID: R2'), findsOneWidget);
+  });
+
   testWidgets('common room avatar waits for the latest room profile', (
     tester,
   ) async {

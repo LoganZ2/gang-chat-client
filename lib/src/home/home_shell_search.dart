@@ -97,6 +97,10 @@ extension _HomeShellSearch on _HomeShellState {
     _selectServer(room, openContent: narrow);
   }
 
+  void _openSearchProfileRoom(PublicRoom room) {
+    _openSearchRoom(_roomCardForPublicRoom(room));
+  }
+
   Future<PublicRoom> _resolveRoomProfile(PublicRoom room) async {
     final detail = await _roomsController.getRoom(room.id);
     return room_display.publicRoomFromRoomDetail(detail);

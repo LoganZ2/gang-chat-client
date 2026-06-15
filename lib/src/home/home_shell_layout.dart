@@ -65,6 +65,7 @@ extension _HomeShellLayout on _HomeShellState {
         embedded: true,
         onClose: _openChat,
         onChanged: () => unawaited(_loadServers()),
+        onOpenRoom: _openNotificationRoom,
       );
     }
     if (_contentMode == _ContentMode.roomSettings && _selectedRoom != null) {
@@ -193,6 +194,7 @@ extension _HomeShellLayout on _HomeShellState {
       onOpenRoomSettings: () => unawaited(_openRoomSettings()),
       onResolveSenderProfile: _resolveSenderProfile,
       onResolveRoomProfile: _resolveRoomProfile,
+      onEnterProfileRoom: _openNotificationRoom,
       composerDropKey: _composerDropKey,
     );
   }

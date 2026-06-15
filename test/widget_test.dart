@@ -404,7 +404,60 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(requestedPaths, contains('/api/v1/rooms/server-beta'));
-      expect(find.text('创建者'), findsOneWidget);
+      final creatorAvatar = find.byWidgetPredicate(
+        (widget) => widget is ui.Avatar && widget.label == 'Morgan',
+      );
+      expect(creatorAvatar, findsOneWidget);
+
+      await tester.tap(creatorAvatar);
+      await tester.pumpAndSettle();
+
+      expect(
+        requestedPaths,
+        contains('/api/v1/rooms/server-beta/members/user-2/profile'),
+      );
+      expect(find.text('@morgan'), findsOneWidget);
+      expect(find.text('Creator profile'), findsOneWidget);
+
+      final sharedRoomAvatar = find.byWidgetPredicate(
+        (widget) => widget is ui.Avatar && widget.label == 'Shared Alpha',
+      );
+      expect(sharedRoomAvatar, findsOneWidget);
+
+      await tester.tap(sharedRoomAvatar);
+      await tester.pumpAndSettle();
+
+      expect(requestedPaths, contains('/api/v1/rooms/server-alpha'));
+      expect(find.text('RID: server-alpha'), findsOneWidget);
+
+      final alphaRidRect = tester.getRect(find.text('RID: server-alpha'));
+      final alphaEnterButtonElement = find
+          .widgetWithText(ui.Button, '进入房间')
+          .evaluate()
+          .singleWhere((element) {
+            final renderObject = element.renderObject;
+            if (renderObject is! RenderBox || !renderObject.hasSize) {
+              return false;
+            }
+            final buttonRect =
+                renderObject.localToGlobal(Offset.zero) & renderObject.size;
+            return buttonRect.top > alphaRidRect.bottom &&
+                (buttonRect.center.dx - alphaRidRect.center.dx).abs() < 160;
+          });
+      await tester.tap(find.byWidget(alphaEnterButtonElement.widget));
+      await tester.pumpAndSettle();
+
+      expect(requestedPaths, contains('/api/v1/rooms/server-alpha/messages'));
+      expect(
+        find.byKey(const ValueKey('home-title-search-results')),
+        findsOneWidget,
+      );
+      expect(find.text('创建者'), findsWidgets);
+
+      await tester.tapAt(const Offset(740, 100));
+      await tester.pumpAndSettle();
+      await tester.tap(searchField);
+      await tester.pumpAndSettle();
 
       await gesture.moveTo(const Offset(20, 520));
       await tester.pump(const Duration(milliseconds: 200));
@@ -3097,7 +3150,42 @@ GangApi _roomsApi({
             visibility: 'private',
             joinPolicy: 'closed',
             role: 'member',
+            createdBy: _userJson(
+              id: 'user-2',
+              username: 'morgan',
+              displayName: 'Morgan',
+              isOnline: true,
+            ),
           ),
+        });
+      }
+      if (request.url.path ==
+          '/api/v1/rooms/server-beta/members/user-2/profile') {
+        return _jsonResponse({
+          'profile': {
+            'user': {
+              ..._userJson(
+                id: 'user-2',
+                username: 'morgan',
+                displayName: 'Morgan',
+                isOnline: true,
+              ),
+              'bio': 'Creator profile',
+              'common_rooms': [
+                {
+                  'id': 'server-alpha',
+                  'rid': 'server-alpha',
+                  'name': 'Shared Alpha',
+                  'visibility': 'private',
+                  'default_avatar_key': 'room-1',
+                  'room_role': 'member',
+                },
+              ],
+            },
+            'room_display_name': 'Morgan Creator',
+            'role': 'owner',
+            'joined_at': '2026-06-01T00:00:00Z',
+          },
         });
       }
       if (request.url.path == '/api/v1/rooms/server-public/join') {
@@ -3454,6 +3542,7 @@ Map<String, Object?> _roomDetailJson({
   String joinPolicy = 'approval_required',
   bool aiVoiceAnnouncementsEnabled = true,
   String role = 'owner',
+  Map<String, Object?>? createdBy,
 }) {
   return {
     ..._roomCardJson(
@@ -3468,7 +3557,7 @@ Map<String, Object?> _roomDetailJson({
     'join_policy': joinPolicy,
     'ai_voice_announcements_enabled': aiVoiceAnnouncementsEnabled,
     'my_membership': {'joined_at': '2026-06-01T00:00:00Z', 'role': role},
-    'created_by': _currentUserJson,
+    'created_by': createdBy ?? _currentUserJson,
     'live': _liveStateJson(roomId: id, participantCount: liveParticipantCount),
     'created_at': '2026-06-01T00:00:00Z',
   };
