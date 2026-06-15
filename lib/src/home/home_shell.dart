@@ -370,7 +370,7 @@ class _HomeShellState extends State<HomeShell> {
         decoration: BoxDecoration(border: Border.all(color: _windowEdgeBorder)),
         child: LayoutBuilder(
           builder: (context, shellConstraints) {
-            final searchOverlayWidth = _homeTitleBarSearchWidth(
+            final showSearchOverlay = _homeTitleBarCanShowSearch(
               context,
               shellConstraints.maxWidth,
             );
@@ -415,13 +415,13 @@ class _HomeShellState extends State<HomeShell> {
                     ],
                   ),
                 ),
-                if (_hasSearchQuery &&
-                    _searchExpanded &&
-                    searchOverlayWidth >= 96)
+                if (_hasSearchQuery && _searchExpanded && showSearchOverlay)
                   Positioned(
                     top: _homeTitleBarHeight - 1,
-                    left: (shellConstraints.maxWidth - searchOverlayWidth) / 2,
-                    width: searchOverlayWidth,
+                    left:
+                        (shellConstraints.maxWidth - _homeTitleBarSearchWidth) /
+                        2,
+                    width: _homeTitleBarSearchWidth,
                     child: TapRegion(
                       key: const ValueKey('home-title-search-results'),
                       groupId: _searchTapRegionGroup,

@@ -269,6 +269,8 @@ void main() {
       find.byKey(const ValueKey('home-title-search')),
     );
     expect(searchRect.center.dx, closeTo(400, 0.01));
+    expect(searchRect.width, closeTo(520, 0.01));
+    expect(searchRect.height, closeTo(30, 0.01));
 
     final userSummaryRect = tester.getRect(
       find.byKey(const ValueKey('home-sidebar-user-summary')),
@@ -301,6 +303,39 @@ void main() {
           .selected,
       isTrue,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('authenticated home shell title search keeps fixed resize size', (
+    WidgetTester tester,
+  ) async {
+    Future<Size> pumpHomeAtWidth(double width) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: Center(
+            child: SizedBox(
+              width: width,
+              height: 620,
+              child: HomePage(
+                app: _homeTestAppContext(),
+                realtime: _NoopRealtimeService(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      return tester.getSize(find.byKey(const ValueKey('home-title-search')));
+    }
+
+    final wideSize = await pumpHomeAtWidth(1180);
+    final resizedSize = await pumpHomeAtWidth(900);
+
+    expect(wideSize.width, closeTo(520, 0.01));
+    expect(wideSize.height, closeTo(30, 0.01));
+    expect(resizedSize.width, closeTo(wideSize.width, 0.01));
+    expect(resizedSize.height, closeTo(wideSize.height, 0.01));
     expect(tester.takeException(), isNull);
   });
 

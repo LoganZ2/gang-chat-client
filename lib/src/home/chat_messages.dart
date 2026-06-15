@@ -1006,7 +1006,7 @@ class _StickerFallback extends StatelessWidget {
   }
 }
 
-const _voiceAccent = Color(0xFF2EA7F2);
+const _voiceAccent = Colors.white;
 
 class _VoiceBody extends StatelessWidget {
   const _VoiceBody({
@@ -1330,7 +1330,8 @@ class _FileAttachmentTile extends StatelessWidget {
                 width: previewSize.width,
                 height: previewSize.height,
                 onTap: () {
-                  final fullUrl = (resolvedUrl != null && resolvedUrl.isNotEmpty)
+                  final fullUrl =
+                      (resolvedUrl != null && resolvedUrl.isNotEmpty)
                       ? resolvedUrl
                       : previewUrl;
                   showChatImagePreview(

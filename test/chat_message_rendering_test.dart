@@ -498,6 +498,18 @@ void main() {
     expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
     expect(find.byIcon(Icons.audio_file_outlined), findsNothing);
     expect(find.byTooltip('voice_1.m4a'), findsNothing);
+    expect(
+      tester.widget<Icon>(find.byIcon(Icons.play_arrow_rounded)).color,
+      Colors.white,
+    );
+    expect(tester.widget<Text>(find.text('15"')).style?.color, Colors.white);
+    expect(
+      find.byWidgetPredicate((widget) {
+        final decoration = widget is DecoratedBox ? widget.decoration : null;
+        return decoration is BoxDecoration && decoration.color == Colors.white;
+      }),
+      findsWidgets,
+    );
 
     await tester.tap(find.byIcon(Icons.play_arrow_rounded));
     expect(toggles, ['client_1|https://assets.test/uploads/voice_1.m4a']);

@@ -1,12 +1,17 @@
 part of 'home_shell.dart';
 
 const _homeTitleBarHeight = 44.0;
-const _homeTitleBarSearchMaxWidth = 520.0;
+const _homeTitleBarSearchWidth = 520.0;
+const _homeTitleBarSearchHeight = 30.0;
 const _homeTitleBarMinSearchWidth = 122.0;
 const _homeTitleBarControlsWidth = 134.0;
 const _homeTitleBarControlWidth = 34.0;
 const _homeTitleBarControlHeight = 28.0;
 const _homeTitleBarControlGap = 6.0;
+const _homeTitleBarWindowsSearchMinWidth =
+    _homeTitleBarSearchWidth +
+    _homeTitleBarControlsWidth * 2 +
+    _homeTitleBarControlGap * 2;
 
 double _homeTitleBarBrandWidth(BuildContext context, double maxWidth) {
   final nativeMacControls = Theme.of(context).platform == TargetPlatform.macOS;
@@ -20,14 +25,12 @@ double _homeTitleBarBrandWidth(BuildContext context, double maxWidth) {
   return wide ? sidebarWidth : compactBrandWidth;
 }
 
-double _homeTitleBarSearchWidth(BuildContext context, double maxWidth) {
+bool _homeTitleBarCanShowSearch(BuildContext context, double maxWidth) {
   final nativeMacControls = Theme.of(context).platform == TargetPlatform.macOS;
-  final brandWidth = _homeTitleBarBrandWidth(context, maxWidth);
-  final rightReserved = nativeMacControls ? 0.0 : _homeTitleBarControlsWidth;
-  final reserved = brandWidth > rightReserved ? brandWidth : rightReserved;
-  return (maxWidth - reserved * 2 - 24)
-      .clamp(0.0, _homeTitleBarSearchMaxWidth)
-      .toDouble();
+  if (nativeMacControls) {
+    return maxWidth >= _homeTitleBarSearchWidth;
+  }
+  return maxWidth >= _homeTitleBarWindowsSearchMinWidth;
 }
 
 class _HomeTitleBar extends StatefulWidget {
@@ -109,7 +112,7 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
               context,
               constraints.maxWidth,
             );
-            final searchWidth = _homeTitleBarSearchWidth(
+            final showSearch = _homeTitleBarCanShowSearch(
               context,
               constraints.maxWidth,
             );
@@ -144,7 +147,7 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
                       ),
                   ],
                 ),
-                if (searchWidth >= 96)
+                if (showSearch)
                   Align(
                     alignment: Alignment.center,
                     child: TapRegion(
@@ -152,7 +155,8 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
                       onTapOutside: (_) => widget.onSearchTapOutside(),
                       child: SizedBox(
                         key: const ValueKey('home-title-search'),
-                        width: searchWidth,
+                        width: _homeTitleBarSearchWidth,
+                        height: _homeTitleBarSearchHeight,
                         child: _TitleSearchField(
                           controller: widget.searchController,
                           query: widget.searchQuery,
@@ -220,7 +224,7 @@ class _TitleSearchFieldState extends State<_TitleSearchField> {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 90),
       curve: Curves.easeOutCubic,
-      height: 30,
+      height: _homeTitleBarSearchHeight,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         color: _focused ? UiColors.selected : UiColors.surface,
