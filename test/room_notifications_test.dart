@@ -175,7 +175,7 @@ void main() {
         deleted.room,
         roomExists: deleted.roomExists,
       ),
-      '空',
+      '',
     );
     expect(
       roomNotificationRoomAvatarUrl(
@@ -248,7 +248,7 @@ void main() {
         deletedInviter.inviter,
         userExists: deletedInviter.inviterExists,
       ),
-      '空',
+      '',
     );
     expect(
       roomNotificationUserAvatarUrl(

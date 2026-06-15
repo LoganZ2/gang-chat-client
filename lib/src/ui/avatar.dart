@@ -44,6 +44,7 @@ class Avatar extends StatelessWidget {
     this.size = 40,
     this.active = false,
     this.activeBorderWidth = 2,
+    this.showFallbackText = true,
   });
 
   final String label;
@@ -57,6 +58,7 @@ class Avatar extends StatelessWidget {
   final double size;
   final bool active;
   final double activeBorderWidth;
+  final bool showFallbackText;
 
   @override
   Widget build(BuildContext context) {
@@ -76,18 +78,20 @@ class Avatar extends StatelessWidget {
         ),
         child: ClipOval(
           child: imageUrl == null
-              ? Center(
-                  child: Text(
-                    initials,
-                    style: TextStyle(
-                      color: key == null && active
-                          ? UiColors.accent
-                          : UiColors.text,
-                      fontSize: size * 0.34,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                )
+              ? showFallbackText
+                    ? Center(
+                        child: Text(
+                          initials,
+                          style: TextStyle(
+                            color: key == null && active
+                                ? UiColors.accent
+                                : UiColors.text,
+                            fontSize: size * 0.34,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      )
+                    : const SizedBox.expand()
               : Image.network(imageUrl!, fit: BoxFit.cover),
         ),
       ),

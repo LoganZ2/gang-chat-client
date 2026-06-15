@@ -9,10 +9,10 @@ enum RoomNotificationItemType {
 }
 
 const missingRoomNotificationRoomLabel = '房间不存在';
-const missingRoomNotificationRoomAvatarLabel = '空';
+const missingRoomNotificationRoomAvatarLabel = '';
 const missingRoomNotificationRoomAvatarKey = 'graphite-2';
 const missingRoomNotificationUserLabel = '用户不存在';
-const missingRoomNotificationUserAvatarLabel = '空';
+const missingRoomNotificationUserAvatarLabel = '';
 const missingRoomNotificationUserAvatarKey = 'graphite-2';
 
 class RoomNotificationItem {

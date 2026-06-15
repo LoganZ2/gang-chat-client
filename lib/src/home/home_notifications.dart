@@ -326,6 +326,7 @@ class _RoomInviteNotificationRow extends StatelessWidget {
                 userExists: invite.inviterExists,
               ),
               size: 34,
+              showFallbackText: invite.inviterExists,
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -579,6 +580,7 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
                 userExists: application.reviewerExists,
               ),
               size: 34,
+              showFallbackText: application.reviewerExists,
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -718,6 +720,7 @@ class _InlineRoomTarget extends StatelessWidget {
         roomExists: roomExists,
       ),
       size: 34,
+      showFallbackText: roomExists,
     );
     final avatarTarget = roomNotificationRoomCardEnabled(roomExists: roomExists)
         ? RoomHoverCard(

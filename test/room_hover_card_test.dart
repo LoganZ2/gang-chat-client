@@ -172,12 +172,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('房间不存在'), findsOneWidget);
-    expect(find.text('空'), findsOneWidget);
+    expect(find.text('空'), findsNothing);
     expect(find.text('Deleted Room'), findsNothing);
 
     final avatarFinder = find.byKey(
       const ValueKey('notification-room-avatar-invite_deleted'),
     );
+    final avatar = tester.widget<Avatar>(avatarFinder);
+    expect(avatar.label, '');
+    expect(avatar.showFallbackText, isFalse);
     final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await gesture.addPointer(location: Offset.zero);
     addTearDown(gesture.removePointer);
@@ -246,7 +249,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('用户不存在'), findsOneWidget);
-    expect(find.text('空'), findsOneWidget);
+    expect(find.text('空'), findsNothing);
     expect(find.text('Deleted User'), findsNothing);
+    final avatar = tester.widget<Avatar>(
+      find.byKey(
+        const ValueKey('notification-inviter-avatar-invite_deleted_user'),
+      ),
+    );
+    expect(avatar.label, '');
+    expect(avatar.showFallbackText, isFalse);
   });
 }
