@@ -59,7 +59,7 @@ void main() {
     expect(settingsSectionTitle(SettingsSection.profile), '用户资料');
     expect(settingsSectionTitle(SettingsSection.preferences), '偏好设置');
     expect(settingsSectionTitle(SettingsSection.security), '隐私和安全');
-    expect(settingsSectionTitle(SettingsSection.voice), '默认语音源');
+    expect(settingsSectionTitle(SettingsSection.voice), '语音和视频');
     expect(settingsSectionTitle(SettingsSection.stickers), '表情包管理');
   });
 

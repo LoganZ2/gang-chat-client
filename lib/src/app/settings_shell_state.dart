@@ -45,7 +45,7 @@ String settingsSectionTitle(SettingsSection section) {
     SettingsSection.preferences => '偏好设置',
     SettingsSection.stickers => '表情包管理',
     SettingsSection.security => '隐私和安全',
-    SettingsSection.voice => '默认语音源',
+    SettingsSection.voice => '语音和视频',
   };
 }
 

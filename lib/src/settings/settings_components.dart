@@ -30,7 +30,7 @@ class _SettingsNavigation extends StatelessWidget {
         ),
         Segment(
           value: SettingsSection.voice,
-          label: '默认语音源',
+          label: '语音和视频',
           icon: Icons.graphic_eq,
         ),
         Segment(
