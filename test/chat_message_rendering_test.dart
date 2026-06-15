@@ -137,6 +137,33 @@ void main() {
     expect(find.byKey(const ValueKey('chat-jump-to-latest')), findsNothing);
   });
 
+  testWidgets('short chats start at the top of the message area', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    final messages = _textMessages(2);
+
+    await tester.pumpWidget(
+      _host(
+        _chatPane(
+          controller: controller,
+          room: _roomDetail,
+          messages: messages,
+        ),
+        height: 620,
+      ),
+    );
+    await tester.pump();
+
+    final listRect = tester.getRect(
+      find.byKey(const ValueKey('chat-message-list')),
+    );
+    final firstMessageRect = tester.getRect(find.text('Message 0'));
+
+    expect(firstMessageRect.top, lessThan(listRect.top + 110));
+  });
+
   testWidgets('latest message button appears away from bottom and jumps back', (
     tester,
   ) async {

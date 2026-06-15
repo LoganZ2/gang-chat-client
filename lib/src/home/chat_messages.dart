@@ -4,6 +4,7 @@ part of 'chat_pane.dart';
 /// incoming message from someone else to auto-scroll the list. Beyond this the
 /// reader is browsing history, so we leave their position alone.
 const double _autoScrollFollowThreshold = 120;
+const double _chatMessageListTopPadding = 18;
 const _messageListCacheExtent = ScrollCacheExtent.pixels(1200);
 
 /// Callbacks for file-attachment downloads, bundled so they can travel from
@@ -112,6 +113,11 @@ class _MessageStageState extends State<_MessageStage> {
   bool _showDetailedTimestamps = false;
   bool _showLatestButton = false;
   final ScrollController _scrollController = ScrollController();
+  final GlobalKey _messageListKey = GlobalKey();
+  final GlobalKey _oldestMessageKey = GlobalKey();
+  double _underflowBottomSpacer = 0;
+  bool _underflowAlignmentScheduled = false;
+  bool _messageListReady = false;
   // Guards queued scroll requests so overlapping requests don't stack up; the newest
   // request wins by bumping this token.
   int _scrollToBottomToken = 0;
@@ -128,9 +134,18 @@ class _MessageStageState extends State<_MessageStage> {
     if (oldWidget.roomId != widget.roomId) {
       _showDetailedTimestamps = false;
       _showLatestButton = false;
+      _underflowBottomSpacer = 0;
+      _messageListReady = false;
       // New room: snap straight to the latest message, no animation.
       _scrollToBottom(animated: false);
       return;
+    }
+    if (oldWidget.messages.length != widget.messages.length ||
+        (oldWidget.messages.isNotEmpty &&
+            widget.messages.isNotEmpty &&
+            oldWidget.messages.last.clientMessageId !=
+                widget.messages.last.clientMessageId)) {
+      _underflowBottomSpacer = 0;
     }
     if (_shouldFollowToBottom(oldWidget)) {
       _scrollToBottom(animated: true);
@@ -183,6 +198,41 @@ class _MessageStageState extends State<_MessageStage> {
     setState(() => _showLatestButton = next);
   }
 
+  void _scheduleUnderflowAlignment() {
+    if (_underflowAlignmentScheduled) return;
+    _underflowAlignmentScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _underflowAlignmentScheduled = false;
+      if (!mounted) return;
+      final listBox =
+          _messageListKey.currentContext?.findRenderObject() as RenderBox?;
+      final oldestBox =
+          _oldestMessageKey.currentContext?.findRenderObject() as RenderBox?;
+      if (listBox == null) return;
+      if (oldestBox == null) {
+        if (_underflowBottomSpacer > 0 || !_messageListReady) {
+          setState(() {
+            _underflowBottomSpacer = 0;
+            _messageListReady = true;
+          });
+        }
+        return;
+      }
+
+      final listTop = listBox.localToGlobal(Offset.zero).dy;
+      final oldestTop = oldestBox.localToGlobal(Offset.zero).dy;
+      final targetTop = listTop + _chatMessageListTopPadding;
+      final delta = oldestTop - targetTop;
+      final nextSpacer = math.max(0.0, _underflowBottomSpacer + delta);
+      final spacerChanged = (nextSpacer - _underflowBottomSpacer).abs() >= 0.5;
+      if (!spacerChanged && _messageListReady) return;
+      setState(() {
+        if (spacerChanged) _underflowBottomSpacer = nextSpacer;
+        _messageListReady = true;
+      });
+    });
+  }
+
   // The list is reversed, so the latest message lives at the minimum scroll
   // extent. New rooms can render directly at the final bottom position instead
   // of painting history first and jumping on the next frame.
@@ -222,6 +272,7 @@ class _MessageStageState extends State<_MessageStage> {
   void _toggleDetailedTimestamps() {
     setState(() {
       _showDetailedTimestamps = !_showDetailedTimestamps;
+      _underflowBottomSpacer = 0;
     });
   }
 
@@ -260,23 +311,29 @@ class _MessageStageState extends State<_MessageStage> {
       );
     }
 
+    _scheduleUnderflowAlignment();
+
     final now = DateTime.now();
     final list = ListView.separated(
-      key: const ValueKey('chat-message-list'),
+      key: _messageListKey,
       controller: _scrollController,
       reverse: true,
       physics: const ClampingScrollPhysics(),
       scrollCacheExtent: _messageListCacheExtent,
       padding: EdgeInsets.fromLTRB(
         _chatHorizontalPadding,
-        18,
+        _chatMessageListTopPadding,
         _chatHorizontalPadding,
         widget.bottomInset,
       ),
-      itemCount: widget.messages.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 12),
+      itemCount: widget.messages.length + 1,
+      separatorBuilder: (context, index) =>
+          index == 0 ? const SizedBox.shrink() : const SizedBox(height: 12),
       itemBuilder: (context, index) {
-        final chronologicalIndex = widget.messages.length - 1 - index;
+        if (index == 0) return SizedBox(height: _underflowBottomSpacer);
+
+        final messageIndex = index - 1;
+        final chronologicalIndex = widget.messages.length - 1 - messageIndex;
         final message = widget.messages[chronologicalIndex];
         final systemEvent = message_display.systemMessageEvent(message);
         final previous = chronologicalIndex == 0
@@ -290,7 +347,7 @@ class _MessageStageState extends State<_MessageStage> {
         final timestamp = _showDetailedTimestamps
             ? message_display.formatDetailedChatTimestamp(message.createdAt)
             : message_display.formatChatTimestamp(message.createdAt, now: now);
-        return Column(
+        final row = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (showTimestamp) ...[
@@ -314,12 +371,24 @@ class _MessageStageState extends State<_MessageStage> {
               ),
           ],
         );
+        if (chronologicalIndex == 0) {
+          return KeyedSubtree(key: _oldestMessageKey, child: row);
+        }
+        return row;
       },
     );
 
     return Stack(
       children: [
-        Positioned.fill(child: list),
+        Positioned.fill(
+          child: Opacity(
+            opacity: _messageListReady ? 1 : 0,
+            child: KeyedSubtree(
+              key: const ValueKey('chat-message-list'),
+              child: list,
+            ),
+          ),
+        ),
         Positioned(
           right: _chatFloatingEdgeInset,
           bottom: 12,
