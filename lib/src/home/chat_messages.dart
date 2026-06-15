@@ -434,7 +434,13 @@ class _MessageStageState extends State<_MessageStage> {
               const SizedBox(height: 10),
             ],
             if (systemEvent != null)
-              _SystemMessageRow(event: systemEvent)
+              _SystemMessageRow(
+                event: systemEvent,
+                currentUser: widget.currentUser,
+                onResolveSenderProfile: widget.onResolveSenderProfile,
+                onResolveRoomProfile: widget.onResolveRoomProfile,
+                onEnterProfileRoom: widget.onEnterProfileRoom,
+              )
             else
               _MessageRow(
                 message: message,
@@ -548,9 +554,20 @@ class _MessageTimeDivider extends StatelessWidget {
 }
 
 class _SystemMessageRow extends StatelessWidget {
-  const _SystemMessageRow({required this.event});
+  const _SystemMessageRow({
+    required this.event,
+    required this.currentUser,
+    this.onResolveSenderProfile,
+    this.onResolveRoomProfile,
+    this.onEnterProfileRoom,
+  });
 
   final message_display.SystemMessageEvent event;
+  final CurrentUser currentUser;
+  final Future<UserSummary> Function(UserSummary sender)?
+  onResolveSenderProfile;
+  final RoomProfileResolver? onResolveRoomProfile;
+  final ValueChanged<PublicRoom>? onEnterProfileRoom;
 
   @override
   Widget build(BuildContext context) {
@@ -570,7 +587,15 @@ class _SystemMessageRow extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               spacing: 5,
               runSpacing: 5,
-              children: [..._SystemMessageParts(event: event).build(context)],
+              children: [
+                ..._SystemMessageParts(
+                  event: event,
+                  currentUser: currentUser,
+                  onResolveSenderProfile: onResolveSenderProfile,
+                  onResolveRoomProfile: onResolveRoomProfile,
+                  onEnterProfileRoom: onEnterProfileRoom,
+                ).build(context),
+              ],
             ),
           ),
         ),
@@ -580,33 +605,44 @@ class _SystemMessageRow extends StatelessWidget {
 }
 
 class _SystemMessageParts {
-  const _SystemMessageParts({required this.event});
+  const _SystemMessageParts({
+    required this.event,
+    required this.currentUser,
+    this.onResolveSenderProfile,
+    this.onResolveRoomProfile,
+    this.onEnterProfileRoom,
+  });
 
   final message_display.SystemMessageEvent event;
+  final CurrentUser currentUser;
+  final Future<UserSummary> Function(UserSummary sender)?
+  onResolveSenderProfile;
+  final RoomProfileResolver? onResolveRoomProfile;
+  final ValueChanged<PublicRoom>? onEnterProfileRoom;
 
   List<Widget> build(BuildContext context) {
     final subject = event.subject;
     switch (event.event) {
       case message_display.kSystemEventRoomMemberJoined:
-        return [_SystemUserChip(user: subject), _text('加入了房间')];
+        return [_userChip(subject), _text('加入了房间')];
       case message_display.kSystemEventRoomMemberLeft:
-        return [_SystemUserChip(user: subject), _text('离开了房间')];
+        return [_userChip(subject), _text('离开了房间')];
       case message_display.kSystemEventRoomMemberRemoved:
         final actor = event.actor;
         return [
-          _SystemUserChip(user: subject),
+          _userChip(subject),
           if (actor == null)
             _text('被踢出了房间')
           else ...[
             _text('被'),
-            _SystemUserChip(user: actor),
+            _userChip(actor),
             _text('踢出了房间'),
           ],
         ];
       case message_display.kSystemEventLiveJoined:
-        return [_SystemUserChip(user: subject), _text('进入了语音频道')];
+        return [_userChip(subject), _text('进入了语音频道')];
       case message_display.kSystemEventLiveLeft:
-        return [_SystemUserChip(user: subject), _text('退出了语音频道')];
+        return [_userChip(subject), _text('退出了语音频道')];
       case message_display.kSystemEventRoomRoleChanged:
         final actor = event.actor;
         final roleLabel = message_display.systemMessageRoleLabel(event.toRole);
@@ -615,21 +651,25 @@ class _SystemMessageParts {
           event,
         );
         return [
-          _SystemUserChip(user: subject),
-          if (!omitActor && actor != null) ...[
-            _text('被'),
-            _SystemUserChip(user: actor),
-          ],
+          _userChip(subject),
+          if (!omitActor && actor != null) ...[_text('被'), _userChip(actor)],
           _text(verb),
           _SystemRoleTag(label: roleLabel),
         ];
       default:
         final fallback = event.message.body.trim();
-        return [
-          _SystemUserChip(user: subject),
-          if (fallback.isNotEmpty) _text(fallback),
-        ];
+        return [_userChip(subject), if (fallback.isNotEmpty) _text(fallback)];
     }
+  }
+
+  Widget _userChip(UserSummary user) {
+    return _SystemUserChip(
+      user: user,
+      currentUser: currentUser,
+      onResolveProfile: onResolveSenderProfile,
+      onResolveRoomProfile: onResolveRoomProfile,
+      onEnterProfileRoom: onEnterProfileRoom,
+    );
   }
 
   Widget _text(String value) {
@@ -646,22 +686,40 @@ class _SystemMessageParts {
 }
 
 class _SystemUserChip extends StatelessWidget {
-  const _SystemUserChip({required this.user});
+  const _SystemUserChip({
+    required this.user,
+    required this.currentUser,
+    this.onResolveProfile,
+    this.onResolveRoomProfile,
+    this.onEnterProfileRoom,
+  });
 
   final UserSummary user;
+  final CurrentUser currentUser;
+  final Future<UserSummary> Function(UserSummary sender)? onResolveProfile;
+  final RoomProfileResolver? onResolveRoomProfile;
+  final ValueChanged<PublicRoom>? onEnterProfileRoom;
 
   @override
   Widget build(BuildContext context) {
     final name = _senderName(user);
+    final avatar = Avatar(
+      label: name,
+      imageUrl: AppConfigScope.of(context).resolveAssetUrl(user.avatarUrl),
+      defaultAvatarKey: user.defaultAvatarKey,
+      size: 16,
+      activeBorderWidth: 1,
+    );
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Avatar(
-          label: name,
-          imageUrl: AppConfigScope.of(context).resolveAssetUrl(user.avatarUrl),
-          defaultAvatarKey: user.defaultAvatarKey,
-          size: 16,
-          activeBorderWidth: 1,
+        _AvatarHoverCard(
+          user: user,
+          currentUser: currentUser,
+          onResolveProfile: onResolveProfile,
+          onResolveRoomProfile: onResolveRoomProfile,
+          onEnterCommonRoom: onEnterProfileRoom,
+          child: avatar,
         ),
         const SizedBox(width: 4),
         ConstrainedBox(

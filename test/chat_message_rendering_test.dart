@@ -289,6 +289,67 @@ void main() {
     expect(find.text(detailed), findsOneWidget);
   });
 
+  testWidgets('system message user avatar opens the resolved profile card', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    final resolvedIds = <String>[];
+
+    Future<UserSummary> resolveProfile(UserSummary sender) async {
+      resolvedIds.add(sender.id);
+      return UserSummary(
+        id: sender.id,
+        username: 'fresh_${sender.username}',
+        displayName: 'Fresh ${sender.displayName}',
+        avatarUrl: sender.avatarUrl,
+        defaultAvatarKey: sender.defaultAvatarKey,
+        uid: '20001',
+        bio: 'Fresh system profile',
+        isOnline: true,
+      );
+    }
+
+    await tester.pumpWidget(
+      _host(
+        _chatPane(
+          controller: controller,
+          messages: [
+            _message(
+              type: 'system',
+              body: '进入了语音频道',
+              attachments: const [
+                MessageAttachment(
+                  type: 'system',
+                  event: message_display.kSystemEventLiveJoined,
+                  target: _systemTarget,
+                ),
+              ],
+            ),
+          ],
+          onResolveSenderProfile: resolveProfile,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+
+    final systemAvatar = find.byWidgetPredicate(
+      (widget) => widget is ui.Avatar && widget.label == 'Logan',
+    );
+    expect(systemAvatar, findsOneWidget);
+
+    await gesture.moveTo(tester.getCenter(systemAvatar));
+    await tester.pumpAndSettle();
+
+    expect(resolvedIds, ['user_target']);
+    expect(find.text('@fresh_logan'), findsOneWidget);
+    expect(find.text('Fresh system profile'), findsOneWidget);
+  });
+
   testWidgets('system and ordinary messages can share a timestamp divider', (
     tester,
   ) async {
@@ -737,6 +798,7 @@ Widget _chatPane({
   required List<Message> messages,
   RoomDetail? room,
   bool loading = false,
+  Future<UserSummary> Function(UserSummary sender)? onResolveSenderProfile,
   ValueChanged<PublicRoom>? onEnterProfileRoom,
 }) {
   return ChatPane(
@@ -776,6 +838,7 @@ Widget _chatPane({
     onOpenLiveChannel: () {},
     onOpenRoomMembers: () {},
     onOpenRoomSettings: () {},
+    onResolveSenderProfile: onResolveSenderProfile,
     onEnterProfileRoom: onEnterProfileRoom,
   );
 }
