@@ -73,6 +73,29 @@ void main() {
     );
   });
 
+  test('global search view hides my rooms that only match hidden details', () {
+    final results = GlobalSearchResults(
+      myRooms: [
+        _room('hidden', name: 'Hidden', description: '12345'),
+        _room('title', name: 'Room 1'),
+        _room('message', name: 'Notes', lastMessageBody: 'visible 1'),
+        _room('rid', name: 'RID Room', rid: '20000001'),
+      ],
+      publicRooms: const [],
+      messages: const [],
+      files: const [],
+    );
+
+    final visibleForOne = globalSearchResultsForView(results, query: '1');
+    expect(visibleForOne.myRooms.map((room) => room.id), ['title', 'message']);
+
+    final visibleForRid = globalSearchResultsForView(
+      results,
+      query: '20000001',
+    );
+    expect(visibleForRid.myRooms.map((room) => room.id), ['rid']);
+  });
+
   test(
     'message search title uses room and subtitle keeps sender with message',
     () {
@@ -96,16 +119,32 @@ void main() {
   });
 }
 
-RoomCard _room(String id) {
+RoomCard _room(
+  String id, {
+  String? name,
+  String rid = '',
+  String description = '',
+  String? lastMessageBody,
+}) {
   return RoomCard(
     id: id,
-    name: id == 'room_1' ? 'Alpha' : 'Beta',
+    name: name ?? (id == 'room_1' ? 'Alpha' : 'Beta'),
+    rid: rid,
+    description: description,
     avatarUrl: null,
     defaultAvatarKey: 'room-1',
     memberCount: 2,
     liveParticipantCount: 0,
     liveAvatarPreview: const [],
-    lastMessage: null,
+    lastMessage: lastMessageBody == null
+        ? null
+        : LastMessagePreview(
+            id: 'last_$id',
+            type: 'text',
+            senderDisplayName: 'Alice',
+            bodyPreview: lastMessageBody,
+            createdAt: DateTime.utc(2026, 6, 1),
+          ),
     unreadCount: 0,
     updatedAt: DateTime.utc(2026, 6, 1),
   );

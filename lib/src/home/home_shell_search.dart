@@ -54,7 +54,10 @@ extension _HomeShellSearch on _HomeShellState {
       if (!mounted || requestSerial != _searchRequestSerial) return;
       if (_titleSearchController.text.trim() != query) return;
       _setHomeState(() {
-        _searchResults = results;
+        _searchResults = search_display.globalSearchResultsForView(
+          results,
+          query: query,
+        );
         _searching = false;
         _searchError = null;
       });
@@ -92,6 +95,11 @@ extension _HomeShellSearch on _HomeShellState {
   void _openSearchRoom(RoomCard room) {
     final narrow = MediaQuery.sizeOf(context).width < narrowBreakpoint;
     _selectServer(room, openContent: narrow);
+  }
+
+  Future<PublicRoom> _resolveSearchRoomProfile(RoomCard room) async {
+    final detail = await _roomsController.getRoom(room.id);
+    return _publicRoomFromRoomDetail(detail);
   }
 
   Future<void> _handlePublicRoomSearchAction(PublicRoom room) async {
@@ -263,6 +271,27 @@ extension _HomeShellSearch on _HomeShellState {
       lastMessage: null,
       unreadCount: 0,
       updatedAt: DateTime.now().toUtc(),
+    );
+  }
+
+  PublicRoom _publicRoomFromRoomDetail(RoomDetail room) {
+    return PublicRoom(
+      id: room.id,
+      rid: room.rid,
+      name: room_display.roomDisplayName(room),
+      avatarUrl: room.avatarUrl,
+      defaultAvatarKey: room.defaultAvatarKey,
+      visibility: room.visibility,
+      joinPolicy: room.joinPolicy,
+      description: room.description,
+      memberCount: room.memberCount,
+      onlineMemberCount: room.onlineMemberCount,
+      liveParticipantCount: room.live.participantCount,
+      joined: true,
+      joinState: 'joined',
+      createdBy: room.createdBy,
+      personalProfile: room.personalProfile,
+      myMembership: room.myMembership,
     );
   }
 

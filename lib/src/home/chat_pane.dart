@@ -9,12 +9,11 @@ import '../app/file_display.dart' as file_display;
 import '../app/file_transfer_state.dart';
 import '../app/composer_attachment_display.dart' as composer_attachment;
 import '../app/message_display.dart' as message_display;
-import '../app/room_display.dart' as room_display;
 import '../app/sticker_display.dart' as sticker_display;
 import '../app/voice_message_display.dart' as voice_display;
 import '../protocol/models.dart';
 import '../ui/ui.dart';
-import 'hover_card_anchor.dart';
+import 'room_profile_card.dart';
 
 part 'chat_header.dart';
 part 'chat_messages.dart';
@@ -163,7 +162,7 @@ class ChatPane extends StatelessWidget {
             child: _MessageStage(
               key: stageKey,
               roomId: room?.id ?? roomCard?.id,
-              currentUserId: currentUser.id,
+              currentUser: currentUser,
               roomReady: roomReady,
               loading: loading,
               error: error,

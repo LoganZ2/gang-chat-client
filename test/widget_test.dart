@@ -339,94 +339,152 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('authenticated home shell search category filters sidebar rooms', (
-    WidgetTester tester,
-  ) async {
-    final requestedPaths = <String>[];
+  testWidgets(
+    'authenticated home shell search category filters sidebar rooms',
+    (WidgetTester tester) async {
+      final requestedPaths = <String>[];
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ui.uiTheme(),
-        home: HomePage(
-          app: _homeTestAppContext(requestedPaths: requestedPaths),
-          realtime: _NoopRealtimeService(),
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: HomePage(
+            app: _homeTestAppContext(requestedPaths: requestedPaths),
+            realtime: _NoopRealtimeService(),
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    final searchField = find.descendant(
-      of: find.byKey(const ValueKey('home-title-search')),
-      matching: find.byType(TextField),
-    );
-    await tester.enterText(searchField, 'Beta');
-    await tester.pump(const Duration(milliseconds: 320));
-    await tester.pumpAndSettle();
+      final searchField = find.descendant(
+        of: find.byKey(const ValueKey('home-title-search')),
+        matching: find.byType(TextField),
+      );
+      await tester.enterText(searchField, 'Beta');
+      await tester.pump(const Duration(milliseconds: 320));
+      await tester.pumpAndSettle();
 
-    expect(requestedPaths, contains('/api/v1/search'));
-    expect(
-      find.byKey(const ValueKey('home-title-search-results')),
-      findsOneWidget,
-    );
-    expect(find.text('我的房间 1'), findsWidgets);
-    expect(find.text('公开房间 1'), findsWidgets);
-    expect(find.text('聊天记录 1'), findsWidgets);
-    expect(find.text('聊天文件 1'), findsWidgets);
-    expect(
-      find.byKey(const ValueKey('public-room-action-server-public')),
-      findsOneWidget,
-    );
+      expect(requestedPaths, contains('/api/v1/search'));
+      expect(
+        find.byKey(const ValueKey('home-title-search-results')),
+        findsOneWidget,
+      );
+      expect(find.text('我的房间 1'), findsWidgets);
+      expect(find.text('公开房间 1'), findsWidgets);
+      expect(find.text('聊天记录 1'), findsWidgets);
+      expect(find.text('聊天文件 1'), findsWidgets);
+      expect(
+        find.byKey(const ValueKey('public-room-action-server-public')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('my-room-action-server-beta')),
+        findsOneWidget,
+      );
+      expect(find.widgetWithText(ui.Button, '进入房间'), findsOneWidget);
+      expect(find.widgetWithText(ui.Button, '加入房间'), findsOneWidget);
+      expect(find.text('5 名成员'), findsWidgets);
+      expect(find.text('2 名成员'), findsWidgets);
+      expect(find.text('server-public - 2 名成员'), findsNothing);
 
-    await tester.tap(
-      find.byKey(const ValueKey('public-room-action-server-public')),
-    );
-    await tester.pumpAndSettle();
+      final searchPanel = find.byKey(
+        const ValueKey('home-title-search-results'),
+      );
+      final myRoomAvatar = find.descendant(
+        of: searchPanel,
+        matching: find.byWidgetPredicate(
+          (widget) => widget is ui.Avatar && widget.label == 'Beta Room',
+        ),
+      );
+      expect(myRoomAvatar, findsWidgets);
 
-    expect(requestedPaths, contains('/api/v1/rooms/server-public/join'));
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: Offset.zero);
+      addTearDown(gesture.removePointer);
+      await gesture.moveTo(tester.getCenter(myRoomAvatar.first));
+      await tester.pumpAndSettle();
 
-    // Selecting the 我的房间 category filters the sidebar to matching rooms.
-    await tester.tap(find.byKey(const ValueKey('search-category-myRooms')));
-    await tester.pumpAndSettle();
+      expect(requestedPaths, contains('/api/v1/rooms/server-beta'));
+      expect(find.text('创建者'), findsOneWidget);
 
-    expect(find.text('Beta Room'), findsWidgets);
-    expect(find.text('Alpha Room'), findsNothing);
+      await gesture.moveTo(const Offset(20, 520));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
 
-    // The active category persists across query edits.
-    await tester.enterText(searchField, 'Beta update');
-    await tester.pump(const Duration(milliseconds: 320));
-    await tester.pumpAndSettle();
+      final pathsBeforeSearchRowTap = List<String>.of(requestedPaths);
+      await tester.tap(
+        find
+            .descendant(
+              of: find.byKey(const ValueKey('home-title-search-results')),
+              matching: find.text('Beta Public'),
+            )
+            .first,
+      );
+      await tester.pumpAndSettle();
+      expect(requestedPaths, pathsBeforeSearchRowTap);
 
-    expect(find.text('Beta Room'), findsWidgets);
-    expect(find.text('Alpha Room'), findsNothing);
+      await tester.tap(
+        find.byKey(const ValueKey('public-room-action-server-public')),
+      );
+      await tester.pumpAndSettle();
 
-    // Re-tapping the active category clears it and restores the full sidebar.
-    await tester.tap(find.byKey(const ValueKey('search-category-myRooms')));
-    await tester.pumpAndSettle();
+      expect(requestedPaths, contains('/api/v1/rooms/server-public/join'));
 
-    expect(find.text('Alpha Room'), findsOneWidget);
-    expect(find.text('Beta Room'), findsWidgets);
+      // Selecting the 我的房间 category filters the sidebar to matching rooms.
+      await tester.tap(find.byKey(const ValueKey('search-category-myRooms')));
+      await tester.pumpAndSettle();
 
-    // Closing the dropdown hides the results panel; reopening restores it.
-    await tester.tapAt(const Offset(740, 100));
-    await tester.pumpAndSettle();
+      expect(find.text('Beta Room'), findsWidgets);
+      expect(find.text('Alpha Room'), findsNothing);
 
-    expect(
-      find.byKey(const ValueKey('home-title-search-results')),
-      findsNothing,
-    );
+      // The active category persists across query edits.
+      await tester.enterText(searchField, 'Beta R');
+      await tester.pump(const Duration(milliseconds: 320));
+      await tester.pumpAndSettle();
 
-    await tester.tap(searchField);
-    await tester.pumpAndSettle();
+      expect(find.text('Beta Room'), findsWidgets);
+      expect(find.text('Alpha Room'), findsNothing);
 
-    expect(
-      find.byKey(const ValueKey('home-title-search-results')),
-      findsOneWidget,
-    );
+      // Re-tapping the active category clears it and restores the full sidebar.
+      await tester.tap(find.byKey(const ValueKey('search-category-myRooms')));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Alpha Room'), findsOneWidget);
-    expect(find.text('Beta Room'), findsWidgets);
-    expect(tester.takeException(), isNull);
-  });
+      expect(find.text('Alpha Room'), findsOneWidget);
+      expect(find.text('Beta Room'), findsWidgets);
+
+      // Closing the dropdown hides the results panel; reopening restores it.
+      await tester.tapAt(const Offset(740, 100));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('home-title-search-results')),
+        findsNothing,
+      );
+
+      await tester.tap(searchField);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('home-title-search-results')),
+        findsOneWidget,
+      );
+
+      expect(find.text('Alpha Room'), findsOneWidget);
+      expect(find.text('Beta Room'), findsWidgets);
+
+      await tester.enterText(searchField, '1');
+      await tester.pump(const Duration(milliseconds: 320));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('home-title-search-results')),
+          matching: find.byKey(const ValueKey('my-room-action-server-beta')),
+        ),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('authenticated home shell creates room from footer template', (
     WidgetTester tester,
@@ -1107,10 +1165,7 @@ void main() {
     // The logout control now lives inline in the top user summary bar, anchored
     // to its right edge — not in the bottom footer alongside settings.
     expect(logoutRect.top, greaterThanOrEqualTo(userSummaryRect.top - 0.01));
-    expect(
-      logoutRect.bottom,
-      lessThanOrEqualTo(userSummaryRect.bottom + 0.01),
-    );
+    expect(logoutRect.bottom, lessThanOrEqualTo(userSummaryRect.bottom + 0.01));
     expect(logoutRect.bottom, lessThan(createRect.top));
     expect(logoutRect.right, lessThanOrEqualTo(userSummaryRect.right + 0.01));
 
@@ -2943,11 +2998,35 @@ GangApi _roomsApi({
         });
       }
       if (request.url.path == '/api/v1/search') {
+        final query = request.url.queryParameters['q']?.toLowerCase() ?? '';
+        if (query == '1') {
+          return _jsonResponse({
+            'my_rooms': [
+              {
+                ..._roomCardJson(
+                  id: 'server-beta',
+                  name: 'Beta Room',
+                  memberCount: 5,
+                ),
+                'description': '12345',
+              },
+            ],
+            'public_rooms': <Object?>[],
+            'messages': <Object?>[],
+            'files': <Object?>[],
+          });
+        }
         return _jsonResponse({
-          'my_rooms': [_roomCardJson(id: 'server-beta', name: 'Beta Room')],
+          'my_rooms': [
+            _roomCardJson(id: 'server-beta', name: 'Beta Room', memberCount: 5),
+          ],
           'public_rooms': [
             {
-              ..._roomCardJson(id: 'server-public', name: 'Beta Public'),
+              ..._roomCardJson(
+                id: 'server-public',
+                name: 'Beta Public',
+                memberCount: 2,
+              ),
               'visibility': 'public',
               'join_policy': 'open',
               'joined': false,
@@ -3005,6 +3084,20 @@ GangApi _roomsApi({
               },
             },
           ],
+        });
+      }
+      if (request.url.path == '/api/v1/rooms/server-beta') {
+        return _jsonResponse({
+          'room': _roomDetailJson(
+            id: 'server-beta',
+            name: 'Beta Room',
+            memberCount: 5,
+            onlineMemberCount: 1,
+            liveParticipantCount: 0,
+            visibility: 'private',
+            joinPolicy: 'closed',
+            role: 'member',
+          ),
         });
       }
       if (request.url.path == '/api/v1/rooms/server-public/join') {

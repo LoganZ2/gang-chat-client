@@ -5,30 +5,384 @@ import '../protocol/models.dart';
 import '../ui/ui.dart';
 import 'hover_card_anchor.dart';
 
-class RoomHoverCard extends StatelessWidget {
+class RoomHoverCard extends StatefulWidget {
   const RoomHoverCard({
     super.key,
     required this.room,
     required this.currentUser,
     required this.child,
+    this.onResolveRoom,
     this.onEnterRoom,
   });
 
   final PublicRoom room;
   final CurrentUser currentUser;
   final Widget child;
+  final Future<PublicRoom> Function(PublicRoom room)? onResolveRoom;
   final ValueChanged<PublicRoom>? onEnterRoom;
+
+  @override
+  State<RoomHoverCard> createState() => _RoomHoverCardState();
+}
+
+class _RoomHoverCardState extends State<RoomHoverCard> {
+  PublicRoom? _resolved;
+  Future<void>? _resolveFuture;
+  bool _roomResolveCompleted = false;
+
+  PublicRoom get _displayRoom => _resolved ?? widget.room;
+  bool get _roomReady =>
+      widget.onResolveRoom == null ||
+      _resolved != null ||
+      _roomResolveCompleted;
+
+  @override
+  void didUpdateWidget(covariant RoomHoverCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final roomChanged = oldWidget.room.id != widget.room.id;
+    final resolverAdded =
+        oldWidget.onResolveRoom == null && widget.onResolveRoom != null;
+    if (!roomChanged && !resolverAdded) return;
+    _resolved = null;
+    _resolveFuture = null;
+    _roomResolveCompleted = false;
+  }
+
+  Future<void> _resolveRoom() {
+    final resolver = widget.onResolveRoom;
+    if (resolver == null || _roomResolveCompleted) {
+      return Future<void>.value();
+    }
+    final existing = _resolveFuture;
+    if (existing != null) return existing;
+
+    final requestedRoom = widget.room;
+    final future = () async {
+      try {
+        final room = await resolver(requestedRoom);
+        if (!mounted || widget.room.id != requestedRoom.id) return;
+        setState(() {
+          _resolved = room;
+          _roomResolveCompleted = true;
+        });
+      } catch (_) {
+        if (!mounted || widget.room.id != requestedRoom.id) return;
+        setState(() => _roomResolveCompleted = true);
+      } finally {
+        if (mounted && widget.room.id == requestedRoom.id) {
+          _resolveFuture = null;
+        }
+      }
+    }();
+    _resolveFuture = future;
+    return future;
+  }
 
   @override
   Widget build(BuildContext context) {
     return HoverCardAnchor(
-      resetKey: room.id,
+      resetKey: Object.hash(widget.room.id, widget.onResolveRoom != null),
+      onBeforeOpen: _roomReady ? null : _resolveRoom,
       cardBuilder: (context) => _RoomProfileCard(
-        room: room,
-        currentUser: currentUser,
-        onEnterRoom: onEnterRoom,
+        room: _displayRoom,
+        currentUser: widget.currentUser,
+        onEnterRoom: widget.onEnterRoom,
       ),
-      child: child,
+      child: widget.child,
+    );
+  }
+}
+
+class UserHoverCard extends StatefulWidget {
+  const UserHoverCard({
+    super.key,
+    required this.user,
+    required this.child,
+    this.currentUser,
+    this.onResolveProfile,
+    this.onEnterCommonRoom,
+  });
+
+  final UserSummary user;
+  final Widget child;
+  final CurrentUser? currentUser;
+
+  /// Lazily fetches a richer profile (gender, common rooms) the first time the
+  /// card opens. When null the card shows only the supplied summary.
+  final Future<UserSummary> Function(UserSummary user)? onResolveProfile;
+  final ValueChanged<PublicRoom>? onEnterCommonRoom;
+
+  @override
+  State<UserHoverCard> createState() => _UserHoverCardState();
+}
+
+class _UserHoverCardState extends State<UserHoverCard> {
+  UserSummary? _resolved;
+  Future<void>? _resolveFuture;
+  bool _profileResolveCompleted = false;
+
+  UserSummary get _displayUser => _resolved ?? widget.user;
+  bool get _profileReady =>
+      widget.onResolveProfile == null ||
+      _resolved != null ||
+      _profileResolveCompleted;
+
+  @override
+  void didUpdateWidget(covariant UserHoverCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final userChanged = oldWidget.user.id != widget.user.id;
+    final resolverAdded =
+        oldWidget.onResolveProfile == null && widget.onResolveProfile != null;
+    if (!userChanged && !resolverAdded) return;
+    _resolved = null;
+    _resolveFuture = null;
+    _profileResolveCompleted = false;
+  }
+
+  Future<void> _resolveProfile() {
+    final resolver = widget.onResolveProfile;
+    if (resolver == null || _profileResolveCompleted) {
+      return Future<void>.value();
+    }
+    final existing = _resolveFuture;
+    if (existing != null) return existing;
+
+    final requestedUser = widget.user;
+    final future = () async {
+      try {
+        final profile = await resolver(requestedUser);
+        if (!mounted || widget.user.id != requestedUser.id) return;
+        setState(() {
+          _resolved = profile;
+          _profileResolveCompleted = true;
+        });
+      } catch (_) {
+        if (!mounted || widget.user.id != requestedUser.id) return;
+        // Keep showing the lightweight summary on failure.
+        setState(() => _profileResolveCompleted = true);
+      } finally {
+        if (mounted && widget.user.id == requestedUser.id) {
+          _resolveFuture = null;
+        }
+      }
+    }();
+    _resolveFuture = future;
+    return future;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return HoverCardAnchor(
+      resetKey: Object.hash(
+        widget.user.id,
+        widget.onResolveProfile != null,
+        widget.currentUser?.id,
+      ),
+      onBeforeOpen: _profileReady ? null : _resolveProfile,
+      cardBuilder: (context) => _UserProfileCard(
+        user: _displayUser,
+        currentUser: widget.currentUser,
+        onEnterCommonRoom: widget.onEnterCommonRoom,
+      ),
+      child: widget.child,
+    );
+  }
+}
+
+class _UserProfileCard extends StatelessWidget {
+  const _UserProfileCard({
+    required this.user,
+    this.currentUser,
+    this.onEnterCommonRoom,
+  });
+
+  final UserSummary user;
+  final CurrentUser? currentUser;
+  final ValueChanged<PublicRoom>? onEnterCommonRoom;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = room_display.userPrimaryName(user);
+    final gender = genderMark(user.gender);
+    final role = room_display.roomRoleLabel(user);
+    final online = user.isOnline ?? false;
+    final bio = user.bio?.trim();
+    final uid = user.uid?.trim();
+    final commonRooms = user.commonRooms.where((r) => r.isUsable).toList();
+
+    return Padding(
+      padding: const EdgeInsets.all(UiSpacing.lg),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Avatar(
+                label: name,
+                imageUrl: AppConfigScope.of(
+                  context,
+                ).resolveAssetUrl(user.avatarUrl),
+                defaultAvatarKey: user.defaultAvatarKey,
+                size: 48,
+                active: online,
+                activeBorderWidth: 2,
+              ),
+              const SizedBox(width: UiSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: UiTypography.title.copyWith(fontSize: 16),
+                          ),
+                        ),
+                        if (gender != null) ...[
+                          const SizedBox(width: 5),
+                          Text(
+                            gender.symbol,
+                            maxLines: 1,
+                            style: UiTypography.title.copyWith(
+                              color: gender.color,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '@${user.username}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: UiTypography.label.copyWith(
+                        color: UiColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: UiSpacing.md),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              StatusBadge(
+                label: online ? '在线' : '离线',
+                icon: online ? Icons.circle : Icons.circle_outlined,
+                active: online,
+              ),
+              StatusBadge(label: role),
+            ],
+          ),
+          if (bio != null && bio.isNotEmpty) ...[
+            const SizedBox(height: UiSpacing.md),
+            Text(
+              bio,
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+              style: UiTypography.body.copyWith(color: UiColors.textSecondary),
+            ),
+          ],
+          if (commonRooms.isNotEmpty) ...[
+            const SizedBox(height: UiSpacing.md),
+            Text(
+              '${commonRooms.length} 个共同房间',
+              style: UiTypography.label.copyWith(color: UiColors.textMuted),
+            ),
+            const SizedBox(height: UiSpacing.xs),
+            ...commonRooms
+                .take(4)
+                .map(
+                  (room) => Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: _UserCommonRoomRow(
+                      room: room,
+                      currentUser: currentUser,
+                      onEnterRoom: onEnterCommonRoom,
+                    ),
+                  ),
+                ),
+            if (commonRooms.length > 4) ...[
+              const SizedBox(height: 4),
+              Text(
+                '等 ${commonRooms.length} 个房间',
+                style: UiTypography.label.copyWith(color: UiColors.textMuted),
+              ),
+            ],
+          ],
+          if (uid != null && uid.isNotEmpty) ...[
+            const SizedBox(height: UiSpacing.sm),
+            Text(
+              'UID: $uid',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: UiTypography.label.copyWith(color: UiColors.textMuted),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _UserCommonRoomRow extends StatelessWidget {
+  const _UserCommonRoomRow({
+    required this.room,
+    required this.currentUser,
+    required this.onEnterRoom,
+  });
+
+  final UserCommonRoom room;
+  final CurrentUser? currentUser;
+  final ValueChanged<PublicRoom>? onEnterRoom;
+
+  @override
+  Widget build(BuildContext context) {
+    final avatar = Avatar(
+      label: room_display.commonRoomAvatarLabel(room),
+      imageUrl: AppConfigScope.of(context).resolveAssetUrl(room.avatarUrl),
+      defaultAvatarKey: room.defaultAvatarKey,
+      size: 20,
+      activeBorderWidth: 1,
+    );
+    final publicRoom = _publicRoomFromCommonRoom(room);
+    final avatarTarget = currentUser == null
+        ? avatar
+        : RoomHoverCard(
+            room: publicRoom,
+            currentUser: currentUser!,
+            onEnterRoom: onEnterRoom,
+            child: avatar,
+          );
+
+    return Row(
+      children: [
+        avatarTarget,
+        const SizedBox(width: UiSpacing.sm),
+        Expanded(
+          child: Text(
+            room_display.commonRoomDisplayName(room),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: UiTypography.body.copyWith(
+              color: UiColors.textSecondary,
+              fontSize: 13,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -135,6 +489,9 @@ class _RoomProfileCard extends StatelessWidget {
               avatarUrl: creator.avatarUrl,
               defaultAvatarKey: creator.defaultAvatarKey,
               name: room_display.userPrimaryName(creator),
+              profileUser: creator,
+              currentUser: currentUser,
+              onEnterCommonRoom: onEnterRoom,
             ),
           ],
           if (joined) ...[
@@ -186,6 +543,9 @@ class _RoomCardPersonRow extends StatelessWidget {
     required this.avatarUrl,
     required this.defaultAvatarKey,
     required this.name,
+    this.profileUser,
+    this.currentUser,
+    this.onEnterCommonRoom,
     this.trailing,
   });
 
@@ -193,19 +553,32 @@ class _RoomCardPersonRow extends StatelessWidget {
   final String? avatarUrl;
   final String defaultAvatarKey;
   final String name;
+  final UserSummary? profileUser;
+  final CurrentUser? currentUser;
+  final ValueChanged<PublicRoom>? onEnterCommonRoom;
   final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
+    final avatar = Avatar(
+      label: avatarLabel,
+      imageUrl: AppConfigScope.of(context).resolveAssetUrl(avatarUrl),
+      defaultAvatarKey: defaultAvatarKey,
+      size: 20,
+      activeBorderWidth: 1,
+    );
+    final avatarTarget = profileUser == null || currentUser == null
+        ? avatar
+        : UserHoverCard(
+            user: profileUser!,
+            currentUser: currentUser,
+            onEnterCommonRoom: onEnterCommonRoom,
+            child: avatar,
+          );
+
     return Row(
       children: [
-        Avatar(
-          label: avatarLabel,
-          imageUrl: AppConfigScope.of(context).resolveAssetUrl(avatarUrl),
-          defaultAvatarKey: defaultAvatarKey,
-          size: 20,
-          activeBorderWidth: 1,
-        ),
+        avatarTarget,
         const SizedBox(width: UiSpacing.sm),
         Expanded(
           child: Text(
@@ -249,6 +622,23 @@ String _myRoomRoleLabel(PublicRoom room, CurrentUser currentUser) {
 String? _nonEmpty(String? value) {
   final trimmed = value?.trim();
   return trimmed == null || trimmed.isEmpty ? null : trimmed;
+}
+
+PublicRoom _publicRoomFromCommonRoom(UserCommonRoom room) {
+  return PublicRoom(
+    id: room.id,
+    rid: room.rid,
+    name: room.name,
+    avatarUrl: room.avatarUrl,
+    defaultAvatarKey: room.defaultAvatarKey,
+    visibility: room.visibility,
+    joinPolicy: 'closed',
+    memberCount: 0,
+    onlineMemberCount: 0,
+    liveParticipantCount: 0,
+    joined: true,
+    joinState: 'joined',
+  );
 }
 
 @visibleForTesting

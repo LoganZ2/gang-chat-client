@@ -101,11 +101,13 @@ class _MemberFilters extends StatelessWidget {
 class _MemberRow extends StatelessWidget {
   const _MemberRow({
     required this.member,
+    required this.currentUser,
     required this.live,
     required this.permission,
     required this.ownerUserId,
     required this.query,
     required this.busy,
+    required this.onResolveProfile,
     required this.onSetAdmin,
     required this.onUnsetAdmin,
     required this.onRemoveMember,
@@ -113,11 +115,13 @@ class _MemberRow extends StatelessWidget {
   });
 
   final RoomMember member;
+  final CurrentUser currentUser;
   final LiveState live;
   final member_filter.RoomMemberPermissionState permission;
   final String? ownerUserId;
   final String query;
   final bool busy;
+  final Future<UserSummary> Function(UserSummary user) onResolveProfile;
   final VoidCallback onSetAdmin;
   final VoidCallback onUnsetAdmin;
   final VoidCallback onRemoveMember;
@@ -130,18 +134,24 @@ class _MemberRow extends StatelessWidget {
       member.user,
       ownerUserId: ownerUserId,
     );
+    final avatar = Avatar(
+      label: member_filter.roomMemberDisplayName(member),
+      imageUrl: AppConfigScope.of(
+        context,
+      ).resolveAssetUrl(member.user.avatarUrl),
+      defaultAvatarKey: member.user.defaultAvatarKey,
+      size: 38,
+    );
     return _RowSurface(
       child: SizedBox(
         height: 48,
         child: Row(
           children: [
-            Avatar(
-              label: member_filter.roomMemberDisplayName(member),
-              imageUrl: AppConfigScope.of(
-                context,
-              ).resolveAssetUrl(member.user.avatarUrl),
-              defaultAvatarKey: member.user.defaultAvatarKey,
-              size: 38,
+            UserHoverCard(
+              user: member.user,
+              currentUser: currentUser,
+              onResolveProfile: onResolveProfile,
+              child: avatar,
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -215,6 +225,7 @@ class _MemberRow extends StatelessWidget {
 class _InviteSection extends StatelessWidget {
   const _InviteSection({
     required this.controller,
+    required this.currentUser,
     required this.query,
     required this.searching,
     required this.results,
@@ -227,6 +238,7 @@ class _InviteSection extends StatelessWidget {
   });
 
   final TextEditingController controller;
+  final CurrentUser currentUser;
   final String query;
   final bool searching;
   final List<UserSummary> results;
@@ -282,6 +294,7 @@ class _InviteSection extends StatelessWidget {
                 for (final candidate in candidates.take(4)) ...[
                   _InviteUserRow(
                     user: candidate.user,
+                    currentUser: currentUser,
                     query: query,
                     alreadyMember: candidate.existing,
                     pending: candidate.pending,
@@ -303,6 +316,7 @@ class _InviteSection extends StatelessWidget {
 class _InviteUserRow extends StatelessWidget {
   const _InviteUserRow({
     required this.user,
+    required this.currentUser,
     required this.query,
     required this.alreadyMember,
     required this.pending,
@@ -312,6 +326,7 @@ class _InviteUserRow extends StatelessWidget {
   });
 
   final UserSummary user;
+  final CurrentUser currentUser;
   final String query;
   final bool alreadyMember;
   final bool pending;
@@ -326,13 +341,17 @@ class _InviteUserRow extends StatelessWidget {
       compact: true,
       child: Row(
         children: [
-          Avatar(
-            label: room_display.userPrimaryName(user),
-            imageUrl: AppConfigScope.of(
-              context,
-            ).resolveAssetUrl(user.avatarUrl),
-            defaultAvatarKey: user.defaultAvatarKey,
-            size: 32,
+          UserHoverCard(
+            user: user,
+            currentUser: currentUser,
+            child: Avatar(
+              label: room_display.userPrimaryName(user),
+              imageUrl: AppConfigScope.of(
+                context,
+              ).resolveAssetUrl(user.avatarUrl),
+              defaultAvatarKey: user.defaultAvatarKey,
+              size: 32,
+            ),
           ),
           const SizedBox(width: 9),
           Expanded(
@@ -359,6 +378,7 @@ class _InviteUserRow extends StatelessWidget {
 class _JoinRequestsSection extends StatelessWidget {
   const _JoinRequestsSection({
     required this.requests,
+    required this.currentUser,
     required this.busyRequestIds,
     required this.activeDetailRequestId,
     required this.error,
@@ -368,6 +388,7 @@ class _JoinRequestsSection extends StatelessWidget {
   });
 
   final List<JoinRequest> requests;
+  final CurrentUser currentUser;
   final Set<String> busyRequestIds;
   final String? activeDetailRequestId;
   final String? error;
@@ -400,6 +421,7 @@ class _JoinRequestsSection extends StatelessWidget {
                 for (final request in requests) ...[
                   _JoinRequestRow(
                     request: request,
+                    currentUser: currentUser,
                     busy: busyRequestIds.contains(request.id),
                     detailActive: activeDetailRequestId == request.id,
                     onDetail: () => onDetail(request),
@@ -419,6 +441,7 @@ class _JoinRequestsSection extends StatelessWidget {
 class _JoinRequestRow extends StatelessWidget {
   const _JoinRequestRow({
     required this.request,
+    required this.currentUser,
     required this.busy,
     required this.detailActive,
     required this.onDetail,
@@ -427,6 +450,7 @@ class _JoinRequestRow extends StatelessWidget {
   });
 
   final JoinRequest request;
+  final CurrentUser currentUser;
   final bool busy;
   final bool detailActive;
   final VoidCallback onDetail;
@@ -439,13 +463,17 @@ class _JoinRequestRow extends StatelessWidget {
       compact: true,
       child: Row(
         children: [
-          Avatar(
-            label: room_display.userPrimaryName(request.user),
-            imageUrl: AppConfigScope.of(
-              context,
-            ).resolveAssetUrl(request.user.avatarUrl),
-            defaultAvatarKey: request.user.defaultAvatarKey,
-            size: 32,
+          UserHoverCard(
+            user: request.user,
+            currentUser: currentUser,
+            child: Avatar(
+              label: room_display.userPrimaryName(request.user),
+              imageUrl: AppConfigScope.of(
+                context,
+              ).resolveAssetUrl(request.user.avatarUrl),
+              defaultAvatarKey: request.user.defaultAvatarKey,
+              size: 32,
+            ),
           ),
           const SizedBox(width: 9),
           Expanded(
@@ -496,9 +524,13 @@ class _JoinRequestRow extends StatelessWidget {
 }
 
 class _JoinRequestDetailsDialog extends StatelessWidget {
-  const _JoinRequestDetailsDialog({required this.request});
+  const _JoinRequestDetailsDialog({
+    required this.request,
+    required this.currentUser,
+  });
 
   final JoinRequest request;
+  final CurrentUser currentUser;
 
   @override
   Widget build(BuildContext context) {
@@ -517,7 +549,10 @@ class _JoinRequestDetailsDialog extends StatelessWidget {
         children: [
           _JoinRequestDetailBlock(
             label: '来源',
-            child: _JoinRequestSourceContent(request: request),
+            child: _JoinRequestSourceContent(
+              request: request,
+              currentUser: currentUser,
+            ),
           ),
           const SizedBox(height: 14),
           _JoinRequestDetailBlock(
@@ -559,9 +594,13 @@ class _JoinRequestDetailBlock extends StatelessWidget {
 }
 
 class _JoinRequestSourceContent extends StatelessWidget {
-  const _JoinRequestSourceContent({required this.request});
+  const _JoinRequestSourceContent({
+    required this.request,
+    required this.currentUser,
+  });
 
   final JoinRequest request;
+  final CurrentUser currentUser;
 
   @override
   Widget build(BuildContext context) {
@@ -577,7 +616,10 @@ class _JoinRequestSourceContent extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final inviter in request.inviters) ...[
-          _JoinRequestInviterSourceLine(user: inviter),
+          _JoinRequestInviterSourceLine(
+            user: inviter,
+            currentUser: currentUser,
+          ),
           if (inviter != request.inviters.last) const SizedBox(height: 6),
         ],
       ],
@@ -586,19 +628,29 @@ class _JoinRequestSourceContent extends StatelessWidget {
 }
 
 class _JoinRequestInviterSourceLine extends StatelessWidget {
-  const _JoinRequestInviterSourceLine({required this.user});
+  const _JoinRequestInviterSourceLine({
+    required this.user,
+    required this.currentUser,
+  });
 
   final UserSummary user;
+  final CurrentUser currentUser;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Avatar(
-          label: room_display.userPrimaryName(user),
-          imageUrl: AppConfigScope.of(context).resolveAssetUrl(user.avatarUrl),
-          defaultAvatarKey: user.defaultAvatarKey,
-          size: 28,
+        UserHoverCard(
+          user: user,
+          currentUser: currentUser,
+          child: Avatar(
+            label: room_display.userPrimaryName(user),
+            imageUrl: AppConfigScope.of(
+              context,
+            ).resolveAssetUrl(user.avatarUrl),
+            defaultAvatarKey: user.defaultAvatarKey,
+            size: 28,
+          ),
         ),
         const SizedBox(width: 8),
         Expanded(

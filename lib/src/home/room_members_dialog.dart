@@ -274,7 +274,10 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
     try {
       await showDialog<void>(
         context: context,
-        builder: (context) => _JoinRequestDetailsDialog(request: request),
+        builder: (context) => _JoinRequestDetailsDialog(
+          request: request,
+          currentUser: widget.currentUser,
+        ),
       );
     } finally {
       if (mounted) setState(() => _activeJoinRequestDetailId = null);
@@ -420,6 +423,14 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
     }
   }
 
+  Future<UserSummary> _resolveMemberProfile(UserSummary user) async {
+    final profile = await widget.controller.getRoomMemberProfile(
+      roomId: _room.id,
+      userId: user.id,
+    );
+    return profile.user;
+  }
+
   List<RoomMember> _visibleMembers() {
     return member_filter.visibleRoomMembers(
       members: _effectiveMembers,
@@ -477,6 +488,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
           SizedBox(height: 220, child: _buildMemberList()),
           _InviteSection(
             controller: _inviteSearchController,
+            currentUser: widget.currentUser,
             query: _inviteQuery,
             searching: _searchingInvites,
             results: _inviteResults,
@@ -490,6 +502,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
           if (_canReviewRequests)
             _JoinRequestsSection(
               requests: _requests,
+              currentUser: widget.currentUser,
               busyRequestIds: _busyRequestIds,
               activeDetailRequestId: _activeJoinRequestDetailId,
               error: _requestError,
@@ -537,11 +550,13 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
         );
         return _MemberRow(
           member: member,
+          currentUser: widget.currentUser,
           live: _live,
           permission: permission,
           ownerUserId: _room.createdBy?.id,
           query: _memberQuery,
           busy: _busyMemberIds.contains(member.user.id),
+          onResolveProfile: _resolveMemberProfile,
           onSetAdmin: () => _setMemberRole(member, 'admin'),
           onUnsetAdmin: () => _setMemberRole(member, 'member'),
           onRemoveMember: () => _removeMember(member),

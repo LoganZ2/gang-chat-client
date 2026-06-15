@@ -1,5 +1,6 @@
 import '../protocol/models.dart';
 import 'file_display.dart' as file_display;
+import 'room_display.dart' as room_display;
 import 'room_notifications.dart' as room_notifications;
 
 enum GlobalSearchCategory { myRooms, publicRooms, messages, files }
@@ -43,6 +44,30 @@ bool globalSearchHasResults(GlobalSearchResults? results) {
       results.publicRooms.isNotEmpty ||
       results.messages.isNotEmpty ||
       results.files.isNotEmpty;
+}
+
+GlobalSearchResults globalSearchResultsForView(
+  GlobalSearchResults results, {
+  required String query,
+}) {
+  return GlobalSearchResults(
+    myRooms: visibleMyRoomSearchResults(rooms: results.myRooms, query: query),
+    publicRooms: results.publicRooms,
+    messages: results.messages,
+    files: results.files,
+  );
+}
+
+List<RoomCard> visibleMyRoomSearchResults({
+  required Iterable<RoomCard> rooms,
+  required String query,
+}) {
+  final normalizedQuery = query.trim().toLowerCase();
+  if (normalizedQuery.isEmpty) return List.unmodifiable(rooms);
+  return [
+    for (final room in rooms)
+      if (_visibleRoomCardMatches(room, normalizedQuery)) room,
+  ];
 }
 
 List<RoomCard> sidebarRoomsForSearch({
@@ -121,4 +146,17 @@ MessageAttachment? _firstFileAttachment(Message message) {
     return attachment;
   }
   return null;
+}
+
+bool _visibleRoomCardMatches(RoomCard room, String query) {
+  if (_contains(room.name, query)) return true;
+  if (_contains(room.remarkName, query)) return true;
+  if (_contains(room.displayName, query)) return true;
+  if (room.rid.trim().toLowerCase() == query) return true;
+  return _contains(room_display.roomSidebarSubtitle(room), query);
+}
+
+bool _contains(String? value, String query) {
+  final trimmed = value?.trim().toLowerCase();
+  return trimmed != null && trimmed.contains(query);
 }

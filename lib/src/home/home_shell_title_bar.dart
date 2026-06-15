@@ -281,11 +281,13 @@ class _TitleSearchResultsPanel extends StatelessWidget {
     required this.results,
     required this.loading,
     required this.error,
+    required this.currentUser,
     required this.activeCategory,
     required this.busyPublicRoomId,
     required this.pendingPublicRoomIds,
     required this.onCategorySelected,
     required this.onMyRoomSelected,
+    required this.onResolveMyRoomProfile,
     required this.onPublicRoomAction,
     required this.onMessageSelected,
     required this.onFileSelected,
@@ -295,11 +297,13 @@ class _TitleSearchResultsPanel extends StatelessWidget {
   final GlobalSearchResults? results;
   final bool loading;
   final String? error;
+  final CurrentUser currentUser;
   final search_display.GlobalSearchCategory? activeCategory;
   final String? busyPublicRoomId;
   final Set<String> pendingPublicRoomIds;
   final ValueChanged<search_display.GlobalSearchCategory> onCategorySelected;
   final ValueChanged<RoomCard> onMyRoomSelected;
+  final Future<PublicRoom> Function(RoomCard room) onResolveMyRoomProfile;
   final ValueChanged<PublicRoom> onPublicRoomAction;
   final ValueChanged<MessageSearchResult> onMessageSelected;
   final ValueChanged<MessageSearchResult> onFileSelected;
@@ -410,19 +414,45 @@ class _TitleSearchResultsPanel extends StatelessWidget {
     if (count == 0) return null;
 
     final children = switch (category) {
-      search_display.GlobalSearchCategory.myRooms =>
-        snapshot.myRooms
-            .map(
-              (room) => _RoomSearchResultTile(
-                title: room.displayName,
-                subtitle: _roomSearchMeta(room.rid, room.memberCount),
-                query: query,
-                avatarUrl: room.avatarUrl,
-                defaultAvatarKey: room.defaultAvatarKey,
-                onPressed: () => onMyRoomSelected(room),
-              ),
-            )
-            .toList(),
+      search_display.GlobalSearchCategory.myRooms => snapshot.myRooms.map((
+        room,
+      ) {
+        final time = room_display.roomSidebarLastMessageTime(room);
+        return _RoomSearchResultTile(
+          title: room.displayName,
+          subtitle: room_display.roomSidebarSubtitle(room),
+          query: query,
+          leading: RoomHoverCard(
+            room: _publicRoomFromRoomCard(room),
+            currentUser: currentUser,
+            onResolveRoom: (_) => onResolveMyRoomProfile(room),
+            onEnterRoom: (_) => onMyRoomSelected(room),
+            child: Avatar(
+              label: room.displayName,
+              imageUrl: AppConfigScope.of(
+                context,
+              ).resolveAssetUrl(room.avatarUrl),
+              defaultAvatarKey: room.defaultAvatarKey,
+              size: 30,
+            ),
+          ),
+          titleTrailing: time.isEmpty
+              ? null
+              : Text(
+                  time,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: UiTypography.label.copyWith(
+                    color: UiColors.textMuted,
+                    fontSize: 10.5,
+                  ),
+                ),
+          trailing: _MyRoomEnterActivity(
+            room: room,
+            onPressed: onMyRoomSelected,
+          ),
+        );
+      }).toList(),
       search_display.GlobalSearchCategory.publicRooms =>
         room_join
             .publicRoomJoinCandidates(
@@ -435,11 +465,21 @@ class _TitleSearchResultsPanel extends StatelessWidget {
                 title: candidate.room.name,
                 subtitle: _publicRoomSearchMeta(candidate.room),
                 query: query,
-                avatarUrl: candidate.room.avatarUrl,
-                defaultAvatarKey: candidate.room.defaultAvatarKey,
-                onPressed: candidate.actionEnabled
-                    ? () => onPublicRoomAction(candidate.room)
-                    : null,
+                leading: RoomHoverCard(
+                  room: candidate.room,
+                  currentUser: currentUser,
+                  onEnterRoom: candidate.room.joined
+                      ? onPublicRoomAction
+                      : null,
+                  child: Avatar(
+                    label: candidate.room.name,
+                    imageUrl: AppConfigScope.of(
+                      context,
+                    ).resolveAssetUrl(candidate.room.avatarUrl),
+                    defaultAvatarKey: candidate.room.defaultAvatarKey,
+                    size: 30,
+                  ),
+                ),
                 trailing: _PublicRoomJoinActivity(
                   candidate: candidate,
                   onPressed: onPublicRoomAction,
@@ -629,34 +669,46 @@ class _RoomSearchResultTile extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.query,
-    required this.avatarUrl,
-    required this.defaultAvatarKey,
-    required this.onPressed,
+    required this.leading,
+    this.titleTrailing,
     this.trailing,
   });
 
   final String title;
   final String subtitle;
   final String query;
-  final String? avatarUrl;
-  final String defaultAvatarKey;
-  final VoidCallback? onPressed;
+  final Widget leading;
+  final Widget? titleTrailing;
   final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
     return _SearchResultTile(
-      onPressed: onPressed,
-      leading: Avatar(
-        label: title,
-        imageUrl: AppConfigScope.of(context).resolveAssetUrl(avatarUrl),
-        defaultAvatarKey: defaultAvatarKey,
-        size: 30,
-      ),
+      leading: leading,
       title: title,
+      titleTrailing: titleTrailing,
       subtitle: subtitle,
       query: query,
       trailing: trailing,
+    );
+  }
+}
+
+class _MyRoomEnterActivity extends StatelessWidget {
+  const _MyRoomEnterActivity({required this.room, required this.onPressed});
+
+  final RoomCard room;
+  final ValueChanged<RoomCard> onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Button(
+      key: ValueKey('my-room-action-${room.id}'),
+      height: 30,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      tone: ButtonTone.primary,
+      onPressed: () => onPressed(room),
+      child: const Text('进入房间'),
     );
   }
 }
@@ -680,12 +732,7 @@ class _PublicRoomJoinActivity extends StatelessWidget {
       tone: candidate.actionable ? ButtonTone.primary : ButtonTone.neutral,
       loading: candidate.busy,
       onPressed: candidate.actionEnabled ? () => onPressed(room) : null,
-      child: Text(
-        room_display.publicRoomJoinActionLabel(
-          room,
-          pending: candidate.pending,
-        ),
-      ),
+      child: Text(_publicRoomSearchActionLabel(candidate)),
     );
   }
 }
@@ -736,6 +783,7 @@ class _SearchResultTile extends StatefulWidget {
     required this.title,
     required this.subtitle,
     required this.query,
+    this.titleTrailing,
     this.trailing,
     this.onPressed,
   });
@@ -744,6 +792,7 @@ class _SearchResultTile extends StatefulWidget {
   final String title;
   final String subtitle;
   final String query;
+  final Widget? titleTrailing;
   final Widget? trailing;
   final VoidCallback? onPressed;
 
@@ -786,15 +835,25 @@ class _SearchResultTileState extends State<_SearchResultTile> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    HighlightedText(
-                      text: widget.title,
-                      query: widget.query,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: UiTypography.body.copyWith(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: HighlightedText(
+                            text: widget.title,
+                            query: widget.query,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: UiTypography.body.copyWith(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        if (widget.titleTrailing != null) ...[
+                          const SizedBox(width: 8),
+                          widget.titleTrailing!,
+                        ],
+                      ],
                     ),
                     if (widget.subtitle.trim().isNotEmpty) ...[
                       const SizedBox(height: 3),
@@ -872,20 +931,40 @@ class _SearchPanelState extends StatelessWidget {
   }
 }
 
-String _roomSearchMeta(String rid, int memberCount) {
-  final parts = <String>[];
-  final trimmedRid = rid.trim();
-  if (trimmedRid.isNotEmpty) parts.add(trimmedRid);
-  parts.add('$memberCount 名成员');
-  return parts.join(' - ');
+String _publicRoomSearchMeta(PublicRoom room) {
+  return '${room.memberCount} 名成员';
 }
 
-String _publicRoomSearchMeta(PublicRoom room) {
-  final parts = <String>[];
-  final trimmedRid = room.rid.trim();
-  if (trimmedRid.isNotEmpty) parts.add(trimmedRid);
-  parts.add('${room.memberCount} 名成员');
-  return parts.join(' - ');
+String _publicRoomSearchActionLabel(
+  room_join.PublicRoomJoinCandidate candidate,
+) {
+  final room = candidate.room;
+  if (room.joined) return '进入房间';
+  if (candidate.pending) return '待审批';
+  if (room.joinPolicy == 'closed') return '不可加入';
+  return '加入房间';
+}
+
+PublicRoom _publicRoomFromRoomCard(RoomCard room) {
+  return PublicRoom(
+    id: room.id,
+    rid: room.rid,
+    name: room.displayName,
+    avatarUrl: room.avatarUrl,
+    defaultAvatarKey: room.defaultAvatarKey,
+    visibility: room.visibility,
+    joinPolicy: room.visibility == 'public' ? 'open' : 'closed',
+    description: room.description,
+    memberCount: room.memberCount,
+    onlineMemberCount: room.onlineMemberCount,
+    liveParticipantCount: room.liveParticipantCount,
+    joined: true,
+    joinState: 'joined',
+    myMembership: RoomMembership(
+      joinedAt: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      role: 'member',
+    ),
+  );
 }
 
 class _WindowDragRegion extends StatelessWidget {

@@ -123,6 +123,88 @@ void main() {
     expect(find.text('RID: R10001'), findsNothing);
   });
 
+  testWidgets('room profile creator avatar opens a user profile card', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(RoomHoverCardForTest(room: _joinedRoom, currentUser: _currentUser)),
+    );
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+
+    await gesture.moveTo(tester.getCenter(find.byType(Avatar).first));
+    await tester.pumpAndSettle();
+    expect(find.text('RID: R10001'), findsOneWidget);
+
+    final creatorAvatar = find.byWidgetPredicate(
+      (widget) => widget is Avatar && widget.label == 'Room Creator',
+    );
+    expect(creatorAvatar, findsOneWidget);
+
+    await gesture.moveTo(tester.getCenter(creatorAvatar));
+    await tester.pumpAndSettle();
+
+    expect(find.text('@creator'), findsOneWidget);
+  });
+
+  testWidgets('notification user avatar opens a user profile card', (
+    tester,
+  ) async {
+    final invite = RoomInvite(
+      id: 'invite_user_card',
+      status: 'accepted',
+      room: PublicRoom(
+        id: 'room_1',
+        rid: 'R100',
+        name: 'Invite Room',
+        avatarUrl: null,
+        defaultAvatarKey: 'room-2',
+        visibility: 'private',
+        joinPolicy: 'closed',
+        memberCount: 2,
+        onlineMemberCount: 0,
+        liveParticipantCount: 0,
+        joined: true,
+        joinState: 'joined',
+      ),
+      inviter: _creator,
+      createdAt: DateTime.utc(2026, 6, 1),
+    );
+
+    await tester.pumpWidget(
+      _host(
+        HomeNotificationsPane(
+          invites: [invite],
+          applications: const [],
+          loading: false,
+          error: null,
+          busyInviteId: null,
+          busyApplicationId: null,
+          currentUser: _currentUser,
+          onClose: () {},
+          onRefresh: () {},
+          onReviewInvite: (_, _) async {},
+          onWithdrawApplication: (_) async {},
+          onOpenRoom: (_) {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final avatarFinder = find.byKey(
+      const ValueKey('notification-inviter-avatar-invite_user_card'),
+    );
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await gesture.moveTo(tester.getCenter(avatarFinder));
+    await tester.pumpAndSettle();
+
+    expect(find.text('@creator'), findsOneWidget);
+  });
+
   testWidgets('deleted notification rooms do not open room profile cards', (
     tester,
   ) async {

@@ -90,6 +90,28 @@ void main() {
     expect(find.text('@logan'), findsOneWidget);
   });
 
+  testWidgets('common room avatar opens a room profile card', (tester) async {
+    await tester.pumpWidget(_host(const AvatarHoverCardForTest(user: _user)));
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+
+    await gesture.moveTo(tester.getCenter(find.byType(Avatar).first));
+    await tester.pumpAndSettle();
+    expect(find.text('@logan'), findsOneWidget);
+
+    final commonRoomAvatar = find.byWidgetPredicate(
+      (widget) => widget is Avatar && widget.label == '摸鱼大队',
+    );
+    expect(commonRoomAvatar, findsOneWidget);
+
+    await gesture.moveTo(tester.getCenter(commonRoomAvatar));
+    await tester.pumpAndSettle();
+
+    expect(find.text('RID: R1'), findsOneWidget);
+  });
+
   testWidgets('tap opens the profile card until an outside tap', (
     tester,
   ) async {

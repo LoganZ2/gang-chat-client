@@ -17,6 +17,7 @@ import '../protocol/models.dart';
 import '../shell/file_selection_service.dart';
 import '../ui/avatar_crop_dialog.dart';
 import '../ui/ui.dart';
+import 'room_profile_card.dart';
 
 part 'room_members_dialog.dart';
 part 'room_settings_dialog.dart';

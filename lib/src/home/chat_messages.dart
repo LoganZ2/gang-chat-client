@@ -85,7 +85,7 @@ class _MessageStage extends StatefulWidget {
   const _MessageStage({
     super.key,
     required this.roomId,
-    required this.currentUserId,
+    required this.currentUser,
     required this.roomReady,
     required this.loading,
     required this.error,
@@ -101,7 +101,7 @@ class _MessageStage extends StatefulWidget {
   });
 
   final String? roomId;
-  final String currentUserId;
+  final CurrentUser currentUser;
   final bool roomReady;
   final bool loading;
   final String? error;
@@ -244,7 +244,7 @@ class _MessageStageState extends State<_MessageStage> {
         messages.last.clientMessageId !=
             oldWidget.messages.last.clientMessageId;
     if (!grew && !lastChanged) return false;
-    if (messages.last.sender.id == widget.currentUserId) return true;
+    if (messages.last.sender.id == widget.currentUser.id) return true;
     return _isNearBottom();
   }
 
@@ -434,7 +434,8 @@ class _MessageStageState extends State<_MessageStage> {
             else
               _MessageRow(
                 message: message,
-                outgoing: message.sender.id == widget.currentUserId,
+                outgoing: message.sender.id == widget.currentUser.id,
+                currentUser: widget.currentUser,
                 transfer: widget.fileTransfers[message.clientMessageId],
                 fileDownloads: widget.fileDownloads,
                 downloadActions: widget.downloadActions,
@@ -709,6 +710,7 @@ class _MessageRow extends StatelessWidget {
   const _MessageRow({
     required this.message,
     required this.outgoing,
+    required this.currentUser,
     required this.transfer,
     required this.fileDownloads,
     required this.downloadActions,
@@ -719,6 +721,7 @@ class _MessageRow extends StatelessWidget {
 
   final Message message;
   final bool outgoing;
+  final CurrentUser currentUser;
   final FileTransferState? transfer;
   final Map<String, FileTransferState> fileDownloads;
   final ChatFileDownloadActions downloadActions;
@@ -784,6 +787,7 @@ class _MessageRow extends StatelessWidget {
 
     final avatarHoverCard = _AvatarHoverCard(
       user: message.sender,
+      currentUser: currentUser,
       onResolveProfile: onResolveSenderProfile,
       child: avatar,
     );

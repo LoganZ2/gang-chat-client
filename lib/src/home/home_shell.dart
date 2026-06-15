@@ -50,6 +50,7 @@ import 'home_sidebar.dart';
 import 'live_channel_pane.dart';
 import 'live_screen_share_picker.dart';
 import 'navigation.dart';
+import 'room_profile_card.dart';
 import 'room_management.dart';
 
 part 'home_shell_realtime.dart';
@@ -430,11 +431,13 @@ class _HomeShellState extends State<HomeShell> {
                         results: _searchResults,
                         loading: _searching,
                         error: _searchError,
+                        currentUser: widget.app.currentUser,
                         activeCategory: _activeSearchCategory,
                         busyPublicRoomId: _busySearchPublicRoomId,
                         pendingPublicRoomIds: _searchPendingPublicRoomIds,
                         onCategorySelected: _selectSearchCategory,
                         onMyRoomSelected: _openSearchRoom,
+                        onResolveMyRoomProfile: _resolveSearchRoomProfile,
                         onPublicRoomAction: (room) =>
                             unawaited(_handlePublicRoomSearchAction(room)),
                         onMessageSelected: _openMessageSearchResult,

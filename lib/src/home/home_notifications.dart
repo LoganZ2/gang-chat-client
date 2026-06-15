@@ -286,6 +286,30 @@ class _RoomInviteNotificationRow extends StatelessWidget {
     final role = roomInviteRoleLabel(inviter);
     final time = roomInviteTimestampLabel(invite.createdAt);
     final invalid = isInvalidPendingRoomInvite(invite);
+    final inviterAvatar = Avatar(
+      key: ValueKey('notification-inviter-avatar-${invite.id}'),
+      label: inviterAvatarLabel,
+      imageUrl: AppConfigScope.of(context).resolveAssetUrl(
+        roomNotificationUserAvatarUrl(
+          inviter,
+          userExists: invite.inviterExists,
+        ),
+      ),
+      defaultAvatarKey: roomNotificationUserAvatarKey(
+        inviter,
+        userExists: invite.inviterExists,
+      ),
+      size: 34,
+      showFallbackText: invite.inviterExists,
+    );
+    final inviterAvatarTarget = invite.inviterExists
+        ? UserHoverCard(
+            user: inviter,
+            currentUser: currentUser,
+            onEnterCommonRoom: onOpenRoom,
+            child: inviterAvatar,
+          )
+        : inviterAvatar;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: UiColors.surface,
@@ -312,22 +336,7 @@ class _RoomInviteNotificationRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
-            Avatar(
-              key: ValueKey('notification-inviter-avatar-${invite.id}'),
-              label: inviterAvatarLabel,
-              imageUrl: AppConfigScope.of(context).resolveAssetUrl(
-                roomNotificationUserAvatarUrl(
-                  inviter,
-                  userExists: invite.inviterExists,
-                ),
-              ),
-              defaultAvatarKey: roomNotificationUserAvatarKey(
-                inviter,
-                userExists: invite.inviterExists,
-              ),
-              size: 34,
-              showFallbackText: invite.inviterExists,
-            ),
+            inviterAvatarTarget,
             const SizedBox(width: 8),
             Expanded(
               child: Row(
@@ -540,6 +549,32 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
     final time = roomInviteTimestampLabel(
       application.reviewedAt ?? application.updatedAt,
     );
+    final reviewerAvatar = Avatar(
+      key: ValueKey(
+        'notification-application-reviewer-avatar-${application.id}',
+      ),
+      label: reviewerAvatarLabel,
+      imageUrl: AppConfigScope.of(context).resolveAssetUrl(
+        roomNotificationUserAvatarUrl(
+          reviewer,
+          userExists: application.reviewerExists,
+        ),
+      ),
+      defaultAvatarKey: roomNotificationUserAvatarKey(
+        reviewer,
+        userExists: application.reviewerExists,
+      ),
+      size: 34,
+      showFallbackText: application.reviewerExists,
+    );
+    final reviewerAvatarTarget = application.reviewerExists
+        ? UserHoverCard(
+            user: reviewer,
+            currentUser: currentUser,
+            onEnterCommonRoom: onOpenRoom,
+            child: reviewerAvatar,
+          )
+        : reviewerAvatar;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: UiColors.surface,
@@ -564,24 +599,7 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
-            Avatar(
-              key: ValueKey(
-                'notification-application-reviewer-avatar-${application.id}',
-              ),
-              label: reviewerAvatarLabel,
-              imageUrl: AppConfigScope.of(context).resolveAssetUrl(
-                roomNotificationUserAvatarUrl(
-                  reviewer,
-                  userExists: application.reviewerExists,
-                ),
-              ),
-              defaultAvatarKey: roomNotificationUserAvatarKey(
-                reviewer,
-                userExists: application.reviewerExists,
-              ),
-              size: 34,
-              showFallbackText: application.reviewerExists,
-            ),
+            reviewerAvatarTarget,
             const SizedBox(width: 8),
             Expanded(
               child: Row(
