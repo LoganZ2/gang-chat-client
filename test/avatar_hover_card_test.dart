@@ -140,6 +140,48 @@ void main() {
     expect(find.text('RID: R1'), findsOneWidget);
   });
 
+  testWidgets('tapping the avatar again closes the profile card', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_host(const AvatarHoverCardForTest(user: _user)));
+
+    await tester.tap(find.byType(Avatar).first);
+    await tester.pumpAndSettle();
+    expect(find.text('@logan'), findsOneWidget);
+
+    await tester.tap(find.byType(Avatar).first);
+    await tester.pumpAndSettle();
+    expect(find.text('@logan'), findsNothing);
+  });
+
+  testWidgets('click pinning is independent from hover-opened cards', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_host(const AvatarHoverCardForTest(user: _user)));
+
+    final avatar = find.byType(Avatar).first;
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+
+    await gesture.moveTo(tester.getCenter(avatar));
+    await tester.pumpAndSettle();
+    expect(find.text('@logan'), findsOneWidget);
+
+    await tester.tap(avatar);
+    await tester.pumpAndSettle();
+    expect(find.text('@logan'), findsOneWidget);
+
+    await gesture.moveTo(const Offset(5, 5));
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
+    expect(find.text('@logan'), findsOneWidget);
+
+    await tester.tap(avatar);
+    await tester.pumpAndSettle();
+    expect(find.text('@logan'), findsNothing);
+  });
+
   testWidgets('nested room enter button invokes the common room callback', (
     tester,
   ) async {
@@ -212,6 +254,100 @@ void main() {
     expect(find.text('@logan'), findsOneWidget);
     expect(find.text('RID: R1'), findsNothing);
     expect(find.text('RID: R2'), findsOneWidget);
+  });
+
+  testWidgets('clicking an earlier card rolls back later nested cards', (
+    tester,
+  ) async {
+    const creator = UserSummary(
+      id: 'creator',
+      username: 'creator',
+      displayName: 'Creator',
+      avatarUrl: null,
+      defaultAvatarKey: 'green-2',
+    );
+    const rollbackUser = UserSummary(
+      id: 'u1',
+      username: 'logan',
+      displayName: 'Logan',
+      avatarUrl: null,
+      defaultAvatarKey: 'blue-3',
+      commonRooms: [UserCommonRoom(id: 'r1', rid: 'R1', name: 'Room One')],
+    );
+
+    await tester.pumpWidget(
+      _host(
+        AvatarHoverCardForTest(
+          user: rollbackUser,
+          onResolveRoomProfile: (room) async {
+            return PublicRoom(
+              id: room.id,
+              rid: room.rid,
+              name: room.name,
+              avatarUrl: null,
+              defaultAvatarKey: 'room-1',
+              visibility: 'private',
+              joinPolicy: 'closed',
+              memberCount: 2,
+              onlineMemberCount: 1,
+              liveParticipantCount: 0,
+              joined: true,
+              joinState: 'joined',
+              createdBy: creator,
+            );
+          },
+          onResolveProfile: (user) async {
+            if (user.id == creator.id) {
+              return user.copyWith(bio: 'Creator bio', isOnline: true);
+            }
+            return user;
+          },
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(Avatar).first);
+    await tester.pumpAndSettle();
+    expect(find.text('@logan'), findsOneWidget);
+
+    final commonRoomAvatar = find.byWidgetPredicate(
+      (widget) => widget is Avatar && widget.label == 'Room One',
+    );
+    await tester.tap(commonRoomAvatar);
+    await tester.pumpAndSettle();
+    expect(find.text('RID: R1'), findsOneWidget);
+
+    final creatorAvatar = find.byWidgetPredicate(
+      (widget) => widget is Avatar && widget.label == 'Creator',
+    );
+    await tester.tap(creatorAvatar);
+    await tester.pumpAndSettle();
+    expect(find.text('@creator'), findsOneWidget);
+    expect(find.text('Creator bio'), findsOneWidget);
+
+    final roomCardAvatar = find.byWidgetPredicate(
+      (widget) =>
+          widget is Avatar && widget.label == 'Room One' && widget.size == 48,
+    );
+    await tester.tap(roomCardAvatar);
+    await tester.pumpAndSettle();
+    expect(find.text('@creator'), findsNothing);
+    expect(find.text('Creator bio'), findsNothing);
+    expect(find.text('RID: R1'), findsOneWidget);
+    expect(find.text('@logan'), findsOneWidget);
+
+    final userCardAvatar = find.byWidgetPredicate(
+      (widget) =>
+          widget is Avatar && widget.label == 'Logan' && widget.size == 48,
+    );
+    await tester.tap(userCardAvatar);
+    await tester.pumpAndSettle();
+    expect(find.text('RID: R1'), findsNothing);
+    expect(find.text('@logan'), findsOneWidget);
+
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle();
+    expect(find.text('@logan'), findsNothing);
   });
 
   testWidgets('common room avatar waits for the latest room profile', (
