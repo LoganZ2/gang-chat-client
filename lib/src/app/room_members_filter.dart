@@ -106,6 +106,32 @@ bool canStartRoomMemberAction({
   return !busyMemberIds.contains(userId);
 }
 
+bool canOpenRoomMemberManagementFromProfile({
+  required RoomDetail room,
+  required CurrentUser currentUser,
+  required UserSummary target,
+}) {
+  final uid = target.uid?.trim();
+  if (uid == null || uid.isEmpty || target.id == currentUser.id) {
+    return false;
+  }
+  final role =
+      target.roomRole ?? (target.id == room.createdBy?.id ? 'owner' : 'member');
+  final permission = roomMemberPermissionState(
+    member: RoomMember(
+      user: target,
+      role: role,
+      joinedAt: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+    ),
+    currentUser: currentUser,
+    canEditCreatorOnly:
+        room.isCreator || room.isSuperuser || currentUser.isSuperuser,
+    canManageMembers: room.isAdmin || currentUser.isSuperuser,
+    ownerUserId: room.createdBy?.id,
+  );
+  return permission.canRoleEdit || permission.canRemoveMember;
+}
+
 bool roomMemberActionBusy({
   required RoomMember member,
   required Iterable<String> busyMemberIds,
@@ -134,8 +160,12 @@ String transferCreatorDialogTitle() {
   return '转让创建者';
 }
 
-String transferCreatorConfirmBody(RoomMember member) {
-  return '创建者身份会转让给 ${roomMemberDisplayName(member)}，你将成为管理员。';
+String transferCreatorConfirmBody(
+  RoomMember member, {
+  required bool currentUserIsCreator,
+}) {
+  final demotedCreator = currentUserIsCreator ? '你' : '原创建者';
+  return '创建者身份会转让给 ${roomMemberDisplayName(member)}，$demotedCreator将成为管理员。';
 }
 
 String transferCreatorConfirmLabel() {
@@ -611,6 +641,7 @@ RoomMemberPermissionState roomMemberPermissionState({
   final isSuperuser = isSuperuserRoomMember(member);
   final isOwner = isOwnerRoomMember(member, ownerUserId: ownerUserId);
   final isAdmin = isAdminRoomMember(member);
+  final currentUserIsSuperuser = currentUser.isSuperuser;
   final canRoleEdit =
       canEditCreatorOnly &&
       !isSuperuser &&
@@ -619,7 +650,7 @@ RoomMemberPermissionState roomMemberPermissionState({
   final canRemoveMember =
       canManageMembers &&
       !isSuperuser &&
-      !isOwner &&
+      (!isOwner || currentUserIsSuperuser) &&
       member.user.id != currentUser.id &&
       (canEditCreatorOnly || !isAdmin);
   return RoomMemberPermissionState(

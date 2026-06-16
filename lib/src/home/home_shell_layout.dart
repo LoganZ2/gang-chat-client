@@ -61,6 +61,7 @@ extension _HomeShellLayout on _HomeShellState {
         room: _selectedRoom!,
         currentUser: _currentUser,
         initialLive: _live ?? _selectedRoom!.live,
+        initialSearchQuery: _membersInitialSearchQuery,
         reloadToken: _membersReloadToken,
         embedded: true,
         onClose: _openChat,
@@ -195,6 +196,7 @@ extension _HomeShellLayout on _HomeShellState {
       onResolveSenderProfile: _resolveSenderProfile,
       onResolveRoomProfile: _resolveRoomProfile,
       onEnterProfileRoom: _openNotificationRoom,
+      senderProfileActionBuilder: _messageProfileAction,
       composerDropKey: _composerDropKey,
     );
   }

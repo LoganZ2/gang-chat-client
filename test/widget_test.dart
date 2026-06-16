@@ -916,7 +916,7 @@ void main() {
     await tester.tap(find.text('Alpha Room'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('房间成员'));
+    await tester.tap(find.byIcon(Icons.groups_outlined));
     await tester.pumpAndSettle();
 
     expect(find.text('成员'), findsAtLeastNWidgets(1));
@@ -947,7 +947,7 @@ void main() {
     expect(find.text('Morgan'), findsWidgets);
     expect(find.text('uid-1 · @kai'), findsNothing);
     expect(find.text('user-2 · @morgan'), findsNothing);
-    expect(find.text('创建者'), findsOneWidget);
+    expect(find.text('创建者'), findsWidgets);
     expect(requestedPaths, contains('/api/v1/rooms/server-alpha/members'));
     expect(
       requestedPaths,
@@ -1103,6 +1103,88 @@ void main() {
       expect(requestedPaths, contains('/api/v1/rooms/server-alpha/members'));
     },
   );
+
+  testWidgets('authenticated home shell lets superusers remove creators', (
+    WidgetTester tester,
+  ) async {
+    final requestedPaths = <String>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(
+            requestedPaths: requestedPaths,
+            currentRoomRole: 'member',
+            currentUserIsSuperuser: true,
+            secondaryMemberRole: 'owner',
+          ),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('房间成员'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Morgan'), findsWidgets);
+    expect(find.text('创建者'), findsWidgets);
+    expect(find.byTooltip('踢出此用户'), findsOneWidget);
+    expect(find.byTooltip('设为管理员'), findsNothing);
+    expect(find.byTooltip('转让创建者'), findsNothing);
+    expect(requestedPaths, contains('/api/v1/rooms/server-alpha/members'));
+  });
+
+  testWidgets('message profile can jump to member management by UID', (
+    WidgetTester tester,
+  ) async {
+    final requestedPaths = <String>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(requestedPaths: requestedPaths),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+
+    final messageAvatar = find.byWidgetPredicate(
+      (widget) => widget is ui.Avatar && widget.label == 'Morgan',
+    );
+    expect(messageAvatar, findsOneWidget);
+
+    await gesture.moveTo(tester.getCenter(messageAvatar));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(ui.Button, '管理成员'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ui.Button, '管理成员'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('成员'), findsAtLeastNWidgets(1));
+    expect(requestedPaths, contains('/api/v1/rooms/server-alpha/members'));
+    final memberSearchField = tester.widget<TextField>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField && widget.decoration?.hintText == '搜索成员',
+      ),
+    );
+    expect(memberSearchField.controller?.text, 'uid-2');
+    expect(find.textContaining('Morgan'), findsAtLeastNWidgets(1));
+  });
 
   testWidgets('authenticated home shell applies realtime live snapshots', (
     WidgetTester tester,
@@ -2962,6 +3044,8 @@ AuthenticatedAppContext _homeTestAppContext({
   List<Map<String, Object?>>? accountUpdates,
   List<Map<String, Object?>>? roomCreations,
   String currentRoomRole = 'owner',
+  bool currentUserIsSuperuser = false,
+  String secondaryMemberRole = 'member',
 }) {
   final user = CurrentUser(
     id: 'user-1',
@@ -2976,7 +3060,7 @@ AuthenticatedAppContext _homeTestAppContext({
     phoneNumberPublic: false,
     avatarUrl: null,
     defaultAvatarKey: 'blue-3',
-    isSuperuser: false,
+    isSuperuser: currentUserIsSuperuser,
     createdAt: DateTime.utc(2026),
   );
 
@@ -2996,6 +3080,7 @@ AuthenticatedAppContext _homeTestAppContext({
       accountUpdates: accountUpdates,
       roomCreations: roomCreations,
       currentRoomRole: currentRoomRole,
+      secondaryMemberRole: secondaryMemberRole,
     ),
   );
 }
@@ -3006,6 +3091,7 @@ GangApi _roomsApi({
   List<Map<String, Object?>>? accountUpdates,
   List<Map<String, Object?>>? roomCreations,
   String currentRoomRole = 'owner',
+  String secondaryMemberRole = 'member',
 }) {
   return GangApiClient(
     baseUrl: 'http://example.test/api/v1',
@@ -3188,6 +3274,22 @@ GangApi _roomsApi({
           },
         });
       }
+      if (request.url.path ==
+          '/api/v1/rooms/server-alpha/members/user-2/profile') {
+        return _jsonResponse({
+          'profile': {
+            'user': _userJson(
+              id: 'user-2',
+              username: 'morgan',
+              displayName: 'Morgan',
+              uid: 'uid-2',
+              isOnline: true,
+            ),
+            'role': 'member',
+            'joined_at': '2026-06-01T00:00:00Z',
+          },
+        });
+      }
       if (request.url.path == '/api/v1/rooms/server-public/join') {
         return _jsonResponse({
           'room': _roomDetailJson(
@@ -3250,8 +3352,10 @@ GangApi _roomsApi({
                 id: 'user-2',
                 username: 'morgan',
                 displayName: 'Morgan',
+                uid: 'uid-2',
                 isOnline: true,
               ),
+              role: secondaryMemberRole,
             ),
           ],
           'next_cursor': null,
@@ -3405,6 +3509,7 @@ GangApi _roomsApi({
                 id: 'user-2',
                 username: 'morgan',
                 displayName: 'Morgan',
+                uid: 'uid-2',
                 isOnline: true,
               ),
               clientMessageId: 'client-msg-1',

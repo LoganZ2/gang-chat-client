@@ -92,6 +92,7 @@ extension _HomeShellRoomActions on _HomeShellState {
       _messages = const [];
       _fileTransfers = const {};
       _fileDownloads = const {};
+      _membersInitialSearchQuery = '';
       _stagedAttachments.clear();
       _roomError = null;
       _sendError = null;
@@ -222,14 +223,34 @@ extension _HomeShellRoomActions on _HomeShellState {
     _setHomeState(() => _contentMode = _ContentMode.chat);
   }
 
-  Future<void> _openRoomMembers() async {
+  Future<void> _openRoomMembers({String initialSearchQuery = ''}) async {
     final room = _selectedRoom;
     if (room == null) return;
     _setHomeState(() {
       _settingsOpen = false;
       _contentMode = _ContentMode.members;
       _narrowContentOpen = true;
+      _membersInitialSearchQuery = initialSearchQuery.trim();
     });
+  }
+
+  UserProfileAction? _messageProfileAction(UserSummary user) {
+    final room = _selectedRoom;
+    if (room == null) return null;
+    final uid = user.uid?.trim();
+    if (uid == null || uid.isEmpty) return null;
+    if (!member_filter.canOpenRoomMemberManagementFromProfile(
+      room: room,
+      currentUser: _currentUser,
+      target: user,
+    )) {
+      return null;
+    }
+    return UserProfileAction(
+      label: '管理成员',
+      icon: Icons.manage_accounts_outlined,
+      onPressed: () => unawaited(_openRoomMembers(initialSearchQuery: uid)),
+    );
   }
 
   Future<void> _openRoomSettings() async {
@@ -282,6 +303,7 @@ extension _HomeShellRoomActions on _HomeShellState {
       _fileDownloads = const {};
       _settingsOpen = false;
       _contentMode = _ContentMode.chat;
+      _membersInitialSearchQuery = '';
       _roomError = null;
       _sendError = null;
       _loadingRoom = false;
@@ -314,6 +336,7 @@ extension _HomeShellRoomActions on _HomeShellState {
         _fileTransfers = const {};
         _fileDownloads = const {};
         _contentMode = _ContentMode.chat;
+        _membersInitialSearchQuery = '';
         _settingsOpen = false;
         _roomError = null;
         _sendError = null;

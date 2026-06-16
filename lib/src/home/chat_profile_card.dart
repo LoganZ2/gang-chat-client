@@ -9,6 +9,7 @@ class _AvatarHoverCard extends StatelessWidget {
     this.onResolveProfile,
     this.onResolveRoomProfile,
     this.onEnterCommonRoom,
+    this.profileActionBuilder,
   });
 
   final UserSummary user;
@@ -20,6 +21,7 @@ class _AvatarHoverCard extends StatelessWidget {
   final Future<UserSummary> Function(UserSummary sender)? onResolveProfile;
   final RoomProfileResolver? onResolveRoomProfile;
   final ValueChanged<PublicRoom>? onEnterCommonRoom;
+  final UserProfileActionBuilder? profileActionBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -29,6 +31,7 @@ class _AvatarHoverCard extends StatelessWidget {
       onResolveProfile: onResolveProfile,
       onResolveRoomProfile: onResolveRoomProfile,
       onEnterCommonRoom: onEnterCommonRoom,
+      profileActionBuilder: profileActionBuilder,
       child: child,
     );
   }
@@ -45,6 +48,7 @@ class AvatarHoverCardForTest extends StatelessWidget {
     this.onResolveProfile,
     this.onResolveRoomProfile,
     this.onEnterCommonRoom,
+    this.profileActionBuilder,
   });
 
   final UserSummary user;
@@ -52,6 +56,7 @@ class AvatarHoverCardForTest extends StatelessWidget {
   final Future<UserSummary> Function(UserSummary sender)? onResolveProfile;
   final RoomProfileResolver? onResolveRoomProfile;
   final ValueChanged<PublicRoom>? onEnterCommonRoom;
+  final UserProfileActionBuilder? profileActionBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +66,7 @@ class AvatarHoverCardForTest extends StatelessWidget {
       onResolveProfile: onResolveProfile,
       onResolveRoomProfile: onResolveRoomProfile,
       onEnterCommonRoom: onEnterCommonRoom,
+      profileActionBuilder: profileActionBuilder,
       child: Avatar(label: _senderName(user), size: 32),
     );
   }

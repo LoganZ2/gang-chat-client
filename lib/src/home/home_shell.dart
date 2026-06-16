@@ -25,6 +25,7 @@ import '../app/music_box_display.dart' as music_box_display;
 import '../app/realtime_controller.dart';
 import '../app/room_display.dart' as room_display;
 import '../app/room_join.dart' as room_join;
+import '../app/room_members_filter.dart' as member_filter;
 import '../app/room_notifications.dart' as room_notifications;
 import '../app/rooms_controller.dart';
 import '../app/search_display.dart' as search_display;
@@ -157,6 +158,7 @@ class _HomeShellState extends State<HomeShell> {
   // `room_join_requests_updated` or `room_role_changed` SSE event). The panel
   // watches this via didUpdateWidget and re-pulls its members/requests.
   int _membersReloadToken = 0;
+  String _membersInitialSearchQuery = '';
   List<RoomInvite> _notificationInvites = const [];
   List<RoomApplication> _notificationApplications = const [];
   bool _loadingNotifications = false;
@@ -265,6 +267,7 @@ class _HomeShellState extends State<HomeShell> {
       _logoutConfirming = false;
       _narrowContentOpen = false;
       _contentMode = _ContentMode.chat;
+      _membersInitialSearchQuery = '';
       _notificationInvites = const [];
       _notificationApplications = const [];
       _loadingNotifications = false;

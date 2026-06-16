@@ -5,6 +5,7 @@ import 'package:client/src/app/sticker_display.dart' as sticker_display;
 import 'package:client/src/app/voice_message_display.dart' as voice_display;
 import 'package:client/src/config/app_config.dart';
 import 'package:client/src/home/chat_pane.dart';
+import 'package:client/src/home/room_profile_card.dart';
 import 'package:client/src/protocol/models.dart';
 import 'package:client/src/ui/app_config_scope.dart';
 import 'package:client/src/ui/ui.dart' as ui;
@@ -348,6 +349,56 @@ void main() {
     expect(resolvedIds, ['user_target']);
     expect(find.text('@fresh_logan'), findsOneWidget);
     expect(find.text('Fresh system profile'), findsOneWidget);
+  });
+
+  testWidgets('system message user avatar can expose a profile action', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    UserSummary? managedUser;
+
+    await tester.pumpWidget(
+      _host(
+        _chatPane(
+          controller: controller,
+          messages: [
+            _message(
+              type: 'system',
+              body: '进入了语音频道',
+              attachments: const [
+                MessageAttachment(
+                  type: 'system',
+                  event: message_display.kSystemEventLiveJoined,
+                  target: _systemTarget,
+                ),
+              ],
+            ),
+          ],
+          senderProfileActionBuilder: (user) => UserProfileAction(
+            label: '管理成员',
+            icon: Icons.manage_accounts_outlined,
+            onPressed: () => managedUser = user,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+
+    final systemAvatar = find.byWidgetPredicate(
+      (widget) => widget is ui.Avatar && widget.label == 'Logan',
+    );
+    await gesture.moveTo(tester.getCenter(systemAvatar));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(ui.Button, '管理成员'));
+    await tester.pumpAndSettle();
+
+    expect(managedUser?.id, 'user_target');
   });
 
   testWidgets('system and ordinary messages can share a timestamp divider', (
@@ -800,6 +851,7 @@ Widget _chatPane({
   bool loading = false,
   Future<UserSummary> Function(UserSummary sender)? onResolveSenderProfile,
   ValueChanged<PublicRoom>? onEnterProfileRoom,
+  UserProfileActionBuilder? senderProfileActionBuilder,
 }) {
   return ChatPane(
     currentUser: _currentUser,
@@ -840,6 +892,7 @@ Widget _chatPane({
     onOpenRoomSettings: () {},
     onResolveSenderProfile: onResolveSenderProfile,
     onEnterProfileRoom: onEnterProfileRoom,
+    senderProfileActionBuilder: senderProfileActionBuilder,
   );
 }
 

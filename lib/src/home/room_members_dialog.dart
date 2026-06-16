@@ -7,6 +7,7 @@ class RoomMembersDialog extends StatefulWidget {
     required this.room,
     required this.currentUser,
     required this.initialLive,
+    this.initialSearchQuery = '',
     this.reloadToken = 0,
     this.embedded = false,
     this.onClose,
@@ -18,6 +19,7 @@ class RoomMembersDialog extends StatefulWidget {
   final RoomDetail room;
   final CurrentUser currentUser;
   final LiveState initialLive;
+  final String initialSearchQuery;
 
   /// Incremented by the host when a realtime event (join requests updated, role
   /// changed) means this panel's data is stale. A change triggers a reload.
@@ -63,6 +65,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       member_filter.RoomMemberPresenceFilter.all;
   member_filter.RoomMemberRoleFilter _roleFilter =
       member_filter.RoomMemberRoleFilter.all;
+  bool _syncingMemberSearch = false;
 
   bool get _canReviewRequests => room_display
       .roomAccessState(room: _room, currentUser: widget.currentUser)
@@ -87,6 +90,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
     super.initState();
     _room = widget.room;
     _live = widget.initialLive;
+    _applyMemberSearchQuery(widget.initialSearchQuery);
     _memberSearchController.addListener(_onMemberSearchChanged);
     _inviteSearchController.addListener(_onInviteSearchChanged);
     unawaited(_load());
@@ -105,6 +109,9 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
     super.didUpdateWidget(oldWidget);
     final liveChanged = !identical(widget.initialLive, oldWidget.initialLive);
     final liveBelongsToRoom = widget.initialLive.roomId == widget.room.id;
+    if (widget.initialSearchQuery != oldWidget.initialSearchQuery) {
+      setState(() => _applyMemberSearchQuery(widget.initialSearchQuery));
+    }
     // The host bumps reloadToken when a realtime event invalidates this panel
     // (join requests changed, or the current user's role changed). Re-pull the
     // member/request lists, and adopt the freshest room so permission checks
@@ -131,7 +138,20 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
   }
 
   void _onMemberSearchChanged() {
+    if (_syncingMemberSearch) return;
     setState(() => _memberQuery = _memberSearchController.text);
+  }
+
+  void _applyMemberSearchQuery(String query) {
+    final value = query.trim();
+    _memberQuery = value;
+    if (_memberSearchController.text == value) return;
+    _syncingMemberSearch = true;
+    _memberSearchController.value = TextEditingValue(
+      text: value,
+      selection: TextSelection.collapsed(offset: value.length),
+    );
+    _syncingMemberSearch = false;
   }
 
   void _onInviteSearchChanged() {
@@ -335,7 +355,10 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       context: context,
       builder: (context) => _ConfirmDialog(
         title: member_filter.transferCreatorDialogTitle(),
-        message: member_filter.transferCreatorConfirmBody(member),
+        message: member_filter.transferCreatorConfirmBody(
+          member,
+          currentUserIsCreator: _room.isCreator,
+        ),
         confirmLabel: member_filter.transferCreatorConfirmLabel(),
         danger: true,
       ),

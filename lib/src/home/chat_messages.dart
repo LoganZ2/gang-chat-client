@@ -100,6 +100,7 @@ class _MessageStage extends StatefulWidget {
     this.onResolveSenderProfile,
     this.onResolveRoomProfile,
     this.onEnterProfileRoom,
+    this.senderProfileActionBuilder,
   });
 
   final String? roomId;
@@ -121,6 +122,7 @@ class _MessageStage extends StatefulWidget {
   onResolveSenderProfile;
   final RoomProfileResolver? onResolveRoomProfile;
   final ValueChanged<PublicRoom>? onEnterProfileRoom;
+  final UserProfileActionBuilder? senderProfileActionBuilder;
 
   @override
   State<_MessageStage> createState() => _MessageStageState();
@@ -440,6 +442,7 @@ class _MessageStageState extends State<_MessageStage> {
                 onResolveSenderProfile: widget.onResolveSenderProfile,
                 onResolveRoomProfile: widget.onResolveRoomProfile,
                 onEnterProfileRoom: widget.onEnterProfileRoom,
+                profileActionBuilder: widget.senderProfileActionBuilder,
               )
             else
               _MessageRow(
@@ -454,6 +457,7 @@ class _MessageStageState extends State<_MessageStage> {
                 onResolveSenderProfile: widget.onResolveSenderProfile,
                 onResolveRoomProfile: widget.onResolveRoomProfile,
                 onEnterProfileRoom: widget.onEnterProfileRoom,
+                profileActionBuilder: widget.senderProfileActionBuilder,
               ),
           ],
         );
@@ -560,6 +564,7 @@ class _SystemMessageRow extends StatelessWidget {
     this.onResolveSenderProfile,
     this.onResolveRoomProfile,
     this.onEnterProfileRoom,
+    this.profileActionBuilder,
   });
 
   final message_display.SystemMessageEvent event;
@@ -568,6 +573,7 @@ class _SystemMessageRow extends StatelessWidget {
   onResolveSenderProfile;
   final RoomProfileResolver? onResolveRoomProfile;
   final ValueChanged<PublicRoom>? onEnterProfileRoom;
+  final UserProfileActionBuilder? profileActionBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -594,6 +600,7 @@ class _SystemMessageRow extends StatelessWidget {
                   onResolveSenderProfile: onResolveSenderProfile,
                   onResolveRoomProfile: onResolveRoomProfile,
                   onEnterProfileRoom: onEnterProfileRoom,
+                  profileActionBuilder: profileActionBuilder,
                 ).build(context),
               ],
             ),
@@ -611,6 +618,7 @@ class _SystemMessageParts {
     this.onResolveSenderProfile,
     this.onResolveRoomProfile,
     this.onEnterProfileRoom,
+    this.profileActionBuilder,
   });
 
   final message_display.SystemMessageEvent event;
@@ -619,6 +627,7 @@ class _SystemMessageParts {
   onResolveSenderProfile;
   final RoomProfileResolver? onResolveRoomProfile;
   final ValueChanged<PublicRoom>? onEnterProfileRoom;
+  final UserProfileActionBuilder? profileActionBuilder;
 
   List<Widget> build(BuildContext context) {
     final subject = event.subject;
@@ -669,6 +678,7 @@ class _SystemMessageParts {
       onResolveProfile: onResolveSenderProfile,
       onResolveRoomProfile: onResolveRoomProfile,
       onEnterProfileRoom: onEnterProfileRoom,
+      profileActionBuilder: profileActionBuilder,
     );
   }
 
@@ -692,6 +702,7 @@ class _SystemUserChip extends StatelessWidget {
     this.onResolveProfile,
     this.onResolveRoomProfile,
     this.onEnterProfileRoom,
+    this.profileActionBuilder,
   });
 
   final UserSummary user;
@@ -699,6 +710,7 @@ class _SystemUserChip extends StatelessWidget {
   final Future<UserSummary> Function(UserSummary sender)? onResolveProfile;
   final RoomProfileResolver? onResolveRoomProfile;
   final ValueChanged<PublicRoom>? onEnterProfileRoom;
+  final UserProfileActionBuilder? profileActionBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -719,6 +731,7 @@ class _SystemUserChip extends StatelessWidget {
           onResolveProfile: onResolveProfile,
           onResolveRoomProfile: onResolveRoomProfile,
           onEnterCommonRoom: onEnterProfileRoom,
+          profileActionBuilder: profileActionBuilder,
           child: avatar,
         ),
         const SizedBox(width: 4),
@@ -783,6 +796,7 @@ class _MessageRow extends StatelessWidget {
     this.onResolveSenderProfile,
     this.onResolveRoomProfile,
     this.onEnterProfileRoom,
+    this.profileActionBuilder,
   });
 
   final Message message;
@@ -797,6 +811,7 @@ class _MessageRow extends StatelessWidget {
   onResolveSenderProfile;
   final RoomProfileResolver? onResolveRoomProfile;
   final ValueChanged<PublicRoom>? onEnterProfileRoom;
+  final UserProfileActionBuilder? profileActionBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -859,6 +874,7 @@ class _MessageRow extends StatelessWidget {
       onResolveProfile: onResolveSenderProfile,
       onResolveRoomProfile: onResolveRoomProfile,
       onEnterCommonRoom: onEnterProfileRoom,
+      profileActionBuilder: profileActionBuilder,
       child: avatar,
     );
 

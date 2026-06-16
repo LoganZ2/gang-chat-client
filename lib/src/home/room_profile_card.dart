@@ -7,6 +7,20 @@ import 'hover_card_anchor.dart';
 
 typedef RoomProfileResolver = Future<PublicRoom> Function(PublicRoom room);
 typedef UserProfileResolver = Future<UserSummary> Function(UserSummary user);
+typedef UserProfileActionBuilder =
+    UserProfileAction? Function(UserSummary user);
+
+class UserProfileAction {
+  const UserProfileAction({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
+}
 
 class RoomHoverCard extends StatefulWidget {
   const RoomHoverCard({
@@ -104,6 +118,7 @@ class UserHoverCard extends StatefulWidget {
     this.onResolveProfile,
     this.onResolveRoomProfile,
     this.onEnterCommonRoom,
+    this.profileActionBuilder,
   });
 
   final UserSummary user;
@@ -115,6 +130,7 @@ class UserHoverCard extends StatefulWidget {
   final UserProfileResolver? onResolveProfile;
   final RoomProfileResolver? onResolveRoomProfile;
   final ValueChanged<PublicRoom>? onEnterCommonRoom;
+  final UserProfileActionBuilder? profileActionBuilder;
 
   @override
   State<UserHoverCard> createState() => _UserHoverCardState();
@@ -135,7 +151,13 @@ class _UserHoverCardState extends State<UserHoverCard> {
     final resolverPresenceChanged =
         (oldWidget.onResolveProfile == null) !=
         (widget.onResolveProfile == null);
-    if (!userChanged && !currentUserChanged && !resolverPresenceChanged) {
+    final actionPresenceChanged =
+        (oldWidget.profileActionBuilder == null) !=
+        (widget.profileActionBuilder == null);
+    if (!userChanged &&
+        !currentUserChanged &&
+        !resolverPresenceChanged &&
+        !actionPresenceChanged) {
       return;
     }
     _resolved = null;
@@ -176,6 +198,7 @@ class _UserHoverCardState extends State<UserHoverCard> {
         widget.onResolveProfile != null,
         widget.onResolveRoomProfile != null,
         widget.currentUser?.id,
+        widget.profileActionBuilder != null,
       ),
       onBeforeOpen: widget.onResolveProfile == null ? null : _resolveProfile,
       cardBuilder: (context) => _UserProfileCard(
@@ -184,6 +207,7 @@ class _UserHoverCardState extends State<UserHoverCard> {
         onResolveUserProfile: widget.onResolveProfile,
         onResolveRoomProfile: widget.onResolveRoomProfile,
         onEnterCommonRoom: widget.onEnterCommonRoom,
+        action: widget.profileActionBuilder?.call(_displayUser),
       ),
       child: widget.child,
     );
@@ -197,6 +221,7 @@ class _UserProfileCard extends StatelessWidget {
     this.onResolveUserProfile,
     this.onResolveRoomProfile,
     this.onEnterCommonRoom,
+    this.action,
   });
 
   final UserSummary user;
@@ -204,6 +229,7 @@ class _UserProfileCard extends StatelessWidget {
   final UserProfileResolver? onResolveUserProfile;
   final RoomProfileResolver? onResolveRoomProfile;
   final ValueChanged<PublicRoom>? onEnterCommonRoom;
+  final UserProfileAction? action;
 
   @override
   Widget build(BuildContext context) {
@@ -336,6 +362,19 @@ class _UserProfileCard extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: UiTypography.label.copyWith(color: UiColors.textMuted),
+            ),
+          ],
+          if (action != null) ...[
+            const SizedBox(height: UiSpacing.md),
+            Center(
+              child: Button(
+                icon: Icon(action!.icon),
+                tone: ButtonTone.primary,
+                height: 34,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                onPressed: action!.onPressed,
+                child: Text(action!.label),
+              ),
             ),
           ],
         ],

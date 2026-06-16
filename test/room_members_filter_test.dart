@@ -298,8 +298,12 @@ void main() {
     expect(roomMemberRoleUpdateConfirmLabel('member'), '移除');
     expect(transferCreatorDialogTitle(), '转让创建者');
     expect(
-      transferCreatorConfirmBody(member),
+      transferCreatorConfirmBody(member, currentUserIsCreator: true),
       '创建者身份会转让给 Room Target，你将成为管理员。',
+    );
+    expect(
+      transferCreatorConfirmBody(member, currentUserIsCreator: false),
+      '创建者身份会转让给 Room Target，原创建者将成为管理员。',
     );
     expect(transferCreatorConfirmLabel(), '转让');
     expect(transferCreatorSuccessNotice(), '创建者已转让');
@@ -432,6 +436,88 @@ void main() {
         canEditCreatorOnly: false,
       ).canRemoveMember,
       isFalse,
+    );
+  });
+
+  test('roomMemberPermissionState lets superusers remove creators', () {
+    final currentUser = _currentUser('current', isSuperuser: true);
+
+    final creator = roomMemberPermissionState(
+      member: _member('owner', role: 'owner'),
+      currentUser: currentUser,
+      canEditCreatorOnly: true,
+      canManageMembers: true,
+      ownerUserId: 'owner',
+    );
+    expect(creator.canRoleEdit, isFalse);
+    expect(creator.canSetAdmin, isFalse);
+    expect(creator.canUnsetAdmin, isFalse);
+    expect(creator.canTransferCreator, isFalse);
+    expect(creator.canRemoveMember, isTrue);
+
+    final superuserCreator = roomMemberPermissionState(
+      member: _member('owner', role: 'owner', isSuperuser: true),
+      currentUser: currentUser,
+      canEditCreatorOnly: true,
+      canManageMembers: true,
+      ownerUserId: 'owner',
+    );
+    expect(superuserCreator.canRemoveMember, isFalse);
+  });
+
+  test('profile management shortcut follows member management permissions', () {
+    final currentUser = _currentUser('current');
+    final superuser = _currentUser('superuser', isSuperuser: true);
+    final ownerRoom = _room('room_1', role: 'owner');
+    final adminRoom = _room('room_1', role: 'admin');
+
+    expect(
+      canOpenRoomMemberManagementFromProfile(
+        room: ownerRoom,
+        currentUser: currentUser,
+        target: _member('admin', role: 'admin', uid: 'uid-admin').user,
+      ),
+      isTrue,
+    );
+    expect(
+      canOpenRoomMemberManagementFromProfile(
+        room: adminRoom,
+        currentUser: currentUser,
+        target: _member('member', uid: 'uid-member').user,
+      ),
+      isTrue,
+    );
+    expect(
+      canOpenRoomMemberManagementFromProfile(
+        room: adminRoom,
+        currentUser: currentUser,
+        target: _member('admin', role: 'admin', uid: 'uid-admin').user,
+      ),
+      isFalse,
+    );
+    expect(
+      canOpenRoomMemberManagementFromProfile(
+        room: ownerRoom,
+        currentUser: currentUser,
+        target: _member('current', uid: 'uid-current').user,
+      ),
+      isFalse,
+    );
+    expect(
+      canOpenRoomMemberManagementFromProfile(
+        room: ownerRoom,
+        currentUser: currentUser,
+        target: _member('member').user,
+      ),
+      isFalse,
+    );
+    expect(
+      canOpenRoomMemberManagementFromProfile(
+        room: adminRoom,
+        currentUser: superuser,
+        target: _member('owner', role: 'owner', uid: 'uid-owner').user,
+      ),
+      isTrue,
     );
   });
 
@@ -646,7 +732,7 @@ UserSummary _user(String id) {
   );
 }
 
-CurrentUser _currentUser(String id) {
+CurrentUser _currentUser(String id, {bool isSuperuser = false}) {
   return CurrentUser(
     id: id,
     uid: id,
@@ -660,7 +746,7 @@ CurrentUser _currentUser(String id) {
     phoneNumberPublic: false,
     avatarUrl: null,
     defaultAvatarKey: 'blue-3',
-    isSuperuser: false,
+    isSuperuser: isSuperuser,
     createdAt: DateTime.utc(2026, 6, 4),
   );
 }
