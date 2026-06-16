@@ -210,7 +210,7 @@ class _MemberRow extends StatelessWidget {
                   onPressed: onRemoveMember,
                   size: 34,
                 ),
-                const SizedBox(width: 6),
+                if (permission.canRoleEdit) const SizedBox(width: 6),
               ],
               if (permission.canRoleEdit)
                 ButtonIcon(

@@ -1139,6 +1139,43 @@ void main() {
     expect(requestedPaths, contains('/api/v1/rooms/server-alpha/members'));
   });
 
+  testWidgets('creator removal action aligns with member action group', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(
+            currentRoomRole: 'member',
+            currentUserIsSuperuser: true,
+            secondaryMemberRole: 'owner',
+            includeActionComparisonMember: true,
+          ),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('房间成员'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Morgan'), findsWidgets);
+    expect(find.text('Taylor'), findsWidgets);
+    expect(_buttonIconWithTooltip('踢出此用户'), findsNWidgets(2));
+    expect(_buttonIconWithTooltip('转让创建者'), findsOneWidget);
+
+    final creatorRemoveRect = tester.getRect(
+      _buttonIconWithTooltip('踢出此用户').first,
+    );
+    final memberTransferRect = tester.getRect(_buttonIconWithTooltip('转让创建者'));
+    expect(creatorRemoveRect.right, closeTo(memberTransferRect.right, 0.01));
+  });
+
   testWidgets('message profile can jump to member management by UID', (
     WidgetTester tester,
   ) async {
@@ -3046,6 +3083,7 @@ AuthenticatedAppContext _homeTestAppContext({
   String currentRoomRole = 'owner',
   bool currentUserIsSuperuser = false,
   String secondaryMemberRole = 'member',
+  bool includeActionComparisonMember = false,
 }) {
   final user = CurrentUser(
     id: 'user-1',
@@ -3081,6 +3119,7 @@ AuthenticatedAppContext _homeTestAppContext({
       roomCreations: roomCreations,
       currentRoomRole: currentRoomRole,
       secondaryMemberRole: secondaryMemberRole,
+      includeActionComparisonMember: includeActionComparisonMember,
     ),
   );
 }
@@ -3092,6 +3131,7 @@ GangApi _roomsApi({
   List<Map<String, Object?>>? roomCreations,
   String currentRoomRole = 'owner',
   String secondaryMemberRole = 'member',
+  bool includeActionComparisonMember = false,
 }) {
   return GangApiClient(
     baseUrl: 'http://example.test/api/v1',
@@ -3357,6 +3397,17 @@ GangApi _roomsApi({
               ),
               role: secondaryMemberRole,
             ),
+            if (includeActionComparisonMember)
+              _roomMemberJson(
+                user: _userJson(
+                  id: 'user-5',
+                  username: 'taylor',
+                  displayName: 'Taylor',
+                  uid: 'uid-5',
+                  isOnline: false,
+                ),
+                role: 'member',
+              ),
           ],
           'next_cursor': null,
         });
