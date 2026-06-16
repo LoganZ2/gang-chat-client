@@ -79,6 +79,14 @@ typedef void (^CapturerStopHandler)(CompletionHandler _Nonnull handler);
 // connection is recording/playing).
 @property(nonatomic, copy) NSString* _Nullable gcDesiredInputDeviceId;
 @property(nonatomic, copy) NSString* _Nullable gcDesiredOutputDeviceId;
+
+// Bluetooth A2DP<->HFP recovery: starting the mic forces a BT headset into HFP
+// (mono, 8/16 kHz), which also drags the device's nominal sample rate down.
+// macOS does not reliably restore the high A2DP rate when the call ends, so the
+// headset is left "stuck" at the HFP rate and system playback sounds wrong.
+// We snapshot the clean (>= 32 kHz) nominal rate per output device id whenever we
+// observe one, then force it back on call teardown. See gcResetAudioOnLeave.
+@property(nonatomic, strong) NSMutableDictionary<NSString*, NSNumber*>* _Nullable gcCleanOutputSampleRates;
 #endif
 
 - (RTCMediaStream* _Nullable)streamForId:(NSString* _Nonnull)streamId

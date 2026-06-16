@@ -14,6 +14,20 @@ class NativeAudioManagement {
     );
   }
 
+  /// gang-chat fork (macOS only): restore the Bluetooth A2DP sample rate on
+  /// room teardown. The native handler is guarded by TARGET_OS_OSX and absent on
+  /// other platforms, so swallow the resulting "not implemented" there.
+  static Future<void> gcResetAudioOnLeave() async {
+    if (kIsWeb) return;
+    try {
+      await WebRTC.invokeMethod('gcResetAudioOnLeave', <String, dynamic>{});
+    } on MissingPluginException {
+      // Native method only exists on macOS; ignore elsewhere.
+    } on PlatformException {
+      // Best-effort recovery; a failure must not block disconnect.
+    }
+  }
+
   static Future<void> setSpeakerphoneOn(bool enable) async {
     await WebRTC.invokeMethod(
       'enableSpeakerphone',

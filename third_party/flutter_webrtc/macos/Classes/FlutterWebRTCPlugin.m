@@ -432,6 +432,12 @@ static FlutterWebRTCPlugin *sharedSingleton;
     NSDictionary* argsMap = call.arguments;
     NSString* deviceId = argsMap[@"deviceId"];
     [self selectAudioOutput:deviceId result:result];
+#if TARGET_OS_OSX
+  } else if ([@"gcResetAudioOnLeave" isEqualToString:call.method]) {
+    // gang-chat fork: restore the Bluetooth A2DP sample rate on room teardown.
+    [self gcResetAudioOnLeave];
+    result(nil);
+#endif
   } else if ([@"mediaStreamGetTracks" isEqualToString:call.method]) {
     NSDictionary* argsMap = call.arguments;
     NSString* streamId = argsMap[@"streamId"];

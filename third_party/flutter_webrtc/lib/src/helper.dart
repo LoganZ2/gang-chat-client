@@ -120,6 +120,13 @@ class Helper {
   static Future<void> selectAudioInput(String deviceId) =>
       NativeAudioManagement.selectAudioInput(deviceId);
 
+  /// gang-chat fork (macOS only): restore the Bluetooth A2DP sample rate on room
+  /// teardown. Stops the ADM's mic capture so a BT headset can drop HFP/SCO,
+  /// then forces each output device back to its clean (>= 32 kHz) nominal rate.
+  /// No-op on other platforms.
+  static Future<void> gcResetAudioOnLeave() =>
+      NativeAudioManagement.gcResetAudioOnLeave();
+
   /// Enable or disable speakerphone
   /// for iOS/Android only
   static Future<void> setSpeakerphoneOn(bool enable) =>

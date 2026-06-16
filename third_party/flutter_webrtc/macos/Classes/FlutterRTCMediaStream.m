@@ -1,4 +1,7 @@
 #import <objc/runtime.h>
+#if TARGET_OS_OSX
+#import <CoreAudio/CoreAudio.h>
+#endif
 #import "AudioUtils.h"
 #import "CameraUtils.h"
 #import "FlutterRTCFrameCapturer.h"
@@ -757,6 +760,110 @@ typedef void (^NavigatorUserMediaSuccessCallback)(RTCMediaStream* mediaStream);
 // requested id isn't present yet we just store it (gcDesiredInput/OutputDeviceId)
 // and re-apply from audioDeviceModuleDidUpdateDevices: once the list populates.
 
+// macOS 12 renamed kAudioObjectPropertyElementMaster -> ...Main; keep building
+// against older SDKs/deployment targets too.
+#ifndef kAudioObjectPropertyElementMain
+#define kAudioObjectPropertyElementMain kAudioObjectPropertyElementMaster
+#endif
+
+// RTCIODevice.deviceId on macOS is the CoreAudio AudioDeviceID as a string.
+// Returns kAudioObjectUnknown when the id can't be parsed.
+static AudioDeviceID GCAudioDeviceIDFromString(NSString* deviceId) {
+  if (deviceId.length == 0) {
+    return kAudioObjectUnknown;
+  }
+  // The id is an unsigned 32-bit AudioObjectID rendered in base 10.
+  const char* utf8 = deviceId.UTF8String;
+  char* end = NULL;
+  unsigned long value = strtoul(utf8, &end, 10);
+  if (end == utf8 || *end != '\0') {
+    return kAudioObjectUnknown;  // not a clean integer string
+  }
+  return (AudioDeviceID)value;
+}
+
+// Reads a device's current nominal sample rate, or 0 on failure.
+static Float64 GCGetNominalSampleRate(AudioDeviceID device) {
+  if (device == kAudioObjectUnknown) {
+    return 0;
+  }
+  AudioObjectPropertyAddress addr = {
+      kAudioDevicePropertyNominalSampleRate,
+      kAudioObjectPropertyScopeOutput,
+      kAudioObjectPropertyElementMain};
+  Float64 rate = 0;
+  UInt32 size = sizeof(rate);
+  OSStatus status = AudioObjectGetPropertyData(device, &addr, 0, NULL, &size, &rate);
+  return status == noErr ? rate : 0;
+}
+
+// Returns the highest nominal sample rate the device advertises, or 0 on
+// failure. Used as the restore target when no clean rate was snapshotted.
+static Float64 GCGetMaxAvailableSampleRate(AudioDeviceID device) {
+  if (device == kAudioObjectUnknown) {
+    return 0;
+  }
+  AudioObjectPropertyAddress addr = {
+      kAudioDevicePropertyAvailableNominalSampleRates,
+      kAudioObjectPropertyScopeOutput,
+      kAudioObjectPropertyElementMain};
+  UInt32 size = 0;
+  if (AudioObjectGetPropertyDataSize(device, &addr, 0, NULL, &size) != noErr || size == 0) {
+    return 0;
+  }
+  UInt32 count = size / sizeof(AudioValueRange);
+  AudioValueRange* ranges = (AudioValueRange*)malloc(size);
+  if (ranges == NULL) {
+    return 0;
+  }
+  Float64 maxRate = 0;
+  if (AudioObjectGetPropertyData(device, &addr, 0, NULL, &size, ranges) == noErr) {
+    for (UInt32 i = 0; i < count; i++) {
+      if (ranges[i].mMaximum > maxRate) {
+        maxRate = ranges[i].mMaximum;
+      }
+    }
+  }
+  free(ranges);
+  return maxRate;
+}
+
+// Sets a device's nominal sample rate. Returns YES on success.
+static BOOL GCSetNominalSampleRate(AudioDeviceID device, Float64 rate) {
+  if (device == kAudioObjectUnknown || rate <= 0) {
+    return NO;
+  }
+  AudioObjectPropertyAddress addr = {
+      kAudioDevicePropertyNominalSampleRate,
+      kAudioObjectPropertyScopeOutput,
+      kAudioObjectPropertyElementMain};
+  OSStatus status =
+      AudioObjectSetPropertyData(device, &addr, 0, NULL, sizeof(rate), &rate);
+  return status == noErr;
+}
+
+// A "clean" rate is the A2DP/high-quality rate (>= 32 kHz). HFP drags the device
+// down to 8/16 kHz, so anything below the threshold is the degraded profile we
+// don't want to memorise as the restore target.
+static const Float64 kGCCleanSampleRateThreshold = 32000.0;
+
+// Remembers a device's nominal sample rate while it's still clean, so call
+// teardown can put it back if HFP/SCO dragged it down. No-op once HFP is active.
+- (void)gcSnapshotCleanOutputRateFor:(NSString*)deviceId {
+  if (deviceId.length == 0) {
+    return;
+  }
+  AudioDeviceID device = GCAudioDeviceIDFromString(deviceId);
+  Float64 rate = GCGetNominalSampleRate(device);
+  if (rate < kGCCleanSampleRateThreshold) {
+    return;
+  }
+  if (!self.gcCleanOutputSampleRates) {
+    self.gcCleanOutputSampleRates = [NSMutableDictionary dictionary];
+  }
+  self.gcCleanOutputSampleRates[deviceId] = @(rate);
+}
+
 // Returns the routing result dict, or nil if the id isn't in the ADM list yet.
 - (NSDictionary*)gcApplyInputDevice:(NSString*)deviceId {
   RTCAudioDeviceModule* adm = [self.peerConnectionFactory audioDeviceModule];
@@ -778,6 +885,9 @@ typedef void (^NavigatorUserMediaSuccessCallback)(RTCMediaStream* mediaStream);
   RTCAudioDeviceModule* adm = [self.peerConnectionFactory audioDeviceModule];
   for (RTCIODevice* device in [adm outputDevices]) {
     if ([deviceId isEqualToString:device.deviceId]) {
+      // Capture the clean nominal rate before recording can force HFP, so
+      // teardown can restore it. See gcResetAudioOnLeave.
+      [self gcSnapshotCleanOutputRateFor:deviceId];
       BOOL wasPlaying = adm.playing;
       NSInteger stopRc = wasPlaying ? [adm stopPlayout] : 0;
       adm.outputDevice = device;
@@ -802,6 +912,42 @@ typedef void (^NavigatorUserMediaSuccessCallback)(RTCMediaStream* mediaStream);
   }
   if (self.gcDesiredOutputDeviceId.length > 0) {
     [self gcApplyOutputDevice:self.gcDesiredOutputDeviceId];
+  }
+}
+
+- (void)gcResetAudioOnLeave {
+  RTCAudioDeviceModule* adm = [self.peerConnectionFactory audioDeviceModule];
+  // Stop the mic first: it's the recording claim that holds a BT headset in
+  // HFP/SCO. Dropping it lets macOS renegotiate back to A2DP.
+  if (adm.recording) {
+    [adm stopRecording];
+  }
+  // Restore each output device that got dragged down to an HFP rate during the
+  // call. Prefer the clean rate we snapshotted; fall back to the device's max
+  // advertised rate. Skip devices already sitting at a clean rate.
+  NSMutableSet<NSString*>* candidateIds = [NSMutableSet set];
+  if (self.gcCleanOutputSampleRates) {
+    [candidateIds addObjectsFromArray:self.gcCleanOutputSampleRates.allKeys];
+  }
+  if (self.gcDesiredOutputDeviceId.length > 0) {
+    [candidateIds addObject:self.gcDesiredOutputDeviceId];
+  }
+  for (NSString* deviceId in candidateIds) {
+    AudioDeviceID device = GCAudioDeviceIDFromString(deviceId);
+    if (device == kAudioObjectUnknown) {
+      continue;
+    }
+    Float64 current = GCGetNominalSampleRate(device);
+    if (current >= kGCCleanSampleRateThreshold) {
+      continue;  // already clean, nothing to undo
+    }
+    Float64 target = [self.gcCleanOutputSampleRates[deviceId] doubleValue];
+    if (target < kGCCleanSampleRateThreshold) {
+      target = GCGetMaxAvailableSampleRate(device);
+    }
+    if (target >= kGCCleanSampleRateThreshold) {
+      GCSetNominalSampleRate(device, target);
+    }
   }
 }
 #endif
