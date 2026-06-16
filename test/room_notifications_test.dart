@@ -122,6 +122,11 @@ void main() {
       invalidReason: 'inviter_left',
       inviter: _user('left_inviter', roomRole: 'left'),
     );
+    final deletedInviterWithoutReason = _invite(
+      'deleted_inviter_without_reason',
+      status: 'pending',
+      inviterExists: false,
+    );
     final accepted = _invite('accepted', status: 'accepted');
     final rejected = _invite('rejected', status: 'rejected');
 
@@ -141,10 +146,20 @@ void main() {
       canReviewNotificationInvite(invite: invalid, busyInviteId: null),
       isFalse,
     );
+    expect(
+      canReviewNotificationInvite(
+        invite: deletedInviterWithoutReason,
+        busyInviteId: null,
+      ),
+      isFalse,
+    );
     expect(isInvalidPendingRoomInvite(invalid), isTrue);
+    expect(isInvalidPendingRoomInvite(deletedInviterWithoutReason), isTrue);
     expect(isActionablePendingRoomInvite(pending), isTrue);
     expect(isActionablePendingRoomInvite(invalid), isFalse);
+    expect(isActionablePendingRoomInvite(deletedInviterWithoutReason), isFalse);
     expect(roomInviteDecisionLabel(invalid), '已失效');
+    expect(roomInviteDecisionLabel(deletedInviterWithoutReason), '已失效');
     expect(roomInviteDecisionLabel(accepted), '已接受');
     expect(roomInviteDecisionLabel(rejected), '已拒绝');
     expect(roomInviteRoleLabel(_user('owner', roomRole: 'owner')), '创建者');
@@ -152,6 +167,7 @@ void main() {
     expect(roomInviteRoleLabel(_user('member', roomRole: 'member')), '成员');
     expect(roomInviteRoleLabel(_user('left', roomRole: 'left')), '已离开');
     expect(pendingRoomInviteCount([pending, invalid]), 1);
+    expect(pendingRoomInviteCount([pending, deletedInviterWithoutReason]), 1);
     expect(
       roomInviteTimestampLabel(DateTime(2026, 6, 9, 8, 5)),
       '2026/06/09 08:05',

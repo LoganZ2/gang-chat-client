@@ -83,7 +83,9 @@ bool isInvalidPendingRoomInvite(RoomInvite invite) {
   if (!isPendingRoomInvite(invite)) return false;
   final reason = invite.invalidReason?.trim();
   if (reason != null && reason.isNotEmpty) return true;
-  return !invite.roomExists || _isLeftRoomRole(invite.inviter.roomRole);
+  return !invite.roomExists ||
+      !invite.inviterExists ||
+      _isLeftRoomRole(invite.inviter.roomRole);
 }
 
 bool isActionablePendingRoomInvite(RoomInvite invite) {
