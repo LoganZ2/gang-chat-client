@@ -43,6 +43,8 @@ dev_dependencies:
 dependency_overrides:
   audioplayers_windows:
     path: third_party/audioplayers_windows
+  flutter_webrtc:
+    path: third_party/flutter_webrtc
 
 flutter:
   uses-material-design: true

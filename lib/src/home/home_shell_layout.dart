@@ -21,6 +21,15 @@ extension _HomeShellLayout on _HomeShellState {
         onAccountDeleted: _logout,
         onScreenShareMaxHeightChanged: (height) =>
             unawaited(_liveSessionController.setScreenShareMaxHeight(height)),
+        // The Settings picker already routes the native ADM (selectAudioInput/
+        // Output). For inputs, also keep LiveSession's tracked capture device in
+        // sync so a later mute/unmute republish stays on the chosen mic. Outputs
+        // are global on the ADM and need no session-side action.
+        onDeviceSelected: (kind, deviceId) {
+          if (kind == 'audioinput') {
+            unawaited(_liveSessionController.setInputDeviceId(deviceId));
+          }
+        },
         onClose: _closeSettings,
       );
     }

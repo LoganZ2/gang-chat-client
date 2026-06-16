@@ -87,6 +87,22 @@ class LiveSessionController {
 
   Future<void> setInputVolume(double volume) => session.setInputVolume(volume);
 
+  /// Pin the microphone capture device. Keeps [LiveSession]'s tracked input id
+  /// in sync so a later mute/unmute republish stays on the chosen device. The
+  /// native ADM is routed separately by the Settings picker's selectAudioInput;
+  /// this only keeps the LiveKit republish path consistent. Persisted so a
+  /// future room join restores the same device.
+  Future<void> setInputDeviceId(String? deviceId) async {
+    await session.setInputDeviceId(deviceId);
+    try {
+      if (deviceId != null) {
+        await audioDeviceStore.writeInputDeviceId(deviceId);
+      }
+    } catch (_) {
+      // A failed persist shouldn't undo the live change.
+    }
+  }
+
   Future<void> setOutputVolume(double volume) {
     return session.setOutputVolume(volume);
   }
