@@ -49,7 +49,15 @@ class FlutterMediaStream {
   void OnDeviceChange();
 
  private:
+  bool TrySelectAudioInputDevice(const std::string& device_id);
+
+  bool TrySelectAudioOutputDevice(const std::string& device_id);
+
+  void ApplyDesiredAudioDevices();
+
   FlutterWebRTCBase* base_;
+  std::string desired_audio_input_device_id_;
+  std::string desired_audio_output_device_id_;
 };
 
 }  // namespace flutter_webrtc_plugin

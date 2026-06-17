@@ -1,13 +1,180 @@
 #include "flutter_media_stream.h"
 
+#include <set>
+
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+
+#include <propkeydef.h>
+#include <functiondiscoverykeys_devpkey.h>
+#include <mmdeviceapi.h>
+#include <propsys.h>
+#endif
+
 #define DEFAULT_WIDTH 1280
 #define DEFAULT_HEIGHT 720
 #define DEFAULT_FPS 30
+
+namespace {
+
+std::string AudioDeviceIdFromNameAndGuid(const char* name, const char* guid) {
+  return strlen(guid) > 0 ? std::string(guid) : std::string(name);
+}
+
+void AppendAudioDevice(EncodableList& sources,
+                       std::set<std::string>& seen,
+                       const std::string& kind,
+                       const std::string& label,
+                       const std::string& device_id) {
+  if (device_id.empty()) {
+    return;
+  }
+  const std::string key = kind + ":" + device_id;
+  if (!seen.insert(key).second) {
+    return;
+  }
+  EncodableMap audio;
+  audio[EncodableValue("label")] = EncodableValue(label);
+  audio[EncodableValue("deviceId")] = EncodableValue(device_id);
+  audio[EncodableValue("groupId")] = EncodableValue(device_id);
+  audio[EncodableValue("facing")] = "";
+  audio[EncodableValue("kind")] = kind;
+  sources.push_back(EncodableValue(audio));
+}
+
+#if defined(_WIN32)
+template <typename T>
+void SafeRelease(T*& value) {
+  if (value) {
+    value->Release();
+    value = nullptr;
+  }
+}
+
+class ScopedComInitialization {
+ public:
+  ScopedComInitialization() {
+    const HRESULT result = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    initialized_here_ = SUCCEEDED(result);
+    ok_ = initialized_here_ || result == RPC_E_CHANGED_MODE;
+  }
+
+  ~ScopedComInitialization() {
+    if (initialized_here_) {
+      CoUninitialize();
+    }
+  }
+
+  bool ok() const { return ok_; }
+
+ private:
+  bool ok_ = false;
+  bool initialized_here_ = false;
+};
+
+std::string WideToUtf8(const wchar_t* value) {
+  if (!value || value[0] == L'\0') {
+    return {};
+  }
+  const int size = WideCharToMultiByte(CP_UTF8, 0, value, -1, nullptr, 0,
+                                       nullptr, nullptr);
+  if (size <= 1) {
+    return {};
+  }
+  std::string result(size, '\0');
+  WideCharToMultiByte(CP_UTF8, 0, value, -1, result.data(), size, nullptr,
+                      nullptr);
+  result.pop_back();
+  return result;
+}
+
+std::string AudioEndpointId(IMMDevice* device) {
+  if (!device) {
+    return {};
+  }
+  wchar_t* raw_id = nullptr;
+  if (FAILED(device->GetId(&raw_id)) || !raw_id) {
+    return {};
+  }
+  std::string device_id = WideToUtf8(raw_id);
+  CoTaskMemFree(raw_id);
+  return device_id;
+}
+
+std::string AudioEndpointFriendlyName(IMMDevice* device,
+                                      const std::string& fallback) {
+  if (!device) {
+    return fallback;
+  }
+  IPropertyStore* properties = nullptr;
+  PROPVARIANT name;
+  PropVariantInit(&name);
+  std::string label;
+  if (SUCCEEDED(device->OpenPropertyStore(STGM_READ, &properties)) &&
+      SUCCEEDED(properties->GetValue(PKEY_Device_FriendlyName, &name)) &&
+      name.vt == VT_LPWSTR) {
+    label = WideToUtf8(name.pwszVal);
+  }
+  PropVariantClear(&name);
+  SafeRelease(properties);
+  return label.empty() ? fallback : label;
+}
+
+void AppendWindowsAudioEndpoints(EncodableList& sources,
+                                 std::set<std::string>& seen,
+                                 EDataFlow flow,
+                                 const std::string& kind,
+                                 const std::string& fallback) {
+  ScopedComInitialization com;
+  if (!com.ok()) {
+    return;
+  }
+
+  IMMDeviceEnumerator* enumerator = nullptr;
+  IMMDeviceCollection* collection = nullptr;
+  if (FAILED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr,
+                              CLSCTX_ALL, IID_PPV_ARGS(&enumerator))) ||
+      FAILED(enumerator->EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE,
+                                            &collection))) {
+    SafeRelease(collection);
+    SafeRelease(enumerator);
+    return;
+  }
+
+  UINT count = 0;
+  if (SUCCEEDED(collection->GetCount(&count))) {
+    for (UINT i = 0; i < count; ++i) {
+      IMMDevice* device = nullptr;
+      if (FAILED(collection->Item(i, &device))) {
+        continue;
+      }
+      const std::string device_id = AudioEndpointId(device);
+      AppendAudioDevice(
+          sources, seen, kind,
+          AudioEndpointFriendlyName(device, fallback + " " + device_id),
+          device_id);
+      SafeRelease(device);
+    }
+  }
+
+  SafeRelease(collection);
+  SafeRelease(enumerator);
+}
+#endif
+
+}  // namespace
 
 namespace flutter_webrtc_plugin {
 
 FlutterMediaStream::FlutterMediaStream(FlutterWebRTCBase* base) : base_(base) {
   base_->audio_device_->OnDeviceChange([&] {
+    ApplyDesiredAudioDevices();
     EncodableMap info;
     info[EncodableValue("event")] = "onDeviceChange";
     base_->event_channel()->Success(EncodableValue(info), false);
@@ -112,6 +279,9 @@ void FlutterMediaStream::GetUserAudio(const EncodableMap& constraints,
       EncodableMap localMap = GetValue<EncodableMap>(audio);
       sourceId = getSourceIdConstraint(localMap);
       deviceId = getDeviceIdConstraint(localMap);
+      if (sourceId.empty()) {
+        sourceId = deviceId;
+      }
       audioConstraints = base_->ParseMediaConstraints(localMap);
       enable_audio = true;
     }
@@ -126,18 +296,27 @@ void FlutterMediaStream::GetUserAudio(const EncodableMap& constraints,
     int playout_devices = base_->audio_device_->PlayoutDevices();
     int recording_devices = base_->audio_device_->RecordingDevices();
 
+    if (sourceId.empty() && !desired_audio_input_device_id_.empty()) {
+      sourceId = desired_audio_input_device_id_;
+    }
+    if (deviceId.empty() && !desired_audio_output_device_id_.empty()) {
+      deviceId = desired_audio_output_device_id_;
+    }
+
     for (uint16_t i = 0; i < recording_devices; i++) {
       base_->audio_device_->RecordingDeviceName(i, strRecordingName,
                                                 strRecordingGuid);
-      if (sourceId != "" && sourceId == strRecordingGuid) {
+      const std::string recording_device_id =
+          AudioDeviceIdFromNameAndGuid(strRecordingName, strRecordingGuid);
+      if (!sourceId.empty() && sourceId == recording_device_id) {
         base_->audio_device_->SetRecordingDevice(i);
       }
     }
 
-    if (sourceId == "") {
+    if (sourceId == "" && recording_devices > 0) {
       base_->audio_device_->RecordingDeviceName(0, strRecordingName,
                                                 strRecordingGuid);
-      sourceId = strRecordingGuid;
+      sourceId = AudioDeviceIdFromNameAndGuid(strRecordingName, strRecordingGuid);
     }
 
     char strPlayoutName[256];
@@ -145,7 +324,9 @@ void FlutterMediaStream::GetUserAudio(const EncodableMap& constraints,
     for (uint16_t i = 0; i < playout_devices; i++) {
       base_->audio_device_->PlayoutDeviceName(i, strPlayoutName,
                                               strPlayoutGuid);
-      if (deviceId != "" && deviceId == strPlayoutGuid) {
+      const std::string playout_device_id =
+          AudioDeviceIdFromNameAndGuid(strPlayoutName, strPlayoutGuid);
+      if (!deviceId.empty() && deviceId == playout_device_id) {
         base_->audio_device_->SetPlayoutDevice(i);
       }
     }
@@ -325,6 +506,7 @@ void FlutterMediaStream::GetUserVideo(const EncodableMap& constraints,
 
 void FlutterMediaStream::GetSources(std::unique_ptr<MethodResultProxy> result) {
   EncodableList sources;
+  std::set<std::string> seen_audio_devices;
 
   int nb_audio_devices = base_->audio_device_->RecordingDevices();
   char strNameUTF8[RTCAudioDevice::kAdmMaxDeviceNameSize + 1] = {0};
@@ -332,28 +514,28 @@ void FlutterMediaStream::GetSources(std::unique_ptr<MethodResultProxy> result) {
 
   for (uint16_t i = 0; i < nb_audio_devices; i++) {
     base_->audio_device_->RecordingDeviceName(i, strNameUTF8, strGuidUTF8);
-    std::string device_id = strlen(strGuidUTF8) > 0 ? std::string(strGuidUTF8)
-                                                    : std::string(strNameUTF8);
-    EncodableMap audio;
-    audio[EncodableValue("label")] = EncodableValue(std::string(strNameUTF8));
-    audio[EncodableValue("deviceId")] = EncodableValue(device_id);
-    audio[EncodableValue("facing")] = "";
-    audio[EncodableValue("kind")] = "audioinput";
-    sources.push_back(EncodableValue(audio));
+    AppendAudioDevice(
+        sources, seen_audio_devices, "audioinput", std::string(strNameUTF8),
+        AudioDeviceIdFromNameAndGuid(strNameUTF8, strGuidUTF8));
   }
 
   nb_audio_devices = base_->audio_device_->PlayoutDevices();
   for (uint16_t i = 0; i < nb_audio_devices; i++) {
     base_->audio_device_->PlayoutDeviceName(i, strNameUTF8, strGuidUTF8);
-    std::string device_id = strlen(strGuidUTF8) > 0 ? std::string(strGuidUTF8)
-                                                    : std::string(strNameUTF8);
-    EncodableMap audio;
-    audio[EncodableValue("label")] = EncodableValue(std::string(strNameUTF8));
-    audio[EncodableValue("deviceId")] = EncodableValue(device_id);
-    audio[EncodableValue("facing")] = "";
-    audio[EncodableValue("kind")] = "audiooutput";
-    sources.push_back(EncodableValue(audio));
+    AppendAudioDevice(
+        sources, seen_audio_devices, "audiooutput", std::string(strNameUTF8),
+        AudioDeviceIdFromNameAndGuid(strNameUTF8, strGuidUTF8));
   }
+
+#if defined(_WIN32)
+  // On Windows the ADM can return zero devices until recording/playout is
+  // initialized by a real room. Enumerate IMMDevice directly so Settings can
+  // show and remember input/output choices before joining.
+  AppendWindowsAudioEndpoints(sources, seen_audio_devices, eCapture,
+                              "audioinput", "Microphone");
+  AppendWindowsAudioEndpoints(sources, seen_audio_devices, eRender,
+                              "audiooutput", "Speaker");
+#endif
 
   int nb_video_devices = base_->video_device_->NumberOfDevices();
   for (int i = 0; i < nb_video_devices; i++) {
@@ -371,54 +553,95 @@ void FlutterMediaStream::GetSources(std::unique_ptr<MethodResultProxy> result) {
   result->Success(EncodableValue(params));
 }
 
-void FlutterMediaStream::SelectAudioOutput(
-    const std::string& device_id,
-    std::unique_ptr<MethodResultProxy> result) {
+bool FlutterMediaStream::TrySelectAudioOutputDevice(
+    const std::string& device_id) {
+  if (device_id.empty()) {
+    return false;
+  }
   char deviceName[256];
   char deviceGuid[256];
   int playout_devices = base_->audio_device_->PlayoutDevices();
-  bool found = false;
   for (uint16_t i = 0; i < playout_devices; i++) {
     base_->audio_device_->PlayoutDeviceName(i, deviceName, deviceGuid);
-    std::string cur_device_id = strlen(deviceGuid) > 0
-                                    ? std::string(deviceGuid)
-                                    : std::string(deviceName);
-    if (device_id != "" && device_id == cur_device_id) {
+    const std::string cur_device_id =
+        AudioDeviceIdFromNameAndGuid(deviceName, deviceGuid);
+    if (device_id == cur_device_id) {
       base_->audio_device_->SetPlayoutDevice(i);
-      found = true;
-      break;
+      return true;
     }
   }
-  if (!found) {
+  return false;
+}
+
+void FlutterMediaStream::SelectAudioOutput(
+    const std::string& device_id,
+    std::unique_ptr<MethodResultProxy> result) {
+  desired_audio_output_device_id_ = device_id;
+  if (TrySelectAudioOutputDevice(device_id)) {
+    result->Success();
+    return;
+  }
+#if defined(_WIN32)
+  if (!device_id.empty()) {
+    result->Success(EncodableValue(EncodableMap{
+        {EncodableValue("deferred"), EncodableValue(true)}}));
+    return;
+  }
+#endif
+  {
     result->Error("Bad Arguments", "Not found device id: " + device_id);
     return;
   }
-  result->Success();
+}
+
+bool FlutterMediaStream::TrySelectAudioInputDevice(
+    const std::string& device_id) {
+  if (device_id.empty()) {
+    return false;
+  }
+  char deviceName[256];
+  char deviceGuid[256];
+  int recording_devices = base_->audio_device_->RecordingDevices();
+  for (uint16_t i = 0; i < recording_devices; i++) {
+    base_->audio_device_->RecordingDeviceName(i, deviceName, deviceGuid);
+    const std::string cur_device_id =
+        AudioDeviceIdFromNameAndGuid(deviceName, deviceGuid);
+    if (device_id == cur_device_id) {
+      base_->audio_device_->SetRecordingDevice(i);
+      return true;
+    }
+  }
+  return false;
 }
 
 void FlutterMediaStream::SelectAudioInput(
     const std::string& device_id,
     std::unique_ptr<MethodResultProxy> result) {
-  char deviceName[256];
-  char deviceGuid[256];
-  int playout_devices = base_->audio_device_->RecordingDevices();
-  bool found = false;
-  for (uint16_t i = 0; i < playout_devices; i++) {
-    base_->audio_device_->RecordingDeviceName(i, deviceName, deviceGuid);
-    std::string cur_device_id = strlen(deviceGuid) > 0
-                                    ? std::string(deviceGuid)
-                                    : std::string(deviceName);
-    if (device_id != "" && device_id == cur_device_id) {
-      base_->audio_device_->SetRecordingDevice(i);
-      found = true;
-      break;
-    }
+  desired_audio_input_device_id_ = device_id;
+  if (TrySelectAudioInputDevice(device_id)) {
+    result->Success();
+    return;
   }
-  if (!found) {
+#if defined(_WIN32)
+  if (!device_id.empty()) {
+    result->Success(EncodableValue(EncodableMap{
+        {EncodableValue("deferred"), EncodableValue(true)}}));
+    return;
+  }
+#endif
+  {
     result->Error("Bad Arguments", "Not found device id: " + device_id);
     return;
   }
-  result->Success();
+}
+
+void FlutterMediaStream::ApplyDesiredAudioDevices() {
+  if (!desired_audio_input_device_id_.empty()) {
+    TrySelectAudioInputDevice(desired_audio_input_device_id_);
+  }
+  if (!desired_audio_output_device_id_.empty()) {
+    TrySelectAudioOutputDevice(desired_audio_output_device_id_);
+  }
 }
 
 void FlutterMediaStream::MediaStreamGetTracks(
