@@ -75,12 +75,6 @@ FlutterWebRTCBase::FlutterWebRTCBase(BinaryMessenger* messenger,
 }
 
 FlutterWebRTCBase::~FlutterWebRTCBase() {
-  for (auto& item : local_track_cleanups_) {
-    if (item.second) {
-      item.second();
-    }
-  }
-  local_track_cleanups_.clear();
   if (audio_processing_ != nullptr) {
     audio_processing_->SetCapturePostProcessing(nullptr);
   }
@@ -92,27 +86,6 @@ void FlutterWebRTCBase::SetLocalAudioInputVolume(double volume) {
     return;
   }
   local_audio_input_volume_processor_->set_volume(volume);
-}
-
-void FlutterWebRTCBase::RegisterLocalTrackCleanup(
-    const std::string& id,
-    std::function<void()> cleanup) {
-  if (id.empty() || !cleanup) {
-    return;
-  }
-  local_track_cleanups_[id] = std::move(cleanup);
-}
-
-void FlutterWebRTCBase::RunLocalTrackCleanup(const std::string& id) {
-  auto it = local_track_cleanups_.find(id);
-  if (it == local_track_cleanups_.end()) {
-    return;
-  }
-  auto cleanup = std::move(it->second);
-  local_track_cleanups_.erase(it);
-  if (cleanup) {
-    cleanup();
-  }
 }
 
 EventChannelProxy* FlutterWebRTCBase::event_channel() {
@@ -156,7 +129,6 @@ scoped_refptr<RTCMediaTrack> FlutterWebRTCBase ::MediaTrackForId(const std::stri
 }
 
 void FlutterWebRTCBase::RemoveMediaTrackForId(const std::string& id) {
-  RunLocalTrackCleanup(id);
   auto it = local_tracks_.find(id);
   if (it != local_tracks_.end())
     local_tracks_.erase(it);
@@ -426,7 +398,6 @@ scoped_refptr<RTCMediaTrack> FlutterWebRTCBase::MediaTracksForId(
 }
 
 void FlutterWebRTCBase::RemoveTracksForId(const std::string& id) {
-  RunLocalTrackCleanup(id);
   auto it = local_tracks_.find(id);
   if (it != local_tracks_.end())
     local_tracks_.erase(it);
