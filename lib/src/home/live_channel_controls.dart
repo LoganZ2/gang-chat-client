@@ -599,8 +599,10 @@ class _HoverVolumeSliderState extends State<_HoverVolumeSlider> {
                       ),
                       decoration: BoxDecoration(
                         color: UiColors.accent,
-                        borderRadius: BorderRadius.all(
-                          Radius.circular(_hoverVolumeTrackThickness / 2),
+                        borderRadius: BorderRadius.vertical(
+                          bottom: Radius.circular(
+                            _hoverVolumeTrackThickness / 2,
+                          ),
                         ),
                       ),
                     ),

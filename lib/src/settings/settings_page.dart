@@ -148,8 +148,8 @@ class _SettingsPageState extends State<SettingsPage> {
   AudioDeviceInfo? _selectedInput;
   AudioDeviceInfo? _selectedOutput;
   String? _busyDeviceId;
-  double _inputVolume = 1.0;
-  double _outputVolume = 1.0;
+  double _inputVolume = defaultAudioVolume;
+  double _outputVolume = defaultAudioVolume;
   double _inputLevel = 0.0;
   double _outputLevel = 0.0;
   bool _testingInput = false;

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:livekit_client/livekit_client.dart' as lk;
 
+import '../app/audio_device_preferences.dart';
 import '../app/audio_levels.dart';
 import '../protocol/models.dart' show musicBoxBotIdentity;
 import 'audio_output_rebinder.dart';
@@ -263,10 +264,10 @@ class LiveSession extends ChangeNotifier {
   bool _connecting = false;
   bool _screenSharing = false;
   bool _canPublish = true;
-  double _inputVolume = 1.0;
-  double _outputVolume = 1.0;
-  double _musicBoxVolume = 1.0;
-  double _screenShareVolume = 1.0;
+  double _inputVolume = defaultAudioVolume;
+  double _outputVolume = defaultAudioVolume;
+  double _musicBoxVolume = defaultAudioVolume;
+  double _screenShareVolume = defaultAudioVolume;
   bool _outputMuted = false;
   // Local mic mute (Option A): muting keeps the capture running and only zeroes
   // the outgoing audio, so it never tears down the CoreAudio input. Tearing it

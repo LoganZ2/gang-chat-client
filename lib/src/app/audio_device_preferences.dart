@@ -2,14 +2,16 @@ import 'audio_device_display.dart';
 import 'audio_levels.dart';
 import '../live/screen_share_quality.dart';
 
+const defaultAudioVolume = 0.5;
+
 class StoredAudioDevices {
   const StoredAudioDevices({
     this.inputDeviceId,
     this.outputDeviceId,
-    this.inputVolume = 1.0,
-    this.outputVolume = 1.0,
-    this.musicBoxVolume = 1.0,
-    this.screenShareVolume = 1.0,
+    this.inputVolume = defaultAudioVolume,
+    this.outputVolume = defaultAudioVolume,
+    this.musicBoxVolume = defaultAudioVolume,
+    this.screenShareVolume = defaultAudioVolume,
     this.screenShareMaxHeight = defaultScreenShareMaxHeight,
   });
 
@@ -34,10 +36,10 @@ class StoredAudioDevices {
   bool get isEmpty =>
       (inputDeviceId == null || inputDeviceId!.isEmpty) &&
       (outputDeviceId == null || outputDeviceId!.isEmpty) &&
-      inputVolume == 1.0 &&
-      outputVolume == 1.0 &&
-      musicBoxVolume == 1.0 &&
-      screenShareVolume == 1.0 &&
+      inputVolume == defaultAudioVolume &&
+      outputVolume == defaultAudioVolume &&
+      musicBoxVolume == defaultAudioVolume &&
+      screenShareVolume == defaultAudioVolume &&
       screenShareMaxHeight == defaultScreenShareMaxHeight;
 }
 

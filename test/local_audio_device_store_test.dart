@@ -18,10 +18,10 @@ void main() {
 
     expect(stored.inputDeviceId, isNull);
     expect(stored.outputDeviceId, isNull);
-    expect(stored.inputVolume, 1.0);
-    expect(stored.outputVolume, 1.0);
-    expect(stored.musicBoxVolume, 1.0);
-    expect(stored.screenShareVolume, 1.0);
+    expect(stored.inputVolume, 0.5);
+    expect(stored.outputVolume, 0.5);
+    expect(stored.musicBoxVolume, 0.5);
+    expect(stored.screenShareVolume, 0.5);
     expect(stored.screenShareMaxHeight, 1080);
   });
 

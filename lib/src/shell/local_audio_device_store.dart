@@ -89,6 +89,6 @@ class LocalAudioDeviceStore extends AudioDeviceStore {
 
   double _readVolume(SharedPreferences prefs, String key) {
     final value = prefs.getDouble(key);
-    return value == null ? 1.0 : normalizedAudioVolume(value);
+    return value == null ? defaultAudioVolume : normalizedAudioVolume(value);
   }
 }

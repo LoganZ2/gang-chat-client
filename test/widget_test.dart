@@ -898,6 +898,11 @@ void main() {
     );
     expect(tester.getSize(micVolumePanel).height, lessThan(174));
     expect(tester.getSize(micVolumeFill).width, greaterThanOrEqualTo(7));
+    final fillDecoration =
+        tester.widget<DecoratedBox>(micVolumeFill).decoration as BoxDecoration;
+    final fillRadius = fillDecoration.borderRadius as BorderRadius;
+    expect(fillRadius.topLeft, Radius.zero);
+    expect(fillRadius.topRight, Radius.zero);
     expect(tester.getSize(micVolumeThumb).width, greaterThanOrEqualTo(26));
     expect(tester.getSize(micVolumeThumb).height, greaterThanOrEqualTo(7));
     expect(

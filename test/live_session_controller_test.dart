@@ -29,7 +29,7 @@ void main() {
       expect(session.disconnects, 1);
       expect(session.inputVolumes, [0.35, 0.35]);
       expect(session.outputVolumes, [0.75, 0.75]);
-      expect(session.screenShareVolumes, [1.0, 1.0]);
+      expect(session.screenShareVolumes, [0.5, 0.5]);
       expect(restoredDevices, 2);
       expect(session.connectedUrl, 'wss://live.example.test');
       expect(session.connectedRoomName, 'room_live_1');
@@ -195,9 +195,9 @@ class _FakeLiveSession extends LiveSession {
   String? connectedUrl;
   String? connectedRoomName;
   bool? connectedMicMuted;
-  double _inputVolume = 1.0;
-  double _outputVolume = 1.0;
-  double _screenShareVolume = 1.0;
+  double _inputVolume = defaultAudioVolume;
+  double _outputVolume = defaultAudioVolume;
+  double _screenShareVolume = defaultAudioVolume;
 
   void emitChange() => notifyListeners();
 
