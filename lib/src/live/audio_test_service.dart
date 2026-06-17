@@ -8,24 +8,6 @@ import 'package:livekit_client/livekit_client.dart' as lk;
 import '../app/audio_levels.dart';
 
 class AudioTestService {
-  bool _requestedDeviceAccess = false;
-
-  Future<void> ensureDeviceAccess() async {
-    if (_requestedDeviceAccess) return;
-    _requestedDeviceAccess = true;
-    lk.LocalAudioTrack? track;
-    try {
-      track = await lk.LocalAudioTrack.create();
-      await track.start();
-      await track.stop();
-    } catch (_) {
-      // Device enumeration will surface the usable state. This call is only
-      // here to trigger OS media permission before enumerateDevices().
-    } finally {
-      await _disposeTestTrack(track);
-    }
-  }
-
   Future<AudioTestHandle> startInputTest({
     required String? inputDeviceId,
     required double volume,
@@ -73,7 +55,6 @@ class AudioTestService {
   Future<lk.LocalAudioTrack> _createTestAudioTrack(
     String? inputDeviceId,
   ) async {
-    await ensureDeviceAccess();
     final track = await lk.LocalAudioTrack.create(
       lk.AudioCaptureOptions(deviceId: inputDeviceId),
     );
