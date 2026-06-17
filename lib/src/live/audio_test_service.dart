@@ -1,4 +1,8 @@
-import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
+import 'dart:async';
+import 'dart:math' as math;
+import 'dart:typed_data';
+
+import 'package:audioplayers/audioplayers.dart';
 import 'package:livekit_client/livekit_client.dart' as lk;
 
 import '../app/audio_levels.dart';
@@ -41,30 +45,27 @@ class AudioTestService {
   }
 
   Future<AudioTestHandle> startOutputTest({
-    required String? inputDeviceId,
-    required String? outputDeviceId,
     required double volume,
     required void Function(double level) onLevel,
   }) async {
-    lk.LocalAudioTrack? track;
-    rtc.RTCVideoRenderer? renderer;
-    _StartedAudioVisualizer? visualizer;
+    AudioPlayer? player;
+    Timer? levelTimer;
     try {
-      track = await _createTestAudioTrack(inputDeviceId);
-      renderer = rtc.RTCVideoRenderer();
-      await renderer.initialize();
-      renderer.srcObject = track.mediaStream;
-      await _routeOutput(renderer, outputDeviceId);
-      visualizer = await _startVisualizer(track, onLevel);
-      return AudioTestHandle._(
-        track: track,
-        renderer: renderer,
-        visualizer: visualizer,
+      player = AudioPlayer();
+      await player.setReleaseMode(ReleaseMode.loop);
+      await player.play(
+        BytesSource(_outputTestToneWav, mimeType: 'audio/wav'),
+        volume: normalizedAudioVolume(volume),
       );
+      onLevel(1.0);
+      levelTimer = Timer.periodic(
+        const Duration(milliseconds: 80),
+        (_) => onLevel(1.0),
+      );
+      return AudioTestHandle._(outputPlayer: player, levelTimer: levelTimer);
     } catch (_) {
-      await visualizer?.dispose();
-      await _disposeRenderer(renderer);
-      await _disposeTestTrack(track);
+      levelTimer?.cancel();
+      await _disposeOutputPlayer(player);
       rethrow;
     }
   }
@@ -83,16 +84,19 @@ class AudioTestService {
 
 class AudioTestHandle {
   AudioTestHandle._({
-    required lk.LocalAudioTrack track,
-    required _StartedAudioVisualizer visualizer,
-    rtc.RTCVideoRenderer? renderer,
+    lk.LocalAudioTrack? track,
+    _StartedAudioVisualizer? visualizer,
+    AudioPlayer? outputPlayer,
+    Timer? levelTimer,
   }) : _track = track,
        _visualizer = visualizer,
-       _renderer = renderer;
+       _outputPlayer = outputPlayer,
+       _levelTimer = levelTimer;
 
   lk.LocalAudioTrack? _track;
   _StartedAudioVisualizer? _visualizer;
-  rtc.RTCVideoRenderer? _renderer;
+  AudioPlayer? _outputPlayer;
+  Timer? _levelTimer;
 
   Future<void> setCaptureVolume(double volume) async {
     // Input-test levels are scaled in app state. Do not write the local
@@ -100,23 +104,23 @@ class AudioTestHandle {
   }
 
   Future<void> setPlaybackVolume(double volume) async {
-    // The output test plays back a local capture track; renderer.setVolume()
-    // ultimately writes that same source volume on native platforms.
-  }
-
-  Future<void> routeOutput(String? outputDeviceId) async {
-    await _routeOutput(_renderer, outputDeviceId);
+    final player = _outputPlayer;
+    if (player == null) return;
+    await player.setVolume(normalizedAudioVolume(volume));
   }
 
   Future<void> dispose() async {
     final visualizer = _visualizer;
-    final renderer = _renderer;
+    final player = _outputPlayer;
+    final levelTimer = _levelTimer;
     final track = _track;
     _visualizer = null;
-    _renderer = null;
+    _outputPlayer = null;
+    _levelTimer = null;
     _track = null;
+    levelTimer?.cancel();
     await visualizer?.dispose();
-    await _disposeRenderer(renderer);
+    await _disposeOutputPlayer(player);
     await _disposeTestTrack(track);
   }
 }
@@ -164,16 +168,6 @@ Future<_StartedAudioVisualizer> _startVisualizer(
   return _StartedAudioVisualizer(visualizer, listener);
 }
 
-Future<void> _routeOutput(
-  rtc.RTCVideoRenderer? renderer,
-  String? outputDeviceId,
-) async {
-  if (renderer == null || outputDeviceId == null) return;
-  try {
-    await renderer.audioOutput(outputDeviceId);
-  } catch (_) {}
-}
-
 Future<void> _disposeTestTrack(lk.LocalAudioTrack? track) async {
   if (track == null) return;
   try {
@@ -184,12 +178,53 @@ Future<void> _disposeTestTrack(lk.LocalAudioTrack? track) async {
   } catch (_) {}
 }
 
-Future<void> _disposeRenderer(rtc.RTCVideoRenderer? renderer) async {
-  if (renderer == null) return;
+Future<void> _disposeOutputPlayer(AudioPlayer? player) async {
+  if (player == null) return;
   try {
-    renderer.srcObject = null;
+    await player.stop();
   } catch (_) {}
   try {
-    await renderer.dispose();
+    await player.dispose();
   } catch (_) {}
+}
+
+final Uint8List _outputTestToneWav = _buildOutputTestToneWav();
+
+Uint8List _buildOutputTestToneWav() {
+  const sampleRate = 48000;
+  const durationMs = 500;
+  const frequency = 1000.0;
+  const amplitude = 0.22;
+  final samples = sampleRate * durationMs ~/ 1000;
+  final dataByteCount = samples * 2;
+  final bytes = Uint8List(44 + dataByteCount);
+  final data = ByteData.sublistView(bytes);
+
+  void writeAscii(int offset, String value) {
+    for (var i = 0; i < value.length; i += 1) {
+      data.setUint8(offset + i, value.codeUnitAt(i));
+    }
+  }
+
+  writeAscii(0, 'RIFF');
+  data.setUint32(4, 36 + dataByteCount, Endian.little);
+  writeAscii(8, 'WAVE');
+  writeAscii(12, 'fmt ');
+  data.setUint32(16, 16, Endian.little);
+  data.setUint16(20, 1, Endian.little);
+  data.setUint16(22, 1, Endian.little);
+  data.setUint32(24, sampleRate, Endian.little);
+  data.setUint32(28, sampleRate * 2, Endian.little);
+  data.setUint16(32, 2, Endian.little);
+  data.setUint16(34, 16, Endian.little);
+  writeAscii(36, 'data');
+  data.setUint32(40, dataByteCount, Endian.little);
+
+  for (var i = 0; i < samples; i += 1) {
+    final sample =
+        math.sin(2 * math.pi * frequency * i / sampleRate) * amplitude;
+    data.setInt16(44 + i * 2, (sample * 32767).round(), Endian.little);
+  }
+
+  return bytes;
 }

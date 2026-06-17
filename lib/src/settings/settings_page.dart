@@ -518,13 +518,13 @@ class _SettingsPageState extends State<SettingsPage> {
         deviceId,
       ) {
         _systemDefaultInputId = deviceId;
-        unawaited(_onSystemDefaultAudioChanged(routeOutputTest: false));
+        unawaited(_onSystemDefaultAudioChanged());
       });
       _systemDefaultOutputSubscription ??= _systemAudio.outputChanges.listen((
         deviceId,
       ) {
         _systemDefaultOutputId = deviceId;
-        unawaited(_onSystemDefaultAudioChanged(routeOutputTest: true));
+        unawaited(_onSystemDefaultAudioChanged());
       });
       unawaited(_loadStoredAudioSettings());
     }
@@ -2064,14 +2064,9 @@ class _SettingsPageState extends State<SettingsPage> {
   // Re-runs device selection when OS defaults change while Settings is open.
   // restoreStoredAudioDevices only falls back to the system defaults when the
   // user has not pinned a device, so explicit choices are preserved.
-  Future<void> _onSystemDefaultAudioChanged({
-    required bool routeOutputTest,
-  }) async {
+  Future<void> _onSystemDefaultAudioChanged() async {
     if (!mounted || !_voiceInitialized) return;
     await _applyDevices([..._audioInputs, ..._audioOutputs]);
-    if (routeOutputTest && _testingOutput) {
-      await _outputTest?.routeOutput(_selectedOutput?.deviceId);
-    }
   }
 
   Future<void> _selectInput(AudioDeviceInfo device) async {
@@ -2098,12 +2093,8 @@ class _SettingsPageState extends State<SettingsPage> {
       () => widget.audioDeviceStore.writeOutputDeviceId(device.deviceId),
     );
     if (!didSelect) return;
-    final effects = audioOutputDeviceSelectedEffects(
-      testingOutput: _testingOutput,
-    );
-    if (effects.routeOutputTest) {
-      await _outputTest?.routeOutput(_selectedOutput?.deviceId);
-    }
+    final effects = audioOutputDeviceSelectedEffects();
+    if (effects.restartOutputTest) await _restartOutputTest();
   }
 
   Future<bool> _selectDevice(
@@ -2191,11 +2182,11 @@ class _SettingsPageState extends State<SettingsPage> {
     final outputTest = _outputTest;
     final effects = audioOutputVolumeChangedEffects(
       outputVolume: patch.outputVolume,
-      hasOutputRenderer: outputTest != null,
+      hasOutputTestPlayback: outputTest != null,
     );
     widget.onVolumeChanged?.call(effects.deviceKind, effects.volume);
     unawaited(widget.audioDeviceStore.writeOutputVolume(effects.volume));
-    if (effects.updateOutputRenderer && outputTest != null) {
+    if (effects.updateOutputTestPlayback && outputTest != null) {
       try {
         await outputTest.setPlaybackVolume(effects.volume);
       } catch (_) {}
@@ -2308,8 +2299,6 @@ class _SettingsPageState extends State<SettingsPage> {
     AudioTestHandle? handle;
     try {
       handle = await _audioTestService.startOutputTest(
-        inputDeviceId: _selectedInput?.deviceId,
-        outputDeviceId: _selectedOutput?.deviceId,
         volume: _outputVolume,
         onLevel: (level) {
           if (!mounted) return;

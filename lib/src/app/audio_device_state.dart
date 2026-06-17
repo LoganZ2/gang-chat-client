@@ -37,12 +37,10 @@ class AudioDeviceSelectionEffects {
   const AudioDeviceSelectionEffects({
     required this.restartInputTest,
     required this.restartOutputTest,
-    required this.routeOutputTest,
   });
 
   final bool restartInputTest;
   final bool restartOutputTest;
-  final bool routeOutputTest;
 }
 
 class AudioVolumePatch {
@@ -60,13 +58,13 @@ class AudioVolumeEffects {
     required this.deviceKind,
     required this.volume,
     required this.updateInputTestTrack,
-    required this.updateOutputRenderer,
+    required this.updateOutputTestPlayback,
   });
 
   final String deviceKind;
   final double volume;
   final bool updateInputTestTrack;
-  final bool updateOutputRenderer;
+  final bool updateOutputTestPlayback;
 }
 
 class AudioTestStatePatch {
@@ -212,17 +210,13 @@ AudioDeviceSelectionEffects audioInputDeviceSelectedEffects({
   return AudioDeviceSelectionEffects(
     restartInputTest: wasTestingInput,
     restartOutputTest: wasTestingOutput,
-    routeOutputTest: false,
   );
 }
 
-AudioDeviceSelectionEffects audioOutputDeviceSelectedEffects({
-  required bool testingOutput,
-}) {
+AudioDeviceSelectionEffects audioOutputDeviceSelectedEffects() {
   return AudioDeviceSelectionEffects(
     restartInputTest: false,
     restartOutputTest: false,
-    routeOutputTest: testingOutput,
   );
 }
 
@@ -264,19 +258,19 @@ AudioVolumeEffects audioInputVolumeChangedEffects({
     deviceKind: 'audioinput',
     volume: normalizedAudioVolume(inputVolume),
     updateInputTestTrack: hasInputTestTrack,
-    updateOutputRenderer: false,
+    updateOutputTestPlayback: false,
   );
 }
 
 AudioVolumeEffects audioOutputVolumeChangedEffects({
   required double outputVolume,
-  required bool hasOutputRenderer,
+  required bool hasOutputTestPlayback,
 }) {
   return AudioVolumeEffects(
     deviceKind: 'audiooutput',
     volume: normalizedAudioVolume(outputVolume),
     updateInputTestTrack: false,
-    updateOutputRenderer: hasOutputRenderer,
+    updateOutputTestPlayback: hasOutputTestPlayback,
   );
 }
 

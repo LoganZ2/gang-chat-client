@@ -224,7 +224,6 @@ void main() {
     );
     expect(effects.restartInputTest, isTrue);
     expect(effects.restartOutputTest, isFalse);
-    expect(effects.routeOutputTest, isFalse);
 
     effects = audioInputDeviceSelectedEffects(
       wasTestingInput: false,
@@ -232,12 +231,10 @@ void main() {
     );
     expect(effects.restartInputTest, isFalse);
     expect(effects.restartOutputTest, isTrue);
-    expect(effects.routeOutputTest, isFalse);
 
-    effects = audioOutputDeviceSelectedEffects(testingOutput: true);
+    effects = audioOutputDeviceSelectedEffects();
     expect(effects.restartInputTest, isFalse);
     expect(effects.restartOutputTest, isFalse);
-    expect(effects.routeOutputTest, isTrue);
   });
 
   test('audioStoredVolumesApplied normalizes stored volumes', () {
@@ -274,16 +271,16 @@ void main() {
     expect(effects.deviceKind, 'audioinput');
     expect(effects.volume, 1);
     expect(effects.updateInputTestTrack, isTrue);
-    expect(effects.updateOutputRenderer, isFalse);
+    expect(effects.updateOutputTestPlayback, isFalse);
 
     effects = audioOutputVolumeChangedEffects(
       outputVolume: -0.2,
-      hasOutputRenderer: true,
+      hasOutputTestPlayback: true,
     );
     expect(effects.deviceKind, 'audiooutput');
     expect(effects.volume, 0);
     expect(effects.updateInputTestTrack, isFalse);
-    expect(effects.updateOutputRenderer, isTrue);
+    expect(effects.updateOutputTestPlayback, isTrue);
   });
 
   test('audioInputTestStarted resets input level and clears error', () {
