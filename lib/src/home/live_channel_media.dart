@@ -57,13 +57,11 @@ class _LiveMediaStage extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 _StageOverlayIconButton(
-                  tooltip: '退出观看',
                   icon: Icons.close_fullscreen,
                   onPressed: onExit,
                 ),
                 const SizedBox(width: 6),
                 _StageOverlayIconButton(
-                  tooltip: '全屏',
                   icon: Icons.fullscreen,
                   onPressed: onFullScreen,
                 ),
@@ -115,7 +113,6 @@ class LiveFullScreenStage extends StatelessWidget {
             top: 14,
             right: 14,
             child: _StageOverlayIconButton(
-              tooltip: '退出全屏',
               icon: Icons.fullscreen_exit,
               onPressed: onExit,
             ),
@@ -127,13 +124,8 @@ class LiveFullScreenStage extends StatelessWidget {
 }
 
 class _StageOverlayIconButton extends StatefulWidget {
-  const _StageOverlayIconButton({
-    required this.tooltip,
-    required this.icon,
-    required this.onPressed,
-  });
+  const _StageOverlayIconButton({required this.icon, required this.onPressed});
 
-  final String tooltip;
   final IconData icon;
   final VoidCallback onPressed;
 
@@ -148,27 +140,24 @@ class _StageOverlayIconButtonState extends State<_StageOverlayIconButton> {
   @override
   Widget build(BuildContext context) {
     final color = _hovered ? UiColors.accent : UiColors.textSecondary;
-    return Tooltip(
-      message: widget.tooltip,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: widget.onPressed,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 120),
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: _hovered
-                  ? UiColors.surface.withValues(alpha: 0.92)
-                  : UiColors.surface.withValues(alpha: 0.72),
-              borderRadius: BorderRadius.circular(UiRadii.md),
-            ),
-            child: Icon(widget.icon, size: 19, color: color),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onPressed,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: _hovered
+                ? UiColors.surface.withValues(alpha: 0.92)
+                : UiColors.surface.withValues(alpha: 0.72),
+            borderRadius: BorderRadius.circular(UiRadii.md),
           ),
+          child: Icon(widget.icon, size: 19, color: color),
         ),
       ),
     );

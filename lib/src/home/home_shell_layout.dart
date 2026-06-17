@@ -15,12 +15,14 @@ extension _HomeShellLayout on _HomeShellState {
         isSubWindow: true,
         api: _services.api,
         apiBaseUrl: widget.app.apiBaseUrl,
+        audioDeviceStore: widget.audioDeviceStore,
         stickerPackStore: widget.app.stickerPackStore,
         currentUser: _currentUser,
         onUserUpdated: _handleUserUpdated,
         onAccountDeleted: _logout,
         onScreenShareMaxHeightChanged: (height) =>
             unawaited(_liveSessionController.setScreenShareMaxHeight(height)),
+        onVolumeChanged: _syncSettingsAudioVolumeToLive,
         // The Settings picker already routes the native ADM (selectAudioInput/
         // Output). For inputs, also keep LiveSession's tracked capture device in
         // sync so a later mute/unmute republish stays on the chosen mic. Outputs

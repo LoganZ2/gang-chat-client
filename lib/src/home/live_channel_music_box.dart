@@ -13,7 +13,6 @@ const double _musicBoxCompactBodyHeight = 220;
 /// [Input.defaultHeight] to keep the docked panel dense.
 const double _musicBoxSearchFieldHeight = 30;
 
-
 /// The in-pane music box console: a spinning vinyl for the current track, a
 /// progress bar with transport controls, the queue, and a search-to-queue
 /// field. Audio is delivered separately via the LiveKit session; this is purely
@@ -169,12 +168,7 @@ class _MusicBoxHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 6),
-        ButtonIcon(
-          tooltip: '收起',
-          icon: const Icon(Icons.close),
-          onPressed: onClose,
-          size: 26,
-        ),
+        ButtonIcon(icon: const Icon(Icons.close), onPressed: onClose, size: 26),
       ],
     );
   }
@@ -238,11 +232,6 @@ class _MusicBoxNowPlaying extends StatelessWidget {
               Row(
                 children: [
                   ButtonIcon(
-                    tooltip:
-                        transport ==
-                            music_box_display.MusicBoxTransportAction.pause
-                        ? '暂停'
-                        : '播放',
                     icon: Icon(
                       transport ==
                               music_box_display.MusicBoxTransportAction.pause
@@ -255,7 +244,6 @@ class _MusicBoxNowPlaying extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   ButtonIcon(
-                    tooltip: '下一首',
                     icon: const Icon(Icons.skip_next),
                     onPressed: hasQueue ? onSkip : null,
                     size: 30,
@@ -348,7 +336,6 @@ class _MusicBoxVolumeState extends State<_MusicBoxVolume> {
     return _VolumeIconButton(
       icon: _icon,
       color: _palette.foreground,
-      tooltip: _muted ? '取消静音' : '静音',
       size: size,
       onTap: _toggleMute,
     );
@@ -439,31 +426,26 @@ class _VolumeIconButton extends StatelessWidget {
   const _VolumeIconButton({
     required this.icon,
     required this.color,
-    required this.tooltip,
     required this.size,
     required this.onTap,
   });
 
   final IconData icon;
   final Color color;
-  final String tooltip;
   final double size;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onTap,
-          child: SizedBox(
-            width: size,
-            height: size,
-            child: Icon(icon, color: color, size: size * 0.46),
-          ),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: Icon(icon, color: color, size: size * 0.46),
         ),
       ),
     );
@@ -679,7 +661,6 @@ class _MusicBoxBodyState extends State<_MusicBoxBody> {
             ),
             const SizedBox(width: 8),
             ButtonIcon(
-              tooltip: _showQueue ? '返回搜索' : '播放列表',
               icon: const Icon(Icons.queue_music),
               selected: _showQueue,
               onPressed: () => setState(() => _showQueue = !_showQueue),
@@ -859,7 +840,6 @@ class _MusicBoxQueueTile extends StatelessWidget {
           ],
           const SizedBox(width: 4),
           ButtonIcon(
-            tooltip: '移除',
             icon: const Icon(Icons.close),
             tone: ButtonTone.danger,
             onPressed: onRemove,
@@ -948,7 +928,6 @@ class _MusicBoxSearchTile extends StatelessWidget {
       borderColor: UiColors.border,
       borderRadius: UiRadii.md,
       padding: const EdgeInsets.symmetric(horizontal: 10),
-      tooltip: '点歌',
       onPressed: onQueue,
       child: Row(
         children: [

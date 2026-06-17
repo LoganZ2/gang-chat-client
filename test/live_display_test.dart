@@ -405,29 +405,19 @@ void main() {
 
   test('live control display helpers describe toggled states', () {
     final mutedMic = liveMicControlState(micMuted: true, voiceBlocked: false);
-    expect(mutedMic.tooltip, '取消静音');
     expect(mutedMic.mutedForDisplay, isTrue);
     expect(mutedMic.active, isFalse);
     expect(mutedMic.enabled, isTrue);
 
     final liveMic = liveMicControlState(micMuted: false, voiceBlocked: false);
-    expect(liveMic.tooltip, '静音');
     expect(liveMic.mutedForDisplay, isFalse);
     expect(liveMic.active, isTrue);
     expect(liveMic.enabled, isTrue);
 
     final blockedMic = liveMicControlState(micMuted: false, voiceBlocked: true);
-    expect(blockedMic.tooltip, '已被管理员禁言');
     expect(blockedMic.mutedForDisplay, isTrue);
     expect(blockedMic.active, isFalse);
     expect(blockedMic.enabled, isFalse);
-
-    expect(liveHeadphonesControlTooltip(true), '取消耳机静音');
-    expect(liveHeadphonesControlTooltip(false), '耳机静音');
-    expect(liveCameraControlTooltip(true), '关闭摄像头');
-    expect(liveCameraControlTooltip(false), '开启摄像头');
-    expect(liveScreenShareControlTooltip(true), '停止共享屏幕');
-    expect(liveScreenShareControlTooltip(false), '共享屏幕');
   });
 }
 

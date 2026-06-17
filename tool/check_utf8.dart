@@ -3,6 +3,7 @@ import 'dart:io';
 
 const _skippedDirectories = {
   '.dart_tool',
+  '.codegraph',
   '.git',
   '.idea',
   '.vscode',
@@ -25,6 +26,7 @@ const _binaryExtensions = {
   '.jpeg',
   '.jpg',
   '.keystore',
+  '.lib',
   '.lockfile',
   '.png',
   '.so',

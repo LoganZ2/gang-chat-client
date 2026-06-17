@@ -608,6 +608,7 @@ class LiveSession extends ChangeNotifier {
       // the published encoding down after publishing (_applyScreenShareScale).
       final target = screenShareResolutionForHeight(_screenShareMaxHeight);
       final options = lk.ScreenShareCaptureOptions(
+        captureScreenAudio: true,
         sourceId: sourceId,
         maxFrameRate: 60.0,
         params: lk.VideoParameters(
@@ -620,6 +621,7 @@ class LiveSession extends ChangeNotifier {
       );
       await local.setScreenShareEnabled(
         true,
+        captureScreenAudio: true,
         screenShareCaptureOptions: options,
       );
       _screenSharing = true;

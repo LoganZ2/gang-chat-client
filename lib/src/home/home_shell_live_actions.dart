@@ -180,6 +180,22 @@ extension _HomeShellLiveActions on _HomeShellState {
     unawaited(_liveSessionController.setScreenShareVolume(volume));
   }
 
+  void _syncSettingsAudioVolumeToLive(String kind, double volume) {
+    if (kind == 'audioinput') {
+      final normalized = normalizedAudioVolume(volume);
+      _rememberInputVolume(normalized);
+      unawaited(_liveSessionController.setInputVolume(normalized));
+      _setHomeState(() {});
+      return;
+    }
+    if (kind == 'audiooutput') {
+      final normalized = normalizedAudioVolume(volume);
+      _rememberOutputVolume(normalized);
+      unawaited(_liveSessionController.setOutputVolume(normalized));
+      _setHomeState(() {});
+    }
+  }
+
   void _rememberInputVolume(double volume) {
     final normalized = normalizedAudioVolume(volume);
     _lastInputVolumeBeforeMute = normalized > 0

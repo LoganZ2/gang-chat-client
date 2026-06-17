@@ -70,11 +70,11 @@ class _LiveControlBar extends StatelessWidget {
         );
         final controls = [
           _HoverVolumeButton(
+            key: const ValueKey<String>('live-control:mic'),
             value: inputVolume,
             semanticLabel: '麦克风输入音量',
             onChanged: onInputVolumeChanged,
             child: ButtonIcon(
-              tooltip: micControl.tooltip,
               icon: Icon(
                 micControl.mutedForDisplay ? Icons.mic_off : Icons.mic,
               ),
@@ -84,13 +84,11 @@ class _LiveControlBar extends StatelessWidget {
             ),
           ),
           _HoverVolumeButton(
+            key: const ValueKey<String>('live-control:headphones'),
             value: outputVolume,
             semanticLabel: '语音输出音量',
             onChanged: onOutputVolumeChanged,
             child: ButtonIcon(
-              tooltip: live_display.liveHeadphonesControlTooltip(
-                headphonesMuted,
-              ),
               icon: Icon(
                 headphonesMuted ? Icons.headset_off : Icons.headphones,
               ),
@@ -100,21 +98,19 @@ class _LiveControlBar extends StatelessWidget {
             ),
           ),
           ButtonIcon(
-            tooltip: live_display.liveCameraControlTooltip(cameraOn),
+            key: const ValueKey<String>('live-control:camera'),
             icon: Icon(cameraOn ? Icons.videocam : Icons.videocam_outlined),
             selected: cameraOn,
             onPressed: onToggleCamera,
             size: _controlButtonSize,
           ),
           _HoverVolumeButton(
+            key: const ValueKey<String>('live-control:screen-share'),
             value: screenShareVolume,
             semanticLabel: '共享屏幕输出音量',
             onChanged: onScreenShareVolumeChanged,
             enabled: watchingRemoteScreenShare,
             child: ButtonIcon(
-              tooltip: live_display.liveScreenShareControlTooltip(
-                screenSharing,
-              ),
               icon: Icon(
                 screenSharing
                     ? Icons.stop_screen_share
@@ -126,7 +122,7 @@ class _LiveControlBar extends StatelessWidget {
             ),
           ),
           ButtonIcon(
-            tooltip: '离开',
+            key: const ValueKey<String>('live-control:leave'),
             icon: const Icon(Icons.call_end),
             tone: ButtonTone.danger,
             onPressed: joining ? null : onLeave,
@@ -173,7 +169,7 @@ class _LiveControlBar extends StatelessWidget {
                   else
                     ...controls,
                   ButtonIcon(
-                    tooltip: '收起语音频道',
+                    key: const ValueKey<String>('live-control:collapse'),
                     icon: const Icon(Icons.keyboard_arrow_up),
                     onPressed: onCollapse,
                     size: _controlButtonSize,
@@ -204,7 +200,7 @@ class _LiveControlBar extends StatelessWidget {
               const SizedBox(width: 10),
             ],
             ButtonIcon(
-              tooltip: '收起语音频道',
+              key: const ValueKey<String>('live-control:collapse'),
               icon: const Icon(Icons.keyboard_arrow_up),
               onPressed: onCollapse,
               size: _controlButtonSize,
@@ -251,6 +247,7 @@ const _hoverVolumePercentGap = 6.0;
 
 class _HoverVolumeButton extends StatefulWidget {
   const _HoverVolumeButton({
+    super.key,
     required this.child,
     required this.value,
     required this.semanticLabel,
@@ -774,7 +771,7 @@ class _InlineMusicBox extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     ButtonIcon(
-                      tooltip: isPause ? '暂停' : '播放',
+                      key: const ValueKey<String>('live-control:music-toggle'),
                       icon: Icon(isPause ? Icons.pause : Icons.play_arrow),
                       tone: ButtonTone.primary,
                       onPressed: hasQueue ? onTogglePlayback : null,
@@ -783,7 +780,7 @@ class _InlineMusicBox extends StatelessWidget {
                     if (showSkip) ...[
                       const SizedBox(width: 4),
                       ButtonIcon(
-                        tooltip: '下一首',
+                        key: const ValueKey<String>('live-control:music-skip'),
                         icon: const Icon(Icons.skip_next),
                         onPressed: hasQueue ? onSkip : null,
                         size: 30,
@@ -791,7 +788,7 @@ class _InlineMusicBox extends StatelessWidget {
                     ],
                     const SizedBox(width: 4),
                     ButtonIcon(
-                      tooltip: expanded ? '收起音乐盒' : '搜索 / 播放列表',
+                      key: const ValueKey<String>('live-control:music-queue'),
                       icon: const Icon(Icons.queue_music),
                       selected: expanded,
                       onPressed: onToggleExpand,

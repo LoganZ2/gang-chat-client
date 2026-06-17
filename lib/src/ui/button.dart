@@ -93,7 +93,7 @@ class ButtonIcon extends StatelessWidget {
   const ButtonIcon({
     super.key,
     required this.icon,
-    required this.tooltip,
+    this.tooltip,
     this.onPressed,
     this.tone = ButtonTone.neutral,
     this.selected = false,
@@ -108,7 +108,7 @@ class ButtonIcon extends StatelessWidget {
   final VoidCallback? onPressed;
   final ValueChanged<bool>? onToggleChanged;
   final Widget icon;
-  final String tooltip;
+  final String? tooltip;
   final ButtonTone tone;
   final bool selected;
   final bool? toggleValue;

@@ -16,13 +16,11 @@ class LiveParticipantTileState {
 
 class LiveMicControlState {
   const LiveMicControlState({
-    required this.tooltip,
     required this.mutedForDisplay,
     required this.active,
     required this.enabled,
   });
 
-  final String tooltip;
   final bool mutedForDisplay;
   final bool active;
   final bool enabled;
@@ -255,30 +253,16 @@ LiveMicControlState liveMicControlState({
 }) {
   if (voiceBlocked) {
     return const LiveMicControlState(
-      tooltip: '已被管理员禁言',
       mutedForDisplay: true,
       active: false,
       enabled: false,
     );
   }
   return LiveMicControlState(
-    tooltip: micMuted ? '取消静音' : '静音',
     mutedForDisplay: micMuted,
     active: !micMuted,
     enabled: true,
   );
-}
-
-String liveHeadphonesControlTooltip(bool headphonesMuted) {
-  return headphonesMuted ? '取消耳机静音' : '耳机静音';
-}
-
-String liveCameraControlTooltip(bool cameraOn) {
-  return cameraOn ? '关闭摄像头' : '开启摄像头';
-}
-
-String liveScreenShareControlTooltip(bool screenSharing) {
-  return screenSharing ? '停止共享屏幕' : '共享屏幕';
 }
 
 String liveForciblyRemovedNotice() {

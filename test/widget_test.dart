@@ -841,7 +841,8 @@ void main() {
 
     expect(find.text('Morgan'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '加入'), findsOneWidget);
-    expect(find.byTooltip('收起语音频道'), findsOneWidget);
+    expect(_liveControl('collapse'), findsOneWidget);
+    expect(find.byTooltip('收起语音频道'), findsNothing);
     expect(find.byTooltip('已加入语音'), findsNothing);
 
     await tester.tap(find.widgetWithText(ui.Button, '加入'));
@@ -852,32 +853,61 @@ void main() {
     expect(find.text('Kai (you)'), findsOneWidget);
     expect(find.text('Morgan'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '加入'), findsNothing);
-    expect(find.byTooltip('静音'), findsOneWidget);
-    expect(find.byTooltip('离开'), findsOneWidget);
+    expect(_liveControl('mic'), findsOneWidget);
+    expect(_liveControl('leave'), findsOneWidget);
+    expect(find.byTooltip('静音'), findsNothing);
+    expect(find.byTooltip('耳机静音'), findsNothing);
+    expect(find.byTooltip('共享屏幕'), findsNothing);
+    expect(find.byTooltip('开启摄像头'), findsNothing);
+    expect(find.byTooltip('离开'), findsNothing);
     expect(find.byTooltip('已加入语音'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('静音'));
+    await tester.tap(_liveControl('mic'));
     await tester.pumpAndSettle();
     expect(liveSession.inputVolumes.last, 0.0);
-    expect(find.byTooltip('取消静音'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: _liveControl('mic'),
+        matching: find.byIcon(Icons.mic_off),
+      ),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.byTooltip('取消静音'));
+    await tester.tap(_liveControl('mic'));
     await tester.pumpAndSettle();
     expect(liveSession.inputVolumes.last, closeTo(0.35, 1e-9));
-    expect(find.byTooltip('静音'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: _liveControl('mic'),
+        matching: find.byIcon(Icons.mic),
+      ),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.byTooltip('耳机静音'));
+    await tester.tap(_liveControl('headphones'));
     await tester.pumpAndSettle();
     expect(liveSession.outputVolumes.last, 0.0);
-    expect(find.byTooltip('取消耳机静音'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: _liveControl('headphones'),
+        matching: find.byIcon(Icons.headset_off),
+      ),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.byTooltip('取消耳机静音'));
+    await tester.tap(_liveControl('headphones'));
     await tester.pumpAndSettle();
     expect(liveSession.outputVolumes.last, closeTo(0.75, 1e-9));
-    expect(find.byTooltip('耳机静音'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: _liveControl('headphones'),
+        matching: find.byIcon(Icons.headphones),
+      ),
+      findsOneWidget,
+    );
 
     final hover = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    await hover.addPointer(location: tester.getCenter(find.byTooltip('静音')));
+    await hover.addPointer(location: tester.getCenter(_liveControl('mic')));
     await tester.pump();
     final micVolumeSlider = find.byKey(
       const ValueKey<String>('live-volume-slider:麦克风输入音量'),
@@ -894,7 +924,7 @@ void main() {
     expect(micVolumeSlider, findsOneWidget);
     expect(
       tester.getSize(micVolumePanel).width,
-      tester.getSize(find.byTooltip('静音')).width,
+      tester.getSize(_liveControl('mic')).width,
     );
     expect(tester.getSize(micVolumePanel).height, lessThan(174));
     expect(tester.getSize(micVolumeFill).width, greaterThanOrEqualTo(7));
@@ -934,14 +964,26 @@ void main() {
     await tester.pumpAndSettle();
     expect(liveSession.inputVolumes, contains(0.0));
     expect(liveSession.micMutes, contains(true));
-    expect(find.byTooltip('取消静音'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: _liveControl('mic'),
+        matching: find.byIcon(Icons.mic_off),
+      ),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.byTooltip('取消静音'));
+    await tester.tap(_liveControl('mic'));
     await tester.pumpAndSettle();
     expect(liveSession.inputVolumes.last, closeTo(0.5, 1e-9));
-    expect(find.byTooltip('静音'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: _liveControl('mic'),
+        matching: find.byIcon(Icons.mic),
+      ),
+      findsOneWidget,
+    );
 
-    await hover.moveTo(tester.getCenter(find.byTooltip('耳机静音')));
+    await hover.moveTo(tester.getCenter(_liveControl('headphones')));
     await tester.pump();
     final outputVolumeSlider = find.byKey(
       const ValueKey<String>('live-volume-slider:语音输出音量'),
@@ -952,14 +994,26 @@ void main() {
     await tester.pumpAndSettle();
     expect(liveSession.outputVolumes, contains(0.0));
     expect(liveSession.outputMutes, containsAll([true, false]));
-    expect(find.byTooltip('取消耳机静音'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: _liveControl('headphones'),
+        matching: find.byIcon(Icons.headset_off),
+      ),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.byTooltip('取消耳机静音'));
+    await tester.tap(_liveControl('headphones'));
     await tester.pumpAndSettle();
     expect(liveSession.outputVolumes.last, closeTo(0.5, 1e-9));
-    expect(find.byTooltip('耳机静音'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: _liveControl('headphones'),
+        matching: find.byIcon(Icons.headphones),
+      ),
+      findsOneWidget,
+    );
 
-    await hover.moveTo(tester.getCenter(find.byTooltip('共享屏幕')));
+    await hover.moveTo(tester.getCenter(_liveControl('screen-share')));
     await tester.pump(const Duration(milliseconds: 120));
     expect(
       find.byKey(const ValueKey<String>('live-volume-slider:共享屏幕输出音量')),
@@ -968,9 +1022,9 @@ void main() {
     await hover.removePointer();
     await tester.pump();
 
-    await tester.tap(find.byTooltip('开启摄像头'));
+    await tester.tap(_liveControl('camera'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('共享屏幕'));
+    await tester.tap(_liveControl('screen-share'));
     await tester.pumpAndSettle();
     expect(find.text('Primary Display'), findsOneWidget);
     await tester.tap(find.text('Primary Display'));
@@ -990,18 +1044,87 @@ void main() {
       greaterThanOrEqualTo(3),
     );
 
-    await tester.tap(find.byTooltip('离开'));
+    await tester.tap(_liveControl('leave'));
     await tester.pumpAndSettle();
 
     expect(liveSession.disconnects, 1);
     expect(find.widgetWithText(ui.Button, '加入'), findsOneWidget);
     expect(find.byTooltip('已加入语音'), findsNothing);
 
-    await tester.tap(find.byTooltip('收起语音频道'));
+    await tester.tap(_liveControl('collapse'));
     await tester.pumpAndSettle();
 
     expect(find.text('Kai (you)'), findsNothing);
     expect(find.text('Hello from Morgan'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('settings audio volumes sync to live channel sliders', (
+    WidgetTester tester,
+  ) async {
+    final liveSession = _FakeLiveSession();
+    final liveSessionController = _FakeLiveSessionController(
+      session: liveSession,
+      audioDeviceStore: const _FakeAudioDeviceStore(
+        inputVolume: 0.35,
+        outputVolume: 0.75,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(),
+          audioDeviceStore: const _FakeAudioDeviceStore(
+            inputVolume: 0.62,
+            outputVolume: 0.27,
+          ),
+          liveSessionController: liveSessionController,
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('进入语音频道'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ui.Button, '加入'));
+    await tester.pumpAndSettle();
+
+    expect(liveSession.inputVolumes.last, closeTo(0.35, 1e-9));
+    expect(liveSession.outputVolumes.last, closeTo(0.75, 1e-9));
+
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('语音和视频').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('设置'), findsOneWidget);
+    expect(find.text('输入音量'), findsOneWidget);
+    expect(liveSession.inputVolumes.last, closeTo(0.62, 1e-9));
+    expect(liveSession.outputVolumes.last, closeTo(0.27, 1e-9));
+    expect(liveSession.micMutes, isEmpty);
+    expect(liveSession.outputMutes, isEmpty);
+
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('进入语音频道'));
+    await tester.pumpAndSettle();
+
+    final hover = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await hover.addPointer(location: tester.getCenter(_liveControl('mic')));
+    await tester.pump();
+    _expectLiveVolumeFill(tester, '麦克风输入音量', 0.62);
+
+    await hover.moveTo(tester.getCenter(_liveControl('headphones')));
+    await tester.pump();
+    _expectLiveVolumeFill(tester, '语音输出音量', 0.27);
+    await hover.removePointer();
+    await tester.pump();
+
     expect(tester.takeException(), isNull);
   });
 
@@ -3145,6 +3268,25 @@ Finder _buttonIconWithTooltip(String tooltip) {
   );
 }
 
+Finder _liveControl(String id) {
+  return find.byKey(ValueKey<String>('live-control:$id'));
+}
+
+void _expectLiveVolumeFill(WidgetTester tester, String label, double volume) {
+  final slider = find.byKey(ValueKey<String>('live-volume-slider:$label'));
+  final thumb = find.byKey(ValueKey<String>('live-volume-thumb:$label'));
+  final fill = find.byKey(ValueKey<String>('live-volume-fill:$label'));
+  expect(slider, findsOneWidget);
+  expect(thumb, findsOneWidget);
+  expect(fill, findsOneWidget);
+
+  final sliderRect = tester.getRect(slider);
+  final thumbRect = tester.getRect(thumb);
+  final fillRect = tester.getRect(fill);
+  final expectedHeight = (sliderRect.height - thumbRect.height) * volume;
+  expect(fillRect.height, closeTo(expectedHeight, 1.0));
+}
+
 void _expectRectCloseTo(Rect actual, Rect expected) {
   expect(actual.left, closeTo(expected.left, 0.01));
   expect(actual.top, closeTo(expected.top, 0.01));
@@ -4041,11 +4183,20 @@ Map<String, Object?> _roomApplicationJson({
 }
 
 class _FakeAudioDeviceStore extends AudioDeviceStore {
-  const _FakeAudioDeviceStore();
+  const _FakeAudioDeviceStore({
+    this.inputVolume = 0.35,
+    this.outputVolume = 0.75,
+  });
+
+  final double inputVolume;
+  final double outputVolume;
 
   @override
   Future<StoredAudioDevices> read() async {
-    return const StoredAudioDevices(inputVolume: 0.35, outputVolume: 0.75);
+    return StoredAudioDevices(
+      inputVolume: inputVolume,
+      outputVolume: outputVolume,
+    );
   }
 
   @override
@@ -4104,13 +4255,14 @@ class _FakeRealtimeService implements RealtimeService {
 }
 
 class _FakeLiveSessionController extends LiveSessionController {
-  _FakeLiveSessionController({required LiveSession session})
-    : super(
-        apiBaseUrl: 'http://localhost:3000',
-        audioDeviceStore: const _FakeAudioDeviceStore(),
-        session: session,
-        audioDeviceRestorer: (_) async => null,
-      );
+  _FakeLiveSessionController({
+    required LiveSession session,
+    super.audioDeviceStore = const _FakeAudioDeviceStore(),
+  }) : super(
+         apiBaseUrl: 'http://localhost:3000',
+         session: session,
+         audioDeviceRestorer: (_) async => null,
+       );
 
   @override
   Future<List<ScreenSource>> listScreenSources() async {
