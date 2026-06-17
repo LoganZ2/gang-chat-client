@@ -1,6 +1,34 @@
 #include "flutter_screen_capture.h"
 
+#include "flutter_screen_audio_capture.h"
+
+#include <iostream>
+
 namespace flutter_webrtc_plugin {
+namespace {
+
+bool ShouldCaptureScreenAudio(const EncodableMap& constraints) {
+  auto it = constraints.find(EncodableValue("audio"));
+  if (it == constraints.end()) {
+    return false;
+  }
+  if (TypeIs<bool>(it->second)) {
+    return GetValue<bool>(it->second);
+  }
+  return TypeIs<EncodableMap>(it->second);
+}
+
+EncodableMap LocalTrackInfo(scoped_refptr<RTCMediaTrack> track,
+                            const std::string& label) {
+  EncodableMap info;
+  info[EncodableValue("id")] = EncodableValue(track->id().std_string());
+  info[EncodableValue("label")] = EncodableValue(label);
+  info[EncodableValue("kind")] = EncodableValue(track->kind().std_string());
+  info[EncodableValue("enabled")] = EncodableValue(track->enabled());
+  return info;
+}
+
+}  // namespace
 
 FlutterScreenCapture::FlutterScreenCapture(FlutterWebRTCBase* base)
     : base_(base) {}
@@ -215,7 +243,48 @@ void FlutterScreenCapture::GetDisplayMedia(
 
   // AUDIO
 
-  params[EncodableValue("audioTracks")] = EncodableValue(EncodableList());
+  EncodableList audioTracks;
+  if (ShouldCaptureScreenAudio(constraints)) {
+    scoped_refptr<RTCAudioSource> audio_source =
+        base_->factory_->CreateAudioSource(
+            "screen_capture_audio", RTCAudioSource::SourceType::kCustom);
+    std::string audio_error;
+    std::shared_ptr<ScreenAudioCapture> audio_capture =
+        StartScreenAudioCapture(audio_source, &audio_error);
+    if (audio_capture) {
+      const std::string audio_track_id = base_->GenerateUUID();
+      scoped_refptr<RTCAudioTrack> audio_track =
+          base_->factory_->CreateAudioTrack(audio_source,
+                                            audio_track_id.c_str());
+      if (!audio_track.get()) {
+        audio_capture->Stop();
+        std::cout << " Screen audio capture unavailable: "
+                  << "CreateAudioTrack failed" << std::endl;
+      } else {
+        EncodableMap audio_info =
+            LocalTrackInfo(audio_track, "screen_capture_audio");
+        EncodableMap settings;
+        settings[EncodableValue("deviceId")] =
+            EncodableValue("default-render-loopback");
+        settings[EncodableValue("kind")] = EncodableValue("audioinput");
+        settings[EncodableValue("echoCancellation")] = EncodableValue(false);
+        settings[EncodableValue("noiseSuppression")] = EncodableValue(false);
+        settings[EncodableValue("autoGainControl")] = EncodableValue(false);
+        audio_info[EncodableValue("settings")] = EncodableValue(settings);
+
+        audioTracks.push_back(EncodableValue(audio_info));
+        stream->AddTrack(audio_track);
+        base_->local_tracks_[audio_track->id().std_string()] = audio_track;
+        base_->RegisterLocalTrackCleanup(
+            audio_track->id().std_string(),
+            [audio_capture]() { audio_capture->Stop(); });
+      }
+    } else {
+      std::cout << " Screen audio capture unavailable: " << audio_error
+                << std::endl;
+    }
+  }
+  params[EncodableValue("audioTracks")] = EncodableValue(audioTracks);
 
   // VIDEO
 
@@ -260,11 +329,7 @@ void FlutterScreenCapture::GetDisplayMedia(
       base_->factory_->CreateVideoTrack(video_source, uuid.c_str());
 
   EncodableList videoTracks;
-  EncodableMap info;
-  info[EncodableValue("id")] = EncodableValue(track->id().std_string());
-  info[EncodableValue("label")] = EncodableValue(track->id().std_string());
-  info[EncodableValue("kind")] = EncodableValue(track->kind().std_string());
-  info[EncodableValue("enabled")] = EncodableValue(track->enabled());
+  EncodableMap info = LocalTrackInfo(track, track->id().std_string());
   videoTracks.push_back(EncodableValue(info));
   params[EncodableValue("videoTracks")] = EncodableValue(videoTracks);
 
