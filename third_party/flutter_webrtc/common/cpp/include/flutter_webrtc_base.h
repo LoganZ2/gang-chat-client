@@ -4,6 +4,7 @@
 #include "flutter_common.h"
 
 #include <string.h>
+#include <atomic>
 #include <list>
 #include <map>
 #include <memory>
@@ -31,6 +32,24 @@ class FlutterVideoRenderer;
 class FlutterRTCDataChannelObserver;
 class FlutterPeerConnectionObserver;
 
+class LocalAudioInputVolumeProcessor
+    : public RTCAudioProcessing::CustomProcessing {
+ public:
+  void set_volume(double volume);
+
+  void Initialize(int sample_rate_hz, int num_channels) override;
+  void Process(int num_bands,
+               int num_frames,
+               int buffer_size,
+               float* buffer) override;
+  void Reset(int new_rate) override {}
+  void Release() override {}
+
+ private:
+  std::atomic<double> volume_{1.0};
+  std::atomic<int> channels_{1};
+};
+
 class FlutterWebRTCBase {
  public:
   friend class FlutterMediaStream;
@@ -54,6 +73,8 @@ class FlutterWebRTCBase {
   }
 
   virtual scoped_refptr<RTCMediaTrack> MediaTrackForId(const std::string& id);
+
+  void SetLocalAudioInputVolume(double volume);
 
   std::string GenerateUUID();
 
@@ -114,6 +135,8 @@ class FlutterWebRTCBase {
   scoped_refptr<RTCVideoDevice> video_device_;
   scoped_refptr<RTCDesktopDevice> desktop_device_;
   scoped_refptr<RTCAudioProcessing> audio_processing_;
+  std::unique_ptr<LocalAudioInputVolumeProcessor>
+      local_audio_input_volume_processor_;
   RTCConfiguration configuration_;
 
   std::map<std::string, scoped_refptr<libwebrtc::KeyProvider>> key_providers_;

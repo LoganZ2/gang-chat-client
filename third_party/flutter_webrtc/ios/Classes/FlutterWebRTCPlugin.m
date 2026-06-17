@@ -1103,6 +1103,11 @@ static FlutterWebRTCPlugin *sharedSingleton;
       audioSource.volume = [volume doubleValue];
     }
     result(nil);
+  } else if ([@"setLocalAudioInputVolume" isEqualToString:call.method]) {
+    NSDictionary* argsMap = call.arguments;
+    NSNumber* volume = argsMap[@"volume"];
+    [_audioManager.capturePostProcessingAdapter setProcessingVolume:volume ? [volume doubleValue] : 1.0];
+    result(nil);
   } else if ([@"setMicrophoneMute" isEqualToString:call.method]) {
     NSDictionary* argsMap = call.arguments;
     NSString* trackId = argsMap[@"trackId"];

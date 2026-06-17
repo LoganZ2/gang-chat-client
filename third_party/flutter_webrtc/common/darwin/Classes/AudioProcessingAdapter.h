@@ -19,6 +19,8 @@
 
 - (void)removeProcessing:(id<ExternalAudioProcessingDelegate> _Nonnull)processor;
 
+- (void)setProcessingVolume:(double)volume;
+
 - (void)addAudioRenderer:(nonnull id<RTCAudioRenderer>)renderer;
 
 - (void)removeAudioRenderer:(nonnull id<RTCAudioRenderer>)renderer;

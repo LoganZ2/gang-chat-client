@@ -796,6 +796,12 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
         AudioSwitchManager.instance.setMicrophoneMute(mute);
         result.success(null);
         break;
+      case "setLocalAudioInputVolume":
+        Double volume = call.argument("volume");
+        audioProcessingController.capturePostProcessing.setProcessingVolume(
+                volume != null ? volume : 1.0);
+        result.success(null);
+        break;
       case "selectAudioInput":
         if (Build.VERSION.SDK_INT > Build.VERSION_CODES.LOLLIPOP_MR1) {
           String deviceId = call.argument("deviceId");

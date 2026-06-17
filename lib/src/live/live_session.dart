@@ -475,9 +475,9 @@ class LiveSession extends ChangeNotifier {
       // Publish the microphone track. The OS prompts for permission on the
       // first publish. Skip it when publishing is blocked, and when joining
       // muted: the one unavoidable capture start is deferred to the first
-      // unmute, which lazily publishes. Once published, muting uses LiveKit's
-      // track mute with stopAudioCaptureOnMute=false so the capture session
-      // stays open without writing the system input volume.
+      // unmute, which lazily publishes. Once published, muting is app-local
+      // gain 0 after capture; it never writes system input gain or disables the
+      // WebRTC track.
       if (_canPublish && !_shouldMuteLocalMicrophone) {
         await room.localParticipant?.setMicrophoneEnabled(
           true,
@@ -503,6 +503,7 @@ class LiveSession extends ChangeNotifier {
       _screenSharing = false;
       _speakingIdentities.clear();
       _micMutedByIdentity.clear();
+      unawaited(_resetLocalInputVolume());
       notifyListeners();
       throw LiveSessionConnectException(url: url, cause: e);
     }
@@ -513,25 +514,12 @@ class LiveSession extends ChangeNotifier {
 
   /// Mute/unmute the local microphone. Safe to call when not connected.
   ///
-  /// Muting uses LiveKit's publication mute with stopAudioCaptureOnMute=false:
-  /// capture stays live, the shared OS input device is not stopped, and we do
-  /// not write RTCAudioSource.volume (which can leak into system input volume
-  /// on desktop). A 0 input-volume slider is treated as the same local mute.
+  /// Muting is app-local gain 0 after capture: the shared OS input device and
+  /// WebRTC track stay live, and we do not write RTCAudioSource.volume (which
+  /// can leak into system input volume on desktop). A 0 input-volume slider is
+  /// treated as the same local mute.
   Future<void> setMicMuted(bool muted) async {
     _micMuted = muted;
-    final local = _room?.localParticipant;
-    if (local == null) {
-      notifyListeners();
-      return;
-    }
-    // Ensure a live mic track exists when unmuting. Publishing forces the one
-    // unavoidable capture start; once published it is never stopped on mute.
-    if (!muted && local.audioTrackPublications.isEmpty && _canPublish) {
-      await local.setMicrophoneEnabled(
-        true,
-        audioCaptureOptions: _audioCaptureOptions(),
-      );
-    }
     await _applyLocalMicrophoneState();
     _refreshAllMicStates();
     notifyListeners();
@@ -553,7 +541,8 @@ class LiveSession extends ChangeNotifier {
     if (local == null) return;
     // Republish only if a mic track exists; otherwise the new id is picked up
     // by the next publish (connect or first unmute).
-    final hasTrack = local.audioTrackPublications.isNotEmpty;
+    final hasTrack =
+        local.getTrackPublicationBySource(lk.TrackSource.microphone) != null;
     if (!hasTrack) return;
     // Switching capture device unavoidably stops and restarts the input (one
     // HFP transition on macOS). That is acceptable here: it only happens on an
@@ -797,6 +786,7 @@ class LiveSession extends ChangeNotifier {
     _canPublish = true;
     _speakingIdentities.clear();
     _micMutedByIdentity.clear();
+    await _resetLocalInputVolume();
     if (cancel != null) {
       try {
         await cancel();
@@ -829,6 +819,7 @@ class LiveSession extends ChangeNotifier {
     _screenSharing = false;
     _speakingIdentities.clear();
     _micMutedByIdentity.clear();
+    unawaited(_resetLocalInputVolume());
     cancel?.call();
     if (room != null) {
       // Best-effort async cleanup; swallow errors.
@@ -889,6 +880,7 @@ class LiveSession extends ChangeNotifier {
         final next = event.permissions.canPublish;
         if (next != _canPublish) {
           _canPublish = next;
+          unawaited(_applyLocalMicrophoneState());
           notifyListeners();
           onPublishPermissionChanged?.call(next);
         }
@@ -956,12 +948,16 @@ class LiveSession extends ChangeNotifier {
   }
 
   static bool _isMicMuted(lk.Participant participant) {
-    final pubs = participant.audioTrackPublications;
-    if (pubs.isEmpty) return true;
-    return pubs.every((pub) => pub.muted);
+    final pub = participant.getTrackPublicationBySource(
+      lk.TrackSource.microphone,
+    );
+    return pub?.muted ?? true;
   }
 
   bool get _shouldMuteLocalMicrophone => _micMuted || _inputVolume <= 0;
+
+  double get _effectiveInputVolume =>
+      (!_canPublish || _shouldMuteLocalMicrophone) ? 0.0 : _inputVolume;
 
   lk.AudioCaptureOptions _audioCaptureOptions() {
     return lk.AudioCaptureOptions(
@@ -972,20 +968,47 @@ class LiveSession extends ChangeNotifier {
 
   Future<void> _applyLocalMicrophoneState() async {
     final local = _room?.localParticipant;
+    await _applyLocalInputVolume();
     if (local == null) return;
-    final muted = _shouldMuteLocalMicrophone;
-    if (!muted && local.audioTrackPublications.isEmpty && _canPublish) {
+
+    var microphonePublication = local.getTrackPublicationBySource(
+      lk.TrackSource.microphone,
+    );
+    if (microphonePublication == null &&
+        !_shouldMuteLocalMicrophone &&
+        _canPublish) {
       await local.setMicrophoneEnabled(
         true,
         audioCaptureOptions: _audioCaptureOptions(),
       );
-    }
-    if (local.audioTrackPublications.isEmpty) return;
-    try {
-      await local.setMicrophoneEnabled(
-        !muted,
-        audioCaptureOptions: _audioCaptureOptions(),
+      microphonePublication = local.getTrackPublicationBySource(
+        lk.TrackSource.microphone,
       );
+    }
+    if (microphonePublication == null) return;
+
+    // Keep the LiveKit track enabled. Local mute is represented by the
+    // app-level live state plus capture gain 0, not by disabling the track.
+    if (_canPublish && microphonePublication.muted) {
+      try {
+        await local.setMicrophoneEnabled(
+          true,
+          audioCaptureOptions: _audioCaptureOptions(),
+        );
+      } catch (_) {}
+    }
+    await _applyLocalInputVolume();
+  }
+
+  Future<void> _applyLocalInputVolume() async {
+    try {
+      await rtc.Helper.setLocalAudioInputVolume(_effectiveInputVolume);
+    } catch (_) {}
+  }
+
+  Future<void> _resetLocalInputVolume() async {
+    try {
+      await rtc.Helper.setLocalAudioInputVolume(1.0);
     } catch (_) {}
   }
 

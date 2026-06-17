@@ -5,9 +5,54 @@
 
 #include "helper.h"
 
+#include <cmath>
+
 namespace flutter_webrtc_plugin {
 
 const char* kEventChannelName = "FlutterWebRTC.Event";
+
+void LocalAudioInputVolumeProcessor::set_volume(double volume) {
+  if (!std::isfinite(volume)) {
+    volume = 1.0;
+  }
+  if (volume < 0.0) {
+    volume = 0.0;
+  } else if (volume > 1.0) {
+    volume = 1.0;
+  }
+  volume_.store(volume, std::memory_order_relaxed);
+}
+
+void LocalAudioInputVolumeProcessor::Initialize(int sample_rate_hz,
+                                                int num_channels) {
+  channels_.store(num_channels > 1 ? num_channels : 1,
+                  std::memory_order_relaxed);
+}
+
+void LocalAudioInputVolumeProcessor::Process(int num_bands,
+                                             int num_frames,
+                                             int buffer_size,
+                                             float* buffer) {
+  if (buffer == nullptr || buffer_size <= 0) {
+    return;
+  }
+  const double volume = volume_.load(std::memory_order_relaxed);
+  if (volume >= 0.999999) {
+    return;
+  }
+  const int stored_channels = channels_.load(std::memory_order_relaxed);
+  const int channels = stored_channels > 1 ? stored_channels : 1;
+  const int bands = num_bands > 1 ? num_bands : 1;
+  const int frames = num_frames > 0 ? num_frames : 0;
+  const int expected_samples = bands * frames * channels;
+  const int samples =
+      expected_samples > 0
+          ? (buffer_size < expected_samples ? buffer_size : expected_samples)
+                           : buffer_size;
+  for (int i = 0; i < samples; ++i) {
+    buffer[i] = static_cast<float>(buffer[i] * volume);
+  }
+}
 
 FlutterWebRTCBase::FlutterWebRTCBase(BinaryMessenger* messenger,
                                      TextureRegistrar* textures,
@@ -20,11 +65,27 @@ FlutterWebRTCBase::FlutterWebRTCBase(BinaryMessenger* messenger,
   video_device_ = factory_->GetVideoDevice();
   desktop_device_ = factory_->GetDesktopDevice();
   audio_processing_ = factory_->GetAudioProcessing();
+  local_audio_input_volume_processor_ =
+      std::make_unique<LocalAudioInputVolumeProcessor>();
+  if (audio_processing_ != nullptr) {
+    audio_processing_->SetCapturePostProcessing(
+        local_audio_input_volume_processor_.get());
+  }
   event_channel_ = EventChannelProxy::Create(messenger_, task_runner_, kEventChannelName);
 }
 
 FlutterWebRTCBase::~FlutterWebRTCBase() {
+  if (audio_processing_ != nullptr) {
+    audio_processing_->SetCapturePostProcessing(nullptr);
+  }
   LibWebRTC::Terminate();
+}
+
+void FlutterWebRTCBase::SetLocalAudioInputVolume(double volume) {
+  if (local_audio_input_volume_processor_ == nullptr) {
+    return;
+  }
+  local_audio_input_volume_processor_->set_volume(volume);
 }
 
 EventChannelProxy* FlutterWebRTCBase::event_channel() {

@@ -1,10 +1,12 @@
 #import "AudioProcessingAdapter.h"
 #import <WebRTC/RTCAudioRenderer.h>
+#import <math.h>
 #import <os/lock.h>
 
 @implementation AudioProcessingAdapter {
   NSMutableArray<id<RTCAudioRenderer>>* _renderers;
   NSMutableArray<id<ExternalAudioProcessingDelegate>>* _processors;
+  double _processingVolume;
   os_unfair_lock _lock;
 }
 
@@ -14,6 +16,7 @@
     _lock = OS_UNFAIR_LOCK_INIT;
     _renderers = [[NSMutableArray<id<RTCAudioRenderer>> alloc] init];
     _processors = [[NSMutableArray<id<ExternalAudioProcessingDelegate>> alloc] init];
+    _processingVolume = 1.0;
   }
   return self;
 }
@@ -31,6 +34,15 @@
                                                                         NSDictionary* bindings) {
         return evaluatedObject != processor;
       }]] mutableCopy];
+  os_unfair_lock_unlock(&_lock);
+}
+
+- (void)setProcessingVolume:(double)volume {
+  os_unfair_lock_lock(&_lock);
+  if (!isfinite(volume)) {
+    volume = 1.0;
+  }
+  _processingVolume = MIN(MAX(volume, 0.0), 1.0);
   os_unfair_lock_unlock(&_lock);
 }
 
@@ -84,6 +96,15 @@
 
 - (void)audioProcessingProcess:(RTC_OBJC_TYPE(RTCAudioBuffer) *)audioBuffer {
   os_unfair_lock_lock(&_lock);
+  if (_processingVolume < 0.999999) {
+    for (int channel = 0; channel < audioBuffer.channels; channel++) {
+      float* samples = [audioBuffer rawBufferForChannel:channel];
+      for (int frame = 0; frame < audioBuffer.frames; frame++) {
+        samples[frame] *= _processingVolume;
+      }
+    }
+  }
+
   for (id<ExternalAudioProcessingDelegate> processor in _processors) {
     [processor audioProcessingProcess:audioBuffer];
   }

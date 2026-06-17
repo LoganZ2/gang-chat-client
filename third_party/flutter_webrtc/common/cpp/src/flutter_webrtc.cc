@@ -564,6 +564,25 @@ void FlutterWebRTC::HandleMethodCall(
     audioTrack->SetVolume(volume.value());
 
     result->Success();
+  } else if (method_call.method_name().compare("setLocalAudioInputVolume") ==
+             0) {
+    auto args = method_call.arguments();
+    if (!args) {
+      result->Error("Bad Arguments",
+                    "setLocalAudioInputVolume() Null arguments received");
+      return;
+    }
+
+    const EncodableMap params = GetValue<EncodableMap>(*args);
+    const std::optional<double> volume = maybeFindDouble(params, "volume");
+    if (!volume.has_value()) {
+      result->Error("Bad Arguments",
+                    "setLocalAudioInputVolume() No volume provided");
+      return;
+    }
+
+    SetLocalAudioInputVolume(volume.value());
+    result->Success();
   } else if (method_call.method_name().compare("getLocalDescription") == 0) {
     if (!method_call.arguments()) {
       result->Error("Bad Arguments", "Null constraints arguments received");

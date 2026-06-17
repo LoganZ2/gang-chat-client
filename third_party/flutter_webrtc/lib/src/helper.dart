@@ -161,6 +161,12 @@ class Helper {
   static Future<void> setVolume(double volume, MediaStreamTrack track) =>
       NativeAudioManagement.setVolume(volume, track);
 
+  /// Set the app-local microphone input volume after capture.
+  ///
+  /// This does not change the system microphone gain or system mute state.
+  static Future<void> setLocalAudioInputVolume(double volume) =>
+      NativeAudioManagement.setLocalAudioInputVolume(volume);
+
   /// Set the microphone mute/unmute for Flutter native
   static Future<void> setMicrophoneMute(bool mute, MediaStreamTrack track) =>
       NativeAudioManagement.setMicrophoneMute(mute, track);

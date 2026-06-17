@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -7,6 +9,8 @@ import 'media_stream_track_impl.dart';
 import 'utils.dart';
 
 class NativeAudioManagement {
+  static const MethodChannel _channel = MethodChannel('FlutterWebRTC.Method');
+
   static Future<void> selectAudioInput(String deviceId) async {
     await WebRTC.invokeMethod(
       'selectAudioInput',
@@ -60,6 +64,21 @@ class NativeAudioManagement {
     }
 
     return Future.value();
+  }
+
+  static Future<void> setLocalAudioInputVolume(double volume) async {
+    if (!kIsWeb && !Platform.environment.containsKey('FLUTTER_TEST')) {
+      try {
+        await _channel
+            .invokeMethod('setLocalAudioInputVolume', <String, dynamic>{
+          'volume': volume.clamp(0.0, 1.0).toDouble(),
+        });
+      } on MissingPluginException {
+        return;
+      } on PlatformException catch (e) {
+        throw 'Unable to set local audio input volume: ${e.message}';
+      }
+    }
   }
 
   static Future<void> setMicrophoneMute(
