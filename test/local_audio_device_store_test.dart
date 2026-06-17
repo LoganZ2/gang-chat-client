@@ -21,6 +21,7 @@ void main() {
     expect(stored.inputVolume, 1.0);
     expect(stored.outputVolume, 1.0);
     expect(stored.musicBoxVolume, 1.0);
+    expect(stored.screenShareVolume, 1.0);
     expect(stored.screenShareMaxHeight, 1080);
   });
 
@@ -32,6 +33,7 @@ void main() {
     await store.writeInputVolume(0.4);
     await store.writeOutputVolume(0.6);
     await store.writeMusicBoxVolume(0.2);
+    await store.writeScreenShareVolume(0.8);
     await store.writeScreenShareMaxHeight(720);
 
     final stored = await store.read();
@@ -40,25 +42,31 @@ void main() {
     expect(stored.inputVolume, closeTo(0.4, 1e-9));
     expect(stored.outputVolume, closeTo(0.6, 1e-9));
     expect(stored.musicBoxVolume, closeTo(0.2, 1e-9));
+    expect(stored.screenShareVolume, closeTo(0.8, 1e-9));
     expect(stored.screenShareMaxHeight, 720);
   });
 
-  test('screen share height is coerced to a supported option on write', () async {
-    final store = const LocalAudioDeviceStore();
+  test(
+    'screen share height is coerced to a supported option on write',
+    () async {
+      final store = const LocalAudioDeviceStore();
 
-    await store.writeScreenShareMaxHeight(999);
-    final stored = await store.read();
+      await store.writeScreenShareMaxHeight(999);
+      final stored = await store.read();
 
-    expect(stored.screenShareMaxHeight, 1080);
-  });
+      expect(stored.screenShareMaxHeight, 1080);
+    },
+  );
 
   test('volumes are clamped to the valid range on write', () async {
     final store = const LocalAudioDeviceStore();
 
     await store.writeOutputVolume(5.0);
+    await store.writeScreenShareVolume(-0.5);
     final stored = await store.read();
 
     expect(stored.outputVolume, normalizedAudioVolume(5.0));
     expect(stored.outputVolume, 1.0);
+    expect(stored.screenShareVolume, 0.0);
   });
 }

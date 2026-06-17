@@ -85,7 +85,16 @@ class LiveSessionController {
     return session.setScreenShareEnabled(enabled, sourceId: sourceId);
   }
 
-  Future<void> setInputVolume(double volume) => session.setInputVolume(volume);
+  double get inputVolume => session.inputVolume;
+
+  Future<void> setInputVolume(double volume) async {
+    await session.setInputVolume(volume);
+    try {
+      await audioDeviceStore.writeInputVolume(session.inputVolume);
+    } catch (_) {
+      // A failed persist shouldn't undo the live change.
+    }
+  }
 
   /// Pin the microphone capture device. Keeps [LiveSession]'s tracked input id
   /// in sync so a later mute/unmute republish stays on the chosen device. The
@@ -103,8 +112,15 @@ class LiveSessionController {
     }
   }
 
-  Future<void> setOutputVolume(double volume) {
-    return session.setOutputVolume(volume);
+  double get outputVolume => session.outputVolume;
+
+  Future<void> setOutputVolume(double volume) async {
+    await session.setOutputVolume(volume);
+    try {
+      await audioDeviceStore.writeOutputVolume(session.outputVolume);
+    } catch (_) {
+      // A failed persist shouldn't undo the live change.
+    }
   }
 
   double get musicBoxVolume => session.musicBoxVolume;
@@ -116,6 +132,17 @@ class LiveSessionController {
     } catch (_) {
       // A failed persist shouldn't undo the live volume change; it just won't
       // survive the next launch.
+    }
+  }
+
+  double get screenShareVolume => session.screenShareVolume;
+
+  Future<void> setScreenShareVolume(double volume) async {
+    await session.setScreenShareVolume(volume);
+    try {
+      await audioDeviceStore.writeScreenShareVolume(session.screenShareVolume);
+    } catch (_) {
+      // A failed persist shouldn't undo the live change.
     }
   }
 
@@ -172,6 +199,7 @@ class LiveSessionController {
       await session.setInputVolume(stored.inputVolume);
       await session.setOutputVolume(stored.outputVolume);
       await session.setMusicBoxVolume(stored.musicBoxVolume);
+      await session.setScreenShareVolume(stored.screenShareVolume);
       await session.setScreenShareMaxHeight(stored.screenShareMaxHeight);
       // Capture the published mic from the device the restorer resolved (the
       // user's pinned device, or the macOS system default). Null leaves LiveKit

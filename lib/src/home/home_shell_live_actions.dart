@@ -127,14 +127,81 @@ extension _HomeShellLiveActions on _HomeShellState {
     _live = patch.live;
   }
 
+  void _toggleMicMute() {
+    final muted = !_micMuted;
+    final volume = muted ? 0.0 : _restoredInputVolume();
+    if (muted) {
+      _rememberInputVolume(_liveSessionController.inputVolume);
+    }
+    unawaited(_liveSessionController.setInputVolume(volume));
+    unawaited(_patchLiveState(micMuted: muted));
+  }
+
   void _toggleHeadphonesMute() {
     final patch = liveOutputMuteToggled(headphonesMuted: _headphonesMuted);
-    _setHomeState(() => _headphonesMuted = patch.headphonesMuted);
-    unawaited(_liveSessionController.setOutputMuted(patch.headphonesMuted));
+    _setHeadphonesMuted(patch.headphonesMuted);
+  }
+
+  void _setHeadphonesMuted(bool muted, {bool syncVolume = true}) {
+    if (_headphonesMuted == muted) return;
+    if (syncVolume) {
+      final volume = muted ? 0.0 : _restoredOutputVolume();
+      if (muted) {
+        _rememberOutputVolume(_liveSessionController.outputVolume);
+      }
+      unawaited(_liveSessionController.setOutputVolume(volume));
+    }
+    _setHomeState(() => _headphonesMuted = muted);
+    unawaited(_liveSessionController.setOutputMuted(muted));
     // Report the headphone state to the server so other participants see it on
     // the live snapshot. Best-effort: a failure here doesn't undo the local
     // mute, which already took effect on the LiveKit session above.
-    unawaited(_patchLiveState(headphonesMuted: patch.headphonesMuted));
+    unawaited(_patchLiveState(headphonesMuted: muted));
+  }
+
+  void _changeInputVolume(double volume) {
+    final normalized = normalizedAudioVolume(volume);
+    _rememberInputVolume(normalized);
+    unawaited(_liveSessionController.setInputVolume(normalized));
+    final muted = normalized == 0;
+    if (muted == _micMuted) return;
+    if (!muted && _voiceBlocked) return;
+    unawaited(_patchLiveState(micMuted: muted));
+  }
+
+  void _changeOutputVolume(double volume) {
+    final normalized = normalizedAudioVolume(volume);
+    _rememberOutputVolume(normalized);
+    unawaited(_liveSessionController.setOutputVolume(normalized));
+    _setHeadphonesMuted(normalized == 0, syncVolume: false);
+  }
+
+  void _changeScreenShareVolume(double volume) {
+    unawaited(_liveSessionController.setScreenShareVolume(volume));
+  }
+
+  void _rememberInputVolume(double volume) {
+    final normalized = normalizedAudioVolume(volume);
+    _lastInputVolumeBeforeMute = normalized > 0
+        ? normalized
+        : _defaultLiveVolumeRestore;
+  }
+
+  void _rememberOutputVolume(double volume) {
+    final normalized = normalizedAudioVolume(volume);
+    _lastOutputVolumeBeforeMute = normalized > 0
+        ? normalized
+        : _defaultLiveVolumeRestore;
+  }
+
+  double _restoredInputVolume() {
+    final remembered = normalizedAudioVolume(_lastInputVolumeBeforeMute);
+    return remembered > 0 ? remembered : _defaultLiveVolumeRestore;
+  }
+
+  double _restoredOutputVolume() {
+    final remembered = normalizedAudioVolume(_lastOutputVolumeBeforeMute);
+    return remembered > 0 ? remembered : _defaultLiveVolumeRestore;
   }
 
   Future<void> _joinLive(String source) async {

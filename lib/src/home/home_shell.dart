@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../app/audio_device_store.dart';
+import '../app/audio_levels.dart';
 import '../app/authenticated_app_services.dart';
 import '../app/authenticated_app_context.dart';
 import '../app/file_display.dart' as file_display;
@@ -69,6 +70,7 @@ part 'home_shell_title_bar.dart';
 part 'home_shell_join_dialog.dart';
 
 const _windowEdgeBorder = Color(0xFF303842);
+const _defaultLiveVolumeRestore = 0.5;
 
 bool get _supportsWindowManagement =>
     !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
@@ -170,6 +172,8 @@ class _HomeShellState extends State<HomeShell> {
   bool _joiningLive = false;
   bool _micMuted = true;
   bool _headphonesMuted = false;
+  double _lastInputVolumeBeforeMute = _defaultLiveVolumeRestore;
+  double _lastOutputVolumeBeforeMute = _defaultLiveVolumeRestore;
   bool _cameraOn = false;
   bool _screenSharing = false;
   bool _voiceBlocked = false;

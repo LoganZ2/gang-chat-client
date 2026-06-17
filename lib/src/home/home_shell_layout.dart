@@ -116,9 +116,7 @@ extension _HomeShellLayout on _HomeShellState {
         onBackToChat: _openChat,
         onJoin: () => unawaited(_joinLive('live_panel')),
         onLeave: () => unawaited(_leaveLive()),
-        onToggleMic: _voiceBlocked
-            ? null
-            : () => unawaited(_patchLiveState(micMuted: !_micMuted)),
+        onToggleMic: _voiceBlocked ? null : _toggleMicMute,
         onToggleHeadphones: _toggleHeadphonesMute,
         onToggleCamera: () => unawaited(_toggleCamera()),
         onToggleShare: () => unawaited(_toggleScreenShare()),
@@ -136,9 +134,15 @@ extension _HomeShellLayout on _HomeShellState {
             unawaited(_queueMusicBoxTrack(result)),
         onMusicBoxRemoveItem: (item) => unawaited(_removeMusicBoxItem(item)),
         onMusicBoxSourceChanged: _changeMusicBoxSource,
+        inputVolume: _liveSessionController.inputVolume,
+        outputVolume: _liveSessionController.outputVolume,
         musicBoxVolume: _liveSessionController.musicBoxVolume,
+        screenShareVolume: _liveSessionController.screenShareVolume,
+        onInputVolumeChanged: _changeInputVolume,
+        onOutputVolumeChanged: _changeOutputVolume,
         onMusicBoxVolumeChanged: (volume) =>
             unawaited(_liveSessionController.setMusicBoxVolume(volume)),
+        onScreenShareVolumeChanged: _changeScreenShareVolume,
       );
     }
 

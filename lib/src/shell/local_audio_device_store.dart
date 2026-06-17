@@ -19,6 +19,7 @@ class LocalAudioDeviceStore extends AudioDeviceStore {
   static const _inputVolumeKey = 'gang.audioInputVolume';
   static const _outputVolumeKey = 'gang.audioOutputVolume';
   static const _musicBoxVolumeKey = 'gang.musicBoxVolume';
+  static const _screenShareVolumeKey = 'gang.screenShareVolume';
   static const _screenShareMaxHeightKey = 'gang.screenShareMaxHeight';
 
   @override
@@ -34,6 +35,7 @@ class LocalAudioDeviceStore extends AudioDeviceStore {
       inputVolume: _readVolume(prefs, _inputVolumeKey),
       outputVolume: _readVolume(prefs, _outputVolumeKey),
       musicBoxVolume: _readVolume(prefs, _musicBoxVolumeKey),
+      screenShareVolume: _readVolume(prefs, _screenShareVolumeKey),
       screenShareMaxHeight: normalizedScreenShareMaxHeight(
         prefs.getInt(_screenShareMaxHeightKey),
       ),
@@ -68,6 +70,12 @@ class LocalAudioDeviceStore extends AudioDeviceStore {
   Future<void> writeMusicBoxVolume(double volume) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_musicBoxVolumeKey, normalizedAudioVolume(volume));
+  }
+
+  @override
+  Future<void> writeScreenShareVolume(double volume) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_screenShareVolumeKey, normalizedAudioVolume(volume));
   }
 
   @override

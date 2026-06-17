@@ -29,6 +29,7 @@ void main() {
       expect(session.disconnects, 1);
       expect(session.inputVolumes, [0.35, 0.35]);
       expect(session.outputVolumes, [0.75, 0.75]);
+      expect(session.screenShareVolumes, [1.0, 1.0]);
       expect(restoredDevices, 2);
       expect(session.connectedUrl, 'wss://live.example.test');
       expect(session.connectedRoomName, 'room_live_1');
@@ -98,6 +99,7 @@ void main() {
     await controller.setOutputMuted(true);
     await controller.setInputVolume(0.4);
     await controller.setOutputVolume(0.6);
+    await controller.setScreenShareVolume(0.8);
 
     expect(session.micMutes, [true]);
     expect(session.cameraEnables, [true]);
@@ -106,10 +108,11 @@ void main() {
     expect(session.outputMutes, [true]);
     expect(session.inputVolumes, [0.4]);
     expect(session.outputVolumes, [0.6]);
+    expect(session.screenShareVolumes, [0.8]);
   });
 
   test(
-    'setScreenShareMaxHeight applies to the session and persists',
+    'live session volume controls persist through the local store',
     () async {
       final session = _FakeLiveSession();
       final store = _RecordingAudioDeviceStore();
@@ -120,12 +123,31 @@ void main() {
         audioDeviceRestorer: (_) async => null,
       );
 
-      await controller.setScreenShareMaxHeight(720);
+      await controller.setInputVolume(0.4);
+      await controller.setOutputVolume(0.6);
+      await controller.setScreenShareVolume(0.8);
 
-      expect(session.screenShareMaxHeights, [720]);
-      expect(store.screenShareWrites, [720]);
+      expect(store.inputVolumeWrites, [0.4]);
+      expect(store.outputVolumeWrites, [0.6]);
+      expect(store.screenShareVolumeWrites, [0.8]);
     },
   );
+
+  test('setScreenShareMaxHeight applies to the session and persists', () async {
+    final session = _FakeLiveSession();
+    final store = _RecordingAudioDeviceStore();
+    final controller = LiveSessionController(
+      apiBaseUrl: 'https://api.example.test/api/v1',
+      session: session,
+      audioDeviceStore: store,
+      audioDeviceRestorer: (_) async => null,
+    );
+
+    await controller.setScreenShareMaxHeight(720);
+
+    expect(session.screenShareMaxHeights, [720]);
+    expect(store.screenShareWrites, [720]);
+  });
 
   test('connectWithRetry restores the stored screen-share height', () async {
     final session = _FakeLiveSession();
@@ -164,6 +186,7 @@ class _FakeLiveSession extends LiveSession {
   int disconnects = 0;
   final inputVolumes = <double>[];
   final outputVolumes = <double>[];
+  final screenShareVolumes = <double>[];
   final outputMutes = <bool>[];
   final micMutes = <bool>[];
   final cameraEnables = <bool>[];
@@ -172,8 +195,20 @@ class _FakeLiveSession extends LiveSession {
   String? connectedUrl;
   String? connectedRoomName;
   bool? connectedMicMuted;
+  double _inputVolume = 1.0;
+  double _outputVolume = 1.0;
+  double _screenShareVolume = 1.0;
 
   void emitChange() => notifyListeners();
+
+  @override
+  double get inputVolume => _inputVolume;
+
+  @override
+  double get outputVolume => _outputVolume;
+
+  @override
+  double get screenShareVolume => _screenShareVolume;
 
   @override
   Future<void> connect({
@@ -200,12 +235,20 @@ class _FakeLiveSession extends LiveSession {
 
   @override
   Future<void> setInputVolume(double volume) async {
+    _inputVolume = volume;
     inputVolumes.add(volume);
   }
 
   @override
   Future<void> setOutputVolume(double volume) async {
+    _outputVolume = volume;
     outputVolumes.add(volume);
+  }
+
+  @override
+  Future<void> setScreenShareVolume(double volume) async {
+    _screenShareVolume = volume;
+    screenShareVolumes.add(volume);
   }
 
   @override
@@ -243,6 +286,9 @@ class _RecordingAudioDeviceStore extends AudioDeviceStore {
   _RecordingAudioDeviceStore({this.storedScreenShareMaxHeight = 1080});
 
   final int storedScreenShareMaxHeight;
+  final inputVolumeWrites = <double>[];
+  final outputVolumeWrites = <double>[];
+  final screenShareVolumeWrites = <double>[];
   final screenShareWrites = <int>[];
 
   @override
@@ -250,8 +296,24 @@ class _RecordingAudioDeviceStore extends AudioDeviceStore {
     return StoredAudioDevices(
       inputVolume: 0.35,
       outputVolume: 0.75,
+      screenShareVolume: 1.0,
       screenShareMaxHeight: storedScreenShareMaxHeight,
     );
+  }
+
+  @override
+  Future<void> writeInputVolume(double volume) async {
+    inputVolumeWrites.add(volume);
+  }
+
+  @override
+  Future<void> writeOutputVolume(double volume) async {
+    outputVolumeWrites.add(volume);
+  }
+
+  @override
+  Future<void> writeScreenShareVolume(double volume) async {
+    screenShareVolumeWrites.add(volume);
   }
 
   @override

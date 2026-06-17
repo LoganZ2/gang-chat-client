@@ -9,6 +9,10 @@ class _LiveControlBar extends StatelessWidget {
     required this.voiceBlocked,
     required this.cameraOn,
     required this.screenSharing,
+    required this.watchingRemoteScreenShare,
+    required this.inputVolume,
+    required this.outputVolume,
+    required this.screenShareVolume,
     required this.musicBox,
     required this.musicBoxEnabled,
     required this.musicBoxOpen,
@@ -18,6 +22,9 @@ class _LiveControlBar extends StatelessWidget {
     required this.onToggleHeadphones,
     required this.onToggleCamera,
     required this.onToggleShare,
+    required this.onInputVolumeChanged,
+    required this.onOutputVolumeChanged,
+    required this.onScreenShareVolumeChanged,
     required this.onToggleMusicBox,
     required this.onMusicBoxTogglePlayback,
     required this.onMusicBoxSkip,
@@ -31,6 +38,10 @@ class _LiveControlBar extends StatelessWidget {
   final bool voiceBlocked;
   final bool cameraOn;
   final bool screenSharing;
+  final bool watchingRemoteScreenShare;
+  final double inputVolume;
+  final double outputVolume;
+  final double screenShareVolume;
   final MusicBoxState? musicBox;
   final bool musicBoxEnabled;
   final bool musicBoxOpen;
@@ -40,6 +51,9 @@ class _LiveControlBar extends StatelessWidget {
   final VoidCallback onToggleHeadphones;
   final VoidCallback onToggleCamera;
   final VoidCallback onToggleShare;
+  final ValueChanged<double> onInputVolumeChanged;
+  final ValueChanged<double> onOutputVolumeChanged;
+  final ValueChanged<double> onScreenShareVolumeChanged;
   final VoidCallback onToggleMusicBox;
   final VoidCallback onMusicBoxTogglePlayback;
   final VoidCallback onMusicBoxSkip;
@@ -55,19 +69,35 @@ class _LiveControlBar extends StatelessWidget {
           voiceBlocked: voiceBlocked,
         );
         final controls = [
-          ButtonIcon(
-            tooltip: micControl.tooltip,
-            icon: Icon(micControl.mutedForDisplay ? Icons.mic_off : Icons.mic),
-            selected: micControl.active,
-            onPressed: micControl.enabled ? onToggleMic : null,
-            size: _controlButtonSize,
+          _HoverVolumeButton(
+            value: inputVolume,
+            semanticLabel: '麦克风输入音量',
+            onChanged: onInputVolumeChanged,
+            child: ButtonIcon(
+              tooltip: micControl.tooltip,
+              icon: Icon(
+                micControl.mutedForDisplay ? Icons.mic_off : Icons.mic,
+              ),
+              selected: micControl.active,
+              onPressed: micControl.enabled ? onToggleMic : null,
+              size: _controlButtonSize,
+            ),
           ),
-          ButtonIcon(
-            tooltip: live_display.liveHeadphonesControlTooltip(headphonesMuted),
-            icon: Icon(headphonesMuted ? Icons.headset_off : Icons.headphones),
-            selected: !headphonesMuted,
-            onPressed: onToggleHeadphones,
-            size: _controlButtonSize,
+          _HoverVolumeButton(
+            value: outputVolume,
+            semanticLabel: '语音输出音量',
+            onChanged: onOutputVolumeChanged,
+            child: ButtonIcon(
+              tooltip: live_display.liveHeadphonesControlTooltip(
+                headphonesMuted,
+              ),
+              icon: Icon(
+                headphonesMuted ? Icons.headset_off : Icons.headphones,
+              ),
+              selected: !headphonesMuted,
+              onPressed: onToggleHeadphones,
+              size: _controlButtonSize,
+            ),
           ),
           ButtonIcon(
             tooltip: live_display.liveCameraControlTooltip(cameraOn),
@@ -76,16 +106,24 @@ class _LiveControlBar extends StatelessWidget {
             onPressed: onToggleCamera,
             size: _controlButtonSize,
           ),
-          ButtonIcon(
-            tooltip: live_display.liveScreenShareControlTooltip(screenSharing),
-            icon: Icon(
-              screenSharing
-                  ? Icons.stop_screen_share
-                  : Icons.screen_share_outlined,
+          _HoverVolumeButton(
+            value: screenShareVolume,
+            semanticLabel: '共享屏幕输出音量',
+            onChanged: onScreenShareVolumeChanged,
+            enabled: watchingRemoteScreenShare,
+            child: ButtonIcon(
+              tooltip: live_display.liveScreenShareControlTooltip(
+                screenSharing,
+              ),
+              icon: Icon(
+                screenSharing
+                    ? Icons.stop_screen_share
+                    : Icons.screen_share_outlined,
+              ),
+              selected: screenSharing,
+              onPressed: onToggleShare,
+              size: _controlButtonSize,
             ),
-            selected: screenSharing,
-            onPressed: onToggleShare,
-            size: _controlButtonSize,
           ),
           ButtonIcon(
             tooltip: '离开',
@@ -201,6 +239,454 @@ List<Widget> _withControlGaps(List<Widget> children) {
       children[index],
     ],
   ];
+}
+
+const _hoverVolumePanelHeight = 144.0;
+const _hoverVolumeTrackThickness = 7.0;
+const _hoverVolumeThumbWidth = 26.0;
+const _hoverVolumeThumbHeight = 7.0;
+const _hoverVolumePercentWidth = 40.0;
+const _hoverVolumePercentHeight = 18.0;
+const _hoverVolumePercentGap = 6.0;
+
+class _HoverVolumeButton extends StatefulWidget {
+  const _HoverVolumeButton({
+    required this.child,
+    required this.value,
+    required this.semanticLabel,
+    required this.onChanged,
+    this.enabled = true,
+  });
+
+  final Widget child;
+  final double value;
+  final String semanticLabel;
+  final ValueChanged<double> onChanged;
+  final bool enabled;
+
+  @override
+  State<_HoverVolumeButton> createState() => _HoverVolumeButtonState();
+}
+
+class _HoverVolumeButtonState extends State<_HoverVolumeButton> {
+  static _HoverVolumeButtonState? _active;
+
+  OverlayEntry? _overlayEntry;
+  Timer? _hideTimer;
+  bool _targetHovered = false;
+  bool _overlayHovered = false;
+  bool _dragging = false;
+  late double _value = normalizedAudioVolume(widget.value);
+
+  @override
+  void didUpdateWidget(_HoverVolumeButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value) {
+      _value = normalizedAudioVolume(widget.value);
+      _markOverlayNeedsBuild();
+    }
+    if (!widget.enabled) _hideOverlay();
+  }
+
+  @override
+  void dispose() {
+    _hideTimer?.cancel();
+    _hideOverlay();
+    super.dispose();
+  }
+
+  void _showOverlay() {
+    if (!widget.enabled) return;
+    _hideTimer?.cancel();
+    if (_active != null && _active != this) {
+      _active!._hideOverlay();
+    }
+    _active = this;
+    if (_overlayEntry != null) {
+      _overlayEntry!.markNeedsBuild();
+      return;
+    }
+    final overlay = Overlay.of(context);
+    final targetBox = context.findRenderObject();
+    final overlayBox = overlay.context.findRenderObject();
+    if (targetBox is! RenderBox || overlayBox is! RenderBox) return;
+    final targetOffset = targetBox.localToGlobal(
+      Offset.zero,
+      ancestor: overlayBox,
+    );
+    final targetSize = targetBox.size;
+    final overlaySize = overlayBox.size;
+    final maxPanelLeft = (overlaySize.width - _controlButtonSize).clamp(
+      0.0,
+      double.infinity,
+    );
+    final maxPanelTop = (overlaySize.height - _hoverVolumePanelHeight).clamp(
+      0.0,
+      double.infinity,
+    );
+    final panelLeft =
+        (targetOffset.dx + (targetSize.width - _controlButtonSize) / 2)
+            .clamp(0.0, maxPanelLeft)
+            .toDouble();
+    final panelTop = (targetOffset.dy - _hoverVolumePanelHeight - 8)
+        .clamp(0.0, maxPanelTop)
+        .toDouble();
+    _overlayEntry = OverlayEntry(
+      builder: (context) =>
+          _buildOverlay(context, left: panelLeft, top: panelTop),
+    );
+    overlay.insert(_overlayEntry!);
+  }
+
+  void _hideOverlay() {
+    _hideTimer?.cancel();
+    _hideTimer = null;
+    if (_active == this) _active = null;
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  void _scheduleHide() {
+    _hideTimer?.cancel();
+    _hideTimer = Timer(const Duration(milliseconds: 90), () {
+      if (!_targetHovered && !_overlayHovered && !_dragging) {
+        _hideOverlay();
+      }
+    });
+  }
+
+  void _markOverlayNeedsBuild() {
+    if (_overlayEntry == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _overlayEntry?.markNeedsBuild();
+    });
+  }
+
+  void _setValue(double value) {
+    final normalized = normalizedAudioVolume(value);
+    setState(() => _value = normalized);
+    _overlayEntry?.markNeedsBuild();
+    widget.onChanged(normalized);
+  }
+
+  Widget _buildOverlay(
+    BuildContext context, {
+    required double left,
+    required double top,
+  }) {
+    return Positioned(
+      left: left,
+      top: top,
+      width: _controlButtonSize,
+      height: _hoverVolumePanelHeight,
+      child: MouseRegion(
+        onEnter: (_) {
+          _overlayHovered = true;
+          _showOverlay();
+        },
+        onExit: (_) {
+          _overlayHovered = false;
+          _scheduleHide();
+        },
+        child: _HoverVolumePanel(
+          value: _value,
+          semanticLabel: widget.semanticLabel,
+          onChanged: _setValue,
+          onChangeStart: (_) {
+            _dragging = true;
+            _showOverlay();
+          },
+          onChangeEnd: (_) {
+            _dragging = false;
+            _scheduleHide();
+          },
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) {
+        _targetHovered = true;
+        _showOverlay();
+      },
+      onExit: (_) {
+        _targetHovered = false;
+        _scheduleHide();
+      },
+      child: widget.child,
+    );
+  }
+}
+
+class _HoverVolumePanel extends StatelessWidget {
+  const _HoverVolumePanel({
+    required this.value,
+    required this.semanticLabel,
+    required this.onChanged,
+    required this.onChangeStart,
+    required this.onChangeEnd,
+  });
+
+  final double value;
+  final String semanticLabel;
+  final ValueChanged<double> onChanged;
+  final ValueChanged<double> onChangeStart;
+  final ValueChanged<double> onChangeEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = normalizedAudioVolume(value);
+    return Semantics(
+      label: semanticLabel,
+      value: audioVolumePercentText(normalized),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: UiColors.surface,
+          borderRadius: BorderRadius.circular(UiRadii.md),
+          border: Border.all(color: UiColors.border),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x66080A0D),
+              offset: Offset(0, 8),
+              blurRadius: 18,
+            ),
+          ],
+        ),
+        child: SizedBox(
+          key: ValueKey<String>('live-volume-panel:$semanticLabel'),
+          width: _controlButtonSize,
+          height: _hoverVolumePanelHeight,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Center(
+              child: _HoverVolumeSlider(
+                value: normalized,
+                semanticLabel: semanticLabel,
+                onChanged: onChanged,
+                onChangeStart: onChangeStart,
+                onChangeEnd: onChangeEnd,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HoverVolumeSlider extends StatefulWidget {
+  const _HoverVolumeSlider({
+    required this.value,
+    required this.semanticLabel,
+    required this.onChanged,
+    required this.onChangeStart,
+    required this.onChangeEnd,
+  });
+
+  final double value;
+  final String semanticLabel;
+  final ValueChanged<double> onChanged;
+  final ValueChanged<double> onChangeStart;
+  final ValueChanged<double> onChangeEnd;
+
+  @override
+  State<_HoverVolumeSlider> createState() => _HoverVolumeSliderState();
+}
+
+class _HoverVolumeSliderState extends State<_HoverVolumeSlider> {
+  int? _pointer;
+  bool _thumbHovered = false;
+  bool _dragging = false;
+  late double _interactionValue = normalizedAudioVolume(widget.value);
+
+  double get _value => normalizedAudioVolume(widget.value);
+
+  double _fractionFromPosition(Offset localPosition, Size size) {
+    final travel = size.height - _hoverVolumeThumbHeight;
+    if (travel <= 0) return 0;
+    return (1 - (localPosition.dy - _hoverVolumeThumbHeight / 2) / travel)
+        .clamp(0.0, 1.0)
+        .toDouble();
+  }
+
+  void _emitFromPosition(Offset localPosition) {
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox) return;
+    final fraction = _fractionFromPosition(localPosition, renderObject.size);
+    _interactionValue = fraction;
+    widget.onChanged(fraction);
+  }
+
+  void _handlePointerDown(PointerDownEvent event) {
+    if (_pointer != null) return;
+    _pointer = event.pointer;
+    _interactionValue = _value;
+    setState(() => _dragging = true);
+    widget.onChangeStart(_interactionValue);
+    _emitFromPosition(event.localPosition);
+  }
+
+  void _handlePointerMove(PointerMoveEvent event) {
+    if (event.pointer != _pointer) return;
+    _emitFromPosition(event.localPosition);
+  }
+
+  void _handlePointerUp(PointerUpEvent event) {
+    if (event.pointer != _pointer) return;
+    _pointer = null;
+    setState(() => _dragging = false);
+    widget.onChangeEnd(_interactionValue);
+  }
+
+  void _handlePointerCancel(PointerCancelEvent event) {
+    if (event.pointer != _pointer) return;
+    _pointer = null;
+    setState(() => _dragging = false);
+    widget.onChangeEnd(_interactionValue);
+  }
+
+  @override
+  void didUpdateWidget(_HoverVolumeSlider oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_dragging) _interactionValue = _value;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final percentText = audioVolumePercentText(_value);
+    final showPercent = _thumbHovered || _dragging;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: Listener(
+        behavior: HitTestBehavior.opaque,
+        onPointerDown: _handlePointerDown,
+        onPointerMove: _handlePointerMove,
+        onPointerUp: _handlePointerUp,
+        onPointerCancel: _handlePointerCancel,
+        child: SizedBox(
+          key: ValueKey<String>('live-volume-slider:${widget.semanticLabel}'),
+          width: _hoverVolumeThumbWidth,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final height = constraints.maxHeight;
+              final travel = (height - _hoverVolumeThumbHeight).clamp(
+                0.0,
+                double.infinity,
+              );
+              final thumbBottom = travel * _value;
+              final labelBottom = _sidePercentBottom(
+                height: height,
+                thumbBottom: thumbBottom,
+              );
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  _HoverVolumeTrack(),
+                  Positioned(
+                    left:
+                        (_hoverVolumeThumbWidth - _hoverVolumeTrackThickness) /
+                        2,
+                    bottom: 0,
+                    width: _hoverVolumeTrackThickness,
+                    height: thumbBottom,
+                    child: DecoratedBox(
+                      key: ValueKey<String>(
+                        'live-volume-fill:${widget.semanticLabel}',
+                      ),
+                      decoration: BoxDecoration(
+                        color: UiColors.accent,
+                        borderRadius: BorderRadius.all(
+                          Radius.circular(_hoverVolumeTrackThickness / 2),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (showPercent)
+                    Positioned(
+                      left: _hoverVolumeThumbWidth + _hoverVolumePercentGap,
+                      bottom: labelBottom,
+                      width: _hoverVolumePercentWidth,
+                      height: _hoverVolumePercentHeight,
+                      child: DecoratedBox(
+                        key: ValueKey<String>(
+                          'live-volume-percent:${widget.semanticLabel}',
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(UiRadii.sm),
+                        ),
+                        child: Center(
+                          child: Text(
+                            percentText,
+                            style: UiTypography.label.copyWith(
+                              color: Colors.black87,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  Positioned(
+                    left: 0,
+                    bottom: thumbBottom,
+                    width: _hoverVolumeThumbWidth,
+                    height: _hoverVolumeThumbHeight,
+                    child: MouseRegion(
+                      onEnter: (_) => setState(() => _thumbHovered = true),
+                      onExit: (_) => setState(() => _thumbHovered = false),
+                      child: DecoratedBox(
+                        key: ValueKey<String>(
+                          'live-volume-thumb:${widget.semanticLabel}',
+                        ),
+                        decoration: const BoxDecoration(
+                          color: UiColors.text,
+                          borderRadius: BorderRadius.all(
+                            Radius.circular(_hoverVolumeThumbHeight / 2),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  double _sidePercentBottom({
+    required double height,
+    required double thumbBottom,
+  }) {
+    return (thumbBottom +
+            (_hoverVolumeThumbHeight - _hoverVolumePercentHeight) / 2)
+        .clamp(0.0, height - _hoverVolumePercentHeight)
+        .toDouble();
+  }
+}
+
+class _HoverVolumeTrack extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: (_hoverVolumeThumbWidth - _hoverVolumeTrackThickness) / 2,
+      top: 0,
+      bottom: 0,
+      width: _hoverVolumeTrackThickness,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: UiColors.surfacePressed,
+          borderRadius: BorderRadius.circular(_hoverVolumeTrackThickness / 2),
+        ),
+      ),
+    );
+  }
 }
 
 /// The now-playing strip embedded inline at the right of the live control bar:

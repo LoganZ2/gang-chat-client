@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../app/audio_levels.dart';
 import '../app/live_display.dart' as live_display;
 import '../app/music_box_display.dart' as music_box_display;
 import '../live/live_session.dart';
@@ -94,8 +97,14 @@ class LiveChannelPane extends StatefulWidget {
     required this.onMusicBoxQueueResult,
     required this.onMusicBoxRemoveItem,
     required this.onMusicBoxSourceChanged,
+    required this.inputVolume,
+    required this.outputVolume,
     required this.musicBoxVolume,
+    required this.screenShareVolume,
+    required this.onInputVolumeChanged,
+    required this.onOutputVolumeChanged,
     required this.onMusicBoxVolumeChanged,
+    required this.onScreenShareVolumeChanged,
   });
 
   final String title;
@@ -136,10 +145,24 @@ class LiveChannelPane extends StatefulWidget {
   final ValueChanged<MusicBoxQueueItem> onMusicBoxRemoveItem;
   final ValueChanged<String> onMusicBoxSourceChanged;
 
+  /// Local microphone input volume (0-1), applied only to what this user sends.
+  final double inputVolume;
+
+  /// Local voice listening volume (0-1), applied to ordinary remote speakers.
+  final double outputVolume;
+
   /// Local listening volume for the music box bot (0–1), restored from the
   /// store and persisted by [onMusicBoxVolumeChanged].
   final double musicBoxVolume;
+
+  /// Local listening volume for remote screen-share audio (0-1), separate from
+  /// ordinary voice output.
+  final double screenShareVolume;
+
+  final ValueChanged<double> onInputVolumeChanged;
+  final ValueChanged<double> onOutputVolumeChanged;
   final ValueChanged<double> onMusicBoxVolumeChanged;
+  final ValueChanged<double> onScreenShareVolumeChanged;
 
   @override
   State<LiveChannelPane> createState() => _LiveChannelPaneState();
@@ -163,13 +186,15 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
 
   @override
   Widget build(BuildContext context) {
-    final participants = (widget.live?.participants ?? const <LiveParticipant>[])
-        .where((p) => p.user.id != musicBoxBotIdentity)
-        .toList();
+    final participants =
+        (widget.live?.participants ?? const <LiveParticipant>[])
+            .where((p) => p.user.id != musicBoxBotIdentity)
+            .toList();
     final stageTrack = _resolveStageTrack();
     final musicBox = widget.musicBox;
     final musicBoxEnabled = musicBox?.enabled ?? false;
-    final musicBoxOpen = widget.joined && musicBoxEnabled && widget.musicBoxOpen;
+    final musicBoxOpen =
+        widget.joined && musicBoxEnabled && widget.musicBoxOpen;
 
     return ColoredBox(
       color: UiColors.background,
@@ -281,6 +306,12 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                   voiceBlocked: widget.voiceBlocked,
                   cameraOn: widget.cameraOn,
                   screenSharing: widget.screenSharing,
+                  watchingRemoteScreenShare:
+                      stageTrack?.isScreenShare == true &&
+                      stageTrack?.isLocal == false,
+                  inputVolume: widget.inputVolume,
+                  outputVolume: widget.outputVolume,
+                  screenShareVolume: widget.screenShareVolume,
                   musicBox: musicBox,
                   musicBoxEnabled: musicBoxEnabled,
                   musicBoxOpen: musicBoxOpen,
@@ -290,6 +321,9 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                   onToggleHeadphones: widget.onToggleHeadphones,
                   onToggleCamera: widget.onToggleCamera,
                   onToggleShare: widget.onToggleShare,
+                  onInputVolumeChanged: widget.onInputVolumeChanged,
+                  onOutputVolumeChanged: widget.onOutputVolumeChanged,
+                  onScreenShareVolumeChanged: widget.onScreenShareVolumeChanged,
                   onToggleMusicBox: widget.onToggleMusicBox,
                   onMusicBoxTogglePlayback: widget.onMusicBoxTogglePlayback,
                   onMusicBoxSkip: widget.onMusicBoxSkip,

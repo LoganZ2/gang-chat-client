@@ -248,13 +248,13 @@ class LiveSession extends ChangeNotifier {
   /// headset flipping its A2DP/HFP profile when the mic opens or closes). It
   /// is started while connected and stopped on disconnect; null disables the
   /// recovery (tests, non-macOS). The default wires a real macOS rebinder.
-  LiveSession({AudioOutputRebinder? Function(LiveSession session)?
-      outputRebinderFactory})
-    : _outputRebinderFactory =
-          outputRebinderFactory ?? _defaultOutputRebinderFactory;
+  LiveSession({
+    AudioOutputRebinder? Function(LiveSession session)? outputRebinderFactory,
+  }) : _outputRebinderFactory =
+           outputRebinderFactory ?? _defaultOutputRebinderFactory;
 
   final AudioOutputRebinder? Function(LiveSession session)
-      _outputRebinderFactory;
+  _outputRebinderFactory;
   AudioOutputRebinder? _outputRebinder;
 
   lk.Room? _room;
@@ -266,6 +266,7 @@ class LiveSession extends ChangeNotifier {
   double _inputVolume = 1.0;
   double _outputVolume = 1.0;
   double _musicBoxVolume = 1.0;
+  double _screenShareVolume = 1.0;
   bool _outputMuted = false;
   // Local mic mute (Option A): muting keeps the capture running and only zeroes
   // the outgoing audio, so it never tears down the CoreAudio input. Tearing it
@@ -315,6 +316,11 @@ class LiveSession extends ChangeNotifier {
   /// Local listening volume applied only to the music box bot's audio track,
   /// independent of [outputVolume] (which covers every other remote speaker).
   double get musicBoxVolume => _musicBoxVolume;
+
+  /// Local listening volume applied only to remote screen-share audio tracks,
+  /// independent of [outputVolume] (which covers ordinary voice tracks).
+  double get screenShareVolume => _screenShareVolume;
+
   bool get outputMuted => _outputMuted;
 
   /// Target max height (px) for the local screen share.
@@ -483,6 +489,7 @@ class LiveSession extends ChangeNotifier {
       await _applyInputVolume();
       await _applyOutputVolume();
       await _applyMusicBoxVolume();
+      await _applyScreenShareVolume();
       _refreshAllMicStates();
       _startOutputRebinder();
     } catch (e) {
@@ -597,6 +604,11 @@ class LiveSession extends ChangeNotifier {
   Future<void> setMusicBoxVolume(double volume) async {
     _musicBoxVolume = normalizedAudioVolume(volume);
     await _applyMusicBoxVolume();
+  }
+
+  Future<void> setScreenShareVolume(double volume) async {
+    _screenShareVolume = normalizedAudioVolume(volume);
+    await _applyScreenShareVolume();
   }
 
   Future<void> setOutputMuted(bool muted) async {
@@ -878,6 +890,7 @@ class LiveSession extends ChangeNotifier {
       );
       unawaited(_applyOutputVolume());
       unawaited(_applyMusicBoxVolume());
+      unawaited(_applyScreenShareVolume());
       notifyListeners();
       return;
     }
@@ -914,6 +927,7 @@ class LiveSession extends ChangeNotifier {
       unawaited(_applyInputVolume());
       unawaited(_applyOutputVolume());
       unawaited(_applyMusicBoxVolume());
+      unawaited(_applyScreenShareVolume());
       _refreshAllMicStates();
       // A local screen-share track can be stopped from the OS (e.g. the
       // "stop sharing" bar); keep our flag honest.
@@ -993,6 +1007,7 @@ class LiveSession extends ChangeNotifier {
       // _applyMusicBoxVolume so the two don't fight over the same track.
       if (participant.identity == musicBoxBotIdentity) continue;
       for (final pub in participant.audioTrackPublications) {
+        if (pub.source == lk.TrackSource.screenShareAudio) continue;
         final track = pub.track;
         if (track == null) continue;
         try {
@@ -1017,6 +1032,24 @@ class LiveSession extends ChangeNotifier {
     }
   }
 
+  Future<void> _applyScreenShareVolume() async {
+    final room = _room;
+    if (room == null) return;
+    for (final participant in room.remoteParticipants.values) {
+      for (final pub in participant.audioTrackPublications) {
+        if (pub.source != lk.TrackSource.screenShareAudio) continue;
+        final track = pub.track;
+        if (track == null) continue;
+        try {
+          await rtc.Helper.setVolume(
+            _screenShareVolume,
+            track.mediaStreamTrack,
+          );
+        } catch (_) {}
+      }
+    }
+  }
+
   // Re-bind WebRTC's audio output to the live default endpoint and re-apply
   // every track volume. Invoked by [_outputRebinder] after macOS swaps the
   // default output (the Bluetooth A2DP/HFP profile flip), where WebRTC would
@@ -1025,6 +1058,7 @@ class LiveSession extends ChangeNotifier {
     if (_room == null) return;
     await _applyOutputVolume();
     await _applyMusicBoxVolume();
+    await _applyScreenShareVolume();
   }
 
   void _startOutputRebinder() {

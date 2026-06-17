@@ -41,6 +41,12 @@ class AudioDeviceStore {
     );
   }
 
+  Future<void> writeScreenShareVolume(double volume) {
+    throw UnimplementedError(
+      'AudioDeviceStore.writeScreenShareVolume must be implemented.',
+    );
+  }
+
   Future<void> writeScreenShareMaxHeight(int height) {
     throw UnimplementedError(
       'AudioDeviceStore.writeScreenShareMaxHeight must be implemented.',
