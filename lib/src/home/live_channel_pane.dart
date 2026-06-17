@@ -145,7 +145,8 @@ class LiveChannelPane extends StatefulWidget {
   final ValueChanged<MusicBoxQueueItem> onMusicBoxRemoveItem;
   final ValueChanged<String> onMusicBoxSourceChanged;
 
-  /// Local microphone input volume (0-1), applied only to what this user sends.
+  /// Local microphone input preference (0-1); 0 mutes the sent mic without
+  /// writing system input gain.
   final double inputVolume;
 
   /// Local voice listening volume (0-1), applied to ordinary remote speakers.

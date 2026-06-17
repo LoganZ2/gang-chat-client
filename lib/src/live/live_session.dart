@@ -474,20 +474,17 @@ class LiveSession extends ChangeNotifier {
       _micMuted = micMuted;
       // Publish the microphone track. The OS prompts for permission on the
       // first publish. Skip it when publishing is blocked, and when joining
-      // muted: under Option A the one unavoidable capture start (the single
-      // HFP transition) is deferred to the first unmute, which lazily
-      // publishes. Once published the track stays live and is silenced via
-      // _applyInputVolume on later mutes rather than being stopped.
-      if (_canPublish && !micMuted) {
+      // muted: the one unavoidable capture start is deferred to the first
+      // unmute, which lazily publishes. Once published, muting uses LiveKit's
+      // track mute with stopAudioCaptureOnMute=false so the capture session
+      // stays open without writing the system input volume.
+      if (_canPublish && !_shouldMuteLocalMicrophone) {
         await room.localParticipant?.setMicrophoneEnabled(
           true,
-          audioCaptureOptions: lk.AudioCaptureOptions(
-            stopAudioCaptureOnMute: false,
-            deviceId: _inputDeviceId,
-          ),
+          audioCaptureOptions: _audioCaptureOptions(),
         );
       }
-      await _applyInputVolume();
+      await _applyLocalMicrophoneState();
       await _applyOutputVolume();
       await _applyMusicBoxVolume();
       await _applyScreenShareVolume();
@@ -516,17 +513,10 @@ class LiveSession extends ChangeNotifier {
 
   /// Mute/unmute the local microphone. Safe to call when not connected.
   ///
-  /// Option A: muting does NOT LiveKit-mute the track (which would stop the
-  /// CoreAudio capture and, on macOS, flip a Bluetooth headset's HFP<->A2DP
-  /// profile and corrupt the output sample rate). Instead the capture stays
-  /// live and the local audio source volume is driven to 0 so peers receive
-  /// silence. Unmute restores the configured input volume. The mic track is
-  /// published once (on first unmute or at connect) and then left running;
-  /// that single publish is the only HFP transition, not every toggle.
-  ///
-  /// The mute state shown to other participants is carried separately through
-  /// gang-chat's own server state (updateMyState), not the LiveKit track, so
-  /// keeping the track live here does not affect remote mute indicators.
+  /// Muting uses LiveKit's publication mute with stopAudioCaptureOnMute=false:
+  /// capture stays live, the shared OS input device is not stopped, and we do
+  /// not write RTCAudioSource.volume (which can leak into system input volume
+  /// on desktop). A 0 input-volume slider is treated as the same local mute.
   Future<void> setMicMuted(bool muted) async {
     _micMuted = muted;
     final local = _room?.localParticipant;
@@ -539,22 +529,17 @@ class LiveSession extends ChangeNotifier {
     if (!muted && local.audioTrackPublications.isEmpty && _canPublish) {
       await local.setMicrophoneEnabled(
         true,
-        audioCaptureOptions: lk.AudioCaptureOptions(
-          stopAudioCaptureOnMute: false,
-          deviceId: _inputDeviceId,
-        ),
+        audioCaptureOptions: _audioCaptureOptions(),
       );
     }
-    // Drive the outgoing volume: 0 while muted, the configured input volume
-    // otherwise. _applyInputVolume reads _micMuted to pick the value.
-    await _applyInputVolume();
+    await _applyLocalMicrophoneState();
     _refreshAllMicStates();
     notifyListeners();
   }
 
   Future<void> setInputVolume(double volume) async {
     _inputVolume = normalizedAudioVolume(volume);
-    await _applyInputVolume();
+    await _applyLocalMicrophoneState();
   }
 
   /// Select the microphone capture device. [deviceId] is WebRTC's macOS format
@@ -572,24 +557,18 @@ class LiveSession extends ChangeNotifier {
     if (!hasTrack) return;
     // Switching capture device unavoidably stops and restarts the input (one
     // HFP transition on macOS). That is acceptable here: it only happens on an
-    // explicit device change, not on a mute toggle. Restore the mute state by
-    // re-applying the input volume (0 while muted) rather than LiveKit-muting.
+    // explicit device change, not on a mute toggle. Restore the mute state
+    // through LiveKit without touching the system input gain.
     try {
       await local.setMicrophoneEnabled(
         false,
-        audioCaptureOptions: lk.AudioCaptureOptions(
-          stopAudioCaptureOnMute: false,
-          deviceId: _inputDeviceId,
-        ),
+        audioCaptureOptions: _audioCaptureOptions(),
       );
       await local.setMicrophoneEnabled(
         true,
-        audioCaptureOptions: lk.AudioCaptureOptions(
-          stopAudioCaptureOnMute: false,
-          deviceId: _inputDeviceId,
-        ),
+        audioCaptureOptions: _audioCaptureOptions(),
       );
-      await _applyInputVolume();
+      await _applyLocalMicrophoneState();
       _refreshAllMicStates();
       notifyListeners();
     } catch (_) {
@@ -925,7 +904,7 @@ class LiveSession extends ChangeNotifier {
         event is lk.TrackUnpublishedEvent ||
         event is lk.TrackMutedEvent ||
         event is lk.TrackUnmutedEvent) {
-      unawaited(_applyInputVolume());
+      unawaited(_applyLocalMicrophoneState());
       unawaited(_applyOutputVolume());
       unawaited(_applyMusicBoxVolume());
       unawaited(_applyScreenShareVolume());
@@ -969,9 +948,7 @@ class LiveSession extends ChangeNotifier {
     if (room == null) return;
     final local = room.localParticipant;
     if (local != null) {
-      // The local track is intentionally never LiveKit-muted under Option A, so
-      // derive the local state from _micMuted rather than the track flag.
-      _micMutedByIdentity[local.identity] = _micMuted;
+      _micMutedByIdentity[local.identity] = _shouldMuteLocalMicrophone;
     }
     for (final p in room.remoteParticipants.values) {
       _micMutedByIdentity[p.identity] = _isMicMuted(p);
@@ -984,19 +961,32 @@ class LiveSession extends ChangeNotifier {
     return pubs.every((pub) => pub.muted);
   }
 
-  Future<void> _applyInputVolume() async {
+  bool get _shouldMuteLocalMicrophone => _micMuted || _inputVolume <= 0;
+
+  lk.AudioCaptureOptions _audioCaptureOptions() {
+    return lk.AudioCaptureOptions(
+      stopAudioCaptureOnMute: false,
+      deviceId: _inputDeviceId,
+    );
+  }
+
+  Future<void> _applyLocalMicrophoneState() async {
     final local = _room?.localParticipant;
     if (local == null) return;
-    // While muted the capture stays live but the outgoing audio is silenced
-    // (Option A). Otherwise apply the user's configured input volume.
-    final volume = _micMuted ? 0.0 : _inputVolume;
-    for (final pub in local.audioTrackPublications) {
-      final track = pub.track;
-      if (track == null) continue;
-      try {
-        await rtc.Helper.setVolume(volume, track.mediaStreamTrack);
-      } catch (_) {}
+    final muted = _shouldMuteLocalMicrophone;
+    if (!muted && local.audioTrackPublications.isEmpty && _canPublish) {
+      await local.setMicrophoneEnabled(
+        true,
+        audioCaptureOptions: _audioCaptureOptions(),
+      );
     }
+    if (local.audioTrackPublications.isEmpty) return;
+    try {
+      await local.setMicrophoneEnabled(
+        !muted,
+        audioCaptureOptions: _audioCaptureOptions(),
+      );
+    } catch (_) {}
   }
 
   Future<void> _applyOutputVolume() async {

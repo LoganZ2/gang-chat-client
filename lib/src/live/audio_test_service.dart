@@ -31,10 +31,6 @@ class AudioTestService {
     _StartedAudioVisualizer? visualizer;
     try {
       track = await _createTestAudioTrack(inputDeviceId);
-      await rtc.Helper.setVolume(
-        normalizedAudioVolume(volume),
-        track.mediaStreamTrack,
-      );
       visualizer = await _startVisualizer(track, onLevel);
       return AudioTestHandle._(track: track, visualizer: visualizer);
     } catch (_) {
@@ -58,7 +54,6 @@ class AudioTestService {
       renderer = rtc.RTCVideoRenderer();
       await renderer.initialize();
       renderer.srcObject = track.mediaStream;
-      await renderer.setVolume(normalizedAudioVolume(volume));
       await _routeOutput(renderer, outputDeviceId);
       visualizer = await _startVisualizer(track, onLevel);
       return AudioTestHandle._(
@@ -100,18 +95,13 @@ class AudioTestHandle {
   rtc.RTCVideoRenderer? _renderer;
 
   Future<void> setCaptureVolume(double volume) async {
-    final track = _track;
-    if (track == null) return;
-    await rtc.Helper.setVolume(
-      normalizedAudioVolume(volume),
-      track.mediaStreamTrack,
-    );
+    // Input-test levels are scaled in app state. Do not write the local
+    // capture track volume here: on desktop that can leak into system mic gain.
   }
 
   Future<void> setPlaybackVolume(double volume) async {
-    final renderer = _renderer;
-    if (renderer == null) return;
-    await renderer.setVolume(normalizedAudioVolume(volume));
+    // The output test plays back a local capture track; renderer.setVolume()
+    // ultimately writes that same source volume on native platforms.
   }
 
   Future<void> routeOutput(String? outputDeviceId) async {
