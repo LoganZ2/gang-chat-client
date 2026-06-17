@@ -6,6 +6,7 @@
 #include "helper.h"
 
 #include <cmath>
+#include <utility>
 
 namespace flutter_webrtc_plugin {
 
@@ -75,6 +76,12 @@ FlutterWebRTCBase::FlutterWebRTCBase(BinaryMessenger* messenger,
 }
 
 FlutterWebRTCBase::~FlutterWebRTCBase() {
+  for (auto& cleanup : local_track_cleanups_) {
+    if (cleanup.second) {
+      cleanup.second();
+    }
+  }
+  local_track_cleanups_.clear();
   if (audio_processing_ != nullptr) {
     audio_processing_->SetCapturePostProcessing(nullptr);
   }
@@ -129,6 +136,7 @@ scoped_refptr<RTCMediaTrack> FlutterWebRTCBase ::MediaTrackForId(const std::stri
 }
 
 void FlutterWebRTCBase::RemoveMediaTrackForId(const std::string& id) {
+  RunLocalTrackCleanup(id);
   auto it = local_tracks_.find(id);
   if (it != local_tracks_.end())
     local_tracks_.erase(it);
@@ -398,9 +406,29 @@ scoped_refptr<RTCMediaTrack> FlutterWebRTCBase::MediaTracksForId(
 }
 
 void FlutterWebRTCBase::RemoveTracksForId(const std::string& id) {
-  auto it = local_tracks_.find(id);
-  if (it != local_tracks_.end())
-    local_tracks_.erase(it);
+  RemoveMediaTrackForId(id);
+}
+
+void FlutterWebRTCBase::RegisterLocalTrackCleanup(
+    const std::string& id,
+    std::function<void()> cleanup) {
+  if (id.empty() || !cleanup) {
+    return;
+  }
+  RunLocalTrackCleanup(id);
+  local_track_cleanups_[id] = std::move(cleanup);
+}
+
+void FlutterWebRTCBase::RunLocalTrackCleanup(const std::string& id) {
+  auto it = local_track_cleanups_.find(id);
+  if (it == local_track_cleanups_.end()) {
+    return;
+  }
+  auto cleanup = std::move(it->second);
+  local_track_cleanups_.erase(it);
+  if (cleanup) {
+    cleanup();
+  }
 }
 
 libwebrtc::scoped_refptr<libwebrtc::RTCRtpSender>

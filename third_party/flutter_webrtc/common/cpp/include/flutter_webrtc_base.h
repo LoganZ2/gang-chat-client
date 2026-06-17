@@ -5,6 +5,7 @@
 
 #include <string.h>
 #include <atomic>
+#include <functional>
 #include <list>
 #include <map>
 #include <memory>
@@ -108,6 +109,11 @@ class FlutterWebRTCBase {
 
   void RemoveTracksForId(const std::string& id);
 
+  void RegisterLocalTrackCleanup(const std::string& id,
+                                 std::function<void()> cleanup);
+
+  void RunLocalTrackCleanup(const std::string& id);
+
   EventChannelProxy* event_channel();
 
   libwebrtc::scoped_refptr<libwebrtc::RTCRtpSender> GetRtpSenderById(
@@ -145,6 +151,7 @@ class FlutterWebRTCBase {
   std::map<std::string, scoped_refptr<RTCMediaTrack>> local_tracks_;
   std::map<std::string, scoped_refptr<RTCVideoCapturer>> video_capturers_;
   std::map<int64_t, std::shared_ptr<FlutterVideoRenderer>> renders_;
+  std::map<std::string, std::function<void()>> local_track_cleanups_;
   std::map<std::string, std::shared_ptr<FlutterRTCDataChannelObserver>>
       data_channel_observers_;
   std::map<std::string, std::shared_ptr<FlutterPeerConnectionObserver>>

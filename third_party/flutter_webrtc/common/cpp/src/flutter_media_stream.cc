@@ -705,13 +705,12 @@ void FlutterMediaStream::MediaStreamDispose(
 
   for (auto track : audio_tracks.std_vector()) {
     stream->RemoveTrack(track);
-    base_->local_tracks_.erase(track->id().std_string());
+    base_->RemoveMediaTrackForId(track->id().std_string());
   }
 
   vector<scoped_refptr<RTCVideoTrack>> video_tracks = stream->video_tracks();
   for (auto track : video_tracks.std_vector()) {
     stream->RemoveTrack(track);
-    base_->local_tracks_.erase(track->id().std_string());
     if (base_->video_capturers_.find(track->id().std_string()) !=
         base_->video_capturers_.end()) {
       auto video_capture = base_->video_capturers_[track->id().std_string()];
@@ -720,6 +719,7 @@ void FlutterMediaStream::MediaStreamDispose(
       }
       base_->video_capturers_.erase(track->id().std_string());
     }
+    base_->RemoveMediaTrackForId(track->id().std_string());
   }
 
   base_->RemoveStreamForId(stream_id);
