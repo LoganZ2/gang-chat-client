@@ -35,6 +35,7 @@ abstract final class UiColors {
   static const presenceVoice = Color(0xFF7FFFD4);
   static const presenceVoiceSurface = Color(0xFF153A34);
   static const presenceVoiceBorder = Color(0xFF4AAE96);
+  static const presenceReconnecting = Color(0xFFE0B45B);
 
   static const roleMember = Color(0xFF5FA8FF);
   static const roleMemberSurface = Color(0xFF162A42);

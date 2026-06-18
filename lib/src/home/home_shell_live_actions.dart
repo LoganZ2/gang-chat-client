@@ -306,6 +306,133 @@ extension _HomeShellLiveActions on _HomeShellState {
     }
   }
 
+  Future<void> _restoreLiveAfterRealtimeReconnect(String roomId) async {
+    if (_joiningLive || _joinedLiveRoomId != roomId) return;
+
+    final previousMicMuted = _micMuted;
+    final previousHeadphonesMuted = _headphonesMuted;
+    final previousCameraOn = _cameraOn;
+    final previousScreenSharing = _screenSharing;
+    _setHomeState(() {
+      _joiningLive = true;
+      _roomError = null;
+    });
+
+    try {
+      final result = await _liveController.joinLive(
+        roomId: roomId,
+        source: 'reconnect',
+      );
+      if (!mounted || _joinedLiveRoomId != roomId) return;
+
+      final joinPatch = _liveController.patchJoinResult(
+        rooms: _servers,
+        result: result,
+      );
+      _setHomeState(() {
+        _micMuted = joinPatch.micMuted;
+        _cameraOn = joinPatch.cameraOn;
+        _screenSharing = joinPatch.screenSharing;
+        _voiceBlocked = joinPatch.voiceBlocked;
+        _servers = joinPatch.rooms;
+        if (_selectedServerId == result.live.roomId) {
+          _live = joinPatch.live;
+        }
+      });
+
+      try {
+        await _liveSessionController.connectWithRetry(
+          result,
+          isCancelled: () => !mounted || _joinedLiveRoomId != roomId,
+        );
+      } catch (error) {
+        if (mounted) _setHomeState(() => _roomError = error.toString());
+        return;
+      }
+      if (!mounted || _joinedLiveRoomId != roomId) return;
+
+      final canPublish = !joinPatch.voiceBlocked;
+      await _restoreLiveParticipantState(
+        roomId: roomId,
+        micMuted: canPublish ? previousMicMuted : true,
+        headphonesMuted: previousHeadphonesMuted,
+        cameraOn: canPublish && previousCameraOn,
+        screenSharing:
+            canPublish &&
+            previousScreenSharing &&
+            _liveSessionController.isScreenSharing,
+      );
+    } catch (error) {
+      if (mounted) _setHomeState(() => _roomError = error.toString());
+    } finally {
+      if (mounted) _setHomeState(() => _joiningLive = false);
+    }
+  }
+
+  Future<void> _restoreLiveParticipantState({
+    required String roomId,
+    required bool micMuted,
+    required bool headphonesMuted,
+    required bool cameraOn,
+    required bool screenSharing,
+  }) async {
+    var restoredCameraOn = cameraOn;
+    try {
+      await _liveSessionController.setOutputMuted(headphonesMuted);
+    } catch (_) {}
+    try {
+      await _liveSessionController.setCameraEnabled(restoredCameraOn);
+    } catch (error) {
+      restoredCameraOn = false;
+      if (mounted) _setHomeState(() => _roomError = error.toString());
+    }
+    if (!screenSharing && _liveSessionController.isScreenSharing) {
+      try {
+        await _liveSessionController.setScreenShareEnabled(false);
+      } catch (_) {}
+    }
+
+    final liveKitMicFuture = _liveSessionController
+        .setMicMuted(micMuted)
+        .catchError((_) {});
+    try {
+      final participant = await _liveController.updateMyState(
+        roomId: roomId,
+        micMuted: micMuted,
+        headphonesMuted: headphonesMuted,
+        cameraOn: restoredCameraOn,
+        screenSharing: screenSharing,
+      );
+      await liveKitMicFuture;
+      if (shouldSyncLiveKitMicAfterServerPatch(
+        requestedMicMuted: micMuted,
+        serverMicMuted: participant.micMuted,
+      )) {
+        try {
+          await _liveSessionController.setMicMuted(participant.micMuted);
+        } catch (_) {}
+      }
+      if (!mounted || _joinedLiveRoomId != roomId) return;
+      final updateSelectedLive = _selectedServerId == roomId;
+      final patch = _liveController.patchStateUpdate(
+        live: updateSelectedLive ? _live : null,
+        participant: participant,
+      );
+      _setHomeState(() {
+        _micMuted = patch.micMuted;
+        _headphonesMuted = participant.headphonesMuted;
+        _cameraOn = patch.cameraOn;
+        _screenSharing = patch.screenSharing;
+        _voiceBlocked = patch.voiceBlocked;
+        if (updateSelectedLive) _live = patch.live;
+      });
+    } catch (error) {
+      await liveKitMicFuture;
+      if (!mounted || isBenignGoneLiveStatePatch(error)) return;
+      _setHomeState(() => _roomError = error.toString());
+    }
+  }
+
   Future<void> _leaveLive() async {
     final roomId = _joinedLiveRoomId;
     if (roomId == null) return;

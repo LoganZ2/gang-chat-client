@@ -200,6 +200,14 @@ void main() {
       currentUserPresenceLabel(_currentUser(status: 'active'), inLive: true),
       '语音',
     );
+    expect(
+      currentUserPresenceLabel(
+        _currentUser(status: 'active'),
+        inLive: true,
+        reconnecting: true,
+      ),
+      '重连中',
+    );
   });
 
   test(

@@ -313,7 +313,12 @@ String? userPresenceLabel(UserSummary user) {
   return isOnline ? '在线' : '离线';
 }
 
-String currentUserPresenceLabel(CurrentUser user, {required bool inLive}) {
+String currentUserPresenceLabel(
+  CurrentUser user, {
+  required bool inLive,
+  bool reconnecting = false,
+}) {
+  if (reconnecting) return '重连中';
   if (inLive) return '语音';
   return userPresenceLabel(user.toSummary()) ?? '在线';
 }

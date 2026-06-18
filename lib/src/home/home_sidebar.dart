@@ -25,6 +25,7 @@ class HomeSidebar extends StatelessWidget {
     required this.servers,
     required this.selectedServerId,
     required this.joinedLiveRoomId,
+    required this.realtimeReconnecting,
     required this.searchQuery,
     required this.loading,
     required this.error,
@@ -46,6 +47,7 @@ class HomeSidebar extends StatelessWidget {
   final List<RoomCard> servers;
   final String? selectedServerId;
   final String? joinedLiveRoomId;
+  final bool realtimeReconnecting;
   final String searchQuery;
   final bool loading;
   final String? error;
@@ -93,6 +95,7 @@ class HomeSidebar extends StatelessWidget {
                     _UserSummaryBar(
                       user: currentUser,
                       inLive: joinedLiveRoomId != null,
+                      reconnecting: realtimeReconnecting,
                       logoutActive: logoutActive,
                       onLogout: onLogout,
                     ),
@@ -261,12 +264,14 @@ class _UserSummaryBar extends StatelessWidget {
   const _UserSummaryBar({
     required this.user,
     required this.inLive,
+    required this.reconnecting,
     required this.logoutActive,
     required this.onLogout,
   });
 
   final CurrentUser user;
   final bool inLive;
+  final bool reconnecting;
   final bool logoutActive;
   final VoidCallback onLogout;
 
@@ -275,6 +280,7 @@ class _UserSummaryBar extends StatelessWidget {
     final statusLabel = room_display.currentUserPresenceLabel(
       user,
       inLive: inLive,
+      reconnecting: reconnecting,
     );
     return DecoratedBox(
       key: const ValueKey('home-sidebar-user-summary'),
@@ -335,9 +341,7 @@ class _UserSummaryBar extends StatelessWidget {
   }
 }
 
-/// A borderless, background-free icon button — just the glyph with a hover
-/// cursor and tooltip. Used for low-emphasis actions like logout that sit
-/// inline next to other content.
+/// Compact status label with a colored presence dot.
 class _SidebarPresenceLabel extends StatelessWidget {
   const _SidebarPresenceLabel({required this.label});
 
@@ -347,6 +351,7 @@ class _SidebarPresenceLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = switch (label) {
       '语音' => UiColors.presenceVoice,
+      '重连中' => UiColors.presenceReconnecting,
       '离线' => UiColors.presenceOffline,
       _ => UiColors.presenceOnline,
     };
@@ -359,13 +364,15 @@ class _SidebarPresenceLabel extends StatelessWidget {
           child: const SizedBox.square(dimension: 6),
         ),
         const SizedBox(width: 6),
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: UiTypography.label.copyWith(
-            color: color,
-            fontWeight: FontWeight.w600,
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: UiTypography.label.copyWith(
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],

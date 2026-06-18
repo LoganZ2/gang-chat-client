@@ -54,6 +54,8 @@ class LiveSessionController {
   }
 
   bool get isScreenSharing => session.isScreenSharing;
+  bool get isConnected => session.isConnected;
+  String? get roomName => session.roomName;
   Set<String> get speakingIdentities => session.speakingIdentities;
   List<LiveVideoTrack> get videoTracks => session.videoTracks;
 

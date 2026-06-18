@@ -118,6 +118,7 @@ class _HomeShellState extends State<HomeShell> {
   final GlobalKey _composerDropKey = GlobalKey();
   final Object _searchTapRegionGroup = Object();
   StreamSubscription<RealtimeEvent>? _realtimeEvents;
+  StreamSubscription<RealtimeConnectionStatus>? _realtimeStatusEvents;
   StreamSubscription<FileDropEvent>? _fileDropEvents;
 
   List<RoomCard> _servers = const [];
@@ -212,6 +213,7 @@ class _HomeShellState extends State<HomeShell> {
   String? _busySearchPublicRoomId;
   Set<String> _searchPendingPublicRoomIds = const {};
   bool _showingJoinApplicationDialog = false;
+  RealtimeConnectionStatus _realtimeStatus = RealtimeConnectionStatus.offline;
 
   RoomsController get _roomsController => _services.rooms;
   MessagesController get _messagesController => _services.messages;
@@ -323,6 +325,10 @@ class _HomeShellState extends State<HomeShell> {
   void dispose() {
     final realtimeEvents = _realtimeEvents;
     if (realtimeEvents != null) unawaited(realtimeEvents.cancel());
+    final realtimeStatusEvents = _realtimeStatusEvents;
+    if (realtimeStatusEvents != null) {
+      unawaited(realtimeStatusEvents.cancel());
+    }
     final fileDropEvents = _fileDropEvents;
     if (fileDropEvents != null) unawaited(fileDropEvents.cancel());
     unawaited(_setSystemFullScreen(false));

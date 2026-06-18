@@ -4,11 +4,22 @@ extension _HomeShellRealtime on _HomeShellState {
   void _startRealtime() {
     final previous = _realtimeEvents;
     if (previous != null) unawaited(previous.cancel());
+    final previousStatus = _realtimeStatusEvents;
+    if (previousStatus != null) unawaited(previousStatus.cancel());
 
     final realtime = _services.realtime;
     realtime.onReconnect = _onRealtimeReconnect;
+    _realtimeStatus = realtime.status;
+    _realtimeStatusEvents = realtime.statusChanges.listen(
+      _onRealtimeStatusChanged,
+    );
     _realtimeEvents = realtime.events.listen(_onRealtimeEvent);
     unawaited(realtime.start());
+  }
+
+  void _onRealtimeStatusChanged(RealtimeConnectionStatus status) {
+    if (!mounted) return;
+    _setHomeState(() => _realtimeStatus = status);
   }
 
   void _onRealtimeReconnect() {
@@ -16,6 +27,10 @@ extension _HomeShellRealtime on _HomeShellState {
     unawaited(_loadServersSilently());
     final selected = _selectedServerId;
     if (selected != null) unawaited(_refreshLiveSilently(selected));
+    final joinedLiveRoomId = _joinedLiveRoomId;
+    if (joinedLiveRoomId != null) {
+      unawaited(_restoreLiveAfterRealtimeReconnect(joinedLiveRoomId));
+    }
   }
 
   Future<void> _loadServersSilently() async {

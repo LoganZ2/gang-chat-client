@@ -227,6 +227,8 @@ extension _HomeShellLayout on _HomeShellState {
       servers: _sidebarServers,
       selectedServerId: _selectedServerId,
       joinedLiveRoomId: _joinedLiveRoomId,
+      realtimeReconnecting:
+          _realtimeStatus == RealtimeConnectionStatus.reconnecting,
       searchQuery: _filteringSidebarBySearch ? _searchQuery : '',
       loading: _loadingServers || _loadingSidebarSearch,
       error: _serverLoadError,

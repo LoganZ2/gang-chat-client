@@ -1718,6 +1718,140 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('authenticated home shell shows realtime reconnecting marker', (
+    WidgetTester tester,
+  ) async {
+    final realtime = _FakeRealtimeService();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(app: _homeTestAppContext(), realtime: realtime),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final userSummary = find.byKey(const ValueKey('home-sidebar-user-summary'));
+    expect(
+      find.descendant(of: userSummary, matching: find.textContaining('重连中')),
+      findsNothing,
+    );
+
+    realtime.setStatus(RealtimeConnectionStatus.reconnecting);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(of: userSummary, matching: find.text('重连中')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: userSummary, matching: find.text('在线')),
+      findsNothing,
+    );
+
+    realtime.setStatus(RealtimeConnectionStatus.connected);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(of: userSummary, matching: find.textContaining('重连中')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: userSummary, matching: find.text('在线')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'authenticated home shell restores live after realtime reconnect',
+    (WidgetTester tester) async {
+      final realtime = _FakeRealtimeService();
+      final liveJoinRequests = <Map<String, Object?>>[];
+      final liveStateUpdates = <Map<String, Object?>>[];
+      final liveSession = _FakeLiveSession();
+      final liveSessionController = _FakeLiveSessionController(
+        session: liveSession,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: HomePage(
+            app: _homeTestAppContext(
+              liveJoinRequests: liveJoinRequests,
+              liveStateUpdates: liveStateUpdates,
+            ),
+            liveSessionController: liveSessionController,
+            realtime: realtime,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Alpha Room'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('进入语音频道'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ui.Button, '加入'));
+      await tester.pumpAndSettle();
+
+      expect(liveSession.connectAttempts, 1);
+      liveJoinRequests.clear();
+      liveStateUpdates.clear();
+
+      await tester.tap(_liveControl('mic'));
+      await tester.pumpAndSettle();
+      expect(liveStateUpdates.last['mic_muted'], true);
+      liveStateUpdates.clear();
+
+      realtime.setStatus(RealtimeConnectionStatus.reconnecting);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('home-sidebar-user-summary')),
+          matching: find.text('重连中'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('home-sidebar-user-summary')),
+          matching: find.text('语音'),
+        ),
+        findsNothing,
+      );
+
+      realtime.setStatus(RealtimeConnectionStatus.connected);
+      realtime.emitReconnect();
+      await tester.pumpAndSettle();
+
+      expect(
+        liveJoinRequests.map((body) => body['source']),
+        contains('reconnect'),
+      );
+      expect(liveSession.connectAttempts, 2);
+      expect(liveStateUpdates.last['mic_muted'], true);
+      expect(liveStateUpdates.last['headphones_muted'], false);
+      expect(liveStateUpdates.last['camera_on'], false);
+      expect(liveStateUpdates.last['screen_sharing'], false);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('home-sidebar-user-summary')),
+          matching: find.textContaining('重连中'),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('home-sidebar-user-summary')),
+          matching: find.text('语音'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
   testWidgets('authenticated home shell footer opens settings and logs out', (
     WidgetTester tester,
   ) async {
@@ -3522,6 +3656,8 @@ AuthenticatedAppContext _homeTestAppContext({
   List<Uri>? requestedUris,
   List<Map<String, Object?>>? accountUpdates,
   List<Map<String, Object?>>? roomCreations,
+  List<Map<String, Object?>>? liveJoinRequests,
+  List<Map<String, Object?>>? liveStateUpdates,
   String currentRoomRole = 'owner',
   bool currentUserIsSuperuser = false,
   String secondaryMemberRole = 'member',
@@ -3560,6 +3696,8 @@ AuthenticatedAppContext _homeTestAppContext({
       requestedUris: requestedUris,
       accountUpdates: accountUpdates,
       roomCreations: roomCreations,
+      liveJoinRequests: liveJoinRequests,
+      liveStateUpdates: liveStateUpdates,
       currentRoomRole: currentRoomRole,
       secondaryMemberRole: secondaryMemberRole,
       includeActionComparisonMember: includeActionComparisonMember,
@@ -3572,6 +3710,8 @@ GangApi _roomsApi({
   List<Uri>? requestedUris,
   List<Map<String, Object?>>? accountUpdates,
   List<Map<String, Object?>>? roomCreations,
+  List<Map<String, Object?>>? liveJoinRequests,
+  List<Map<String, Object?>>? liveStateUpdates,
   String currentRoomRole = 'owner',
   String secondaryMemberRole = 'member',
   bool includeActionComparisonMember = false,
@@ -4116,6 +4256,9 @@ GangApi _roomsApi({
         });
       }
       if (request.url.path == '/api/v1/rooms/server-alpha/live/join') {
+        liveJoinRequests?.add(
+          jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>,
+        );
         final participant = _liveParticipantJson(
           user: _currentUserJson,
           liveSessionId: 'live-session-joined',
@@ -4149,6 +4292,7 @@ GangApi _roomsApi({
       if (request.url.path == '/api/v1/rooms/server-alpha/live/me') {
         final body =
             jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>;
+        liveStateUpdates?.add(body);
         return _jsonResponse({
           'participant': _liveParticipantJson(
             user: _currentUserJson,
@@ -4522,12 +4666,19 @@ class _RecordingWindowController extends DesktopWindowController {
 
 class _NoopRealtimeService implements RealtimeService {
   final _events = const Stream<RealtimeEvent>.empty();
+  final _statusChanges = const Stream<RealtimeConnectionStatus>.empty();
 
   @override
   void Function()? onReconnect;
 
   @override
   Stream<RealtimeEvent> get events => _events;
+
+  @override
+  RealtimeConnectionStatus get status => RealtimeConnectionStatus.offline;
+
+  @override
+  Stream<RealtimeConnectionStatus> get statusChanges => _statusChanges;
 
   @override
   Future<void> start() async {}
@@ -4544,12 +4695,19 @@ class _RecordingRealtimeService implements RealtimeService {
 
   final List<String> lifecycleEvents;
   final _events = const Stream<RealtimeEvent>.empty();
+  final _statusChanges = const Stream<RealtimeConnectionStatus>.empty();
 
   @override
   void Function()? onReconnect;
 
   @override
   Stream<RealtimeEvent> get events => _events;
+
+  @override
+  RealtimeConnectionStatus get status => RealtimeConnectionStatus.offline;
+
+  @override
+  Stream<RealtimeConnectionStatus> get statusChanges => _statusChanges;
 
   @override
   Future<void> start() async {}
@@ -4565,12 +4723,22 @@ class _RecordingRealtimeService implements RealtimeService {
 
 class _FakeRealtimeService implements RealtimeService {
   final _controller = StreamController<RealtimeEvent>.broadcast();
+  final _statusController =
+      StreamController<RealtimeConnectionStatus>.broadcast();
+  RealtimeConnectionStatus _status = RealtimeConnectionStatus.connected;
 
   @override
   void Function()? onReconnect;
 
   @override
   Stream<RealtimeEvent> get events => _controller.stream;
+
+  @override
+  RealtimeConnectionStatus get status => _status;
+
+  @override
+  Stream<RealtimeConnectionStatus> get statusChanges =>
+      _statusController.stream;
 
   @override
   Future<void> start() async {}
@@ -4580,9 +4748,17 @@ class _FakeRealtimeService implements RealtimeService {
 
   void add(RealtimeEvent event) => _controller.add(event);
 
+  void setStatus(RealtimeConnectionStatus status) {
+    _status = status;
+    _statusController.add(status);
+  }
+
+  void emitReconnect() => onReconnect?.call();
+
   @override
   void dispose() {
     _controller.close();
+    _statusController.close();
   }
 }
 
