@@ -236,6 +236,32 @@ HRESULT ActivateProcessLoopbackAudioClient(
   return hr;
 }
 
+HRESULT ActivateDefaultRenderAudioClient(
+    Microsoft::WRL::ComPtr<IAudioClient>* audio_client) {
+  if (audio_client == nullptr) {
+    return E_POINTER;
+  }
+
+  Microsoft::WRL::ComPtr<IMMDeviceEnumerator> device_enumerator;
+  HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr,
+                                CLSCTX_ALL,
+                                IID_PPV_ARGS(&device_enumerator));
+  if (FAILED(hr)) {
+    return hr;
+  }
+
+  Microsoft::WRL::ComPtr<IMMDevice> render_device;
+  hr = device_enumerator->GetDefaultAudioEndpoint(eRender, eConsole,
+                                                  &render_device);
+  if (FAILED(hr)) {
+    return hr;
+  }
+
+  return render_device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr,
+                                 reinterpret_cast<void**>(
+                                     audio_client->GetAddressOf()));
+}
+
 WAVEFORMATEX CreateCaptureFormat() {
   WAVEFORMATEX format = {};
   format.wFormatTag = WAVE_FORMAT_PCM;
@@ -349,14 +375,53 @@ class ScreenAudioCapture::Impl {
 
   HRESULT InitializeAudioClient(DWORD target_process_id,
                                 bool include_process_tree) {
+    process_loopback_result_.store(
+        InitializeProcessLoopbackAudioClient(target_process_id,
+                                             include_process_tree),
+        std::memory_order_release);
+    if (SUCCEEDED(process_loopback_result_.load(std::memory_order_acquire))) {
+      return S_OK;
+    }
+
+    audio_client_.Reset();
+    audio_capture_client_.Reset();
+
+    // Process loopback is endpoint-independent but requires newer Windows
+    // audio support. Fall back to classic system loopback so screen sharing can
+    // still include sound on older or unhealthy process-loopback stacks.
+    system_loopback_result_.store(InitializeSystemLoopbackAudioClient(),
+                                  std::memory_order_release);
+    return system_loopback_result_.load(std::memory_order_acquire);
+  }
+
+  HRESULT InitializeProcessLoopbackAudioClient(DWORD target_process_id,
+                                               bool include_process_tree) {
+    Microsoft::WRL::ComPtr<IAudioClient> audio_client;
     HRESULT hr = ActivateProcessLoopbackAudioClient(
-        target_process_id, include_process_tree, &audio_client_);
+        target_process_id, include_process_tree, &audio_client);
     if (FAILED(hr)) {
       return hr;
     }
+    return InitializeAudioClientStream(audio_client);
+  }
+
+  HRESULT InitializeSystemLoopbackAudioClient() {
+    Microsoft::WRL::ComPtr<IAudioClient> audio_client;
+    HRESULT hr = ActivateDefaultRenderAudioClient(&audio_client);
+    if (FAILED(hr)) {
+      return hr;
+    }
+    return InitializeAudioClientStream(audio_client);
+  }
+
+  HRESULT InitializeAudioClientStream(
+      Microsoft::WRL::ComPtr<IAudioClient> audio_client) {
+    if (audio_client == nullptr) {
+      return E_POINTER;
+    }
 
     capture_format_ = CreateCaptureFormat();
-    hr = audio_client_->Initialize(
+    HRESULT hr = audio_client->Initialize(
         AUDCLNT_SHAREMODE_SHARED,
         AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK |
             AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
@@ -365,14 +430,20 @@ class ScreenAudioCapture::Impl {
       return hr;
     }
 
-    hr = audio_client_->GetService(
+    hr = audio_client->GetService(
         __uuidof(IAudioCaptureClient),
         reinterpret_cast<void**>(audio_capture_client_.GetAddressOf()));
     if (FAILED(hr)) {
       return hr;
     }
 
-    return audio_client_->SetEventHandle(sample_event_.get());
+    hr = audio_client->SetEventHandle(sample_event_.get());
+    if (SUCCEEDED(hr)) {
+      audio_client_ = audio_client;
+    } else {
+      audio_capture_client_.Reset();
+    }
+    return hr;
   }
 
   void CaptureLoop() {
@@ -455,6 +526,8 @@ class ScreenAudioCapture::Impl {
   std::thread worker_;
   std::atomic<bool> running_{false};
   std::atomic<HRESULT> start_result_{E_PENDING};
+  std::atomic<HRESULT> process_loopback_result_{S_OK};
+  std::atomic<HRESULT> system_loopback_result_{S_OK};
   ScopedHandle stop_event_;
   ScopedHandle started_event_;
   ScopedHandle sample_event_;
