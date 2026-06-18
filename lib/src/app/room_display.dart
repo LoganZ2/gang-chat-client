@@ -313,6 +313,11 @@ String? userPresenceLabel(UserSummary user) {
   return isOnline ? '在线' : '离线';
 }
 
+String currentUserPresenceLabel(CurrentUser user, {required bool inLive}) {
+  if (inLive) return '语音';
+  return userPresenceLabel(user.toSummary()) ?? '在线';
+}
+
 UserSummary roomUserInfoProfile({
   required UserSummary user,
   required RoomDetail room,

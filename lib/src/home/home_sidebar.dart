@@ -92,6 +92,7 @@ class HomeSidebar extends StatelessWidget {
                   if (showSummary) ...[
                     _UserSummaryBar(
                       user: currentUser,
+                      inLive: joinedLiveRoomId != null,
                       logoutActive: logoutActive,
                       onLogout: onLogout,
                     ),
@@ -259,16 +260,22 @@ class _NotificationFooterButton extends StatelessWidget {
 class _UserSummaryBar extends StatelessWidget {
   const _UserSummaryBar({
     required this.user,
+    required this.inLive,
     required this.logoutActive,
     required this.onLogout,
   });
 
   final CurrentUser user;
+  final bool inLive;
   final bool logoutActive;
   final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
+    final statusLabel = room_display.currentUserPresenceLabel(
+      user,
+      inLive: inLive,
+    );
     return DecoratedBox(
       key: const ValueKey('home-sidebar-user-summary'),
       decoration: BoxDecoration(
@@ -308,10 +315,7 @@ class _UserSummaryBar extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: PresencePill.fromLabel(_userStatus(user)),
-                    ),
+                    _SidebarPresenceLabel(label: statusLabel),
                   ],
                 ),
               ),
@@ -334,6 +338,41 @@ class _UserSummaryBar extends StatelessWidget {
 /// A borderless, background-free icon button — just the glyph with a hover
 /// cursor and tooltip. Used for low-emphasis actions like logout that sit
 /// inline next to other content.
+class _SidebarPresenceLabel extends StatelessWidget {
+  const _SidebarPresenceLabel({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (label) {
+      '语音' => UiColors.presenceVoice,
+      '离线' => UiColors.presenceOffline,
+      _ => UiColors.presenceOnline,
+    };
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        DecoratedBox(
+          key: const ValueKey('home-sidebar-presence-dot'),
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          child: const SizedBox.square(dimension: 6),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: UiTypography.label.copyWith(
+            color: color,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _FlatIconButton extends StatelessWidget {
   const _FlatIconButton({
     required this.tooltip,
@@ -540,10 +579,4 @@ class _UnreadBadge extends StatelessWidget {
       ),
     );
   }
-}
-
-String _userStatus(CurrentUser user) {
-  final status = user.status?.trim();
-  if (status != null && status.isNotEmpty) return status;
-  return '在线';
 }

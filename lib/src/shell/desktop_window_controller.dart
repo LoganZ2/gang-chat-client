@@ -146,6 +146,12 @@ class DesktopWindowController {
     });
   }
 
+  Future<void> hideAppWindowForExit() {
+    return _configure(() async {
+      await windowManager.hide();
+    });
+  }
+
   Future<void> terminateApplication() async {
     if (_terminating) return;
     _terminating = true;

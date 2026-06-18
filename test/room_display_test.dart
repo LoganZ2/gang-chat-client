@@ -188,6 +188,18 @@ void main() {
     expect(userPresenceLabel(_user(isOnline: true)), '在线');
     expect(userPresenceLabel(_user(isOnline: false)), '离线');
     expect(userPresenceLabel(_user()), isNull);
+    expect(
+      currentUserPresenceLabel(_currentUser(status: 'active'), inLive: false),
+      '在线',
+    );
+    expect(
+      currentUserPresenceLabel(_currentUser(status: 'offline'), inLive: false),
+      '离线',
+    );
+    expect(
+      currentUserPresenceLabel(_currentUser(status: 'active'), inLive: true),
+      '语音',
+    );
   });
 
   test(
@@ -638,7 +650,7 @@ RoomDetail _roomDetail({
   );
 }
 
-CurrentUser _currentUser({bool isSuperuser = false}) {
+CurrentUser _currentUser({bool isSuperuser = false, String? status}) {
   return CurrentUser(
     id: 'user_1',
     uid: '1001',
@@ -654,5 +666,6 @@ CurrentUser _currentUser({bool isSuperuser = false}) {
     defaultAvatarKey: 'blue-3',
     isSuperuser: isSuperuser,
     createdAt: DateTime.utc(2026, 6, 4),
+    status: status,
   );
 }

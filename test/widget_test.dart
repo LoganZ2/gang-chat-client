@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:client/main.dart';
 import 'package:client/src/app/audio_device_store.dart';
 import 'package:client/src/app/authenticated_app_context.dart';
+import 'package:client/src/app/close_behavior.dart';
 import 'package:client/src/app/live_session_controller.dart';
 import 'package:client/src/app/realtime_controller.dart';
 import 'package:client/src/auth/auth_client.dart';
@@ -21,6 +22,7 @@ import 'package:client/src/live/live_session.dart';
 import 'package:client/src/protocol/api_client.dart';
 import 'package:client/src/protocol/models.dart';
 import 'package:client/src/settings/settings_page.dart';
+import 'package:client/src/shell/desktop_window_controller.dart';
 import 'package:client/src/shell/login_page.dart';
 import 'package:client/src/ui/ui.dart' as ui;
 import 'package:client/src/home/home_page.dart';
@@ -280,6 +282,24 @@ void main() {
     final userSummaryRect = tester.getRect(
       find.byKey(const ValueKey('home-sidebar-user-summary')),
     );
+    final displayNameRect = tester.getRect(find.text('Kai'));
+    final statusRect = tester.getRect(find.text('在线'));
+    final statusDotRect = tester.getRect(
+      find.byKey(const ValueKey('home-sidebar-presence-dot')),
+    );
+    expect(statusRect.top, greaterThan(displayNameRect.bottom));
+    expect(statusRect.left, greaterThan(userSummaryRect.left));
+    expect(statusRect.right, lessThan(userSummaryRect.right));
+    expect(statusDotRect.width, closeTo(6, 0.01));
+    expect(statusDotRect.height, closeTo(6, 0.01));
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('home-sidebar-user-summary')),
+        matching: find.byType(ui.PresencePill),
+      ),
+      findsNothing,
+    );
+
     final alphaCardRect = tester.getRect(
       find.ancestor(
         of: find.text('Alpha Room'),
@@ -942,6 +962,20 @@ void main() {
     expect(find.byTooltip('开启摄像头'), findsNothing);
     expect(find.byTooltip('离开'), findsNothing);
     expect(find.byTooltip('已加入语音'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('home-sidebar-user-summary')),
+        matching: find.text('语音'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('home-sidebar-user-summary')),
+        matching: find.text('active'),
+      ),
+      findsNothing,
+    );
 
     await tester.tap(_liveControl('mic'));
     await tester.pumpAndSettle();
@@ -1139,6 +1173,72 @@ void main() {
     expect(find.text('Hello from Morgan'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'direct close exit keeps token while leaving live and going offline',
+    (WidgetTester tester) async {
+      final events = <String>[];
+      final requestedPaths = <String>[];
+      final liveSession = _FakeLiveSession();
+      final liveSessionController = _FakeLiveSessionController(
+        session: liveSession,
+      );
+      final realtime = _RecordingRealtimeService(events);
+      final windowController = _RecordingWindowController(events);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: HomePage(
+            app: _homeTestAppContext(
+              onLogout: () async => events.add('logout'),
+              onExitSessionForAppExit: () async => events.add('exit-session'),
+              requestedPaths: requestedPaths,
+            ),
+            audioDeviceStore: const _FakeAudioDeviceStore(),
+            liveSessionController: liveSessionController,
+            realtime: realtime,
+            closeBehaviorStore: const _FixedCloseBehaviorStore(
+              CloseBehavior.exitProgram,
+            ),
+            windowController: windowController,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find
+            .ancestor(
+              of: find.text('Alpha Room'),
+              matching: find.byType(ui.PressableSurface),
+            )
+            .first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(requestedPaths, contains('/api/v1/rooms/server-alpha'));
+      expect(requestedPaths, contains('/api/v1/rooms/server-alpha/live'));
+
+      final enterLiveChannel = find.text('进入语音频道');
+      if (enterLiveChannel.evaluate().isNotEmpty) {
+        await tester.tap(enterLiveChannel);
+        await tester.pumpAndSettle();
+      }
+
+      await tester.tap(find.widgetWithText(ui.Button, '加入'));
+      await tester.pumpAndSettle();
+
+      final handler = windowController.closeRequestHandler;
+      expect(handler, isNotNull);
+      expect(await handler!(), isTrue);
+
+      expect(requestedPaths, contains('/api/v1/rooms/server-alpha/live/me'));
+      expect(liveSession.disconnects, 1);
+      expect(events, ['hide', 'realtime-stop', 'exit-session', 'terminate']);
+      expect(events, isNot(contains('logout')));
+    },
+  );
 
   testWidgets('settings audio volumes sync to live channel sliders', (
     WidgetTester tester,
@@ -3417,6 +3517,7 @@ void _expectSubmitButtonFullWidth(
 
 AuthenticatedAppContext _homeTestAppContext({
   Future<void> Function()? onLogout,
+  Future<void> Function()? onExitSessionForAppExit,
   List<String>? requestedPaths,
   List<Uri>? requestedUris,
   List<Map<String, Object?>>? accountUpdates,
@@ -3453,6 +3554,7 @@ AuthenticatedAppContext _homeTestAppContext({
     apiBaseUrl: 'http://localhost:3000',
     accessTokenProvider: ({bool forceRefresh = false}) async => 'access-token',
     logout: onLogout ?? () async {},
+    exitSessionForAppExit: onExitSessionForAppExit ?? () async {},
     api: _roomsApi(
       requestedPaths: requestedPaths,
       requestedUris: requestedUris,
@@ -4099,7 +4201,7 @@ final _currentUserJson = {
   'default_avatar_key': 'blue-3',
   'is_superuser': false,
   'created_at': '2026-01-01T00:00:00Z',
-  'status': '在线',
+  'status': 'active',
   'language': 'zh-Hans',
 };
 
@@ -4378,6 +4480,46 @@ class _FakeAudioDeviceStore extends AudioDeviceStore {
   Future<void> writeOutputVolume(double volume) async {}
 }
 
+class _FixedCloseBehaviorStore extends CloseBehaviorStore {
+  const _FixedCloseBehaviorStore(this.behavior);
+
+  final CloseBehavior behavior;
+
+  @override
+  Future<CloseBehavior> read() async => behavior;
+
+  @override
+  Future<void> write(CloseBehavior behavior) async {}
+}
+
+class _RecordingWindowController extends DesktopWindowController {
+  _RecordingWindowController(this.events);
+
+  final List<String> events;
+  AppCloseRequestHandler? closeRequestHandler;
+  AppTrayExitHandler? trayExitHandler;
+
+  @override
+  void setCloseRequestHandler(AppCloseRequestHandler? handler) {
+    closeRequestHandler = handler;
+  }
+
+  @override
+  void setTrayExitHandler(AppTrayExitHandler? handler) {
+    trayExitHandler = handler;
+  }
+
+  @override
+  Future<void> hideAppWindowForExit() async {
+    events.add('hide');
+  }
+
+  @override
+  Future<void> terminateApplication() async {
+    events.add('terminate');
+  }
+}
+
 class _NoopRealtimeService implements RealtimeService {
   final _events = const Stream<RealtimeEvent>.empty();
 
@@ -4392,6 +4534,30 @@ class _NoopRealtimeService implements RealtimeService {
 
   @override
   Future<void> stop() async {}
+
+  @override
+  void dispose() {}
+}
+
+class _RecordingRealtimeService implements RealtimeService {
+  _RecordingRealtimeService(this.lifecycleEvents);
+
+  final List<String> lifecycleEvents;
+  final _events = const Stream<RealtimeEvent>.empty();
+
+  @override
+  void Function()? onReconnect;
+
+  @override
+  Stream<RealtimeEvent> get events => _events;
+
+  @override
+  Future<void> start() async {}
+
+  @override
+  Future<void> stop() async {
+    lifecycleEvents.add('realtime-stop');
+  }
 
   @override
   void dispose() {}

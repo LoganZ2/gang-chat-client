@@ -73,6 +73,7 @@ class _AuthGateState extends State<_AuthGate> {
   bool _initialRestoreDone = false;
   // The window starts hidden and is revealed once we know which screen to show.
   bool _windowRevealed = false;
+  bool _exitingSessionForAppExit = false;
   Timer? _revealFallbackTimer;
 
   DesktopWindowController get _window => widget.windowController;
@@ -155,6 +156,15 @@ class _AuthGateState extends State<_AuthGate> {
     await _auth.finishLogout(session);
   }
 
+  Future<void> _exitSessionForAppExit() async {
+    if (mounted) {
+      setState(() => _exitingSessionForAppExit = true);
+    } else {
+      _exitingSessionForAppExit = true;
+    }
+    _auth.beginLogout();
+  }
+
   Future<void> _lockLoginAuthWindow({bool centerWindow = false}) {
     return _window.lockAuthWindow(
       centerWindow: centerWindow,
@@ -183,6 +193,9 @@ class _AuthGateState extends State<_AuthGate> {
   @override
   Widget build(BuildContext context) {
     final session = _auth.session;
+    if (_exitingSessionForAppExit) {
+      return const _LoadingPage();
+    }
     if (session == null) {
       if (widget.startsAuthenticated && !_initialRestoreDone) {
         return const _LoadingPage();
@@ -203,6 +216,7 @@ class _AuthGateState extends State<_AuthGate> {
       apiBaseUrl: _auth.apiBaseUrl,
       accessTokenProvider: _auth.accessToken,
       logout: _logout,
+      exitSessionForAppExit: _exitSessionForAppExit,
     );
 
     return SelectionContainer.disabled(

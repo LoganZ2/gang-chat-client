@@ -193,15 +193,25 @@ extension _HomeShellRoomActions on _HomeShellState {
   }
 
   Future<void> _logout() async {
+    await _leaveLiveForSessionEnd(
+      disconnectTimeout: const Duration(seconds: 1),
+    );
+    await widget.app.logout();
+  }
+
+  Future<void> _leaveLiveForSessionEnd({Duration? disconnectTimeout}) async {
     final joinedLiveRoomId = _joinedLiveRoomId;
     _joinedLiveRoomId = null;
     if (joinedLiveRoomId != null) {
       await _notifyLiveLeft(joinedLiveRoomId);
     }
-    await _liveSessionController.disconnect(
-      timeout: const Duration(seconds: 1),
-    );
-    await widget.app.logout();
+    await _liveSessionController.disconnect(timeout: disconnectTimeout);
+  }
+
+  Future<void> _stopRealtimeForExit() async {
+    try {
+      await _services.realtime.stop();
+    } catch (_) {}
   }
 
   Future<bool> _handleWindowCloseRequest() async {
@@ -348,7 +358,12 @@ extension _HomeShellRoomActions on _HomeShellState {
     if (_exitingApplication) return;
     _exitingApplication = true;
     try {
-      await _logout();
+      await widget.windowController.hideAppWindowForExit();
+      await _leaveLiveForSessionEnd(
+        disconnectTimeout: const Duration(seconds: 1),
+      );
+      await _stopRealtimeForExit();
+      await widget.app.exitSessionForAppExit();
     } finally {
       await widget.windowController.terminateApplication();
     }

@@ -4,6 +4,7 @@ import '../protocol/models.dart';
 import '../protocol/sticker_pack_store.dart';
 
 typedef LogoutCallback = Future<void> Function();
+typedef ExitSessionCallback = Future<void> Function();
 
 class AuthenticatedAppContext {
   const AuthenticatedAppContext({
@@ -11,6 +12,7 @@ class AuthenticatedAppContext {
     required this.apiBaseUrl,
     required this.accessTokenProvider,
     required this.logout,
+    required this.exitSessionForAppExit,
     this.api,
     this.stickerPackStore = const StickerPackStore(),
   });
@@ -19,6 +21,7 @@ class AuthenticatedAppContext {
   final String apiBaseUrl;
   final AccessTokenProvider accessTokenProvider;
   final LogoutCallback logout;
+  final ExitSessionCallback exitSessionForAppExit;
   final GangApi? api;
   final StickerPackStore stickerPackStore;
 
