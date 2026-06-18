@@ -676,7 +676,12 @@ class _SystemMessageParts {
           _userChip(subject),
           if (!omitActor && actor != null) ...[_text('被'), _userChip(actor)],
           _text(verb),
-          _SystemRoleTag(label: roleLabel),
+          RoleBadge(
+            label: roleLabel,
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
         ];
       default:
         final fallback = event.message.body.trim();
@@ -766,36 +771,6 @@ class _SystemUserChip extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _SystemRoleTag extends StatelessWidget {
-  const _SystemRoleTag({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: UiColors.selected,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: UiColors.selectedBorder),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-        child: Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: UiTypography.label.copyWith(
-            color: UiColors.accent,
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
     );
   }
 }

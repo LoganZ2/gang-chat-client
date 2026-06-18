@@ -147,6 +147,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('@creator'), findsOneWidget);
+    expect(find.text('成员'), findsNothing);
   });
 
   testWidgets('room profile creator card waits for the latest user profile', (
@@ -187,6 +188,7 @@ void main() {
     expect(find.text('Fresh Creator'), findsOneWidget);
     expect(find.text('Latest status'), findsOneWidget);
     expect(find.text('在线'), findsOneWidget);
+    expect(find.text('成员'), findsNothing);
   });
 
   testWidgets('refreshes the resolved room profile each time the card opens', (

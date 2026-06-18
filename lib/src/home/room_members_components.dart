@@ -172,6 +172,7 @@ class _MemberRow extends StatelessWidget {
               onResolveRoomProfile: onResolveRoomProfile,
               onEnterCommonRoom: onOpenRoom,
               inLive: presence == member_filter.RoomMemberPresence.live,
+              showRoomRole: true,
               child: avatar,
             ),
             const SizedBox(width: 10),
@@ -187,7 +188,10 @@ class _MemberRow extends StatelessWidget {
             const SizedBox(width: 10),
             PresencePill.member(presence),
             const SizedBox(width: 6),
-            _Pill(label: role),
+            RoleBadge(
+              label: role,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            ),
             if (busy) ...[
               const SizedBox(width: 10),
               const SizedBox.square(

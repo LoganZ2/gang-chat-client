@@ -54,6 +54,41 @@ void main() {
     );
   });
 
+  testWidgets('RoleBadge maps role labels to blue yellow orange red colors', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const Directionality(
+        textDirection: TextDirection.ltr,
+        child: Row(
+          children: [
+            RoleBadge(label: '成员'),
+            RoleBadge(label: '管理员'),
+            RoleBadge(label: '创建者'),
+            RoleBadge(label: '超级用户'),
+          ],
+        ),
+      ),
+    );
+
+    expect(
+      tester.widget<Text>(find.text('成员')).style?.color,
+      UiColors.roleMember,
+    );
+    expect(
+      tester.widget<Text>(find.text('管理员')).style?.color,
+      UiColors.roleAdmin,
+    );
+    expect(
+      tester.widget<Text>(find.text('创建者')).style?.color,
+      UiColors.roleCreator,
+    );
+    expect(
+      tester.widget<Text>(find.text('超级用户')).style?.color,
+      UiColors.roleSuperuser,
+    );
+  });
+
   test('genderMark normalizes common gender values', () {
     expect(genderMark('M')?.symbol, '♂');
     expect(genderMark('woman')?.symbol, '♀');

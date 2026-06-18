@@ -11,6 +11,7 @@ export 'highlighted_text.dart';
 export 'input.dart';
 export 'member_presence_icons.dart';
 export 'navigation.dart';
+export 'role_badge.dart';
 export 'segmented_control.dart';
 export 'settings_scaffold.dart';
 export 'sidebar.dart';

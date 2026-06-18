@@ -114,35 +114,6 @@ class _RowSurface extends StatelessWidget {
   }
 }
 
-class _Pill extends StatelessWidget {
-  const _Pill({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: UiColors.surfacePressed,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: UiColors.border),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        child: Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: UiTypography.label.copyWith(
-            color: UiColors.textSecondary,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _NoticeStrip extends StatelessWidget {
   const _NoticeStrip({required this.message, this.icon, this.danger = false});
 

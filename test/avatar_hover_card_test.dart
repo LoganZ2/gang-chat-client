@@ -72,7 +72,9 @@ void main() {
     expect(find.text('@logan'), findsNothing);
   });
 
-  testWidgets('hover card shows voice as a peer presence tag', (tester) async {
+  testWidgets('hover card shows voice instead of online presence tag', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       _host(const AvatarHoverCardForTest(user: _user, inLive: true)),
     );
@@ -83,8 +85,26 @@ void main() {
     await gesture.moveTo(tester.getCenter(find.byType(Avatar).first));
     await tester.pumpAndSettle();
 
-    expect(find.text('在线'), findsOneWidget);
+    expect(find.text('在线'), findsNothing);
+    expect(find.text('离线'), findsNothing);
     expect(find.text('语音'), findsOneWidget);
+  });
+
+  testWidgets('hover card hides room role outside room context', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(const AvatarHoverCardForTest(user: _user, showRoomRole: false)),
+    );
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await gesture.moveTo(tester.getCenter(find.byType(Avatar).first));
+    await tester.pumpAndSettle();
+
+    expect(find.text('@logan'), findsOneWidget);
+    expect(find.text('管理员'), findsNothing);
   });
 
   testWidgets('moving the cursor onto the card keeps it open', (tester) async {

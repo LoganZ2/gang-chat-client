@@ -725,26 +725,12 @@ class _InviteRoleBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: UiColors.surfacePressed,
-        borderRadius: BorderRadius.circular(UiRadii.sm),
-        border: Border.all(color: UiColors.border),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-        child: HighlightedText(
-          text: label,
-          query: query,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: UiTypography.label.copyWith(
-            color: UiColors.textSecondary,
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
+    return RoleBadge(
+      label: label,
+      query: query,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      borderRadius: UiRadii.sm,
+      fontSize: 11,
     );
   }
 }

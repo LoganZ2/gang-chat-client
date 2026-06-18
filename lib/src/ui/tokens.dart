@@ -35,6 +35,19 @@ abstract final class UiColors {
   static const presenceVoice = Color(0xFF7FFFD4);
   static const presenceVoiceSurface = Color(0xFF153A34);
   static const presenceVoiceBorder = Color(0xFF4AAE96);
+
+  static const roleMember = Color(0xFF5FA8FF);
+  static const roleMemberSurface = Color(0xFF162A42);
+  static const roleMemberBorder = Color(0xFF356CA8);
+  static const roleAdmin = Color(0xFFEAD15D);
+  static const roleAdminSurface = Color(0xFF332D17);
+  static const roleAdminBorder = Color(0xFF9C8434);
+  static const roleCreator = Color(0xFFFFA552);
+  static const roleCreatorSurface = Color(0xFF3A2417);
+  static const roleCreatorBorder = Color(0xFFA46332);
+  static const roleSuperuser = Color(0xFFFF6B6B);
+  static const roleSuperuserSurface = Color(0xFF3B1B22);
+  static const roleSuperuserBorder = Color(0xFFA5474D);
 }
 
 abstract final class UiSpacing {
