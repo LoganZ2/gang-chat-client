@@ -290,6 +290,37 @@ void FlutterScreenCapture::GetDisplayMedia(
     return;
   }
 
+  scoped_refptr<RTCDesktopCapturer> desktop_capturer =
+      base_->desktop_device_->CreateDesktopCapturer(source);
+
+  if (!desktop_capturer.get()) {
+    result->Error("Bad Arguments", "CreateDesktopCapturer failed!");
+    return;
+  }
+
+  desktop_capturer->RegisterDesktopCapturerObserver(this);
+
+  const char* video_source_label = "screen_capture_input";
+
+  scoped_refptr<RTCVideoSource> video_source =
+      base_->factory_->CreateDesktopSource(
+          desktop_capturer, video_source_label,
+          base_->ParseMediaConstraints(video_constraints));
+
+  // TODO: RTCVideoSource -> RTCVideoTrack
+
+  scoped_refptr<RTCVideoTrack> track =
+      base_->factory_->CreateVideoTrack(video_source, uuid.c_str());
+
+  EncodableList videoTracks;
+  EncodableMap info;
+  info[EncodableValue("id")] = EncodableValue(track->id().std_string());
+  info[EncodableValue("label")] = EncodableValue(track->id().std_string());
+  info[EncodableValue("kind")] = EncodableValue(track->kind().std_string());
+  info[EncodableValue("enabled")] = EncodableValue(track->enabled());
+  videoTracks.push_back(EncodableValue(info));
+  params[EncodableValue("videoTracks")] = EncodableValue(videoTracks);
+
   // AUDIO
 
   EncodableList audioTracks;
@@ -371,37 +402,6 @@ void FlutterScreenCapture::GetDisplayMedia(
   }
 #endif
   params[EncodableValue("audioTracks")] = EncodableValue(audioTracks);
-
-  scoped_refptr<RTCDesktopCapturer> desktop_capturer =
-      base_->desktop_device_->CreateDesktopCapturer(source);
-
-  if (!desktop_capturer.get()) {
-    result->Error("Bad Arguments", "CreateDesktopCapturer failed!");
-    return;
-  }
-
-  desktop_capturer->RegisterDesktopCapturerObserver(this);
-
-  const char* video_source_label = "screen_capture_input";
-
-  scoped_refptr<RTCVideoSource> video_source =
-      base_->factory_->CreateDesktopSource(
-          desktop_capturer, video_source_label,
-          base_->ParseMediaConstraints(video_constraints));
-
-  // TODO: RTCVideoSource -> RTCVideoTrack
-
-  scoped_refptr<RTCVideoTrack> track =
-      base_->factory_->CreateVideoTrack(video_source, uuid.c_str());
-
-  EncodableList videoTracks;
-  EncodableMap info;
-  info[EncodableValue("id")] = EncodableValue(track->id().std_string());
-  info[EncodableValue("label")] = EncodableValue(track->id().std_string());
-  info[EncodableValue("kind")] = EncodableValue(track->kind().std_string());
-  info[EncodableValue("enabled")] = EncodableValue(track->enabled());
-  videoTracks.push_back(EncodableValue(info));
-  params[EncodableValue("videoTracks")] = EncodableValue(videoTracks);
 
   stream->AddTrack(track);
 

@@ -203,12 +203,14 @@ class _LiveStageBadge extends StatelessWidget {
 class _LiveVideoFooter extends StatelessWidget {
   const _LiveVideoFooter({
     required this.name,
+    required this.nameColor,
     required this.micMuted,
     required this.speaking,
     required this.mediaKind,
   });
 
   final String name;
+  final Color nameColor;
   final bool micMuted;
   final bool speaking;
   final _LiveMediaKind mediaKind;
@@ -245,7 +247,7 @@ class _LiveVideoFooter extends StatelessWidget {
                 name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: UiTypography.label.copyWith(color: UiColors.text),
+                style: UiTypography.label.copyWith(color: nameColor),
               ),
             ),
             const SizedBox(width: 6),

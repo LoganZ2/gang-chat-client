@@ -98,35 +98,62 @@ void main() {
     expect(sources.map((s) => s.thumbnailKey), ['screen:1', 'window:1']);
   });
 
-  test('screen-share thumbnail updates are cached for reopened picker', () async {
-    resetScreenSourceThumbnailCacheForTest();
-    addTearDown(resetScreenSourceThumbnailCacheForTest);
-
-    final controller = StreamController<Uint8List>.broadcast(sync: true);
-    addTearDown(controller.close);
-
-    final observed = <Uint8List>[];
-    final subscription = cacheScreenSourceThumbnailUpdatesForTest(
-      'screen:0',
-      controller.stream,
-    ).listen(observed.add);
-    addTearDown(subscription.cancel);
-    final sourceIdUpdates = <Uint8List>[];
-    final sourceIdSubscription = screenSourceThumbnailUpdatesForTest(
-      'screen:0',
-    ).listen(sourceIdUpdates.add);
-    addTearDown(sourceIdSubscription.cancel);
-
-    final thumbnail = Uint8List.fromList([1, 2, 3]);
-    controller.add(thumbnail);
-    await Future<void>.delayed(Duration.zero);
-
-    expect(observed, hasLength(1));
-    expect(observed.single, same(thumbnail));
-    expect(sourceIdUpdates, hasLength(1));
-    expect(sourceIdUpdates.single, same(thumbnail));
-    expect(cachedScreenSourceThumbnailForTest('screen:0'), same(thumbnail));
+  test('screen-share requests audio even with picked desktop sources', () {
+    expect(
+      shouldRequestScreenShareAudio(
+        sourceId: 'screen-primary',
+        isDesktopSourcePickerPlatform: true,
+      ),
+      isTrue,
+    );
+    expect(
+      shouldRequestScreenShareAudio(
+        sourceId: null,
+        isDesktopSourcePickerPlatform: true,
+      ),
+      isTrue,
+    );
+    expect(
+      shouldRequestScreenShareAudio(
+        sourceId: 'screen-primary',
+        isDesktopSourcePickerPlatform: false,
+      ),
+      isTrue,
+    );
   });
+
+  test(
+    'screen-share thumbnail updates are cached for reopened picker',
+    () async {
+      resetScreenSourceThumbnailCacheForTest();
+      addTearDown(resetScreenSourceThumbnailCacheForTest);
+
+      final controller = StreamController<Uint8List>.broadcast(sync: true);
+      addTearDown(controller.close);
+
+      final observed = <Uint8List>[];
+      final subscription = cacheScreenSourceThumbnailUpdatesForTest(
+        'screen:0',
+        controller.stream,
+      ).listen(observed.add);
+      addTearDown(subscription.cancel);
+      final sourceIdUpdates = <Uint8List>[];
+      final sourceIdSubscription = screenSourceThumbnailUpdatesForTest(
+        'screen:0',
+      ).listen(sourceIdUpdates.add);
+      addTearDown(sourceIdSubscription.cancel);
+
+      final thumbnail = Uint8List.fromList([1, 2, 3]);
+      controller.add(thumbnail);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(observed, hasLength(1));
+      expect(observed.single, same(thumbnail));
+      expect(sourceIdUpdates, hasLength(1));
+      expect(sourceIdUpdates.single, same(thumbnail));
+      expect(cachedScreenSourceThumbnailForTest('screen:0'), same(thumbnail));
+    },
+  );
 
   test('session starts the output rebinder while connected', () async {
     final changes = StreamController<void>.broadcast();

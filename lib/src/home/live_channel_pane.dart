@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../app/audio_levels.dart';
 import '../app/live_display.dart' as live_display;
 import '../app/music_box_display.dart' as music_box_display;
+import '../app/room_display.dart' as room_display;
 import '../live/live_session.dart';
 import '../live/live_video_track_view.dart';
 import '../protocol/models.dart';
@@ -22,7 +23,7 @@ const _liveRoomPadding = 18.0;
 // Width of the right-docked music box panel (search + queue) when expanded.
 const _musicBoxPanelWidth = 270.0;
 const _memberCardWidth = 154.0;
-const _memberCardHeight = 126.0;
+const _memberCardHeight = 142.0;
 const _controlButtonSize = 44.0;
 // How far the docked music box panel extends below the stage's bottom edge,
 // reaching down over the control-bar gap to align with the control bar.
@@ -258,6 +259,10 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                                 videoTracks: widget.videoTracks,
                                 stageTrack: stageTrack,
                                 onSelectStage: _selectStage,
+                                onToggleMic: widget.onToggleMic,
+                                onToggleHeadphones: widget.onToggleHeadphones,
+                                onToggleCamera: widget.onToggleCamera,
+                                onToggleShare: widget.onToggleShare,
                               ),
                             ),
                           ],

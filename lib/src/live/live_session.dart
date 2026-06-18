@@ -58,6 +58,19 @@ const _ignoredShareWindowNameParts = <String>[
   'geforce overlay',
 ];
 
+bool get _isDesktopScreenShareSourcePickerPlatform =>
+    !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
+
+@visibleForTesting
+bool shouldRequestScreenShareAudio({
+  required String? sourceId,
+  required bool isDesktopSourcePickerPlatform,
+}) {
+  // Desktop source pickers still need audio:true so the native WebRTC layer can
+  // attach the platform screen-audio track to getDisplayMedia's stream.
+  return true;
+}
+
 // libwebrtc's RTCDesktopSource thumbnails shear on Retina screens (same stride
 // bug the live share sidesteps via ScreenCaptureKit). For screen sources we grab
 // the thumbnail natively (CGDisplayCreateImage) instead, which is undistorted.
@@ -607,8 +620,13 @@ class LiveSession extends ChangeNotifier {
       // still governs what viewers receive. To cap resolution on macOS we scale
       // the published encoding down after publishing (_applyScreenShareScale).
       final target = screenShareResolutionForHeight(_screenShareMaxHeight);
+      final captureScreenAudio = shouldRequestScreenShareAudio(
+        sourceId: sourceId,
+        isDesktopSourcePickerPlatform:
+            _isDesktopScreenShareSourcePickerPlatform,
+      );
       final options = lk.ScreenShareCaptureOptions(
-        captureScreenAudio: true,
+        captureScreenAudio: captureScreenAudio,
         sourceId: sourceId,
         maxFrameRate: 60.0,
         params: lk.VideoParameters(
@@ -621,7 +639,7 @@ class LiveSession extends ChangeNotifier {
       );
       await local.setScreenShareEnabled(
         true,
-        captureScreenAudio: true,
+        captureScreenAudio: captureScreenAudio,
         screenShareCaptureOptions: options,
       );
       _screenSharing = true;

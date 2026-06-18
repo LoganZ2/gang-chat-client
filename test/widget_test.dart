@@ -958,7 +958,15 @@ void main() {
 
     expect(requestedPaths, contains('/api/v1/rooms/server-alpha/live/join'));
     expect(liveSession.connectAttempts, 1);
-    expect(find.text('Kai (you)'), findsOneWidget);
+    final selfLiveMemberCard = find.ancestor(
+      of: find.byKey(const ValueKey<String>('live-member-status:mic:user-1')),
+      matching: find.byType(ui.PressableSurface),
+    );
+    final selfLiveName = tester.widget<Text>(
+      find.descendant(of: selfLiveMemberCard, matching: find.text('Kai')),
+    );
+    expect(selfLiveName.style?.color, ui.UiColors.accent);
+    expect(find.text('Kai (you)'), findsNothing);
     expect(find.text('Morgan'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '加入'), findsNothing);
     expect(_liveControl('mic'), findsOneWidget);
