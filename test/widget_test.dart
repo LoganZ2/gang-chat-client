@@ -539,6 +539,82 @@ void main() {
     },
   );
 
+  testWidgets('authenticated home shell search scroll loads next cursor page', (
+    WidgetTester tester,
+  ) async {
+    final requestedUris = <Uri>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(requestedUris: requestedUris),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final searchField = find.descendant(
+      of: find.byKey(const ValueKey('home-title-search')),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(searchField, 'Page');
+    await tester.pump(const Duration(milliseconds: 320));
+    await tester.pumpAndSettle();
+
+    expect(find.text('聊天记录 9'), findsWidgets);
+    expect(find.text('聊天记录 8'), findsNothing);
+    expect(_highlightedSearchText('Page result 9'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('search-category-messages')));
+    await tester.pumpAndSettle();
+
+    final panel = find.byKey(const ValueKey('home-title-search-results'));
+    final resultsList = find.descendant(
+      of: panel,
+      matching: find.byType(ListView),
+    );
+    expect(resultsList, findsOneWidget);
+
+    await tester.drag(resultsList, const Offset(0, -360));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    final cursorRequests = requestedUris
+        .where(
+          (uri) =>
+              uri.path == '/api/v1/search' &&
+              uri.queryParameters['messages_cursor'] == 'message-cursor-8',
+        )
+        .toList();
+    expect(cursorRequests, hasLength(1));
+    final cursorRequest = cursorRequests.single;
+    expect(cursorRequest.queryParameters['categories'], 'messages');
+    expect(
+      cursorRequest.queryParameters.containsKey('my_rooms_cursor'),
+      isFalse,
+    );
+    expect(
+      cursorRequest.queryParameters.containsKey('public_rooms_cursor'),
+      isFalse,
+    );
+    expect(cursorRequest.queryParameters.containsKey('files_cursor'), isFalse);
+    expect(find.text('聊天记录 9'), findsWidgets);
+    await tester.drag(resultsList, const Offset(0, -120));
+    await tester.pumpAndSettle();
+    expect(
+      requestedUris.where(
+        (uri) =>
+            uri.path == '/api/v1/search' &&
+            uri.queryParameters['messages_cursor'] == 'message-cursor-8',
+      ),
+      hasLength(1),
+    );
+    expect(_highlightedSearchText('Page result 9'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('authenticated home shell creates room from footer template', (
     WidgetTester tester,
   ) async {
@@ -3266,6 +3342,12 @@ Finder _textFieldWithHint(String hintText) {
   );
 }
 
+Finder _highlightedSearchText(String text) {
+  return find.byWidgetPredicate(
+    (widget) => widget is ui.HighlightedText && widget.text.contains(text),
+  );
+}
+
 Finder _buttonIconWithTooltip(String tooltip) {
   return find.byWidgetPredicate(
     (widget) => widget is ui.ButtonIcon && widget.tooltip == tooltip,
@@ -3432,6 +3514,69 @@ GangApi _roomsApi({
       }
       if (request.url.path == '/api/v1/search') {
         final query = request.url.queryParameters['q']?.toLowerCase() ?? '';
+        Map<String, Object?> pagedMessage(int index) {
+          return {
+            'room': _searchRoomContextJson(
+              id: 'server-page',
+              name: 'Paged Room',
+            ),
+            'message': _messageJson(
+              id: 'msg-page-$index',
+              roomId: 'server-page',
+              sender: _userJson(
+                id: 'user-2',
+                username: 'morgan',
+                displayName: 'Morgan',
+              ),
+              clientMessageId: 'client-msg-page-$index',
+              body: 'Page result $index',
+            ),
+          };
+        }
+
+        if (query == 'page') {
+          if (request.url.queryParameters['messages_cursor'] ==
+              'message-cursor-8') {
+            return _jsonResponse({
+              'my_rooms': <Object?>[],
+              'public_rooms': <Object?>[],
+              'messages': [pagedMessage(9)],
+              'files': <Object?>[],
+              'next_cursors': {
+                'my_rooms': null,
+                'public_rooms': null,
+                'messages': null,
+                'files': null,
+              },
+              'total_counts': {
+                'my_rooms': 0,
+                'public_rooms': 0,
+                'messages': 9,
+                'files': 0,
+              },
+            });
+          }
+          return _jsonResponse({
+            'my_rooms': <Object?>[],
+            'public_rooms': <Object?>[],
+            'messages': [
+              for (var index = 1; index <= 8; index += 1) pagedMessage(index),
+            ],
+            'files': <Object?>[],
+            'next_cursors': {
+              'my_rooms': null,
+              'public_rooms': null,
+              'messages': 'message-cursor-8',
+              'files': null,
+            },
+            'total_counts': {
+              'my_rooms': 0,
+              'public_rooms': 0,
+              'messages': 9,
+              'files': 0,
+            },
+          });
+        }
         if (query == '1') {
           return _jsonResponse({
             'my_rooms': [
@@ -3447,6 +3592,12 @@ GangApi _roomsApi({
             'public_rooms': <Object?>[],
             'messages': <Object?>[],
             'files': <Object?>[],
+            'next_cursors': {
+              'my_rooms': null,
+              'public_rooms': null,
+              'messages': null,
+              'files': null,
+            },
           });
         }
         return _jsonResponse({
@@ -3517,6 +3668,12 @@ GangApi _roomsApi({
               },
             },
           ],
+          'next_cursors': {
+            'my_rooms': null,
+            'public_rooms': null,
+            'messages': null,
+            'files': null,
+          },
         });
       }
       if (request.url.path == '/api/v1/rooms/server-beta') {

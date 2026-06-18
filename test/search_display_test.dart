@@ -10,20 +10,112 @@ void main() {
       publicRooms: [_publicRoom('room_2')],
       messages: [_messageResult('room_1')],
       files: [_messageResult('room_1', type: 'file')],
+      totalCounts: const GlobalSearchCounts(
+        myRooms: 10,
+        publicRooms: 11,
+        messages: 12,
+        files: 13,
+      ),
     );
 
     expect(globalSearchCategoryLabel(GlobalSearchCategory.myRooms), '我的房间');
-    expect(globalSearchCategoryCount(results, GlobalSearchCategory.myRooms), 1);
+    expect(
+      globalSearchCategoryCount(results, GlobalSearchCategory.myRooms),
+      10,
+    );
     expect(
       globalSearchCategoryCount(results, GlobalSearchCategory.publicRooms),
-      1,
+      11,
     );
     expect(
       globalSearchCategoryCount(results, GlobalSearchCategory.messages),
-      1,
+      12,
     );
-    expect(globalSearchCategoryCount(results, GlobalSearchCategory.files), 1);
+    expect(globalSearchCategoryCount(results, GlobalSearchCategory.files), 13);
+    expect(globalSearchCategoryKey(GlobalSearchCategory.myRooms), 'my_rooms');
+    expect(
+      globalSearchCategoryKey(GlobalSearchCategory.publicRooms),
+      'public_rooms',
+    );
+    expect(globalSearchCategoryKey(GlobalSearchCategory.messages), 'messages');
+    expect(globalSearchCategoryKey(GlobalSearchCategory.files), 'files');
     expect(globalSearchHasResults(results), isTrue);
+  });
+
+  test('global search cursors parse and merge selected pages', () {
+    final parsed = GlobalSearchResults.fromJson({
+      'my_rooms': <Object?>[],
+      'public_rooms': <Object?>[],
+      'messages': <Object?>[],
+      'files': <Object?>[],
+      'next_cursors': {
+        'my_rooms': 'my-next',
+        'public_rooms': null,
+        'messages': 'message-next',
+        'files': 'file-next',
+      },
+      'total_counts': {
+        'my_rooms': 1,
+        'public_rooms': 2,
+        'messages': 3,
+        'files': 4,
+      },
+    });
+
+    expect(parsed.nextCursors.myRooms, 'my-next');
+    expect(parsed.nextCursors.publicRooms, isNull);
+    expect(parsed.nextCursors.messages, 'message-next');
+    expect(parsed.nextCursors.files, 'file-next');
+    expect(parsed.totalCounts.myRooms, 1);
+    expect(parsed.totalCounts.publicRooms, 2);
+    expect(parsed.totalCounts.messages, 3);
+    expect(parsed.totalCounts.files, 4);
+
+    final current = GlobalSearchResults(
+      myRooms: [_room('room_1')],
+      publicRooms: [_publicRoom('public_1')],
+      messages: [_messageResult('room_1')],
+      files: [_messageResult('room_1', type: 'file')],
+      nextCursors: const GlobalSearchCursors(
+        myRooms: 'my-next',
+        publicRooms: 'public-next',
+        messages: 'message-next',
+        files: 'file-next',
+      ),
+      totalCounts: const GlobalSearchCounts(
+        myRooms: 1,
+        publicRooms: 1,
+        messages: 8,
+        files: 1,
+      ),
+    );
+    final page = GlobalSearchResults(
+      myRooms: const [],
+      publicRooms: const [],
+      messages: [_messageResult('room_2')],
+      files: const [],
+      nextCursors: const GlobalSearchCursors(messages: 'message-next-2'),
+      totalCounts: const GlobalSearchCounts(messages: 9),
+    );
+
+    final merged = globalSearchResultsByAppendingPage(
+      current: current,
+      page: page,
+      categories: const [GlobalSearchCategory.messages],
+    );
+
+    expect(merged.myRooms, current.myRooms);
+    expect(merged.publicRooms, current.publicRooms);
+    expect(merged.messages, hasLength(2));
+    expect(merged.files, current.files);
+    expect(merged.nextCursors.myRooms, 'my-next');
+    expect(merged.nextCursors.publicRooms, 'public-next');
+    expect(merged.nextCursors.messages, 'message-next-2');
+    expect(merged.nextCursors.files, 'file-next');
+    expect(merged.totalCounts.myRooms, 1);
+    expect(merged.totalCounts.publicRooms, 1);
+    expect(merged.totalCounts.messages, 9);
+    expect(merged.totalCounts.files, 1);
   });
 
   test('sidebar search filter only applies to active my rooms category', () {

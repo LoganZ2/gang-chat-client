@@ -231,7 +231,15 @@ abstract interface class GangApi {
 
   Future<List<PublicRoom>> searchRooms({required String query, int limit = 20});
 
-  Future<GlobalSearchResults> search({required String query, int limit = 8});
+  Future<GlobalSearchResults> search({
+    required String query,
+    int limit = 8,
+    Iterable<String>? categories,
+    String? myRoomsCursor,
+    String? publicRoomsCursor,
+    String? messagesCursor,
+    String? filesCursor,
+  });
 
   Future<JoinRoomResult> joinRoom(String roomId, {String? reason});
 
@@ -1081,10 +1089,36 @@ class GangApiClient implements GangApi {
   Future<GlobalSearchResults> search({
     required String query,
     int limit = 8,
+    Iterable<String>? categories,
+    String? myRoomsCursor,
+    String? publicRoomsCursor,
+    String? messagesCursor,
+    String? filesCursor,
   }) async {
+    final queryParameters = <String, String>{'q': query, 'limit': '$limit'};
+    final categoryList = categories?.where((category) => category.isNotEmpty);
+    if (categoryList != null) {
+      final encodedCategories = categoryList.join(',');
+      if (encodedCategories.isNotEmpty) {
+        queryParameters['categories'] = encodedCategories;
+      }
+    }
+    if (myRoomsCursor != null) {
+      queryParameters['my_rooms_cursor'] = myRoomsCursor;
+    }
+    if (publicRoomsCursor != null) {
+      queryParameters['public_rooms_cursor'] = publicRoomsCursor;
+    }
+    if (messagesCursor != null) {
+      queryParameters['messages_cursor'] = messagesCursor;
+    }
+    if (filesCursor != null) {
+      queryParameters['files_cursor'] = filesCursor;
+    }
+
     final decoded = await _sendJson((token) {
       return _httpClient.get(
-        _uri('/search', {'q': query, 'limit': '$limit'}),
+        _uri('/search', queryParameters),
         headers: _headers(token),
       );
     }, retryTransientFailures: true);
@@ -1421,10 +1455,7 @@ class GangApiClient implements GangApi {
       return _httpClient.post(
         _uri('/rooms/$roomId/messages/$messageId/force-delete'),
         headers: _headers(token),
-        body: encodeJsonBody({
-          'confirm': true,
-          'reason': ?reason,
-        }),
+        body: encodeJsonBody({'confirm': true, 'reason': ?reason}),
       );
     });
     return Message.fromJson(decoded['message']! as Map<String, Object?>);
@@ -1474,10 +1505,7 @@ class GangApiClient implements GangApi {
       return _httpClient.post(
         _uri('/rooms/$roomId/live/participants/$userId/moderation'),
         headers: _headers(token),
-        body: encodeJsonBody({
-          'action': action,
-          'reason': ?reason,
-        }),
+        body: encodeJsonBody({'action': action, 'reason': ?reason}),
       );
     });
   }

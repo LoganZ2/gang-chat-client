@@ -199,6 +199,7 @@ class _HomeShellState extends State<HomeShell> {
   String _searchQuery = '';
   bool _searchExpanded = false;
   bool _searching = false;
+  bool _searchLoadingMore = false;
   String? _searchError;
   GlobalSearchResults? _searchResults;
   search_display.GlobalSearchCategory? _activeSearchCategory;
@@ -290,6 +291,7 @@ class _HomeShellState extends State<HomeShell> {
       _searchQuery = '';
       _searchExpanded = false;
       _searching = false;
+      _searchLoadingMore = false;
       _searchError = null;
       _searchResults = null;
       _activeSearchCategory = null;
@@ -440,12 +442,15 @@ class _HomeShellState extends State<HomeShell> {
                           query: _searchQuery,
                           results: _searchResults,
                           loading: _searching,
+                          loadingMore: _searchLoadingMore,
                           error: _searchError,
                           currentUser: widget.app.currentUser,
                           activeCategory: _activeSearchCategory,
+                          visibleCategories: _visibleSearchCategories,
                           busyPublicRoomId: _busySearchPublicRoomId,
                           pendingPublicRoomIds: _searchPendingPublicRoomIds,
                           onCategorySelected: _selectSearchCategory,
+                          onLoadMore: () => unawaited(_loadMoreSearchResults()),
                           onMyRoomSelected: _openSearchRoom,
                           onProfileRoomSelected: _openSearchProfileRoom,
                           onResolveRoomProfile: _resolveRoomProfile,

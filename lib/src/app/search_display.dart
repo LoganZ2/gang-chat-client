@@ -12,6 +12,117 @@ const globalSearchCategories = [
   GlobalSearchCategory.files,
 ];
 
+String globalSearchCategoryKey(GlobalSearchCategory category) {
+  return switch (category) {
+    GlobalSearchCategory.myRooms => 'my_rooms',
+    GlobalSearchCategory.publicRooms => 'public_rooms',
+    GlobalSearchCategory.messages => 'messages',
+    GlobalSearchCategory.files => 'files',
+  };
+}
+
+String? globalSearchCursorForCategory(
+  GlobalSearchCursors cursors,
+  GlobalSearchCategory category,
+) {
+  return switch (category) {
+    GlobalSearchCategory.myRooms => cursors.myRooms,
+    GlobalSearchCategory.publicRooms => cursors.publicRooms,
+    GlobalSearchCategory.messages => cursors.messages,
+    GlobalSearchCategory.files => cursors.files,
+  };
+}
+
+GlobalSearchCursors globalSearchCursorsForCategories(
+  GlobalSearchCursors cursors,
+  Iterable<GlobalSearchCategory> categories,
+) {
+  String? myRooms;
+  String? publicRooms;
+  String? messages;
+  String? files;
+  for (final category in categories) {
+    switch (category) {
+      case GlobalSearchCategory.myRooms:
+        myRooms = cursors.myRooms;
+      case GlobalSearchCategory.publicRooms:
+        publicRooms = cursors.publicRooms;
+      case GlobalSearchCategory.messages:
+        messages = cursors.messages;
+      case GlobalSearchCategory.files:
+        files = cursors.files;
+    }
+  }
+  return GlobalSearchCursors(
+    myRooms: myRooms,
+    publicRooms: publicRooms,
+    messages: messages,
+    files: files,
+  );
+}
+
+GlobalSearchResults globalSearchResultsByAppendingPage({
+  required GlobalSearchResults current,
+  required GlobalSearchResults page,
+  required Iterable<GlobalSearchCategory> categories,
+}) {
+  var appendMyRooms = false;
+  var appendPublicRooms = false;
+  var appendMessages = false;
+  var appendFiles = false;
+  for (final category in categories) {
+    switch (category) {
+      case GlobalSearchCategory.myRooms:
+        appendMyRooms = true;
+      case GlobalSearchCategory.publicRooms:
+        appendPublicRooms = true;
+      case GlobalSearchCategory.messages:
+        appendMessages = true;
+      case GlobalSearchCategory.files:
+        appendFiles = true;
+    }
+  }
+
+  return GlobalSearchResults(
+    myRooms: appendMyRooms
+        ? [...current.myRooms, ...page.myRooms]
+        : current.myRooms,
+    publicRooms: appendPublicRooms
+        ? [...current.publicRooms, ...page.publicRooms]
+        : current.publicRooms,
+    messages: appendMessages
+        ? [...current.messages, ...page.messages]
+        : current.messages,
+    files: appendFiles ? [...current.files, ...page.files] : current.files,
+    nextCursors: GlobalSearchCursors(
+      myRooms: appendMyRooms
+          ? page.nextCursors.myRooms
+          : current.nextCursors.myRooms,
+      publicRooms: appendPublicRooms
+          ? page.nextCursors.publicRooms
+          : current.nextCursors.publicRooms,
+      messages: appendMessages
+          ? page.nextCursors.messages
+          : current.nextCursors.messages,
+      files: appendFiles ? page.nextCursors.files : current.nextCursors.files,
+    ),
+    totalCounts: GlobalSearchCounts(
+      myRooms: appendMyRooms
+          ? page.totalCounts.myRooms ?? current.totalCounts.myRooms
+          : current.totalCounts.myRooms,
+      publicRooms: appendPublicRooms
+          ? page.totalCounts.publicRooms ?? current.totalCounts.publicRooms
+          : current.totalCounts.publicRooms,
+      messages: appendMessages
+          ? page.totalCounts.messages ?? current.totalCounts.messages
+          : current.totalCounts.messages,
+      files: appendFiles
+          ? page.totalCounts.files ?? current.totalCounts.files
+          : current.totalCounts.files,
+    ),
+  );
+}
+
 bool hasGlobalSearchQuery(String query) {
   return query.trim().isNotEmpty;
 }
@@ -31,10 +142,14 @@ int globalSearchCategoryCount(
 ) {
   if (results == null) return 0;
   return switch (category) {
-    GlobalSearchCategory.myRooms => results.myRooms.length,
-    GlobalSearchCategory.publicRooms => results.publicRooms.length,
-    GlobalSearchCategory.messages => results.messages.length,
-    GlobalSearchCategory.files => results.files.length,
+    GlobalSearchCategory.myRooms =>
+      results.totalCounts.myRooms ?? results.myRooms.length,
+    GlobalSearchCategory.publicRooms =>
+      results.totalCounts.publicRooms ?? results.publicRooms.length,
+    GlobalSearchCategory.messages =>
+      results.totalCounts.messages ?? results.messages.length,
+    GlobalSearchCategory.files =>
+      results.totalCounts.files ?? results.files.length,
   };
 }
 
@@ -55,6 +170,8 @@ GlobalSearchResults globalSearchResultsForView(
     publicRooms: results.publicRooms,
     messages: results.messages,
     files: results.files,
+    nextCursors: results.nextCursors,
+    totalCounts: results.totalCounts,
   );
 }
 

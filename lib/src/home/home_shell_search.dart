@@ -19,6 +19,13 @@ extension _HomeShellSearch on _HomeShellState {
   bool get _loadingSidebarSearch =>
       _filteringSidebarBySearch && _searching && _searchResults == null;
 
+  List<search_display.GlobalSearchCategory> get _visibleSearchCategories {
+    final activeCategory = _activeSearchCategory;
+    return activeCategory == null
+        ? search_display.globalSearchCategories
+        : [activeCategory];
+  }
+
   void _handleTitleSearchChanged() {
     final query = _titleSearchController.text;
     _searchDebounce?.cancel();
@@ -30,6 +37,7 @@ extension _HomeShellSearch on _HomeShellState {
       _searchQuery = query;
       _searchExpanded = hasQuery;
       _searchError = null;
+      _searchLoadingMore = false;
       if (hasQuery) {
         _searching = true;
         _searchResults = null;
@@ -59,14 +67,72 @@ extension _HomeShellSearch on _HomeShellState {
           query: query,
         );
         _searching = false;
+        _searchLoadingMore = false;
         _searchError = null;
       });
     } catch (error) {
       if (!mounted || requestSerial != _searchRequestSerial) return;
       _setHomeState(() {
         _searching = false;
+        _searchLoadingMore = false;
         _searchError = error.toString();
       });
+    }
+  }
+
+  Future<void> _loadMoreSearchResults() async {
+    final current = _searchResults;
+    final query = _searchQuery.trim();
+    if (_searchLoadingMore || _searching || current == null) return;
+    if (!search_display.hasGlobalSearchQuery(query)) return;
+
+    final categories = [
+      for (final category in _visibleSearchCategories)
+        if (search_display.globalSearchCursorForCategory(
+              current.nextCursors,
+              category,
+            ) !=
+            null)
+          category,
+    ];
+    if (categories.isEmpty) return;
+
+    final requestSerial = _searchRequestSerial;
+    final cursors = search_display.globalSearchCursorsForCategories(
+      current.nextCursors,
+      categories,
+    );
+    _setHomeState(() => _searchLoadingMore = true);
+
+    try {
+      final page = await _globalSearchController.search(
+        query: query,
+        categories: categories,
+        myRoomsCursor: cursors.myRooms,
+        publicRoomsCursor: cursors.publicRooms,
+        messagesCursor: cursors.messages,
+        filesCursor: cursors.files,
+      );
+      if (!mounted || requestSerial != _searchRequestSerial) return;
+      if (_titleSearchController.text.trim() != query) return;
+
+      final visiblePage = search_display.globalSearchResultsForView(
+        page,
+        query: query,
+      );
+      _setHomeState(() {
+        final latest = _searchResults;
+        _searchLoadingMore = false;
+        if (latest == null) return;
+        _searchResults = search_display.globalSearchResultsByAppendingPage(
+          current: latest,
+          page: visiblePage,
+          categories: categories,
+        );
+      });
+    } catch (_) {
+      if (!mounted || requestSerial != _searchRequestSerial) return;
+      _setHomeState(() => _searchLoadingMore = false);
     }
   }
 
@@ -322,6 +388,8 @@ extension _HomeShellSearch on _HomeShellState {
       ],
       messages: snapshot.messages,
       files: snapshot.files,
+      nextCursors: snapshot.nextCursors,
+      totalCounts: snapshot.totalCounts,
     );
   }
 }

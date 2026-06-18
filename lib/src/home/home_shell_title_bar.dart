@@ -280,12 +280,15 @@ class _TitleSearchResultsPanel extends StatelessWidget {
     required this.query,
     required this.results,
     required this.loading,
+    required this.loadingMore,
     required this.error,
     required this.currentUser,
     required this.activeCategory,
+    required this.visibleCategories,
     required this.busyPublicRoomId,
     required this.pendingPublicRoomIds,
     required this.onCategorySelected,
+    required this.onLoadMore,
     required this.onMyRoomSelected,
     required this.onProfileRoomSelected,
     required this.onResolveRoomProfile,
@@ -298,12 +301,15 @@ class _TitleSearchResultsPanel extends StatelessWidget {
   final String query;
   final GlobalSearchResults? results;
   final bool loading;
+  final bool loadingMore;
   final String? error;
   final CurrentUser currentUser;
   final search_display.GlobalSearchCategory? activeCategory;
+  final List<search_display.GlobalSearchCategory> visibleCategories;
   final String? busyPublicRoomId;
   final Set<String> pendingPublicRoomIds;
   final ValueChanged<search_display.GlobalSearchCategory> onCategorySelected;
+  final VoidCallback onLoadMore;
   final ValueChanged<RoomCard> onMyRoomSelected;
   final ValueChanged<PublicRoom> onProfileRoomSelected;
   final RoomProfileResolver onResolveRoomProfile;
@@ -383,9 +389,6 @@ class _TitleSearchResultsPanel extends StatelessWidget {
       );
     }
 
-    final visibleCategories = activeCategory == null
-        ? search_display.globalSearchCategories
-        : [activeCategory!];
     final sections = <Widget>[];
     for (final category in visibleCategories) {
       final section = _sectionFor(context, snapshot!, category);
@@ -399,15 +402,32 @@ class _TitleSearchResultsPanel extends StatelessWidget {
       return _SearchPanelState(
         icon: Icons.filter_alt_outlined,
         title: '该分类没有结果',
-        detail: search_display.globalSearchCategoryLabel(activeCategory!),
+        detail: activeCategory == null
+            ? query.trim()
+            : search_display.globalSearchCategoryLabel(activeCategory!),
       );
     }
 
-    return ListView(
-      shrinkWrap: true,
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
-      children: sections,
+    return NotificationListener<ScrollNotification>(
+      onNotification: _handleScrollNotification,
+      child: ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+        children: [
+          ...sections,
+          if (loadingMore) const _SearchLoadingMoreIndicator(),
+        ],
+      ),
     );
+  }
+
+  bool _handleScrollNotification(ScrollNotification notification) {
+    if (loadingMore || notification.metrics.axis != Axis.vertical) {
+      return false;
+    }
+    if (notification.metrics.maxScrollExtent <= 0) return false;
+    if (notification.metrics.extentAfter <= 96) onLoadMore();
+    return false;
   }
 
   Widget? _sectionFor(
@@ -670,6 +690,26 @@ class _SearchResultSection extends StatelessWidget {
         ),
         ...children,
       ],
+    );
+  }
+}
+
+class _SearchLoadingMoreIndicator extends StatelessWidget {
+  const _SearchLoadingMoreIndicator();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      height: 34,
+      child: Center(
+        child: SizedBox.square(
+          dimension: 16,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: UiColors.accent,
+          ),
+        ),
+      ),
     );
   }
 }

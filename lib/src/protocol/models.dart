@@ -815,18 +815,70 @@ class MessageSearchResult {
   }
 }
 
+class GlobalSearchCursors {
+  const GlobalSearchCursors({
+    this.myRooms,
+    this.publicRooms,
+    this.messages,
+    this.files,
+  });
+
+  final String? myRooms;
+  final String? publicRooms;
+  final String? messages;
+  final String? files;
+
+  factory GlobalSearchCursors.fromJson(Map<String, Object?>? json) {
+    if (json == null) return const GlobalSearchCursors();
+    return GlobalSearchCursors(
+      myRooms: json['my_rooms'] as String?,
+      publicRooms: json['public_rooms'] as String?,
+      messages: json['messages'] as String?,
+      files: json['files'] as String?,
+    );
+  }
+}
+
+class GlobalSearchCounts {
+  const GlobalSearchCounts({
+    this.myRooms,
+    this.publicRooms,
+    this.messages,
+    this.files,
+  });
+
+  final int? myRooms;
+  final int? publicRooms;
+  final int? messages;
+  final int? files;
+
+  factory GlobalSearchCounts.fromJson(Map<String, Object?>? json) {
+    if (json == null) return const GlobalSearchCounts();
+    return GlobalSearchCounts(
+      myRooms: _nullableInt(json['my_rooms']),
+      publicRooms: _nullableInt(json['public_rooms']),
+      messages: _nullableInt(json['messages']),
+      files: _nullableInt(json['files']),
+    );
+  }
+}
+
 class GlobalSearchResults {
   const GlobalSearchResults({
     required this.myRooms,
     required this.publicRooms,
     required this.messages,
     required this.files,
+    this.nextCursors = const GlobalSearchCursors(),
+    this.totalCounts = const GlobalSearchCounts(),
   });
 
   final List<RoomCard> myRooms;
   final List<PublicRoom> publicRooms;
   final List<MessageSearchResult> messages;
   final List<MessageSearchResult> files;
+  final GlobalSearchCursors nextCursors;
+  final GlobalSearchCounts totalCounts;
 
   factory GlobalSearchResults.fromJson(Map<String, Object?> json) {
     return GlobalSearchResults(
@@ -840,6 +892,12 @@ class GlobalSearchResults {
       files: _listOfMaps(
         json['files'],
       ).map(MessageSearchResult.fromJson).toList(),
+      nextCursors: GlobalSearchCursors.fromJson(
+        _nullableMap(json['next_cursors']),
+      ),
+      totalCounts: GlobalSearchCounts.fromJson(
+        _nullableMap(json['total_counts']),
+      ),
     );
   }
 }
