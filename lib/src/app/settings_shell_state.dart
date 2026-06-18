@@ -56,13 +56,14 @@ SettingsNoticePatch settingsNoticeShown(String message) {
 bool settingsSectionRefreshing({
   required SettingsSection section,
   required bool loadingAccount,
+  required bool loadingPreferences,
   required bool loadingStickers,
   required bool loadingSessions,
   required bool loadingVoice,
 }) {
   return switch (section) {
     SettingsSection.profile => loadingAccount,
-    SettingsSection.preferences => false,
+    SettingsSection.preferences => loadingPreferences,
     SettingsSection.stickers => loadingStickers,
     SettingsSection.security => loadingAccount || loadingSessions,
     SettingsSection.voice => loadingVoice,

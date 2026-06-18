@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:livekit_client/livekit_client.dart' as lk;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:client/main.dart';
 import 'package:client/src/app/audio_device_store.dart';
@@ -27,6 +28,10 @@ import 'package:client/src/home/live_channel_pane.dart' as live_pane;
 import 'package:client/ui_showcase.dart' as showcase;
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   test('live stage defaults collapsed except local screen share', () {
     final remoteCamera = _liveVideoTrack(
       identity: 'user-2',

@@ -193,11 +193,165 @@ extension _HomeShellRoomActions on _HomeShellState {
   }
 
   Future<void> _logout() async {
+    final joinedLiveRoomId = _joinedLiveRoomId;
     _joinedLiveRoomId = null;
+    if (joinedLiveRoomId != null) {
+      await _notifyLiveLeft(joinedLiveRoomId);
+    }
     await _liveSessionController.disconnect(
       timeout: const Duration(seconds: 1),
     );
     await widget.app.logout();
+  }
+
+  Future<bool> _handleWindowCloseRequest() async {
+    if (_exitingApplication) return true;
+    final behavior = await _readCloseBehavior();
+    if (!mounted) return true;
+    if (behavior == CloseBehavior.askEveryTime) {
+      final result = await _showCloseBehaviorDialog();
+      if (result == null) return true;
+      if (result.remember) {
+        try {
+          await widget.closeBehaviorStore.write(result.behavior);
+        } catch (_) {}
+      }
+      await _performCloseBehavior(result.behavior);
+      return true;
+    }
+    await _performCloseBehavior(behavior);
+    return true;
+  }
+
+  Future<CloseBehavior> _readCloseBehavior() async {
+    try {
+      return await widget.closeBehaviorStore.read();
+    } catch (_) {
+      return defaultCloseBehavior;
+    }
+  }
+
+  Future<_ClosePromptResult?> _showCloseBehaviorDialog() async {
+    if (_closeConfirming) return null;
+    _setHomeState(() => _closeConfirming = true);
+    try {
+      var selectedBehavior = CloseBehavior.minimizeToTray;
+      var remember = false;
+      return await showDialog<_ClosePromptResult>(
+        context: context,
+        builder: (context) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              return DialogFrame(
+                title: '关闭 Gang Chat',
+                icon: Icons.close,
+                actions: [
+                  Button(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('取消'),
+                  ),
+                  Button(
+                    onPressed: () => Navigator.of(context).pop(
+                      _ClosePromptResult(
+                        behavior: selectedBehavior,
+                        remember: remember,
+                      ),
+                    ),
+                    icon: const Icon(Icons.check),
+                    tone: selectedBehavior == CloseBehavior.exitProgram
+                        ? ButtonTone.danger
+                        : ButtonTone.primary,
+                    child: const Text('确认'),
+                  ),
+                ],
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Button(
+                            selected:
+                                selectedBehavior ==
+                                CloseBehavior.minimizeToTray,
+                            onPressed: () => setDialogState(
+                              () => selectedBehavior =
+                                  CloseBehavior.minimizeToTray,
+                            ),
+                            icon: const Icon(Icons.keyboard_arrow_down),
+                            child: const Text('最小化到托盘'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Button(
+                            selected:
+                                selectedBehavior == CloseBehavior.exitProgram,
+                            onPressed: () => setDialogState(
+                              () =>
+                                  selectedBehavior = CloseBehavior.exitProgram,
+                            ),
+                            icon: const Icon(Icons.logout),
+                            tone: selectedBehavior == CloseBehavior.exitProgram
+                                ? ButtonTone.danger
+                                : ButtonTone.neutral,
+                            child: const Text('退出程序'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '记住我的选择',
+                            style: UiTypography.body.copyWith(
+                              color: UiColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                        UiSwitch(
+                          value: remember,
+                          onChanged: (value) =>
+                              setDialogState(() => remember = value),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      if (mounted) _setHomeState(() => _closeConfirming = false);
+    }
+  }
+
+  Future<void> _performCloseBehavior(CloseBehavior behavior) async {
+    switch (behavior) {
+      case CloseBehavior.askEveryTime:
+        return;
+      case CloseBehavior.minimizeToTray:
+        await widget.windowController.minimizeToTray();
+        return;
+      case CloseBehavior.exitProgram:
+        await _exitApplication();
+        return;
+    }
+  }
+
+  Future<void> _exitApplication() async {
+    if (_exitingApplication) return;
+    _exitingApplication = true;
+    try {
+      await _logout();
+    } finally {
+      await widget.windowController.terminateApplication();
+    }
   }
 
   void _handleUserUpdated(CurrentUser user) {
@@ -348,4 +502,11 @@ extension _HomeShellRoomActions on _HomeShellState {
       }
     });
   }
+}
+
+class _ClosePromptResult {
+  const _ClosePromptResult({required this.behavior, required this.remember});
+
+  final CloseBehavior behavior;
+  final bool remember;
 }

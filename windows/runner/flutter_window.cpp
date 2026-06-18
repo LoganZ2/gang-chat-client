@@ -19,12 +19,14 @@
 #include <vector>
 
 #include "flutter/generated_plugin_registrant.h"
+#include "resource.h"
 
 namespace {
 
 constexpr char kClipboardChannelName[] = "gang_chat/clipboard";
 constexpr char kFileDropChannelName[] = "gang_chat/file_drop";
 constexpr char kAudioDevicesChannelName[] = "gang_chat/audio_devices";
+constexpr char kTrayChannelName[] = "gang_chat/tray";
 constexpr char kReadFilePathsMethod[] = "readFilePaths";
 constexpr char kReadImageFileMethod[] = "readImageFile";
 constexpr char kWriteImageFileMethod[] = "writeImageFile";
@@ -37,11 +39,19 @@ constexpr char kStartListeningMethod[] = "startListening";
 constexpr char kDefaultInputDeviceChangedMethod[] = "defaultInputDeviceChanged";
 constexpr char kDefaultOutputDeviceChangedMethod[] =
     "defaultOutputDeviceChanged";
+constexpr char kTrayInitializeMethod[] = "initialize";
+constexpr char kTrayDisposeMethod[] = "dispose";
+constexpr char kTrayOpenMethod[] = "open";
+constexpr char kTrayExitMethod[] = "exit";
 constexpr wchar_t kFileDropWindowProp[] = L"GangChatFileDropWindow";
 constexpr wchar_t kFileDropOriginalProcProp[] =
     L"GangChatFileDropOriginalProc";
 constexpr DWORD kBiAlphaBitFields = 6;
 constexpr UINT kAudioDefaultDeviceChangedMessage = WM_APP + 0x4A2;
+constexpr UINT kTrayCallbackMessage = WM_APP + 0x4A3;
+constexpr UINT kTrayIconId = 1;
+constexpr UINT kTrayOpenCommand = 0x4A30;
+constexpr UINT kTrayExitCommand = 0x4A31;
 
 template <typename T>
 void SafeRelease(T*& value) {
@@ -746,6 +756,92 @@ void FlutterWindow::RegisterAudioDevicesChannel() {
       });
 }
 
+void FlutterWindow::RegisterTrayChannel() {
+  tray_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(), kTrayChannelName,
+          &flutter::StandardMethodCodec::GetInstance());
+  tray_channel_->SetMethodCallHandler(
+      [this](
+          const flutter::MethodCall<flutter::EncodableValue>& call,
+          std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
+              result) {
+        if (call.method_name() == kTrayInitializeMethod) {
+          result->Success(flutter::EncodableValue(ShowTrayIcon()));
+          return;
+        }
+        if (call.method_name() == kTrayDisposeMethod) {
+          RemoveTrayIcon();
+          result->Success(flutter::EncodableValue());
+          return;
+        }
+        result->NotImplemented();
+      });
+}
+
+bool FlutterWindow::ShowTrayIcon() {
+  NOTIFYICONDATAW data{};
+  data.cbSize = sizeof(data);
+  data.hWnd = GetHandle();
+  data.uID = kTrayIconId;
+  data.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
+  data.uCallbackMessage = kTrayCallbackMessage;
+  data.hIcon = LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_APP_ICON));
+  wcscpy_s(data.szTip, L"Gang Chat");
+
+  const DWORD action = tray_icon_added_ ? NIM_MODIFY : NIM_ADD;
+  if (!Shell_NotifyIconW(action, &data)) {
+    return false;
+  }
+  tray_icon_added_ = true;
+  return true;
+}
+
+void FlutterWindow::RemoveTrayIcon() {
+  if (!tray_icon_added_) {
+    return;
+  }
+  NOTIFYICONDATAW data{};
+  data.cbSize = sizeof(data);
+  data.hWnd = GetHandle();
+  data.uID = kTrayIconId;
+  Shell_NotifyIconW(NIM_DELETE, &data);
+  tray_icon_added_ = false;
+}
+
+void FlutterWindow::ShowTrayMenu() {
+  HMENU menu = CreatePopupMenu();
+  if (!menu) {
+    return;
+  }
+  AppendMenuW(menu, MF_STRING, kTrayOpenCommand, L"\u6253\u5f00 Gang Chat");
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+  AppendMenuW(menu, MF_STRING, kTrayExitCommand, L"\u9000\u51fa");
+
+  POINT cursor{};
+  GetCursorPos(&cursor);
+  SetForegroundWindow(GetHandle());
+  const UINT command = TrackPopupMenu(
+      menu, TPM_RIGHTBUTTON | TPM_RETURNCMD | TPM_NONOTIFY, cursor.x,
+      cursor.y, 0, GetHandle(), nullptr);
+  DestroyMenu(menu);
+  PostMessage(GetHandle(), WM_NULL, 0, 0);
+
+  if (command == kTrayOpenCommand) {
+    InvokeTrayMethod(kTrayOpenMethod);
+  } else if (command == kTrayExitCommand) {
+    InvokeTrayMethod(kTrayExitMethod);
+  }
+}
+
+void FlutterWindow::InvokeTrayMethod(const char* method) {
+  if (!tray_channel_) {
+    return;
+  }
+  tray_channel_->InvokeMethod(method,
+                              std::make_unique<flutter::EncodableValue>());
+}
+
 bool FlutterWindow::EnsureAudioDeviceNotifications() {
   if (audio_device_enumerator_ && audio_device_notification_client_) {
     return true;
@@ -926,6 +1022,7 @@ bool FlutterWindow::OnCreate() {
       });
   clipboard_channel_ = std::move(clipboard_channel);
   RegisterAudioDevicesChannel();
+  RegisterTrayChannel();
   file_drop_channel_ =
       std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
           flutter_controller_->engine()->messenger(), kFileDropChannelName,
@@ -948,10 +1045,12 @@ bool FlutterWindow::OnCreate() {
 
 void FlutterWindow::OnDestroy() {
   if (flutter_controller_) {
+    RemoveTrayIcon();
     DetachAudioDeviceNotifications();
     DetachFileDropTarget();
     file_drop_channel_ = nullptr;
     audio_devices_channel_ = nullptr;
+    tray_channel_ = nullptr;
     clipboard_channel_ = nullptr;
     flutter_controller_ = nullptr;
   }
@@ -977,6 +1076,21 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       audio_devices_channel_->InvokeMethod(method, std::move(argument));
     }
     return 0;
+  }
+
+  if (message == kTrayCallbackMessage) {
+    const UINT mouse_message = static_cast<UINT>(lparam);
+    switch (mouse_message) {
+      case WM_LBUTTONUP:
+      case WM_LBUTTONDBLCLK:
+      case NIN_SELECT:
+        InvokeTrayMethod(kTrayOpenMethod);
+        return 0;
+      case WM_RBUTTONUP:
+      case WM_CONTEXTMENU:
+        ShowTrayMenu();
+        return 0;
+    }
   }
 
   // Give Flutter, including plugins, an opportunity to handle window messages.

@@ -72,6 +72,7 @@ void main() {
       settingsSectionRefreshing(
         section: SettingsSection.profile,
         loadingAccount: true,
+        loadingPreferences: false,
         loadingStickers: false,
         loadingSessions: false,
         loadingVoice: false,
@@ -82,6 +83,7 @@ void main() {
       settingsSectionRefreshing(
         section: SettingsSection.security,
         loadingAccount: false,
+        loadingPreferences: false,
         loadingStickers: false,
         loadingSessions: true,
         loadingVoice: false,
@@ -92,16 +94,18 @@ void main() {
       settingsSectionRefreshing(
         section: SettingsSection.preferences,
         loadingAccount: true,
+        loadingPreferences: true,
         loadingStickers: true,
         loadingSessions: true,
         loadingVoice: true,
       ),
-      isFalse,
+      isTrue,
     );
     expect(
       settingsSectionRefreshing(
         section: SettingsSection.voice,
         loadingAccount: true,
+        loadingPreferences: true,
         loadingStickers: true,
         loadingSessions: true,
         loadingVoice: false,

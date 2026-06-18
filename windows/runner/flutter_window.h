@@ -49,6 +49,11 @@ class FlutterWindow : public Win32Window {
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
       audio_devices_channel_;
 
+  // Native Windows notification-area bridge used for minimize-to-tray.
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
+      tray_channel_;
+  bool tray_icon_added_ = false;
+
   IMMDeviceEnumerator* audio_device_enumerator_ = nullptr;
   IMMNotificationClient* audio_device_notification_client_ = nullptr;
   bool audio_com_initialized_here_ = false;
@@ -57,6 +62,11 @@ class FlutterWindow : public Win32Window {
   WNDPROC original_child_proc_ = nullptr;
 
   void RegisterAudioDevicesChannel();
+  void RegisterTrayChannel();
+  bool ShowTrayIcon();
+  void RemoveTrayIcon();
+  void ShowTrayMenu();
+  void InvokeTrayMethod(const char* method);
   bool EnsureAudioDeviceNotifications();
   void DetachAudioDeviceNotifications();
   void AttachFileDropTarget(HWND child_window);

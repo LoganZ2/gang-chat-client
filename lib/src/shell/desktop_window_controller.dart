@@ -3,6 +3,7 @@ import 'dart:io' show Platform, exit;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../lifecycle/shutdown_hooks.dart';
@@ -22,13 +23,38 @@ const _registerWidgetSize = Size(_authWidgetWidth, _registerWidgetHeight);
 const _loginWindowSize = _loginWidgetSize;
 const _registerWindowSize = _registerWidgetSize;
 
+typedef AppCloseRequestHandler = Future<bool> Function();
+typedef AppTrayExitHandler = Future<void> Function();
+
 class DesktopWindowController {
+  DesktopWindowController({MethodChannel? trayChannel})
+    : _trayChannel = trayChannel ?? const MethodChannel('gang_chat/tray') {
+    _trayChannel.setMethodCallHandler(_handleTrayMethod);
+  }
+
+  static const _shutdownBudget = Duration(milliseconds: 1200);
+
+  final MethodChannel _trayChannel;
   bool _skipNextAuthWindowLock = false;
+  bool _trayInitialized = false;
+  bool _terminating = false;
+  AppCloseRequestHandler? _closeRequestHandler;
+  AppTrayExitHandler? _trayExitHandler;
 
   bool get supportsWindowManagement =>
       !kIsWeb &&
       !Platform.environment.containsKey('FLUTTER_TEST') &&
       (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
+
+  bool get supportsNativeTray => supportsWindowManagement && Platform.isWindows;
+
+  void setCloseRequestHandler(AppCloseRequestHandler? handler) {
+    _closeRequestHandler = handler;
+  }
+
+  void setTrayExitHandler(AppTrayExitHandler? handler) {
+    _trayExitHandler = handler;
+  }
 
   Size authWidgetSize(bool registering, {bool showingError = false}) {
     final baseSize = registering ? _registerWidgetSize : _loginWidgetSize;
@@ -36,9 +62,7 @@ class DesktopWindowController {
     return Size(baseSize.width, baseSize.height + _authErrorExtraHeight);
   }
 
-  Future<void> prepareForLaunch({
-    required bool authenticated,
-  }) async {
+  Future<void> prepareForLaunch({required bool authenticated}) async {
     if (!supportsWindowManagement) return;
 
     await windowManager.ensureInitialized();
@@ -53,7 +77,7 @@ class DesktopWindowController {
       await _prepareInitialWindow();
     }
     await windowManager.setPreventClose(true);
-    windowManager.addListener(_AppWindowListener());
+    windowManager.addListener(_AppWindowListener(this));
   }
 
   Future<void> waitUntilFirstFrameRasterized(WidgetsBinding binding) async {
@@ -101,6 +125,54 @@ class DesktopWindowController {
 
   Future<void> closeWindow() {
     return _configure(() => windowManager.close());
+  }
+
+  Future<void> minimizeToTray() {
+    return _configure(() async {
+      if (supportsNativeTray && await _ensureTrayIcon()) {
+        await windowManager.setSkipTaskbar(true);
+        await windowManager.hide();
+        return;
+      }
+      await windowManager.minimize();
+    });
+  }
+
+  Future<void> restoreHiddenAppWindow() {
+    return _configure(() async {
+      await windowManager.setSkipTaskbar(false);
+      await windowManager.show();
+      await windowManager.focus();
+    });
+  }
+
+  Future<void> terminateApplication() async {
+    if (_terminating) return;
+    _terminating = true;
+
+    try {
+      if (supportsWindowManagement) {
+        await windowManager.hide();
+      }
+    } catch (_) {}
+
+    try {
+      await Future.any([
+        ShutdownHooks.runAll(),
+        Future<void>.delayed(_shutdownBudget),
+      ]);
+    } catch (_) {
+      // Local process shutdown should not be blocked by cleanup errors.
+    }
+
+    await _disposeTrayIcon();
+
+    try {
+      if (supportsWindowManagement) {
+        await windowManager.destroy();
+      }
+    } catch (_) {}
+    exit(0);
   }
 
   Future<void> lockAuthWindow({
@@ -284,9 +356,7 @@ class DesktopWindowController {
   }
 
   Future<void> _setAppTitleBar() {
-    return _setTitleBar(
-      windowButtonVisibility: Platform.isMacOS,
-    );
+    return _setTitleBar(windowButtonVisibility: Platform.isMacOS);
   }
 
   Future<void> _setTitleBar({required bool windowButtonVisibility}) async {
@@ -302,6 +372,51 @@ class DesktopWindowController {
     return _configure(() => windowManager.setOpacity(opacity));
   }
 
+  Future<bool> _dispatchCloseRequest() async {
+    final handler = _closeRequestHandler;
+    if (handler == null) return false;
+    try {
+      return await handler();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> _ensureTrayIcon() async {
+    if (_trayInitialized) return true;
+    try {
+      final initialized = await _trayChannel.invokeMethod<bool>('initialize');
+      _trayInitialized = initialized ?? true;
+      return _trayInitialized;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _disposeTrayIcon() async {
+    if (!_trayInitialized) return;
+    try {
+      await _trayChannel.invokeMethod<void>('dispose');
+    } catch (_) {}
+    _trayInitialized = false;
+  }
+
+  Future<void> _handleTrayMethod(MethodCall call) async {
+    switch (call.method) {
+      case 'open':
+        await restoreHiddenAppWindow();
+        break;
+      case 'exit':
+        final handler = _trayExitHandler;
+        if (handler != null) {
+          await handler();
+        } else {
+          await terminateApplication();
+        }
+        break;
+    }
+  }
+
   Future<bool> _isAuthWindowSized(Size targetSize) async {
     final size = await windowManager.getSize();
     return (size.width - targetSize.width).abs() < 1 &&
@@ -310,36 +425,24 @@ class DesktopWindowController {
 }
 
 class _AppWindowListener extends WindowListener {
-  // How long async cleanup can run before we force the process to exit. The
-  // window is already hidden, so this budget is invisible to the user.
-  static const _shutdownBudget = Duration(milliseconds: 1200);
-  bool _closing = false;
+  _AppWindowListener(this._controller);
+
+  final DesktopWindowController _controller;
+  bool _handlingClose = false;
 
   @override
   void onWindowClose() {
-    unawaited(_drain());
+    unawaited(_handleClose());
   }
 
-  Future<void> _drain() async {
-    if (_closing) return;
-    _closing = true;
-
+  Future<void> _handleClose() async {
+    if (_handlingClose) return;
+    _handlingClose = true;
     try {
-      await windowManager.hide();
-    } catch (_) {}
-
-    try {
-      await Future.any([
-        ShutdownHooks.runAll(),
-        Future<void>.delayed(_shutdownBudget),
-      ]);
-    } catch (_) {
-      // Local process shutdown should not be blocked by cleanup errors.
+      if (await _controller._dispatchCloseRequest()) return;
+      await _controller.terminateApplication();
+    } finally {
+      _handlingClose = false;
     }
-
-    try {
-      await windowManager.destroy();
-    } catch (_) {}
-    exit(0);
   }
 }

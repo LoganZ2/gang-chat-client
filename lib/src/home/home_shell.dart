@@ -11,6 +11,7 @@ import '../app/audio_device_store.dart';
 import '../app/audio_levels.dart';
 import '../app/authenticated_app_services.dart';
 import '../app/authenticated_app_context.dart';
+import '../app/close_behavior.dart';
 import '../app/file_display.dart' as file_display;
 import '../app/file_downloads_controller.dart';
 import '../app/file_transfer_state.dart';
@@ -90,6 +91,7 @@ class HomeShell extends StatefulWidget {
     super.key,
     required this.app,
     required this.audioDeviceStore,
+    required this.closeBehaviorStore,
     required this.windowController,
     this.liveSessionController,
     this.realtime,
@@ -97,6 +99,7 @@ class HomeShell extends StatefulWidget {
 
   final AuthenticatedAppContext app;
   final AudioDeviceStore audioDeviceStore;
+  final CloseBehaviorStore closeBehaviorStore;
   final DesktopWindowController windowController;
   final LiveSessionController? liveSessionController;
   final RealtimeService? realtime;
@@ -155,6 +158,8 @@ class _HomeShellState extends State<HomeShell> {
   bool _pickingAttachments = false;
   bool _settingsOpen = false;
   bool _logoutConfirming = false;
+  bool _closeConfirming = false;
+  bool _exitingApplication = false;
   bool _narrowContentOpen = false;
   _ContentMode _contentMode = _ContentMode.chat;
   // Bumped to ask an open members panel to reload (e.g. after a
@@ -229,6 +234,8 @@ class _HomeShellState extends State<HomeShell> {
     _voicePlaybackService.state.addListener(_handleVoicePlaybackChanged);
     _installServices();
     _attachLiveSessionCallbacks();
+    widget.windowController.setCloseRequestHandler(_handleWindowCloseRequest);
+    widget.windowController.setTrayExitHandler(_exitApplication);
     _fileDropEvents = _fileDropService.drops.listen(_handleDroppedFiles);
     _startRealtime();
     unawaited(_loadServers());
@@ -238,6 +245,12 @@ class _HomeShellState extends State<HomeShell> {
   @override
   void didUpdateWidget(HomeShell oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.windowController != widget.windowController) {
+      oldWidget.windowController.setCloseRequestHandler(null);
+      oldWidget.windowController.setTrayExitHandler(null);
+      widget.windowController.setCloseRequestHandler(_handleWindowCloseRequest);
+      widget.windowController.setTrayExitHandler(_exitApplication);
+    }
     final appChanged =
         widget.app.currentUser.id != oldWidget.app.currentUser.id ||
         !widget.app.hasSameApiSource(oldWidget.app);
@@ -314,6 +327,8 @@ class _HomeShellState extends State<HomeShell> {
     if (fileDropEvents != null) unawaited(fileDropEvents.cancel());
     unawaited(_setSystemFullScreen(false));
     _detachLiveSessionCallbacks();
+    widget.windowController.setCloseRequestHandler(null);
+    widget.windowController.setTrayExitHandler(null);
     _voiceTicker?.cancel();
     _musicBoxSearchDebounce?.cancel();
     _musicBoxSearchController.dispose();

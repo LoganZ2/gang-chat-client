@@ -12,6 +12,7 @@ import '../app/audio_device_info.dart';
 import '../app/audio_device_state.dart';
 import '../app/audio_device_store.dart';
 import '../app/audio_levels.dart';
+import '../app/close_behavior.dart';
 import '../app/confirmation.dart';
 import '../app/settings_controller.dart';
 import '../app/settings_shell_state.dart';
@@ -28,6 +29,7 @@ import '../protocol/models.dart';
 import '../protocol/sticker_pack_store.dart';
 import '../shell/clipboard_service.dart';
 import '../shell/file_selection_service.dart';
+import '../shell/local_close_behavior_store.dart';
 import '../shell/local_audio_device_store.dart';
 import '../ui/avatar_crop_dialog.dart';
 import '../ui/sticker_upload_adapter.dart';
@@ -60,6 +62,7 @@ class SettingsPage extends StatefulWidget {
     this.stickerPackStore = const StickerPackStore(),
     this.clipboardService = const ClipboardService(),
     this.fileSelectionService = const FileSelectionService(),
+    this.closeBehaviorStore = const LocalCloseBehaviorStore(),
     this.currentUser,
     this.onUserUpdated,
     this.onDeviceSelected,
@@ -81,6 +84,7 @@ class SettingsPage extends StatefulWidget {
   final StickerPackStore stickerPackStore;
   final ClipboardService clipboardService;
   final FileSelectionService fileSelectionService;
+  final CloseBehaviorStore closeBehaviorStore;
   final CurrentUser? currentUser;
   final ValueChanged<CurrentUser>? onUserUpdated;
   final void Function(String kind, String deviceId)? onDeviceSelected;
@@ -159,6 +163,10 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _error;
   bool _loading = false;
   String _language = 'zh-Hans';
+  CloseBehavior _closeBehavior = defaultCloseBehavior;
+  bool _loadingCloseBehavior = false;
+  bool _savingCloseBehavior = false;
+  String? _closeBehaviorError;
   final _audioTestService = AudioTestService();
   AudioTestHandle? _inputTest;
   AudioTestHandle? _outputTest;
@@ -190,6 +198,7 @@ class _SettingsPageState extends State<SettingsPage> {
     super.initState();
     _user = widget.currentUser;
     _syncUserFields(widget.currentUser);
+    unawaited(_loadCloseBehavior());
     unawaited(_loadAccount());
   }
 
@@ -199,6 +208,9 @@ class _SettingsPageState extends State<SettingsPage> {
     if (oldWidget.currentUser != widget.currentUser) {
       _user = widget.currentUser;
       _syncUserFields(widget.currentUser);
+    }
+    if (oldWidget.closeBehaviorStore != widget.closeBehaviorStore) {
+      unawaited(_loadCloseBehavior());
     }
   }
 
@@ -298,6 +310,74 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       );
     }
+  }
+
+  Future<void> _loadCloseBehavior() async {
+    if (_loadingCloseBehavior) return;
+    setState(() {
+      _loadingCloseBehavior = true;
+      _closeBehaviorError = null;
+    });
+    try {
+      final behavior = await widget.closeBehaviorStore.read();
+      if (!mounted) return;
+      setState(() {
+        _closeBehavior = behavior;
+        _loadingCloseBehavior = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadingCloseBehavior = false;
+        _closeBehaviorError = error.toString();
+      });
+    }
+  }
+
+  void _setCloseBehavior(String value) {
+    setState(() {
+      _closeBehavior = closeBehaviorFromStorageValue(value);
+      _closeBehaviorError = null;
+    });
+  }
+
+  Future<void> _savePreferences() async {
+    if (_savingAccount || _savingCloseBehavior) return;
+    setState(() {
+      _savingCloseBehavior = true;
+      _closeBehaviorError = null;
+      _notice = null;
+    });
+    try {
+      await widget.closeBehaviorStore.write(_closeBehavior);
+      if (!mounted) return;
+      setState(() => _savingCloseBehavior = false);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _savingCloseBehavior = false;
+        _closeBehaviorError = error.toString();
+      });
+      return;
+    }
+
+    final user = _user;
+    if (!_settingsController.hasApi || user == null) {
+      if (!mounted) return;
+      setState(() => _notice = '偏好设置已保存');
+      return;
+    }
+
+    final draft = preferencesUpdateDraftFromForm(
+      user: user,
+      language: _language,
+    );
+    if (draft.error == null && draft.noChanges) {
+      if (!mounted) return;
+      setState(() => _notice = '偏好设置已保存');
+      return;
+    }
+    await _saveAccount(target: AccountFormSaveTarget.preferences);
   }
 
   Future<void> _ensureStickersLoaded({bool forceReload = false}) async {
@@ -489,6 +569,7 @@ class _SettingsPageState extends State<SettingsPage> {
         await _loadAccount();
         break;
       case SettingsSection.preferences:
+        await _loadCloseBehavior();
         break;
       case SettingsSection.stickers:
         await _loadStickers(forceReload: true);
@@ -2356,6 +2437,7 @@ class _SettingsPageState extends State<SettingsPage> {
     return settingsSectionRefreshing(
       section: _section,
       loadingAccount: _loadingAccount,
+      loadingPreferences: _loadingCloseBehavior,
       loadingStickers: _loadingStickers,
       loadingSessions: _loadingSessions,
       loadingVoice: _loading,
@@ -2566,8 +2648,46 @@ class _SettingsPageState extends State<SettingsPage> {
       children: [
         if (_notice != null) _SettingsNotice(message: _notice!),
         if (_accountError != null) _SettingsError(message: _accountError!),
+        if (_closeBehaviorError != null)
+          _SettingsError(message: _closeBehaviorError!),
+        _SettingsGroup(
+          title: '关闭方式',
+          trailing: _savingCloseBehavior || _loadingCloseBehavior
+              ? const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: _cyan,
+                  ),
+                )
+              : null,
+          children: [
+            _SegmentedSetting(
+              label: '关闭方式',
+              value: _closeBehavior.storageValue,
+              options: CloseBehavior.values
+                  .map(
+                    (behavior) => _SegmentOption(
+                      value: behavior.storageValue,
+                      label: closeBehaviorLabel(behavior),
+                    ),
+                  )
+                  .toList(growable: false),
+              onChanged: _setCloseBehavior,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              closeBehaviorDescription(_closeBehavior),
+              style: const TextStyle(
+                color: _textSecondary,
+                fontSize: 13,
+                height: 1.45,
+              ),
+            ),
+          ],
+        ),
         if (unavailable)
-          const _SettingsEmptyState(text: '偏好设置需要登录后从服务端读取')
+          const _SettingsEmptyState(text: '语言偏好需要登录后从服务端读取')
         else
           _SettingsGroup(
             title: '语言切换',
@@ -2582,25 +2702,20 @@ class _SettingsPageState extends State<SettingsPage> {
                 ],
                 onChanged: (value) => setState(() => _language = value),
               ),
-              const SizedBox(height: 14),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Button(
-                  onPressed: _savingAccount
-                      ? null
-                      : () => unawaited(
-                          _saveAccount(
-                            target: AccountFormSaveTarget.preferences,
-                          ),
-                        ),
-                  loading: _savingAccount,
-                  icon: const Icon(Icons.save_outlined),
-                  tone: ButtonTone.primary,
-                  child: const Text('保存偏好设置'),
-                ),
-              ),
             ],
           ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: Button(
+            onPressed: _savingAccount || _savingCloseBehavior
+                ? null
+                : () => unawaited(_savePreferences()),
+            loading: _savingAccount || _savingCloseBehavior,
+            icon: const Icon(Icons.save_outlined),
+            tone: ButtonTone.primary,
+            child: const Text('保存偏好设置'),
+          ),
+        ),
       ],
     );
   }

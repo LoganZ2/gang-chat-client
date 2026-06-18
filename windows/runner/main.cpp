@@ -20,7 +20,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
       existing = ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", nullptr);
     }
     if (existing != nullptr) {
-      if (::IsIconic(existing)) {
+      if (::IsIconic(existing) || !::IsWindowVisible(existing)) {
         ::ShowWindow(existing, SW_RESTORE);
       }
       ::SetForegroundWindow(existing);

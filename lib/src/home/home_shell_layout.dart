@@ -16,6 +16,7 @@ extension _HomeShellLayout on _HomeShellState {
         api: _services.api,
         apiBaseUrl: widget.app.apiBaseUrl,
         audioDeviceStore: widget.audioDeviceStore,
+        closeBehaviorStore: widget.closeBehaviorStore,
         stickerPackStore: widget.app.stickerPackStore,
         currentUser: _currentUser,
         onUserUpdated: _handleUserUpdated,
