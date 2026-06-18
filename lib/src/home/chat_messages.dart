@@ -881,8 +881,7 @@ class _MessageRow extends StatelessWidget {
       ).resolveAssetUrl(message.sender.avatarUrl),
       defaultAvatarKey: message.sender.defaultAvatarKey,
       size: 32,
-      active: inLive || (message.sender.isOnline ?? false),
-      activeBorderWidth: 1,
+      showBorder: false,
     );
 
     final avatarHoverCard = _AvatarHoverCard(

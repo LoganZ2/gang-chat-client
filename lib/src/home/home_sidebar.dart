@@ -302,6 +302,7 @@ class _UserSummaryBar extends StatelessWidget {
                 ).resolveAssetUrl(user.avatarUrl),
                 defaultAvatarKey: user.defaultAvatarKey,
                 size: 38,
+                showBorder: false,
               ),
               const SizedBox(width: 11),
               Expanded(

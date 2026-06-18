@@ -252,7 +252,8 @@ class _UserProfileCard extends StatelessWidget {
     final name = room_display.userPrimaryName(user);
     final gender = genderMark(user.gender);
     final role = showRoomRole ? room_display.roomRoleLabel(user) : null;
-    final online = inLive || (user.isOnline ?? false);
+    final isCurrentUser = currentUser?.id == user.id;
+    final online = inLive || isCurrentUser || (user.isOnline ?? false);
     final presencePill = inLive
         ? PresencePill.voice()
         : online
@@ -280,6 +281,8 @@ class _UserProfileCard extends StatelessWidget {
                 size: 48,
                 active: online,
                 activeBorderWidth: 2,
+                activeBorderColor: inLive ? UiColors.presenceVoice : null,
+                paintBorderOnForeground: true,
               ),
               const SizedBox(width: UiSpacing.md),
               Expanded(

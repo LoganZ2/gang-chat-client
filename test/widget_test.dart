@@ -282,11 +282,18 @@ void main() {
     final userSummaryRect = tester.getRect(
       find.byKey(const ValueKey('home-sidebar-user-summary')),
     );
+    final userSummaryAvatar = tester.widget<ui.Avatar>(
+      find.descendant(
+        of: find.byKey(const ValueKey('home-sidebar-user-summary')),
+        matching: find.byType(ui.Avatar),
+      ),
+    );
     final displayNameRect = tester.getRect(find.text('Kai'));
     final statusRect = tester.getRect(find.text('在线'));
     final statusDotRect = tester.getRect(
       find.byKey(const ValueKey('home-sidebar-presence-dot')),
     );
+    expect(userSummaryAvatar.showBorder, isFalse);
     expect(statusRect.top, greaterThan(displayNameRect.bottom));
     expect(statusRect.left, greaterThan(userSummaryRect.left));
     expect(statusRect.right, lessThan(userSummaryRect.right));

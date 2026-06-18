@@ -24,6 +24,23 @@ const _user = UserSummary(
   ],
 );
 
+const _currentUser = CurrentUser(
+  id: 'u1',
+  uid: '10001',
+  username: 'logan',
+  displayName: '加一',
+  bio: '',
+  gender: 'secret',
+  email: null,
+  emailPublic: false,
+  phoneNumber: null,
+  phoneNumberPublic: false,
+  avatarUrl: null,
+  defaultAvatarKey: 'blue-3',
+  isSuperuser: false,
+  createdAt: null,
+);
+
 Widget _host(Widget child) {
   return MaterialApp(
     home: Scaffold(body: Center(child: child)),
@@ -88,6 +105,47 @@ void main() {
     expect(find.text('在线'), findsNothing);
     expect(find.text('离线'), findsNothing);
     expect(find.text('语音'), findsOneWidget);
+    final avatar = tester.widget<Avatar>(
+      find.byWidgetPredicate((widget) => widget is Avatar && widget.size == 48),
+    );
+    expect(avatar.active, isTrue);
+    expect(avatar.activeBorderColor, UiColors.presenceVoice);
+    expect(avatar.paintBorderOnForeground, isTrue);
+  });
+
+  testWidgets('hover card treats current user as online without summary flag', (
+    tester,
+  ) async {
+    const lightweightSelf = UserSummary(
+      id: 'u1',
+      username: 'logan',
+      displayName: '加一',
+      avatarUrl: null,
+      defaultAvatarKey: 'blue-3',
+    );
+
+    await tester.pumpWidget(
+      _host(
+        const AvatarHoverCardForTest(
+          user: lightweightSelf,
+          currentUser: _currentUser,
+        ),
+      ),
+    );
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await gesture.moveTo(tester.getCenter(find.byType(Avatar).first));
+    await tester.pumpAndSettle();
+
+    expect(find.text('在线'), findsOneWidget);
+    final avatar = tester.widget<Avatar>(
+      find.byWidgetPredicate((widget) => widget is Avatar && widget.size == 48),
+    );
+    expect(avatar.active, isTrue);
+    expect(avatar.activeBorderColor, isNull);
+    expect(avatar.paintBorderOnForeground, isTrue);
   });
 
   testWidgets('hover card hides room role outside room context', (

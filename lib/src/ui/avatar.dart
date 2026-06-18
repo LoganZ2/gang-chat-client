@@ -56,6 +56,9 @@ class Avatar extends StatelessWidget {
     this.size = 40,
     this.active = false,
     this.activeBorderWidth = 2,
+    this.activeBorderColor,
+    this.paintBorderOnForeground = false,
+    this.showBorder = true,
     this.showFallbackText = true,
   });
 
@@ -70,6 +73,9 @@ class Avatar extends StatelessWidget {
   final double size;
   final bool active;
   final double activeBorderWidth;
+  final Color? activeBorderColor;
+  final bool paintBorderOnForeground;
+  final bool showBorder;
   final bool showFallbackText;
 
   @override
@@ -79,17 +85,25 @@ class Avatar extends StatelessWidget {
         ? null
         : normalizeAvatarPresetKey(defaultAvatarKey!);
     final fillColor = key == null ? UiColors.surface : avatarFallbackColor(key);
+    final activeColor = activeBorderColor ?? UiColors.accent;
+    final borderActive = showBorder && active;
+    final border = showBorder
+        ? Border.all(
+            color: borderActive ? activeColor : UiColors.border,
+            width: borderActive ? activeBorderWidth : 1,
+          )
+        : null;
     return SizedBox.square(
       dimension: size,
-      child: DecoratedBox(
+      child: Container(
         decoration: BoxDecoration(
           color: fillColor,
           shape: BoxShape.circle,
-          border: Border.all(
-            color: active ? UiColors.accent : UiColors.border,
-            width: active ? activeBorderWidth : 1,
-          ),
+          border: paintBorderOnForeground ? null : border,
         ),
+        foregroundDecoration: paintBorderOnForeground && border != null
+            ? BoxDecoration(shape: BoxShape.circle, border: border)
+            : null,
         child: ClipOval(
           child: imageUrl == null
               ? showFallbackText
@@ -97,8 +111,8 @@ class Avatar extends StatelessWidget {
                         child: Text(
                           initials,
                           style: TextStyle(
-                            color: key == null && active
-                                ? UiColors.accent
+                            color: key == null && borderActive
+                                ? activeColor
                                 : UiColors.text,
                             fontSize: size * 0.34,
                             fontWeight: FontWeight.w600,

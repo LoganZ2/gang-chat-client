@@ -79,7 +79,7 @@ class AvatarHoverCardForTest extends StatelessWidget {
       profileActionBuilder: profileActionBuilder,
       inLive: inLive,
       showRoomRole: showRoomRole,
-      child: Avatar(label: _senderName(user), size: 32),
+      child: Avatar(label: _senderName(user), size: 32, showBorder: false),
     );
   }
 }

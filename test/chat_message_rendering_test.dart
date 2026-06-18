@@ -102,6 +102,59 @@ void main() {
     );
   });
 
+  testWidgets('current user message avatar stays borderless while in live', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    final live = LiveState(
+      roomId: 'room_1',
+      participantCount: 1,
+      participants: [
+        LiveParticipant(
+          liveSessionId: 'live_self',
+          user: _currentUser.toSummary(),
+          joinedAt: DateTime.utc(2026, 6, 11, 9),
+          micMuted: false,
+          headphonesMuted: false,
+          voiceBlocked: false,
+          cameraOn: false,
+          screenSharing: false,
+          connectionState: 'connected',
+        ),
+      ],
+      updatedAt: DateTime.utc(2026, 6, 11, 9),
+    );
+
+    await tester.pumpWidget(
+      _host(
+        _chatPane(
+          controller: controller,
+          room: _roomDetail,
+          live: live,
+          messages: [
+            _message(
+              type: 'text',
+              body: 'from live self',
+              sender: _currentUser.toSummary(),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final avatar = tester.widget<ui.Avatar>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is ui.Avatar &&
+            widget.label == _currentUser.displayName &&
+            widget.size == 32,
+      ),
+    );
+    expect(avatar.active, isFalse);
+    expect(avatar.showBorder, isFalse);
+  });
+
   testWidgets('message timestamps toggle between brief and detailed labels', (
     tester,
   ) async {
@@ -936,6 +989,7 @@ Widget _chatPane({
   required TextEditingController controller,
   required List<Message> messages,
   RoomDetail? room,
+  LiveState? live,
   bool loading = false,
   Future<UserSummary> Function(UserSummary sender)? onResolveSenderProfile,
   ValueChanged<PublicRoom>? onEnterProfileRoom,
@@ -945,7 +999,7 @@ Widget _chatPane({
     currentUser: _currentUser,
     roomCard: _roomCard,
     room: room,
-    live: null,
+    live: live,
     messages: messages,
     fileTransfers: const {},
     fileDownloads: const {},

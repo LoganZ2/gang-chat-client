@@ -211,8 +211,7 @@ class _LiveMemberCard extends StatelessWidget {
                     context,
                   ).resolveAssetUrl(participant.user.avatarUrl),
                   size: 42,
-                  active: state.micActive,
-                  activeBorderWidth: 1.2,
+                  showBorder: false,
                 ),
                 const Spacer(),
                 Icon(
