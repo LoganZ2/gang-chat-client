@@ -200,65 +200,6 @@ class _LiveStageBadge extends StatelessWidget {
   }
 }
 
-class _LiveVideoFooter extends StatelessWidget {
-  const _LiveVideoFooter({
-    required this.name,
-    required this.nameColor,
-    required this.micMuted,
-    required this.speaking,
-    required this.mediaKind,
-  });
-
-  final String name;
-  final Color nameColor;
-  final bool micMuted;
-  final bool speaking;
-  final _LiveMediaKind mediaKind;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.bottomCenter,
-          end: Alignment.topCenter,
-          colors: [
-            UiColors.surfacePressed.withValues(alpha: 0.9),
-            UiColors.surfacePressed.withValues(alpha: 0),
-          ],
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(9, 16, 9, 8),
-        child: Row(
-          children: [
-            Icon(
-              micMuted ? Icons.mic_off : Icons.mic,
-              size: 14,
-              color: micMuted
-                  ? UiColors.textMuted
-                  : speaking
-                  ? UiColors.accent
-                  : UiColors.textSecondary,
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: UiTypography.label.copyWith(color: nameColor),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Icon(_mediaIcon(mediaKind), size: 14, color: UiColors.accent),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 IconData _mediaIcon(_LiveMediaKind kind) {
   return switch (kind) {
     _LiveMediaKind.camera => Icons.videocam,

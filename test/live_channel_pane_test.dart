@@ -1,14 +1,32 @@
 import 'package:client/src/config/app_config.dart';
 import 'package:client/src/home/live_channel_pane.dart';
+import 'package:client/src/live/live_session.dart';
+import 'package:client/src/live/live_video_track_view.dart';
 import 'package:client/src/protocol/models.dart';
 import 'package:client/src/ui/app_config_scope.dart';
 import 'package:client/src/ui/ui.dart' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:livekit_client/livekit_client.dart' as lk;
 
 void main() {
+  testWidgets('empty live channel uses Chinese empty copy without header tag', (
+    tester,
+  ) async {
+    final searchController = TextEditingController();
+    addTearDown(searchController.dispose);
+
+    await tester.pumpWidget(
+      _host(searchController: searchController, live: _liveState(const [])),
+    );
+
+    expect(find.text('语音频道里还没有人'), findsOneWidget);
+    expect(find.text('No one is in live channel'), findsNothing);
+    expect(find.text('Live Channel'), findsNothing);
+  });
+
   testWidgets(
-    'current user live member card centers identity and shows flat statuses',
+    'current user live member card is square and shows connected statuses',
     (tester) async {
       final searchController = TextEditingController();
       addTearDown(searchController.dispose);
@@ -42,6 +60,7 @@ void main() {
         of: find.text('Room Me'),
         matching: find.byType(ui.PressableSurface),
       );
+      final card = tester.widget<ui.PressableSurface>(cardFinder);
       final cardRect = tester.getRect(cardFinder);
       final avatarRect = tester.getRect(find.byWidget(avatar));
       final name = tester.widget<Text>(find.text('Room Me'));
@@ -69,6 +88,7 @@ void main() {
 
       expect(avatar.active, isFalse);
       expect(avatar.showBorder, isFalse);
+      expect(card.height, closeTo(cardRect.width, 0.01));
       expect(avatarRect.center.dx, closeTo(cardRect.center.dx, 1));
       expect(name.textAlign, TextAlign.center);
       expect(name.style?.color, ui.UiColors.accent);
@@ -134,6 +154,78 @@ void main() {
       );
       await tester.tap(shareButtonFinder);
       expect(shareToggles, 1);
+    },
+  );
+
+  testWidgets(
+    'live member media cards show top-left name and keep status controls',
+    (tester) async {
+      final searchController = TextEditingController();
+      addTearDown(searchController.dispose);
+      liveVideoTrackRendererForTest = (track, fit, mirrorLocal) {
+        return ColoredBox(
+          key: ValueKey<String>(
+            'live-video-renderer:${track.identity}:${track.isScreenShare}',
+          ),
+          color: Colors.black,
+        );
+      };
+      addTearDown(resetLiveVideoTrackRendererForTest);
+      var stageSelections = 0;
+      var shareToggles = 0;
+
+      Future<void> pumpMediaCard({required bool screenShare}) async {
+        final user = _currentUser.toSummary().copyWith(
+          roomDisplayName: 'Room Me',
+          roomRole: 'member',
+        );
+        final live = _liveState([
+          _participant(
+            id: 'live_self',
+            user: user,
+            cameraOn: !screenShare,
+            screenSharing: screenShare,
+          ),
+        ]);
+
+        await tester.pumpWidget(
+          _host(
+            searchController: searchController,
+            live: live,
+            videoTracks: [
+              _liveVideoTrack(
+                identity: 'current_user',
+                isScreenShare: screenShare,
+                isLocal: true,
+              ),
+            ],
+            onStageSelectionChanged: (_) => stageSelections += 1,
+            onToggleShare: () => shareToggles += 1,
+          ),
+        );
+        await tester.pump();
+      }
+
+      await pumpMediaCard(screenShare: false);
+      _expectMediaMemberCard(tester);
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('live-video-renderer:current_user:false'),
+        ),
+      );
+      expect(stageSelections, 1);
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>(
+            'live-member-status:screen-share:current_user',
+          ),
+        ),
+      );
+      expect(shareToggles, 1);
+      expect(stageSelections, 1);
+
+      await pumpMediaCard(screenShare: true);
+      _expectMediaMemberCard(tester);
     },
   );
 
@@ -227,6 +319,8 @@ Widget _host({
   VoidCallback? onToggleHeadphones,
   VoidCallback? onToggleCamera,
   VoidCallback? onToggleShare,
+  ValueChanged<LiveStageSelection?>? onStageSelectionChanged,
+  List<LiveVideoTrack> videoTracks = const [],
 }) {
   return MaterialApp(
     theme: ui.uiTheme(),
@@ -253,9 +347,9 @@ Widget _host({
             cameraOn: false,
             screenSharing: false,
             speakingUserIds: speakingUserIds,
-            videoTracks: const [],
+            videoTracks: videoTracks,
             stageSelection: const LiveStageSelection.none(),
-            onStageSelectionChanged: (_) {},
+            onStageSelectionChanged: onStageSelectionChanged ?? (_) {},
             onEnterFullScreen: (_) {},
             onBackToChat: () {},
             onJoin: () {},
@@ -290,6 +384,58 @@ Widget _host({
       ),
     ),
   );
+}
+
+void _expectMediaMemberCard(WidgetTester tester) {
+  final cardFinder = find.ancestor(
+    of: find.byKey(
+      const ValueKey<String>('live-member-status:mic:current_user'),
+    ),
+    matching: find.byType(ui.PressableSurface),
+  );
+  final card = tester.widget<ui.PressableSurface>(cardFinder);
+  final cardRect = tester.getRect(cardFinder);
+  final micButtonRect = tester.getRect(
+    find.byKey(const ValueKey<String>('live-member-status:mic:current_user')),
+  );
+  final shareButtonRect = tester.getRect(
+    find.byKey(
+      const ValueKey<String>('live-member-status:screen-share:current_user'),
+    ),
+  );
+  final nameFinder = find.descendant(
+    of: cardFinder,
+    matching: find.text('Room Me'),
+  );
+  final nameRect = tester.getRect(nameFinder);
+  final tagTextFinder = find.descendant(
+    of: cardFinder,
+    matching: find.byWidgetPredicate(
+      (widget) => widget is Text && widget.data != 'Room Me',
+    ),
+  );
+  final tagRect = tester.getRect(tagTextFinder);
+  final videoRect = tester.getRect(
+    find.descendant(of: cardFinder, matching: find.byType(LiveVideoTrackView)),
+  );
+
+  expect(card.height, closeTo(cardRect.width, 0.01));
+  expect(
+    find.descendant(of: cardFinder, matching: find.byType(LiveVideoTrackView)),
+    findsOneWidget,
+  );
+  expect(
+    find.descendant(of: cardFinder, matching: find.byType(ui.Avatar)),
+    findsNothing,
+  );
+  expect(nameFinder, findsOneWidget);
+  expect(tagTextFinder, findsOneWidget);
+  expect(nameRect.left, lessThan(tagRect.left));
+  expect(nameRect.top, lessThan(videoRect.top));
+  expect(nameRect.bottom, lessThan(micButtonRect.top));
+  expect(tagRect.top, lessThan(micButtonRect.top));
+  expect(tagRect.right, lessThanOrEqualTo(cardRect.right));
+  expect(cardRect.bottom - shareButtonRect.bottom, lessThan(14));
 }
 
 LiveState _liveState(List<LiveParticipant> participants) {
@@ -338,4 +484,22 @@ UserSummary _user(
     roomRole: roomRole,
     isSuperuser: isSuperuser,
   );
+}
+
+LiveVideoTrack _liveVideoTrack({
+  required String identity,
+  required bool isScreenShare,
+  required bool isLocal,
+}) {
+  return LiveVideoTrack(
+    identity: identity,
+    track: _FakeVideoTrack(),
+    isScreenShare: isScreenShare,
+    isLocal: isLocal,
+  );
+}
+
+class _FakeVideoTrack implements lk.VideoTrack {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

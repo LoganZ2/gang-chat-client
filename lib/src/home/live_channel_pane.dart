@@ -23,7 +23,7 @@ const _liveRoomPadding = 18.0;
 // Width of the right-docked music box panel (search + queue) when expanded.
 const _musicBoxPanelWidth = 270.0;
 const _memberCardWidth = 154.0;
-const _memberCardHeight = 142.0;
+const _memberCardHeight = _memberCardWidth;
 const _controlButtonSize = 44.0;
 // How far the docked music box panel extends below the stage's bottom edge,
 // reaching down over the control-bar gap to align with the control bar.

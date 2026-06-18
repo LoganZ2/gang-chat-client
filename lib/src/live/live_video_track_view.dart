@@ -5,6 +5,21 @@ import 'live_session.dart';
 
 enum LiveVideoTrackFit { cover, contain }
 
+typedef LiveVideoTrackRendererBuilder =
+    Widget Function(
+      LiveVideoTrack track,
+      LiveVideoTrackFit fit,
+      bool mirrorLocal,
+    );
+
+@visibleForTesting
+LiveVideoTrackRendererBuilder? liveVideoTrackRendererForTest;
+
+@visibleForTesting
+void resetLiveVideoTrackRendererForTest() {
+  liveVideoTrackRendererForTest = null;
+}
+
 class LiveVideoTrackView extends StatelessWidget {
   const LiveVideoTrackView({
     super.key,
@@ -19,6 +34,11 @@ class LiveVideoTrackView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final testRenderer = liveVideoTrackRendererForTest;
+    if (testRenderer != null) {
+      return testRenderer(track, fit, mirrorLocal);
+    }
+
     final mirrorMode = track.isScreenShare
         ? lk.VideoViewMirrorMode.off
         : mirrorLocal && track.isLocal
