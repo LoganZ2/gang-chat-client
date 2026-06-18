@@ -14,6 +14,94 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('chat sender names use role colors except current user', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      _host(
+        _chatPane(
+          controller: controller,
+          room: _roomDetail,
+          messages: [
+            _message(
+              type: 'text',
+              body: 'from self',
+              sender: const UserSummary(
+                id: _currentUserId,
+                username: 'me',
+                displayName: 'Self Sender',
+                avatarUrl: null,
+                defaultAvatarKey: 'blue-3',
+                roomRole: 'owner',
+              ),
+            ),
+            _message(
+              type: 'text',
+              body: 'from admin',
+              clientMessageId: 'client_admin',
+              sender: const UserSummary(
+                id: 'user_admin',
+                username: 'admin',
+                displayName: 'Admin Sender',
+                avatarUrl: null,
+                defaultAvatarKey: 'blue-3',
+                roomRole: 'admin',
+              ),
+            ),
+            _message(
+              type: 'text',
+              body: 'from creator',
+              clientMessageId: 'client_creator',
+              sender: const UserSummary(
+                id: 'user_creator',
+                username: 'creator',
+                displayName: 'Creator Sender',
+                avatarUrl: null,
+                defaultAvatarKey: 'blue-3',
+                roomRole: 'owner',
+              ),
+            ),
+            _message(
+              type: 'text',
+              body: 'from superuser',
+              clientMessageId: 'client_superuser',
+              sender: const UserSummary(
+                id: 'user_superuser',
+                username: 'superuser',
+                displayName: 'Superuser Sender',
+                avatarUrl: null,
+                defaultAvatarKey: 'blue-3',
+                roomRole: 'member',
+                isSuperuser: true,
+              ),
+            ),
+          ],
+        ),
+        height: 620,
+      ),
+    );
+
+    expect(
+      tester.widget<Text>(find.text('Self Sender')).style?.color,
+      ui.UiColors.accent,
+    );
+    expect(
+      tester.widget<Text>(find.text('Admin Sender')).style?.color,
+      ui.UiColors.roleAdmin,
+    );
+    expect(
+      tester.widget<Text>(find.text('Creator Sender')).style?.color,
+      ui.UiColors.roleCreator,
+    );
+    expect(
+      tester.widget<Text>(find.text('Superuser Sender')).style?.color,
+      ui.UiColors.roleSuperuser,
+    );
+  });
+
   testWidgets('message timestamps toggle between brief and detailed labels', (
     tester,
   ) async {
@@ -959,7 +1047,7 @@ Message _voiceMessage({required Duration duration}) {
 }
 
 const _currentUser = CurrentUser(
-  id: 'current_user',
+  id: _currentUserId,
   uid: '1000000',
   username: 'me',
   displayName: 'Me',
@@ -974,6 +1062,8 @@ const _currentUser = CurrentUser(
   isSuperuser: false,
   createdAt: null,
 );
+
+const _currentUserId = 'current_user';
 
 const _systemTarget = UserSummary(
   id: 'user_target',

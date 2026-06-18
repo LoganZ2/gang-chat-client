@@ -15,6 +15,10 @@ RoleBadgeTone roleBadgeToneForLabel(String label) {
   };
 }
 
+Color roleBadgeForegroundColorForLabel(String label) {
+  return _roleBadgeStyle(roleBadgeToneForLabel(label)).foreground;
+}
+
 class RoleBadge extends StatelessWidget {
   const RoleBadge({
     super.key,

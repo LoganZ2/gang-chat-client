@@ -86,6 +86,7 @@ class _MessageStage extends StatefulWidget {
     super.key,
     required this.roomId,
     required this.currentUser,
+    required this.ownerUserId,
     required this.roomReady,
     required this.loading,
     required this.error,
@@ -106,6 +107,7 @@ class _MessageStage extends StatefulWidget {
 
   final String? roomId;
   final CurrentUser currentUser;
+  final String? ownerUserId;
   final bool roomReady;
   final bool loading;
   final String? error;
@@ -445,6 +447,7 @@ class _MessageStageState extends State<_MessageStage> {
               _SystemMessageRow(
                 event: systemEvent,
                 currentUser: widget.currentUser,
+                ownerUserId: widget.ownerUserId,
                 live: widget.live,
                 onResolveSenderProfile: widget.onResolveSenderProfile,
                 onResolveRoomProfile: widget.onResolveRoomProfile,
@@ -456,6 +459,7 @@ class _MessageStageState extends State<_MessageStage> {
                 message: message,
                 outgoing: message.sender.id == widget.currentUser.id,
                 currentUser: widget.currentUser,
+                ownerUserId: widget.ownerUserId,
                 transfer: widget.fileTransfers[message.clientMessageId],
                 fileDownloads: widget.fileDownloads,
                 downloadActions: widget.downloadActions,
@@ -569,6 +573,7 @@ class _SystemMessageRow extends StatelessWidget {
   const _SystemMessageRow({
     required this.event,
     required this.currentUser,
+    required this.ownerUserId,
     required this.live,
     this.onResolveSenderProfile,
     this.onResolveRoomProfile,
@@ -578,6 +583,7 @@ class _SystemMessageRow extends StatelessWidget {
 
   final message_display.SystemMessageEvent event;
   final CurrentUser currentUser;
+  final String? ownerUserId;
   final LiveState? live;
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
@@ -607,6 +613,7 @@ class _SystemMessageRow extends StatelessWidget {
                 ..._SystemMessageParts(
                   event: event,
                   currentUser: currentUser,
+                  ownerUserId: ownerUserId,
                   live: live,
                   onResolveSenderProfile: onResolveSenderProfile,
                   onResolveRoomProfile: onResolveRoomProfile,
@@ -626,6 +633,7 @@ class _SystemMessageParts {
   const _SystemMessageParts({
     required this.event,
     required this.currentUser,
+    required this.ownerUserId,
     required this.live,
     this.onResolveSenderProfile,
     this.onResolveRoomProfile,
@@ -635,6 +643,7 @@ class _SystemMessageParts {
 
   final message_display.SystemMessageEvent event;
   final CurrentUser currentUser;
+  final String? ownerUserId;
   final LiveState? live;
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
@@ -693,6 +702,7 @@ class _SystemMessageParts {
     return _SystemUserChip(
       user: user,
       currentUser: currentUser,
+      ownerUserId: ownerUserId,
       onResolveProfile: onResolveSenderProfile,
       onResolveRoomProfile: onResolveRoomProfile,
       onEnterProfileRoom: onEnterProfileRoom,
@@ -718,6 +728,7 @@ class _SystemUserChip extends StatelessWidget {
   const _SystemUserChip({
     required this.user,
     required this.currentUser,
+    required this.ownerUserId,
     required this.inLive,
     this.onResolveProfile,
     this.onResolveRoomProfile,
@@ -727,6 +738,7 @@ class _SystemUserChip extends StatelessWidget {
 
   final UserSummary user;
   final CurrentUser currentUser;
+  final String? ownerUserId;
   final bool inLive;
   final Future<UserSummary> Function(UserSummary sender)? onResolveProfile;
   final RoomProfileResolver? onResolveRoomProfile;
@@ -764,7 +776,11 @@ class _SystemUserChip extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: UiTypography.label.copyWith(
-              color: UiColors.text,
+              color: _roomUsernameColor(
+                user: user,
+                currentUser: currentUser,
+                ownerUserId: ownerUserId,
+              ),
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -780,6 +796,7 @@ class _MessageRow extends StatelessWidget {
     required this.message,
     required this.outgoing,
     required this.currentUser,
+    required this.ownerUserId,
     required this.transfer,
     required this.fileDownloads,
     required this.downloadActions,
@@ -795,6 +812,7 @@ class _MessageRow extends StatelessWidget {
   final Message message;
   final bool outgoing;
   final CurrentUser currentUser;
+  final String? ownerUserId;
   final FileTransferState? transfer;
   final Map<String, FileTransferState> fileDownloads;
   final ChatFileDownloadActions downloadActions;
@@ -810,6 +828,11 @@ class _MessageRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sender = _senderName(message.sender);
+    final senderColor = _roomUsernameColor(
+      user: message.sender,
+      currentUser: currentUser,
+      ownerUserId: ownerUserId,
+    );
     final bubble = Flexible(
       child: Column(
         crossAxisAlignment: outgoing
@@ -827,7 +850,7 @@ class _MessageRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 textAlign: outgoing ? TextAlign.right : TextAlign.left,
                 style: UiTypography.label.copyWith(
-                  color: outgoing ? UiColors.accent : UiColors.textSecondary,
+                  color: senderColor,
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                 ),
@@ -1721,6 +1744,17 @@ class _CenteredState extends StatelessWidget {
       ),
     );
   }
+}
+
+Color _roomUsernameColor({
+  required UserSummary user,
+  required CurrentUser currentUser,
+  String? ownerUserId,
+}) {
+  if (user.id == currentUser.id) return UiColors.accent;
+  return roleBadgeForegroundColorForLabel(
+    room_display.roomRoleLabel(user, ownerUserId: ownerUserId),
+  );
 }
 
 String _senderName(UserSummary user) {

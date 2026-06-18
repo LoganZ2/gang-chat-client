@@ -10,6 +10,7 @@ import '../app/file_transfer_state.dart';
 import '../app/composer_attachment_display.dart' as composer_attachment;
 import '../app/live_display.dart' as live_display;
 import '../app/message_display.dart' as message_display;
+import '../app/room_display.dart' as room_display;
 import '../app/sticker_display.dart' as sticker_display;
 import '../app/voice_message_display.dart' as voice_display;
 import '../protocol/models.dart';
@@ -172,6 +173,7 @@ class ChatPane extends StatelessWidget {
               key: stageKey,
               roomId: room?.id ?? roomCard?.id,
               currentUser: currentUser,
+              ownerUserId: room?.createdBy?.id,
               roomReady: roomReady,
               loading: loading,
               error: error,
