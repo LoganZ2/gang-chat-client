@@ -1040,17 +1040,34 @@ class _StickerBody extends StatelessWidget {
     // The preview shows the full-resolution sticker, not the thumbnail.
     final previewUrl = asset == null ? null : config.resolveAssetUrl(asset.url);
     final name = message_display.stickerAttachmentTitle(attachment);
+    final imageRequest = MediaCacheRequest.tryFromUrl(
+      url: imageUrl,
+      filename: asset?.filename ?? name,
+      mimeType: asset?.mimeType,
+      expectedBytes: asset?.sizeBytes,
+    );
     final image = imageUrl != null && imageUrl.isNotEmpty
         ? ClipRRect(
             borderRadius: BorderRadius.circular(UiRadii.md),
-            child: Image.network(
-              imageUrl,
-              width: 132,
-              height: 132,
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) =>
-                  _StickerFallback(name: name),
-            ),
+            child:
+                imagePreviewActions.mediaCache != null && imageRequest != null
+                ? CachedMediaImage(
+                    cache: imagePreviewActions.mediaCache!,
+                    request: imageRequest,
+                    width: 132,
+                    height: 132,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) =>
+                        _StickerFallback(name: name),
+                  )
+                : Image.network(
+                    imageUrl,
+                    width: 132,
+                    height: 132,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) =>
+                        _StickerFallback(name: name),
+                  ),
           )
         : _StickerFallback(name: name);
 
@@ -1437,6 +1454,7 @@ class _FileAttachmentTile extends StatelessWidget {
                 title: title,
                 width: previewSize.width,
                 height: previewSize.height,
+                mediaCache: imagePreviewActions.mediaCache,
                 onTap: () {
                   final fullUrl =
                       (resolvedUrl != null && resolvedUrl.isNotEmpty)
@@ -1538,6 +1556,7 @@ class _FileImagePreview extends StatelessWidget {
     required this.title,
     required this.width,
     required this.height,
+    this.mediaCache,
     this.onTap,
   });
 
@@ -1545,6 +1564,7 @@ class _FileImagePreview extends StatelessWidget {
   final String title;
   final double width;
   final double height;
+  final MediaCacheController? mediaCache;
   final VoidCallback? onTap;
 
   @override
@@ -1559,26 +1579,7 @@ class _FileImagePreview extends StatelessWidget {
         child: SizedBox(
           width: width,
           height: height,
-          child: Image.network(
-            url,
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(
-                    title,
-                    maxLines: 2,
-                    textAlign: TextAlign.center,
-                    overflow: TextOverflow.ellipsis,
-                    style: UiTypography.label.copyWith(
-                      color: UiColors.textMuted,
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
+          child: _filePreviewImage(),
         ),
       ),
     );
@@ -1587,6 +1588,38 @@ class _FileImagePreview extends StatelessWidget {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(onTap: onTap, child: preview),
+    );
+  }
+
+  Widget _filePreviewImage() {
+    final request = MediaCacheRequest.tryFromUrl(url: url, filename: title);
+    if (mediaCache != null && request != null) {
+      return CachedMediaImage(
+        cache: mediaCache!,
+        request: request,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => _filePreviewFallback(),
+      );
+    }
+    return Image.network(
+      url,
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) => _filePreviewFallback(),
+    );
+  }
+
+  Widget _filePreviewFallback() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Text(
+          title,
+          maxLines: 2,
+          textAlign: TextAlign.center,
+          overflow: TextOverflow.ellipsis,
+          style: UiTypography.label.copyWith(color: UiColors.textMuted),
+        ),
+      ),
     );
   }
 }

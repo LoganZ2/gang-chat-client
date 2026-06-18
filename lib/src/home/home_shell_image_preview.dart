@@ -15,12 +15,19 @@ extension _HomeShellImagePreview on _HomeShellState {
       onCopyToClipboard: _previewCopyToClipboard,
       onSaveSticker: _previewSaveSticker,
       onSaveRoomSticker: canManageRoomStickers ? _previewSaveRoomSticker : null,
+      mediaCache: _mediaCacheController,
     );
   }
 
   /// Fetch the bytes for an image at [url]. Throws a user-facing message on a
   /// non-2xx response or transport failure.
   Future<Uint8List> _fetchImageBytes(String url) async {
+    final request = MediaCacheRequest.tryFromUrl(url: url);
+    if (request != null) {
+      final bytes = await _mediaCacheController.readBytes(request: request);
+      return Uint8List.fromList(bytes);
+    }
+
     final uri = Uri.tryParse(url);
     if (uri == null) {
       throw Exception('图片地址无效');

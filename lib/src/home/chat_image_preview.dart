@@ -11,6 +11,7 @@ class ChatImagePreviewActions {
     required this.onCopyToClipboard,
     this.onSaveSticker,
     this.onSaveRoomSticker,
+    this.mediaCache,
   });
 
   /// A no-op bundle for tests and previews where the actions aren't exercised.
@@ -19,7 +20,8 @@ class ChatImagePreviewActions {
       onSaveAs = _noopWithName,
       onCopyToClipboard = _noopWithUrl,
       onSaveSticker = null,
-      onSaveRoomSticker = null;
+      onSaveRoomSticker = null,
+      mediaCache = null;
 
   /// Save the image at [url] straight to the user's Downloads folder, using
   /// [suggestedName] as the filename. Throws on failure.
@@ -42,6 +44,9 @@ class ChatImagePreviewActions {
   /// the room. Throws on failure.
   final Future<void> Function(Message message, MessageAttachment attachment)?
   onSaveRoomSticker;
+
+  /// Optional disk cache used for preview rendering and image actions.
+  final MediaCacheController? mediaCache;
 }
 
 Future<void> _noopWithName(String url, String suggestedName) async {}
@@ -234,31 +239,55 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
         // so scaling isn't confined to the image's original on-screen edges.
         boundaryMargin: const EdgeInsets.all(double.infinity),
         clipBehavior: Clip.none,
-        child: Image.network(
-          widget.imageUrl,
-          fit: BoxFit.contain,
-          loadingBuilder: (context, child, progress) {
-            if (progress == null) return child;
-            return const Center(
-              child: SizedBox.square(
-                dimension: 28,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: UiColors.textSecondary,
-                ),
-              ),
-            );
-          },
-          errorBuilder: (context, error, stackTrace) {
-            return const Center(
-              child: Icon(
-                Icons.broken_image_outlined,
-                color: UiColors.textMuted,
-                size: 48,
-              ),
-            );
-          },
+        child: _previewImage(),
+      ),
+    );
+  }
+
+  Widget _previewImage() {
+    final cache = widget.actions.mediaCache;
+    final request = MediaCacheRequest.tryFromUrl(
+      url: widget.imageUrl,
+      filename: widget.suggestedName,
+    );
+    if (cache != null && request != null) {
+      return CachedMediaImage(
+        cache: cache,
+        request: request,
+        fit: BoxFit.contain,
+        loadingBuilder: (_) => _previewLoading(),
+        errorBuilder: (_, _, _) => _previewError(),
+      );
+    }
+    return Image.network(
+      widget.imageUrl,
+      fit: BoxFit.contain,
+      loadingBuilder: (context, child, progress) {
+        if (progress == null) return child;
+        return _previewLoading();
+      },
+      errorBuilder: (context, error, stackTrace) => _previewError(),
+    );
+  }
+
+  Widget _previewLoading() {
+    return const Center(
+      child: SizedBox.square(
+        dimension: 28,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: UiColors.textSecondary,
         ),
+      ),
+    );
+  }
+
+  Widget _previewError() {
+    return const Center(
+      child: Icon(
+        Icons.broken_image_outlined,
+        color: UiColors.textMuted,
+        size: 48,
       ),
     );
   }

@@ -6,6 +6,7 @@ import 'global_search_controller.dart';
 import 'live_controller.dart';
 import 'live_session_controller.dart';
 import 'messages_controller.dart';
+import 'media_cache_controller.dart';
 import 'music_box_controller.dart';
 import 'realtime_controller.dart';
 import 'rooms_controller.dart';
@@ -24,6 +25,7 @@ class AuthenticatedAppServices {
     required this.realtime,
     required this.musicBox,
     required this.fileDownloads,
+    required this.mediaCache,
     required this.search,
     required this.settings,
     required this.stickers,
@@ -60,6 +62,7 @@ class AuthenticatedAppServices {
           ),
       musicBox: MusicBoxController(api: api),
       fileDownloads: FileDownloadsController(),
+      mediaCache: MediaCacheController(),
       search: GlobalSearchController(api: api),
       settings: SettingsController(
         api: api,
@@ -86,6 +89,7 @@ class AuthenticatedAppServices {
   final RealtimeService realtime;
   final MusicBoxController musicBox;
   final FileDownloadsController fileDownloads;
+  final MediaCacheController mediaCache;
   final GlobalSearchController search;
   final SettingsController settings;
   final StickerPacksController stickers;

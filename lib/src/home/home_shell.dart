@@ -14,6 +14,7 @@ import '../app/authenticated_app_context.dart';
 import '../app/file_display.dart' as file_display;
 import '../app/file_downloads_controller.dart';
 import '../app/file_transfer_state.dart';
+import '../app/media_cache_controller.dart';
 import '../app/composer_attachment_display.dart' as composer_attachment;
 import '../app/global_search_controller.dart';
 import '../app/live_controller.dart';
@@ -217,6 +218,7 @@ class _HomeShellState extends State<HomeShell> {
   MusicBoxController get _musicBoxController => _services.musicBox;
   FileDownloadsController get _fileDownloadsController =>
       _services.fileDownloads;
+  MediaCacheController get _mediaCacheController => _services.mediaCache;
 
   @override
   void initState() {

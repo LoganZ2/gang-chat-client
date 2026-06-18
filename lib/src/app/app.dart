@@ -15,6 +15,7 @@ export 'confirmation.dart';
 export 'file_display.dart';
 export 'file_downloads_controller.dart';
 export 'file_transfer_state.dart';
+export 'media_cache_controller.dart';
 export 'live_controller.dart';
 export 'live_display.dart';
 export 'live_session_controller.dart';

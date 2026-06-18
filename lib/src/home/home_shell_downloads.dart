@@ -15,7 +15,11 @@ extension _HomeShellDownloads on _HomeShellState {
     required int index,
     required String resolvedUrl,
   }) async {
-    final downloadKey = file_display.fileDownloadKey(message, attachment, index);
+    final downloadKey = file_display.fileDownloadKey(
+      message,
+      attachment,
+      index,
+    );
     if (!_fileDownloadsController.canStartDownload(
       downloads: _fileDownloads,
       downloadKey: downloadKey,
@@ -56,21 +60,43 @@ extension _HomeShellDownloads on _HomeShellState {
       ),
     );
 
-    try {
-      await _fileDownloadsController.downloadToFile(
-        uri: uri,
+    void applyProgress({required int sentBytes, required int totalBytes}) {
+      if (!mounted) return;
+      final patch = _fileDownloadsController.patchDownloadProgress(
+        downloads: _fileDownloads,
+        downloadKey: downloadKey,
         transfer: transfer,
-        onProgress: ({required sentBytes, required totalBytes}) {
-          if (!mounted) return;
-          final patch = _fileDownloadsController.patchDownloadProgress(
-            downloads: _fileDownloads,
-            downloadKey: downloadKey,
-            transfer: transfer,
-          );
-          if (patch == null) return;
-          _setHomeState(() => _applyDownloadPatch(patch));
-        },
       );
+      if (patch == null) return;
+      _setHomeState(() => _applyDownloadPatch(patch));
+    }
+
+    try {
+      final cacheRequest = MediaCacheRequest.tryFromUrl(
+        url: resolvedUrl,
+        filename: suggestedName,
+        mimeType: attachment.asset?.mimeType,
+        expectedBytes: attachment.asset?.sizeBytes,
+      );
+      if (cacheRequest == null) {
+        await _fileDownloadsController.downloadToFile(
+          uri: uri,
+          transfer: transfer,
+          onProgress: applyProgress,
+        );
+      } else {
+        final cached = await _mediaCacheController.getOrDownload(
+          request: cacheRequest,
+          transfer: transfer,
+          onProgress: applyProgress,
+        );
+        await _mediaCacheController.copyFileToPath(
+          source: cached,
+          destinationPath: location.path,
+          transfer: transfer,
+          onProgress: applyProgress,
+        );
+      }
       if (!_fileDownloadsController.canCompleteDownload(
         downloads: _fileDownloads,
         downloadKey: downloadKey,
@@ -88,6 +114,9 @@ extension _HomeShellDownloads on _HomeShellState {
         ),
       );
       _showDownloadNotice(file_display.fileDownloadedNotice());
+    } on MediaCacheCancelledException catch (_) {
+      // Cancellation already removed the entry via [_cancelDownload]; nothing
+      // to report.
     } on DownloadCancelledException {
       // Cancellation already removed the entry via [_cancelDownload]; nothing
       // to report.
