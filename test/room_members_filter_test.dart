@@ -23,14 +23,20 @@ void main() {
     );
 
     expect(counts.allPresence, 4);
+    expect(counts.live, 1);
     expect(counts.online, 2);
     expect(counts.offline, 2);
     expect(counts.allRoles, 4);
     expect(counts.roleMembers, 2);
     expect(counts.admins, 2);
+    expect(counts.creators, 1);
     expect(
       roomMemberPresenceFilterLabel(RoomMemberPresenceFilter.all, counts),
       '全部 4',
+    );
+    expect(
+      roomMemberPresenceFilterLabel(RoomMemberPresenceFilter.live, counts),
+      '语音 1',
     );
     expect(
       roomMemberPresenceFilterLabel(RoomMemberPresenceFilter.online, counts),
@@ -51,6 +57,10 @@ void main() {
     expect(
       roomMemberRoleFilterLabel(RoomMemberRoleFilter.admin, counts),
       '管理员 2',
+    );
+    expect(
+      roomMemberRoleFilterLabel(RoomMemberRoleFilter.creator, counts),
+      '创建者 1',
     );
   });
 
@@ -193,7 +203,18 @@ void main() {
       _member('live_admin', role: 'admin', isOnline: false),
       _member('online_member', isOnline: true),
       _member('offline_member', isOnline: false),
+      _member('owner', isOnline: false),
     ];
+
+    final live = visibleRoomMembers(
+      members: members,
+      live: _live(['live_admin']),
+      presenceFilter: RoomMemberPresenceFilter.live,
+      roleFilter: RoomMemberRoleFilter.all,
+      query: '',
+      ownerUserId: 'owner',
+    );
+    expect(live.map((member) => member.user.id), ['live_admin']);
 
     final online = visibleRoomMembers(
       members: members,
@@ -201,6 +222,7 @@ void main() {
       presenceFilter: RoomMemberPresenceFilter.online,
       roleFilter: RoomMemberRoleFilter.all,
       query: '',
+      ownerUserId: 'owner',
     );
     expect(online.map((member) => member.user.id), [
       'live_admin',
@@ -213,6 +235,7 @@ void main() {
       presenceFilter: RoomMemberPresenceFilter.offline,
       roleFilter: RoomMemberRoleFilter.member,
       query: '',
+      ownerUserId: 'owner',
     );
     expect(offlineMembers.map((member) => member.user.id), ['offline_member']);
 
@@ -222,8 +245,19 @@ void main() {
       presenceFilter: RoomMemberPresenceFilter.all,
       roleFilter: RoomMemberRoleFilter.admin,
       query: '',
+      ownerUserId: 'owner',
     );
-    expect(admins.map((member) => member.user.id), ['live_admin']);
+    expect(admins.map((member) => member.user.id), ['live_admin', 'owner']);
+
+    final creators = visibleRoomMembers(
+      members: members,
+      live: _live(['live_admin']),
+      presenceFilter: RoomMemberPresenceFilter.all,
+      roleFilter: RoomMemberRoleFilter.creator,
+      query: '',
+      ownerUserId: 'owner',
+    );
+    expect(creators.map((member) => member.user.id), ['owner']);
   });
 
   test('search rank prefers uid then display name then remark', () {

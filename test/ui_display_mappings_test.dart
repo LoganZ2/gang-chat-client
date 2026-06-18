@@ -24,6 +24,36 @@ void main() {
     );
   });
 
+  testWidgets('PresencePill maps presence tones to unified colors', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const Directionality(
+        textDirection: TextDirection.ltr,
+        child: Row(
+          children: [
+            PresencePill(label: '语音', tone: PresencePillTone.voice),
+            PresencePill(label: '在线', tone: PresencePillTone.online),
+            PresencePill(label: '离线', tone: PresencePillTone.offline),
+          ],
+        ),
+      ),
+    );
+
+    expect(
+      tester.widget<Text>(find.text('语音')).style?.color,
+      UiColors.presenceVoice,
+    );
+    expect(
+      tester.widget<Text>(find.text('在线')).style?.color,
+      UiColors.presenceOnline,
+    );
+    expect(
+      tester.widget<Text>(find.text('离线')).style?.color,
+      UiColors.presenceOffline,
+    );
+  });
+
   test('genderMark normalizes common gender values', () {
     expect(genderMark('M')?.symbol, '♂');
     expect(genderMark('woman')?.symbol, '♀');

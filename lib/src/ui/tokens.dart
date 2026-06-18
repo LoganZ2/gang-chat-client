@@ -25,6 +25,16 @@ abstract final class UiColors {
   static const violet = Color(0xFFB8A3FF);
   static const amber = Color(0xFFD4B675);
   static const danger = Color(0xFFE58383);
+
+  static const presenceOnline = Color(0xFF52A07C);
+  static const presenceOnlineSurface = Color(0xFF1F2D27);
+  static const presenceOnlineBorder = Color(0xFF3D705A);
+  static const presenceOffline = Color(0xFF8E96A6);
+  static const presenceOfflineSurface = Color(0xFF222733);
+  static const presenceOfflineBorder = Color(0xFF4A5263);
+  static const presenceVoice = Color(0xFF7FFFD4);
+  static const presenceVoiceSurface = Color(0xFF153A34);
+  static const presenceVoiceBorder = Color(0xFF4AAE96);
 }
 
 abstract final class UiSpacing {

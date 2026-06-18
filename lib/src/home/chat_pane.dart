@@ -8,6 +8,7 @@ import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import '../app/file_display.dart' as file_display;
 import '../app/file_transfer_state.dart';
 import '../app/composer_attachment_display.dart' as composer_attachment;
+import '../app/live_display.dart' as live_display;
 import '../app/message_display.dart' as message_display;
 import '../app/sticker_display.dart' as sticker_display;
 import '../app/voice_message_display.dart' as voice_display;
@@ -138,7 +139,9 @@ class ChatPane extends StatelessWidget {
     final title = _roomTitle(room, roomCard);
     final avatarUrl = room?.avatarUrl ?? roomCard?.avatarUrl;
     final defaultAvatarKey =
-        room?.defaultAvatarKey ?? roomCard?.defaultAvatarKey ?? 'room-1';
+        room?.defaultAvatarKey ??
+        roomCard?.defaultAvatarKey ??
+        kDefaultAvatarPresetKey;
     final liveParticipantCount =
         live?.participantCount ??
         room?.live.participantCount ??
@@ -175,6 +178,7 @@ class ChatPane extends StatelessWidget {
               messages: messages,
               fileTransfers: fileTransfers,
               fileDownloads: fileDownloads,
+              live: live,
               downloadActions: downloadActions,
               voicePlaybackActions: voicePlaybackActions,
               imagePreviewActions: imagePreviewActions,

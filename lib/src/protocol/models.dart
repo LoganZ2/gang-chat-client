@@ -8,7 +8,7 @@ class UserCommonRoom {
     this.visibility = 'private',
     this.remarkName,
     this.avatarUrl,
-    this.defaultAvatarKey = 'room-1',
+    this.defaultAvatarKey = 'blue-3',
     this.roomDisplayName,
     this.roomRole,
   });
@@ -42,7 +42,7 @@ class UserCommonRoom {
             'default_avatar_key',
             'room_default_avatar_key',
           ]) ??
-          'room-1',
+          'blue-3',
       roomDisplayName: _stringFromJson(json, const [
         'room_display_name',
         'room_username',
@@ -626,7 +626,7 @@ class RoomCard {
       notificationPolicy:
           _stringFromJson(json, const ['notification_policy']) ?? 'all',
       avatarUrl: json['avatar_url'] as String?,
-      defaultAvatarKey: json['default_avatar_key'] as String? ?? 'room-1',
+      defaultAvatarKey: json['default_avatar_key'] as String? ?? 'blue-3',
       memberCount: json['member_count']! as int,
       onlineMemberCount:
           _intFromJson(json, const ['online_member_count', 'online_count']) ??
@@ -721,7 +721,7 @@ class PublicRoom {
       rid: json['rid'] as String? ?? '',
       name: json['name']! as String,
       avatarUrl: json['avatar_url'] as String?,
-      defaultAvatarKey: json['default_avatar_key'] as String? ?? 'room-1',
+      defaultAvatarKey: json['default_avatar_key'] as String? ?? 'blue-3',
       visibility: json['visibility'] as String? ?? 'public',
       joinPolicy: json['join_policy'] as String? ?? 'approval_required',
       description:
@@ -796,7 +796,7 @@ class SearchRoomContext {
       rid: json['rid'] as String? ?? '',
       name: json['name']! as String,
       avatarUrl: json['avatar_url'] as String?,
-      defaultAvatarKey: json['default_avatar_key'] as String? ?? 'room-1',
+      defaultAvatarKey: json['default_avatar_key'] as String? ?? 'blue-3',
     );
   }
 }
@@ -1283,7 +1283,7 @@ class RoomDetail {
         'can_delete',
       ]),
       avatarUrl: json['avatar_url'] as String?,
-      defaultAvatarKey: json['default_avatar_key'] as String? ?? 'room-1',
+      defaultAvatarKey: json['default_avatar_key'] as String? ?? 'blue-3',
       memberCount: json['member_count']! as int,
       onlineMemberCount:
           _intFromJson(json, const ['online_member_count', 'online_count']) ??

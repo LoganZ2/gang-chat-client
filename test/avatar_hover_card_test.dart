@@ -72,6 +72,21 @@ void main() {
     expect(find.text('@logan'), findsNothing);
   });
 
+  testWidgets('hover card shows voice as a peer presence tag', (tester) async {
+    await tester.pumpWidget(
+      _host(const AvatarHoverCardForTest(user: _user, inLive: true)),
+    );
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await gesture.moveTo(tester.getCenter(find.byType(Avatar).first));
+    await tester.pumpAndSettle();
+
+    expect(find.text('在线'), findsOneWidget);
+    expect(find.text('语音'), findsOneWidget);
+  });
+
   testWidgets('moving the cursor onto the card keeps it open', (tester) async {
     await tester.pumpWidget(_host(const AvatarHoverCardForTest(user: _user)));
 

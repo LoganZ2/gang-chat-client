@@ -44,6 +44,13 @@ class _MemberFilters extends StatelessWidget {
                     ),
                   ),
                   Segment(
+                    value: member_filter.RoomMemberPresenceFilter.live,
+                    label: member_filter.roomMemberPresenceFilterLabel(
+                      member_filter.RoomMemberPresenceFilter.live,
+                      filterCounts,
+                    ),
+                  ),
+                  Segment(
                     value: member_filter.RoomMemberPresenceFilter.online,
                     label: member_filter.roomMemberPresenceFilterLabel(
                       member_filter.RoomMemberPresenceFilter.online,
@@ -85,6 +92,13 @@ class _MemberFilters extends StatelessWidget {
                     value: member_filter.RoomMemberRoleFilter.admin,
                     label: member_filter.roomMemberRoleFilterLabel(
                       member_filter.RoomMemberRoleFilter.admin,
+                      filterCounts,
+                    ),
+                  ),
+                  Segment(
+                    value: member_filter.RoomMemberRoleFilter.creator,
+                    label: member_filter.roomMemberRoleFilterLabel(
+                      member_filter.RoomMemberRoleFilter.creator,
                       filterCounts,
                     ),
                   ),
@@ -157,6 +171,7 @@ class _MemberRow extends StatelessWidget {
               onResolveProfile: onResolveProfile,
               onResolveRoomProfile: onResolveRoomProfile,
               onEnterCommonRoom: onOpenRoom,
+              inLive: presence == member_filter.RoomMemberPresence.live,
               child: avatar,
             ),
             const SizedBox(width: 10),
@@ -170,10 +185,7 @@ class _MemberRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
-            _Pill(
-              label: member_filter.roomMemberPresenceLabel(presence),
-              active: presence == member_filter.RoomMemberPresence.live,
-            ),
+            PresencePill.member(presence),
             const SizedBox(width: 6),
             _Pill(label: role),
             if (busy) ...[

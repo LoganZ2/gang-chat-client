@@ -92,6 +92,7 @@ class _MessageStage extends StatefulWidget {
     required this.messages,
     required this.fileTransfers,
     required this.fileDownloads,
+    required this.live,
     required this.downloadActions,
     required this.voicePlaybackActions,
     required this.imagePreviewActions,
@@ -111,6 +112,7 @@ class _MessageStage extends StatefulWidget {
   final List<Message> messages;
   final Map<String, FileTransferState> fileTransfers;
   final Map<String, FileTransferState> fileDownloads;
+  final LiveState? live;
   final ChatFileDownloadActions downloadActions;
   final ChatVoicePlaybackActions voicePlaybackActions;
   final ChatImagePreviewActions imagePreviewActions;
@@ -262,6 +264,10 @@ class _MessageStageState extends State<_MessageStage> {
   double _distanceFromBottom() {
     final position = _scrollController.position;
     return math.max(0, position.pixels - position.minScrollExtent);
+  }
+
+  bool _userInLive(String userId) {
+    return live_display.liveParticipantByUserId(widget.live, userId) != null;
   }
 
   void _handleScrollChanged() {
@@ -439,6 +445,7 @@ class _MessageStageState extends State<_MessageStage> {
               _SystemMessageRow(
                 event: systemEvent,
                 currentUser: widget.currentUser,
+                live: widget.live,
                 onResolveSenderProfile: widget.onResolveSenderProfile,
                 onResolveRoomProfile: widget.onResolveRoomProfile,
                 onEnterProfileRoom: widget.onEnterProfileRoom,
@@ -454,6 +461,7 @@ class _MessageStageState extends State<_MessageStage> {
                 downloadActions: widget.downloadActions,
                 voicePlaybackActions: widget.voicePlaybackActions,
                 imagePreviewActions: widget.imagePreviewActions,
+                inLive: _userInLive(message.sender.id),
                 onResolveSenderProfile: widget.onResolveSenderProfile,
                 onResolveRoomProfile: widget.onResolveRoomProfile,
                 onEnterProfileRoom: widget.onEnterProfileRoom,
@@ -561,6 +569,7 @@ class _SystemMessageRow extends StatelessWidget {
   const _SystemMessageRow({
     required this.event,
     required this.currentUser,
+    required this.live,
     this.onResolveSenderProfile,
     this.onResolveRoomProfile,
     this.onEnterProfileRoom,
@@ -569,6 +578,7 @@ class _SystemMessageRow extends StatelessWidget {
 
   final message_display.SystemMessageEvent event;
   final CurrentUser currentUser;
+  final LiveState? live;
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
   final RoomProfileResolver? onResolveRoomProfile;
@@ -597,6 +607,7 @@ class _SystemMessageRow extends StatelessWidget {
                 ..._SystemMessageParts(
                   event: event,
                   currentUser: currentUser,
+                  live: live,
                   onResolveSenderProfile: onResolveSenderProfile,
                   onResolveRoomProfile: onResolveRoomProfile,
                   onEnterProfileRoom: onEnterProfileRoom,
@@ -615,6 +626,7 @@ class _SystemMessageParts {
   const _SystemMessageParts({
     required this.event,
     required this.currentUser,
+    required this.live,
     this.onResolveSenderProfile,
     this.onResolveRoomProfile,
     this.onEnterProfileRoom,
@@ -623,6 +635,7 @@ class _SystemMessageParts {
 
   final message_display.SystemMessageEvent event;
   final CurrentUser currentUser;
+  final LiveState? live;
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
   final RoomProfileResolver? onResolveRoomProfile;
@@ -679,6 +692,7 @@ class _SystemMessageParts {
       onResolveRoomProfile: onResolveRoomProfile,
       onEnterProfileRoom: onEnterProfileRoom,
       profileActionBuilder: profileActionBuilder,
+      inLive: live_display.liveParticipantByUserId(live, user.id) != null,
     );
   }
 
@@ -699,6 +713,7 @@ class _SystemUserChip extends StatelessWidget {
   const _SystemUserChip({
     required this.user,
     required this.currentUser,
+    required this.inLive,
     this.onResolveProfile,
     this.onResolveRoomProfile,
     this.onEnterProfileRoom,
@@ -707,6 +722,7 @@ class _SystemUserChip extends StatelessWidget {
 
   final UserSummary user;
   final CurrentUser currentUser;
+  final bool inLive;
   final Future<UserSummary> Function(UserSummary sender)? onResolveProfile;
   final RoomProfileResolver? onResolveRoomProfile;
   final ValueChanged<PublicRoom>? onEnterProfileRoom;
@@ -732,6 +748,7 @@ class _SystemUserChip extends StatelessWidget {
           onResolveRoomProfile: onResolveRoomProfile,
           onEnterCommonRoom: onEnterProfileRoom,
           profileActionBuilder: profileActionBuilder,
+          inLive: inLive,
           child: avatar,
         ),
         const SizedBox(width: 4),
@@ -793,6 +810,7 @@ class _MessageRow extends StatelessWidget {
     required this.downloadActions,
     required this.voicePlaybackActions,
     required this.imagePreviewActions,
+    required this.inLive,
     this.onResolveSenderProfile,
     this.onResolveRoomProfile,
     this.onEnterProfileRoom,
@@ -807,6 +825,7 @@ class _MessageRow extends StatelessWidget {
   final ChatFileDownloadActions downloadActions;
   final ChatVoicePlaybackActions voicePlaybackActions;
   final ChatImagePreviewActions imagePreviewActions;
+  final bool inLive;
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
   final RoomProfileResolver? onResolveRoomProfile;
@@ -864,7 +883,7 @@ class _MessageRow extends StatelessWidget {
       ).resolveAssetUrl(message.sender.avatarUrl),
       defaultAvatarKey: message.sender.defaultAvatarKey,
       size: 32,
-      active: message.sender.isOnline ?? false,
+      active: inLive || (message.sender.isOnline ?? false),
       activeBorderWidth: 1,
     );
 
@@ -875,6 +894,7 @@ class _MessageRow extends StatelessWidget {
       onResolveRoomProfile: onResolveRoomProfile,
       onEnterCommonRoom: onEnterProfileRoom,
       profileActionBuilder: profileActionBuilder,
+      inLive: inLive,
       child: avatar,
     );
 

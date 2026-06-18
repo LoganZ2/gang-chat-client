@@ -426,7 +426,6 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
               enabled: _canManageRoom && !_saving,
               onUpload: _pickAvatar,
               onPresetSelected: _selectPreset,
-              presetKeys: const ['room-1', ...kAvatarPresetKeys],
               uploadLabel: '上传图标',
             ),
             Input(
@@ -524,7 +523,7 @@ RoomDetail _draftCreateRoom(CurrentUser currentUser) {
     visibility: 'public',
     joinPolicy: 'approval_required',
     avatarUrl: null,
-    defaultAvatarKey: 'room-1',
+    defaultAvatarKey: kDefaultAvatarPresetKey,
     memberCount: 1,
     onlineMemberCount: 1,
     createdBy: currentUser.toSummary(),

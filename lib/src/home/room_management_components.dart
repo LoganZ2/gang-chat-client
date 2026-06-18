@@ -115,20 +115,17 @@ class _RowSurface extends StatelessWidget {
 }
 
 class _Pill extends StatelessWidget {
-  const _Pill({required this.label, this.active = false});
+  const _Pill({required this.label});
 
   final String label;
-  final bool active;
 
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: active ? UiColors.selected : UiColors.surfacePressed,
+        color: UiColors.surfacePressed,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: active ? UiColors.accentBorder : UiColors.border,
-        ),
+        border: Border.all(color: UiColors.border),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
@@ -137,7 +134,7 @@ class _Pill extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: UiTypography.label.copyWith(
-            color: active ? UiColors.accent : UiColors.textSecondary,
+            color: UiColors.textSecondary,
             fontWeight: FontWeight.w600,
           ),
         ),

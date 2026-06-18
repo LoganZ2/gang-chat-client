@@ -173,7 +173,7 @@ class _RoomHeaderActions extends StatelessWidget {
           ),
           const SizedBox(height: _headerActionGap),
           _HeaderIconButton(
-            tooltip: '房间操作',
+            tooltip: '房间设置',
             icon: Icons.more_horiz,
             onPressed: onSettingsPressed,
           ),

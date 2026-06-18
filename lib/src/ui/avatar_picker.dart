@@ -77,6 +77,9 @@ class AvatarPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final normalizedDefaultAvatarKey = normalizeAvatarPresetKey(
+      defaultAvatarKey,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -91,7 +94,7 @@ class AvatarPicker extends StatelessWidget {
             _AvatarPickerPreview(
               label: displayName,
               imageUrl: usingPreset ? null : imageUrl,
-              defaultAvatarKey: defaultAvatarKey,
+              defaultAvatarKey: normalizedDefaultAvatarKey,
               size: 88,
             ),
             const SizedBox(width: 16),
@@ -103,7 +106,8 @@ class AvatarPicker extends StatelessWidget {
                   for (final key in presetKeys)
                     _AvatarPickerSwatch(
                       keyName: key,
-                      selected: usingPreset && key == defaultAvatarKey,
+                      selected:
+                          usingPreset && key == normalizedDefaultAvatarKey,
                       onTap: enabled ? () => onPresetSelected(key) : null,
                     ),
                 ],

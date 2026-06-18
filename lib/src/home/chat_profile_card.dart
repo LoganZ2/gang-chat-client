@@ -10,6 +10,7 @@ class _AvatarHoverCard extends StatelessWidget {
     this.onResolveRoomProfile,
     this.onEnterCommonRoom,
     this.profileActionBuilder,
+    this.inLive = false,
   });
 
   final UserSummary user;
@@ -22,6 +23,7 @@ class _AvatarHoverCard extends StatelessWidget {
   final RoomProfileResolver? onResolveRoomProfile;
   final ValueChanged<PublicRoom>? onEnterCommonRoom;
   final UserProfileActionBuilder? profileActionBuilder;
+  final bool inLive;
 
   @override
   Widget build(BuildContext context) {
@@ -32,6 +34,7 @@ class _AvatarHoverCard extends StatelessWidget {
       onResolveRoomProfile: onResolveRoomProfile,
       onEnterCommonRoom: onEnterCommonRoom,
       profileActionBuilder: profileActionBuilder,
+      inLive: inLive,
       child: child,
     );
   }
@@ -49,6 +52,7 @@ class AvatarHoverCardForTest extends StatelessWidget {
     this.onResolveRoomProfile,
     this.onEnterCommonRoom,
     this.profileActionBuilder,
+    this.inLive = false,
   });
 
   final UserSummary user;
@@ -57,6 +61,7 @@ class AvatarHoverCardForTest extends StatelessWidget {
   final RoomProfileResolver? onResolveRoomProfile;
   final ValueChanged<PublicRoom>? onEnterCommonRoom;
   final UserProfileActionBuilder? profileActionBuilder;
+  final bool inLive;
 
   @override
   Widget build(BuildContext context) {
@@ -67,6 +72,7 @@ class AvatarHoverCardForTest extends StatelessWidget {
       onResolveRoomProfile: onResolveRoomProfile,
       onEnterCommonRoom: onEnterCommonRoom,
       profileActionBuilder: profileActionBuilder,
+      inLive: inLive,
       child: Avatar(label: _senderName(user), size: 32),
     );
   }

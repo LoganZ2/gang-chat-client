@@ -11,9 +11,21 @@ String avatarInitials(String label) {
   return trimmed.characters.take(2).toString().toUpperCase();
 }
 
+const String kDefaultAvatarPresetKey = 'blue-3';
+
+const Map<String, String> kLegacyAvatarPresetAliases = {
+  'room-1': kDefaultAvatarPresetKey,
+};
+
+String normalizeAvatarPresetKey(String key) {
+  final trimmed = key.trim();
+  if (trimmed.isEmpty) return kDefaultAvatarPresetKey;
+  return kLegacyAvatarPresetAliases[trimmed] ?? trimmed;
+}
+
 Color avatarFallbackColor(String key) {
-  return switch (key) {
-    'blue-3' => const Color(0xFF526C9F),
+  return switch (normalizeAvatarPresetKey(key)) {
+    kDefaultAvatarPresetKey => const Color(0xFF526C9F),
     'sky-2' => const Color(0xFF4F7F92),
     'cyan-2' => const Color(0xFF47777A),
     'mint-2' => const Color(0xFF4F7A67),
@@ -63,7 +75,9 @@ class Avatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final initials = avatarInitials(label);
-    final key = defaultAvatarKey;
+    final key = defaultAvatarKey == null
+        ? null
+        : normalizeAvatarPresetKey(defaultAvatarKey!);
     final fillColor = key == null ? UiColors.surface : avatarFallbackColor(key);
     return SizedBox.square(
       dimension: size,

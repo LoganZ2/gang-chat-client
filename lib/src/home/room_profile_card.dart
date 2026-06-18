@@ -119,11 +119,13 @@ class UserHoverCard extends StatefulWidget {
     this.onResolveRoomProfile,
     this.onEnterCommonRoom,
     this.profileActionBuilder,
+    this.inLive = false,
   });
 
   final UserSummary user;
   final Widget child;
   final CurrentUser? currentUser;
+  final bool inLive;
 
   /// Fetches a richer, up-to-date profile (gender, common rooms) before the
   /// card opens. When null the card shows only the supplied summary.
@@ -151,12 +153,14 @@ class _UserHoverCardState extends State<UserHoverCard> {
     final resolverPresenceChanged =
         (oldWidget.onResolveProfile == null) !=
         (widget.onResolveProfile == null);
+    final liveChanged = oldWidget.inLive != widget.inLive;
     final actionPresenceChanged =
         (oldWidget.profileActionBuilder == null) !=
         (widget.profileActionBuilder == null);
     if (!userChanged &&
         !currentUserChanged &&
         !resolverPresenceChanged &&
+        !liveChanged &&
         !actionPresenceChanged) {
       return;
     }
@@ -198,6 +202,7 @@ class _UserHoverCardState extends State<UserHoverCard> {
         widget.onResolveProfile != null,
         widget.onResolveRoomProfile != null,
         widget.currentUser?.id,
+        widget.inLive,
         widget.profileActionBuilder != null,
       ),
       onBeforeOpen: widget.onResolveProfile == null ? null : _resolveProfile,
@@ -207,6 +212,7 @@ class _UserHoverCardState extends State<UserHoverCard> {
         onResolveUserProfile: widget.onResolveProfile,
         onResolveRoomProfile: widget.onResolveRoomProfile,
         onEnterCommonRoom: widget.onEnterCommonRoom,
+        inLive: widget.inLive,
         action: widget.profileActionBuilder?.call(_displayUser),
       ),
       child: widget.child,
@@ -221,6 +227,7 @@ class _UserProfileCard extends StatelessWidget {
     this.onResolveUserProfile,
     this.onResolveRoomProfile,
     this.onEnterCommonRoom,
+    this.inLive = false,
     this.action,
   });
 
@@ -229,6 +236,7 @@ class _UserProfileCard extends StatelessWidget {
   final UserProfileResolver? onResolveUserProfile;
   final RoomProfileResolver? onResolveRoomProfile;
   final ValueChanged<PublicRoom>? onEnterCommonRoom;
+  final bool inLive;
   final UserProfileAction? action;
 
   @override
@@ -236,7 +244,7 @@ class _UserProfileCard extends StatelessWidget {
     final name = room_display.userPrimaryName(user);
     final gender = genderMark(user.gender);
     final role = room_display.roomRoleLabel(user);
-    final online = user.isOnline ?? false;
+    final online = inLive || (user.isOnline ?? false);
     final bio = user.bio?.trim();
     final uid = user.uid?.trim();
     final commonRooms = user.commonRooms.where((r) => r.isUsable).toList();
@@ -309,11 +317,8 @@ class _UserProfileCard extends StatelessWidget {
             spacing: 6,
             runSpacing: 6,
             children: [
-              StatusBadge(
-                label: online ? '在线' : '离线',
-                icon: online ? Icons.circle : Icons.circle_outlined,
-                active: online,
-              ),
+              online ? PresencePill.online() : PresencePill.offline(),
+              if (inLive) PresencePill.voice(),
               StatusBadge(label: role),
             ],
           ),

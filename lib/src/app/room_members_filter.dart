@@ -2,9 +2,9 @@ import '../protocol/models.dart';
 
 enum RoomMemberPresence { live, online, offline }
 
-enum RoomMemberPresenceFilter { all, online, offline }
+enum RoomMemberPresenceFilter { all, live, online, offline }
 
-enum RoomMemberRoleFilter { all, member, admin }
+enum RoomMemberRoleFilter { all, member, admin, creator }
 
 class RoomMemberPermissionState {
   const RoomMemberPermissionState({
@@ -84,19 +84,23 @@ class RoomMemberPresenceGroup {
 class RoomMemberFilterCounts {
   const RoomMemberFilterCounts({
     required this.allPresence,
+    required this.live,
     required this.online,
     required this.offline,
     required this.allRoles,
     required this.roleMembers,
     required this.admins,
+    required this.creators,
   });
 
   final int allPresence;
+  final int live;
   final int online;
   final int offline;
   final int allRoles;
   final int roleMembers;
   final int admins;
+  final int creators;
 }
 
 bool canStartRoomMemberAction({
@@ -414,21 +418,27 @@ RoomMemberFilterCounts roomMemberFilterCounts({
   String? ownerUserId,
 }) {
   var allPresence = 0;
+  var liveCount = 0;
   var online = 0;
   var offline = 0;
   var allRoles = 0;
   var roleMembers = 0;
   var admins = 0;
+  var creators = 0;
 
   for (final member in members) {
     allPresence += 1;
     allRoles += 1;
 
     final presence = roomMemberPresence(member, live: live);
-    if (presence == RoomMemberPresence.offline) {
-      offline += 1;
-    } else {
-      online += 1;
+    switch (presence) {
+      case RoomMemberPresence.live:
+        liveCount += 1;
+        online += 1;
+      case RoomMemberPresence.online:
+        online += 1;
+      case RoomMemberPresence.offline:
+        offline += 1;
     }
 
     if (_matchesRoleFilter(
@@ -445,15 +455,24 @@ RoomMemberFilterCounts roomMemberFilterCounts({
     )) {
       admins += 1;
     }
+    if (_matchesRoleFilter(
+      member,
+      RoomMemberRoleFilter.creator,
+      ownerUserId: ownerUserId,
+    )) {
+      creators += 1;
+    }
   }
 
   return RoomMemberFilterCounts(
     allPresence: allPresence,
+    live: liveCount,
     online: online,
     offline: offline,
     allRoles: allRoles,
     roleMembers: roleMembers,
     admins: admins,
+    creators: creators,
   );
 }
 
@@ -463,6 +482,7 @@ String roomMemberPresenceFilterLabel(
 ) {
   final (label, count) = switch (filter) {
     RoomMemberPresenceFilter.all => ('全部', counts.allPresence),
+    RoomMemberPresenceFilter.live => ('语音', counts.live),
     RoomMemberPresenceFilter.online => ('在线', counts.online),
     RoomMemberPresenceFilter.offline => ('离线', counts.offline),
   };
@@ -477,6 +497,7 @@ String roomMemberRoleFilterLabel(
     RoomMemberRoleFilter.all => ('所有身份', counts.allRoles),
     RoomMemberRoleFilter.member => ('成员', counts.roleMembers),
     RoomMemberRoleFilter.admin => ('管理员', counts.admins),
+    RoomMemberRoleFilter.creator => ('创建者', counts.creators),
   };
   return '$label $count';
 }
@@ -492,12 +513,7 @@ List<RoomMember> visibleRoomMembers({
   final normalizedQuery = query.trim().toLowerCase();
   final visible = members.where((member) {
     final presence = roomMemberPresence(member, live: live);
-    if (presenceFilter == RoomMemberPresenceFilter.online &&
-        presence == RoomMemberPresence.offline) {
-      return false;
-    }
-    if (presenceFilter == RoomMemberPresenceFilter.offline &&
-        presence != RoomMemberPresence.offline) {
+    if (!_matchesPresenceFilter(presence, presenceFilter)) {
       return false;
     }
     if (!_matchesRoleFilter(member, roleFilter, ownerUserId: ownerUserId)) {
@@ -536,6 +552,18 @@ List<RoomMemberPresenceGroup> roomMemberPresenceGroups({
           members: List.unmodifiable(buckets[presence]!),
         ),
   ];
+}
+
+bool _matchesPresenceFilter(
+  RoomMemberPresence presence,
+  RoomMemberPresenceFilter filter,
+) {
+  return switch (filter) {
+    RoomMemberPresenceFilter.all => true,
+    RoomMemberPresenceFilter.live => presence == RoomMemberPresence.live,
+    RoomMemberPresenceFilter.online => presence != RoomMemberPresence.offline,
+    RoomMemberPresenceFilter.offline => presence == RoomMemberPresence.offline,
+  };
 }
 
 List<RoomMember> roomMembersWithCurrentUserPresence(
@@ -722,6 +750,9 @@ bool _matchesRoleFilter(
       isSuperuserRoomMember(member) ||
           isOwnerRoomMember(member, ownerUserId: ownerUserId) ||
           isAdminRoomMember(member),
+    RoomMemberRoleFilter.creator =>
+      !isSuperuserRoomMember(member) &&
+          isOwnerRoomMember(member, ownerUserId: ownerUserId),
   };
 }
 

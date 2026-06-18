@@ -308,7 +308,10 @@ class _UserSummaryBar extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    _UserPresenceLabel(label: _userStatus(user)),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: PresencePill.fromLabel(_userStatus(user)),
+                    ),
                   ],
                 ),
               ),
@@ -362,36 +365,6 @@ class _FlatIconButton extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _UserPresenceLabel extends StatelessWidget {
-  const _UserPresenceLabel({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            color: UiColors.accent,
-            shape: BoxShape.circle,
-          ),
-          child: SizedBox.square(dimension: 7),
-        ),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: UiTypography.label.copyWith(color: UiColors.textMuted),
-          ),
-        ),
-      ],
     );
   }
 }

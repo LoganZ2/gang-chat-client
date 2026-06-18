@@ -605,7 +605,7 @@ void main() {
     expect(body['visibility'], 'public');
     expect(body['join_policy'], 'approval_required');
     expect(body['ai_voice_announcements_enabled'], isTrue);
-    expect(body['default_avatar_key'], 'room-1');
+    expect(body['default_avatar_key'], 'blue-3');
     expect(find.text('Project Nest'), findsAtLeastNWidgets(1));
     expect(find.text('创建房间'), findsNothing);
     expect(tester.takeException(), isNull);
@@ -1152,6 +1152,10 @@ void main() {
 
     expect(find.text('成员'), findsAtLeastNWidgets(1));
     expect(find.text('邀请成员'), findsOneWidget);
+    expect(find.text('语音 1'), findsOneWidget);
+    expect(find.text('在线 2'), findsOneWidget);
+    expect(find.text('管理员 1'), findsOneWidget);
+    expect(find.text('创建者 1'), findsOneWidget);
     expect(find.text('@riley'), findsNothing);
     expect(find.text('10000001'), findsNothing);
     expect(find.byTooltip('详情'), findsOneWidget);
@@ -1249,7 +1253,7 @@ void main() {
     await tester.tap(find.byTooltip('返回').last);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('房间操作'));
+    await tester.tap(find.byTooltip('房间设置'));
     await tester.pumpAndSettle();
 
     expect(find.text('房间设置'), findsOneWidget);
