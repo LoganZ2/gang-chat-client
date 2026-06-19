@@ -265,6 +265,7 @@ class _LiveMemberCard extends StatelessWidget {
                       imageUrl: AppConfigScope.of(
                         context,
                       ).resolveAssetUrl(participant.user.avatarUrl),
+                      defaultAvatarKey: participant.user.defaultAvatarKey,
                       size: 42,
                       showBorder: false,
                     ),

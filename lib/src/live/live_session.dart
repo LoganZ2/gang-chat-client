@@ -65,9 +65,17 @@ bool get _isDesktopScreenShareSourcePickerPlatform =>
 bool shouldRequestScreenShareAudio({
   required String? sourceId,
   required bool isDesktopSourcePickerPlatform,
+  required bool isWindowsDesktop,
 }) {
-  // Desktop source pickers still need audio:true so the native WebRTC layer can
-  // attach the platform screen-audio track to getDisplayMedia's stream.
+  // The current Windows flutter_webrtc/libwebrtc wrapper publishes screen audio
+  // through a custom RTCAudioSource. That source pushes frames from a WASAPI
+  // worker while WebRTC's ADM also distributes captured frames to every active
+  // AudioSendStream, which can trip AudioSendStream's serialized-audio race
+  // checker. Keep Windows screen sharing video-only until the native custom
+  // source can be routed through WebRTC's serialized audio transport.
+  if (isDesktopSourcePickerPlatform && isWindowsDesktop) {
+    return false;
+  }
   return true;
 }
 
@@ -624,6 +632,7 @@ class LiveSession extends ChangeNotifier {
         sourceId: sourceId,
         isDesktopSourcePickerPlatform:
             _isDesktopScreenShareSourcePickerPlatform,
+        isWindowsDesktop: !kIsWeb && Platform.isWindows,
       );
       final options = lk.ScreenShareCaptureOptions(
         captureScreenAudio: captureScreenAudio,

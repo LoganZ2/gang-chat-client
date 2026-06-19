@@ -1,11 +1,16 @@
 #include "flutter_screen_capture.h"
 
 #if defined(_WIN32)
+#define FLUTTER_WEBRTC_ENABLE_UNSAFE_WINDOWS_SCREEN_AUDIO 0
+
+#if FLUTTER_WEBRTC_ENABLE_UNSAFE_WINDOWS_SCREEN_AUDIO
 #include "flutter_screen_audio_capture.h"
+#endif
 
 #include <windows.h>
 
 #include <cstdint>
+#include <iostream>
 #include <memory>
 #endif
 
@@ -25,6 +30,7 @@ bool WantsScreenAudio(const EncodableMap& constraints) {
 }
 
 #if defined(_WIN32)
+#if FLUTTER_WEBRTC_ENABLE_UNSAFE_WINDOWS_SCREEN_AUDIO
 constexpr int kScreenAudioSampleRate = 48000;
 constexpr int kScreenAudioChannels = 2;
 
@@ -55,6 +61,7 @@ bool ResolveWindowProcessId(const std::string& source_id,
     return false;
   }
 }
+#endif  // FLUTTER_WEBRTC_ENABLE_UNSAFE_WINDOWS_SCREEN_AUDIO
 #endif
 
 }  // namespace
@@ -325,6 +332,7 @@ void FlutterScreenCapture::GetDisplayMedia(
 
   EncodableList audioTracks;
 #if defined(_WIN32)
+#if FLUTTER_WEBRTC_ENABLE_UNSAFE_WINDOWS_SCREEN_AUDIO
   if (WantsScreenAudio(constraints)) {
     RTCAudioOptions audio_options;
     audio_options.echo_cancellation = false;
@@ -400,6 +408,15 @@ void FlutterScreenCapture::GetDisplayMedia(
       }
     }
   }
+#else
+  if (WantsScreenAudio(constraints)) {
+    std::cerr
+        << "Windows screen audio capture is disabled because the current "
+           "custom RTCAudioSource path can race WebRTC's audio send stream; "
+           "continuing with video-only screen share."
+        << std::endl;
+  }
+#endif
 #endif
   params[EncodableValue("audioTracks")] = EncodableValue(audioTracks);
 

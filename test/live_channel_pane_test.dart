@@ -157,6 +157,32 @@ void main() {
     },
   );
 
+  testWidgets('remote live member cards use participant avatar preset', (
+    tester,
+  ) async {
+    final searchController = TextEditingController();
+    addTearDown(searchController.dispose);
+    final remoteUser = _user(
+      'phabe',
+      'Phabe',
+      roomRole: 'member',
+    ).copyWith(defaultAvatarKey: 'green-2');
+    final live = _liveState([_participant(id: 'live_phabe', user: remoteUser)]);
+
+    await tester.pumpWidget(
+      _host(searchController: searchController, live: live),
+    );
+
+    final avatar = tester.widget<ui.Avatar>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is ui.Avatar && widget.label == 'Phabe' && widget.size == 42,
+      ),
+    );
+
+    expect(avatar.defaultAvatarKey, 'green-2');
+  });
+
   testWidgets(
     'live member media cards show top-left name and keep status controls',
     (tester) async {

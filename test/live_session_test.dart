@@ -103,6 +103,7 @@ void main() {
       shouldRequestScreenShareAudio(
         sourceId: 'screen-primary',
         isDesktopSourcePickerPlatform: true,
+        isWindowsDesktop: false,
       ),
       isTrue,
     );
@@ -110,6 +111,7 @@ void main() {
       shouldRequestScreenShareAudio(
         sourceId: null,
         isDesktopSourcePickerPlatform: true,
+        isWindowsDesktop: false,
       ),
       isTrue,
     );
@@ -117,8 +119,20 @@ void main() {
       shouldRequestScreenShareAudio(
         sourceId: 'screen-primary',
         isDesktopSourcePickerPlatform: false,
+        isWindowsDesktop: false,
       ),
       isTrue,
+    );
+  });
+
+  test('screen-share does not request audio on Windows desktop', () {
+    expect(
+      shouldRequestScreenShareAudio(
+        sourceId: 'screen-primary',
+        isDesktopSourcePickerPlatform: true,
+        isWindowsDesktop: true,
+      ),
+      isFalse,
     );
   });
 
