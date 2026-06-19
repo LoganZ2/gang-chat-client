@@ -1,4 +1,4 @@
-import 'dart:io' show HttpClient, HttpOverrides, SecurityContext;
+import 'dart:io' show HttpClient, HttpOverrides, Platform, SecurityContext;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -16,17 +16,13 @@ Future<void> main(List<String> args) async {
   final binding = WidgetsFlutterBinding.ensureInitialized();
   installWindowsAltKeyEventGuard();
 
-  // Bypass the platform voice-processing unit (Apple VPIO on macOS). Its
-  // ducking effect attenuates *other* apps' audio whenever our mic is live —
-  // a separate voice call in another app drops in volume while we're in a
-  // channel, and stays ducked even when muted (we keep the capture device
-  // open). LiveKit.initialize() can't do this: its body is gated behind
-  // lkPlatformIsMobile(), so it's a no-op on desktop. Call flutter_webrtc
-  // directly, before any room connects, so the factory is built without VPIO.
-  // Trade-off: this also drops VPIO's built-in echo cancellation; acceptable
-  // for a headphone-first desktop channel, and a custom AEC processor can be
-  // layered back in later.
-  await rtc.WebRTC.initialize(options: {'bypassVoiceProcessing': true});
+  // Bypass Apple's voice-processing unit on macOS before the WebRTC factory is
+  // created. On Windows, eagerly touching WebRTC during app launch can make the
+  // OS treat the app as an active communications client and adjust system audio,
+  // so Windows lets the plugin initialize lazily on the first real Live action.
+  if (!kIsWeb && Platform.isMacOS) {
+    await rtc.WebRTC.initialize(options: {'bypassVoiceProcessing': true});
+  }
 
   final config = await AppConfig.load();
   _installConfiguredHostProxyBypass(config);
