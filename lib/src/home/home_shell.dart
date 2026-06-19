@@ -8,6 +8,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../app/audio_device_store.dart';
+import '../app/audio_device_state.dart'
+    show rememberedAudioVolume, restoredAudioVolume;
 import '../app/audio_levels.dart';
 import '../app/authenticated_app_services.dart';
 import '../app/authenticated_app_context.dart';

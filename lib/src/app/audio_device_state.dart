@@ -1,4 +1,5 @@
 import 'audio_device_display.dart';
+import 'audio_device_preferences.dart';
 import 'audio_levels.dart';
 
 class AudioDeviceListPatch<T> {
@@ -224,19 +225,25 @@ AudioVolumePatch audioStoredVolumesApplied({
   required double inputVolume,
   required double outputVolume,
 }) {
+  final output = normalizedAudioVolume(outputVolume);
   return AudioVolumePatch(
-    inputVolume: normalizedAudioVolume(inputVolume),
-    outputVolume: normalizedAudioVolume(outputVolume),
+    inputVolume: output == 0 ? 0 : normalizedAudioVolume(inputVolume),
+    outputVolume: output,
   );
 }
 
 AudioVolumePatch audioInputVolumeChanged({
   required double inputVolume,
   required double outputVolume,
+  double restoreOutputVolume = defaultAudioVolume,
 }) {
+  final input = normalizedAudioVolume(inputVolume);
+  final output = normalizedAudioVolume(outputVolume);
   return AudioVolumePatch(
-    inputVolume: normalizedAudioVolume(inputVolume),
-    outputVolume: normalizedAudioVolume(outputVolume),
+    inputVolume: input,
+    outputVolume: input > 0 && output == 0
+        ? restoredAudioVolume(restoreOutputVolume)
+        : output,
   );
 }
 
@@ -244,10 +251,21 @@ AudioVolumePatch audioOutputVolumeChanged({
   required double inputVolume,
   required double outputVolume,
 }) {
+  final output = normalizedAudioVolume(outputVolume);
   return AudioVolumePatch(
-    inputVolume: normalizedAudioVolume(inputVolume),
-    outputVolume: normalizedAudioVolume(outputVolume),
+    inputVolume: output == 0 ? 0 : normalizedAudioVolume(inputVolume),
+    outputVolume: output,
   );
+}
+
+double rememberedAudioVolume(double volume) {
+  final normalized = normalizedAudioVolume(volume);
+  return normalized > 0 ? normalized : defaultAudioVolume;
+}
+
+double restoredAudioVolume(double volume) {
+  final normalized = normalizedAudioVolume(volume);
+  return normalized > 0 ? normalized : defaultAudioVolume;
 }
 
 AudioVolumeEffects audioInputVolumeChangedEffects({

@@ -11,6 +11,7 @@ import 'package:livekit_client/livekit_client.dart' as lk;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:client/main.dart';
+import 'package:client/src/app/audio_device_info.dart';
 import 'package:client/src/app/audio_device_store.dart';
 import 'package:client/src/app/authenticated_app_context.dart';
 import 'package:client/src/app/close_behavior.dart';
@@ -18,7 +19,9 @@ import 'package:client/src/app/live_session_controller.dart';
 import 'package:client/src/app/realtime_controller.dart';
 import 'package:client/src/auth/auth_client.dart';
 import 'package:client/src/auth/token_store.dart';
+import 'package:client/src/live/audio_device_service.dart';
 import 'package:client/src/live/live_session.dart';
+import 'package:client/src/live/system_audio_devices.dart';
 import 'package:client/src/protocol/api_client.dart';
 import 'package:client/src/protocol/models.dart';
 import 'package:client/src/settings/settings_page.dart';
@@ -1017,10 +1020,19 @@ void main() {
     await tester.tap(_liveControl('headphones'));
     await tester.pumpAndSettle();
     expect(liveSession.outputVolumes.last, 0.0);
+    expect(liveSession.inputVolumes.last, 0.0);
+    expect(liveSession.micMutes, contains(true));
     expect(
       find.descendant(
         of: _liveControl('headphones'),
         matching: find.byIcon(Icons.headset_off),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: _liveControl('mic'),
+        matching: find.byIcon(Icons.mic_off),
       ),
       findsOneWidget,
     );
@@ -1032,6 +1044,13 @@ void main() {
       find.descendant(
         of: _liveControl('headphones'),
         matching: find.byIcon(Icons.headphones),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: _liveControl('mic'),
+        matching: find.byIcon(Icons.mic_off),
       ),
       findsOneWidget,
     );
@@ -1123,6 +1142,8 @@ void main() {
     await tester.tapAt(volumeSliderRect.bottomCenter - const Offset(0, 1));
     await tester.pumpAndSettle();
     expect(liveSession.outputVolumes, contains(0.0));
+    expect(liveSession.inputVolumes, contains(0.0));
+    expect(liveSession.micMutes, contains(true));
     expect(liveSession.outputMutes, containsAll([true, false]));
     expect(
       find.descendant(
@@ -1131,10 +1152,17 @@ void main() {
       ),
       findsOneWidget,
     );
+    expect(
+      find.descendant(
+        of: _liveControl('mic'),
+        matching: find.byIcon(Icons.mic_off),
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(_liveControl('headphones'));
     await tester.pumpAndSettle();
-    expect(liveSession.outputVolumes.last, closeTo(0.5, 1e-9));
+    expect(liveSession.outputVolumes.last, closeTo(0.75, 1e-9));
     expect(
       find.descendant(
         of: _liveControl('headphones'),
@@ -1321,6 +1349,251 @@ void main() {
     await hover.removePointer();
     await tester.pump();
 
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('settings audio sliders apply live mute coupling rules', (
+    WidgetTester tester,
+  ) async {
+    final volumeChanges = <String>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: SettingsPage(
+          isSubWindow: true,
+          audioDeviceStore: const _FakeAudioDeviceStore(
+            inputVolume: 0.62,
+            outputVolume: 0,
+          ),
+          audioDeviceService: const _FakeSettingsAudioDeviceService(),
+          systemAudioDevices: SystemAudioDevices(supported: false),
+          onVolumeChanged: (kind, volume) {
+            volumeChanges.add('$kind:${volume.toStringAsFixed(2)}');
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('\u8bed\u97f3\u548c\u89c6\u9891').first);
+    await tester.pumpAndSettle();
+
+    final sliders = find.byType(Slider);
+    double sliderValue(int index) {
+      return tester.widget<Slider>(sliders.at(index)).value;
+    }
+
+    expect(sliders, findsNWidgets(2));
+    expect(sliderValue(0), 0);
+    expect(sliderValue(1), 0);
+    expect(volumeChanges, contains('audioinput:0.00'));
+    expect(volumeChanges, contains('audiooutput:0.00'));
+
+    tester.widget<Slider>(sliders.at(0)).onChanged!(0.8);
+    await tester.pump();
+
+    expect(sliderValue(0), closeTo(0.8, 1e-9));
+    expect(sliderValue(1), closeTo(0.5, 1e-9));
+    expect(volumeChanges, contains('audioinput:0.80'));
+    expect(volumeChanges, contains('audiooutput:0.50'));
+
+    tester.widget<Slider>(sliders.at(1)).onChanged!(0);
+    await tester.pump();
+
+    expect(sliderValue(0), 0);
+    expect(sliderValue(1), 0);
+    expect(volumeChanges, contains('audioinput:0.00'));
+    expect(volumeChanges, contains('audiooutput:0.00'));
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('settings nonzero audio volumes clear live mute states', (
+    WidgetTester tester,
+  ) async {
+    final liveStateUpdates = <Map<String, Object?>>[];
+    final liveSession = _FakeLiveSession();
+    final liveSessionController = _FakeLiveSessionController(
+      session: liveSession,
+      audioDeviceStore: const _FakeAudioDeviceStore(
+        inputVolume: 0.35,
+        outputVolume: 0.75,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(liveStateUpdates: liveStateUpdates),
+          audioDeviceStore: const _FakeAudioDeviceStore(
+            inputVolume: 0.62,
+            outputVolume: 0.27,
+          ),
+          liveSessionController: liveSessionController,
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('进入语音频道'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ui.Button, '加入'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(_liveControl('headphones'));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: _liveControl('mic'),
+        matching: find.byIcon(Icons.mic_off),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: _liveControl('headphones'),
+        matching: find.byIcon(Icons.headset_off),
+      ),
+      findsOneWidget,
+    );
+
+    liveStateUpdates.clear();
+    liveSession.micMutes.clear();
+    liveSession.outputMutes.clear();
+
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('语音和视频').first);
+    await tester.pumpAndSettle();
+
+    expect(liveSession.inputVolumes.last, closeTo(0.62, 1e-9));
+    expect(liveSession.outputVolumes.last, closeTo(0.27, 1e-9));
+    expect(liveSession.micMutes, contains(false));
+    expect(liveSession.outputMutes, contains(false));
+    expect(liveStateUpdates.any((body) => body['mic_muted'] == false), isTrue);
+    expect(
+      liveStateUpdates.any((body) => body['headphones_muted'] == false),
+      isTrue,
+    );
+
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('进入语音频道'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: _liveControl('mic'),
+        matching: find.byIcon(Icons.mic),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: _liveControl('headphones'),
+        matching: find.byIcon(Icons.headphones),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('microphone unmute clears headphones mute', (
+    WidgetTester tester,
+  ) async {
+    final liveStateUpdates = <Map<String, Object?>>[];
+    final liveSession = _FakeLiveSession();
+    final liveSessionController = _FakeLiveSessionController(
+      session: liveSession,
+      audioDeviceStore: const _FakeAudioDeviceStore(),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(liveStateUpdates: liveStateUpdates),
+          liveSessionController: liveSessionController,
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('进入语音频道'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ui.Button, '加入'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(_liveControl('headphones'));
+    await tester.pump();
+    expect(liveSession.outputVolumes.last, 0.0);
+    expect(liveSession.inputVolumes.last, 0.0);
+    expect(liveSession.micMutes, contains(true));
+    expect(
+      find.descendant(
+        of: _liveControl('mic'),
+        matching: find.byIcon(Icons.mic_off),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: _liveControl('headphones'),
+        matching: find.byIcon(Icons.headset_off),
+      ),
+      findsOneWidget,
+    );
+    await tester.pumpAndSettle();
+    expect(liveStateUpdates.last['mic_muted'], true);
+    expect(liveStateUpdates.last['headphones_muted'], true);
+
+    liveStateUpdates.clear();
+    liveSession.micMutes.clear();
+    liveSession.outputMutes.clear();
+
+    await tester.tap(_liveControl('mic'));
+    await tester.pump();
+    expect(liveSession.inputVolumes.last, closeTo(0.35, 1e-9));
+    expect(liveSession.outputVolumes.last, closeTo(0.75, 1e-9));
+    expect(liveSession.micMutes, contains(false));
+    expect(liveSession.outputMutes, contains(false));
+    expect(
+      find.descendant(
+        of: _liveControl('mic'),
+        matching: find.byIcon(Icons.mic),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: _liveControl('headphones'),
+        matching: find.byIcon(Icons.headphones),
+      ),
+      findsOneWidget,
+    );
+    await tester.pumpAndSettle();
+    expect(liveStateUpdates.last['mic_muted'], false);
+    expect(liveStateUpdates.last['headphones_muted'], false);
+    expect(
+      find.descendant(
+        of: _liveControl('mic'),
+        matching: find.byIcon(Icons.mic),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: _liveControl('headphones'),
+        matching: find.byIcon(Icons.headphones),
+      ),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -4607,6 +4880,41 @@ Map<String, Object?> _roomApplicationJson({
     'reviewed_at': reviewedAt,
     'reviewer': reviewer,
   };
+}
+
+class _FakeSettingsAudioDeviceService extends LiveAudioDeviceService {
+  const _FakeSettingsAudioDeviceService();
+
+  static const _input = AudioDeviceInfo(
+    deviceId: 'input-1',
+    label: 'Input 1',
+    kind: 'audioinput',
+  );
+  static const _output = AudioDeviceInfo(
+    deviceId: 'output-1',
+    label: 'Output 1',
+    kind: 'audiooutput',
+  );
+
+  @override
+  Stream<List<AudioDeviceInfo>> get devicesChanged => const Stream.empty();
+
+  @override
+  AudioDeviceInfo? get selectedAudioInput => _input;
+
+  @override
+  AudioDeviceInfo? get selectedAudioOutput => _output;
+
+  @override
+  Future<List<AudioDeviceInfo>> enumerateDevices() async {
+    return const [_input, _output];
+  }
+
+  @override
+  Future<void> selectAudioInput(AudioDeviceInfo device) async {}
+
+  @override
+  Future<void> selectAudioOutput(AudioDeviceInfo device) async {}
 }
 
 class _FakeAudioDeviceStore extends AudioDeviceStore {

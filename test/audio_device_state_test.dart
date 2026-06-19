@@ -243,24 +243,37 @@ void main() {
       outputVolume: -0.2,
     );
 
-    expect(patch.inputVolume, 1);
+    expect(patch.inputVolume, 0);
     expect(patch.outputVolume, 0);
   });
 
-  test('audio volume changes update only target value', () {
+  test('audio volume changes enforce live mute coupling', () {
     final inputPatch = audioInputVolumeChanged(
       inputVolume: 0.42,
       outputVolume: 0.8,
+    );
+    final restoredOutputPatch = audioInputVolumeChanged(
+      inputVolume: 0.42,
+      outputVolume: 0,
+      restoreOutputVolume: 0.73,
     );
     final outputPatch = audioOutputVolumeChanged(
       inputVolume: 0.42,
       outputVolume: 1.4,
     );
+    final mutedOutputPatch = audioOutputVolumeChanged(
+      inputVolume: 0.42,
+      outputVolume: 0,
+    );
 
     expect(inputPatch.inputVolume, 0.42);
     expect(inputPatch.outputVolume, 0.8);
+    expect(restoredOutputPatch.inputVolume, 0.42);
+    expect(restoredOutputPatch.outputVolume, 0.73);
     expect(outputPatch.inputVolume, 0.42);
     expect(outputPatch.outputVolume, 1);
+    expect(mutedOutputPatch.inputVolume, 0);
+    expect(mutedOutputPatch.outputVolume, 0);
   });
 
   test('audio volume effects describe persistence and local test updates', () {

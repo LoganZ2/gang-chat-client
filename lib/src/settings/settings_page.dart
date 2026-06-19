@@ -154,6 +154,7 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _busyDeviceId;
   double _inputVolume = defaultAudioVolume;
   double _outputVolume = defaultAudioVolume;
+  double _lastOutputVolumeBeforeMute = defaultAudioVolume;
   double _inputLevel = 0.0;
   double _outputLevel = 0.0;
   bool _testingInput = false;
@@ -484,6 +485,14 @@ class _SettingsPageState extends State<SettingsPage> {
   void _applyAudioVolumePatch(AudioVolumePatch patch) {
     _inputVolume = patch.inputVolume;
     _outputVolume = patch.outputVolume;
+  }
+
+  void _rememberOutputVolume(double volume) {
+    _lastOutputVolumeBeforeMute = rememberedAudioVolume(volume);
+  }
+
+  double _restoredOutputVolume() {
+    return restoredAudioVolume(_lastOutputVolumeBeforeMute);
   }
 
   void _applyAudioTestStatePatch(AudioTestStatePatch patch) {
@@ -2037,6 +2046,7 @@ class _SettingsPageState extends State<SettingsPage> {
         inputVolume: stored.inputVolume,
         outputVolume: stored.outputVolume,
       );
+      _rememberOutputVolume(patch.outputVolume);
       setState(() => _applyAudioVolumePatch(patch));
       widget.onVolumeChanged?.call('audioinput', patch.inputVolume);
       widget.onVolumeChanged?.call('audiooutput', patch.outputVolume);
@@ -2235,41 +2245,54 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _setInputVolume(double volume) async {
+    final normalized = normalizedAudioVolume(volume);
     final patch = audioInputVolumeChanged(
-      inputVolume: volume,
+      inputVolume: normalized,
       outputVolume: _outputVolume,
+      restoreOutputVolume: _restoredOutputVolume(),
     );
-    setState(() => _applyAudioVolumePatch(patch));
-    final inputTest = _inputTest;
-    final effects = audioInputVolumeChangedEffects(
-      inputVolume: patch.inputVolume,
-      hasInputTestTrack: inputTest != null,
-    );
-    widget.onVolumeChanged?.call(effects.deviceKind, effects.volume);
-    unawaited(widget.audioDeviceStore.writeInputVolume(effects.volume));
-    if (effects.updateInputTestTrack && inputTest != null) {
-      try {
-        await inputTest.setCaptureVolume(effects.volume);
-      } catch (_) {}
-    }
+    await _setAudioVolumes(patch);
   }
 
   Future<void> _setOutputVolume(double volume) async {
+    final normalized = normalizedAudioVolume(volume);
+    if (normalized == 0) {
+      _rememberOutputVolume(_outputVolume);
+    } else {
+      _rememberOutputVolume(normalized);
+    }
     final patch = audioOutputVolumeChanged(
       inputVolume: _inputVolume,
-      outputVolume: volume,
+      outputVolume: normalized,
     );
+    await _setAudioVolumes(patch);
+  }
+
+  Future<void> _setAudioVolumes(AudioVolumePatch patch) async {
+    final previousInputVolume = _inputVolume;
+    final previousOutputVolume = _outputVolume;
+    if (patch.inputVolume == previousInputVolume &&
+        patch.outputVolume == previousOutputVolume) {
+      return;
+    }
     setState(() => _applyAudioVolumePatch(patch));
-    final outputTest = _outputTest;
-    final effects = audioOutputVolumeChangedEffects(
-      outputVolume: patch.outputVolume,
-      hasOutputTestPlayback: outputTest != null,
-    );
-    widget.onVolumeChanged?.call(effects.deviceKind, effects.volume);
-    unawaited(widget.audioDeviceStore.writeOutputVolume(effects.volume));
-    if (effects.updateOutputTestPlayback && outputTest != null) {
+    if (patch.outputVolume > 0) _rememberOutputVolume(patch.outputVolume);
+
+    final inputTest = _inputTest;
+    if (patch.inputVolume != previousInputVolume) {
+      widget.onVolumeChanged?.call('audioinput', patch.inputVolume);
+      unawaited(widget.audioDeviceStore.writeInputVolume(patch.inputVolume));
       try {
-        await outputTest.setPlaybackVolume(effects.volume);
+        await inputTest?.setCaptureVolume(patch.inputVolume);
+      } catch (_) {}
+    }
+
+    final outputTest = _outputTest;
+    if (patch.outputVolume != previousOutputVolume) {
+      widget.onVolumeChanged?.call('audiooutput', patch.outputVolume);
+      unawaited(widget.audioDeviceStore.writeOutputVolume(patch.outputVolume));
+      try {
+        await outputTest?.setPlaybackVolume(patch.outputVolume);
       } catch (_) {}
     }
   }

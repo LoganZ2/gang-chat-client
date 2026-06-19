@@ -127,14 +127,34 @@ extension _HomeShellLiveActions on _HomeShellState {
     _live = patch.live;
   }
 
+  void _setMicMutedLocally(bool muted, {bool syncVolume = true}) {
+    if (syncVolume) {
+      final volume = muted ? 0.0 : _restoredInputVolume();
+      if (muted) {
+        _rememberInputVolume(_liveSessionController.inputVolume);
+      }
+      unawaited(_liveSessionController.setInputVolume(volume));
+    }
+    unawaited(_liveSessionController.setMicMuted(muted));
+    if (_micMuted != muted) {
+      _setHomeState(() => _micMuted = muted);
+    }
+  }
+
   void _toggleMicMute() {
     final muted = !_micMuted;
-    final volume = muted ? 0.0 : _restoredInputVolume();
-    if (muted) {
-      _rememberInputVolume(_liveSessionController.inputVolume);
+    final unmuteHeadphones = !muted && _headphonesMuted;
+    _setMicMutedLocally(muted);
+    if (unmuteHeadphones) {
+      _setHeadphonesMuted(false, patchState: false);
     }
-    unawaited(_liveSessionController.setInputVolume(volume));
-    unawaited(_patchLiveState(micMuted: muted));
+    unawaited(
+      _patchLiveState(
+        micMuted: muted,
+        headphonesMuted: unmuteHeadphones ? false : null,
+        syncLiveKitMic: false,
+      ),
+    );
   }
 
   void _toggleHeadphonesMute() {
@@ -142,36 +162,79 @@ extension _HomeShellLiveActions on _HomeShellState {
     _setHeadphonesMuted(patch.headphonesMuted);
   }
 
-  void _setHeadphonesMuted(bool muted, {bool syncVolume = true}) {
-    if (_headphonesMuted == muted) return;
-    if (syncVolume) {
+  void _setHeadphonesMuted(
+    bool muted, {
+    bool syncVolume = true,
+    bool patchState = true,
+  }) {
+    final headphonesChanged = _headphonesMuted != muted;
+    final muteMic = muted && !_micMuted;
+    if (!headphonesChanged && !muteMic) return;
+
+    if (headphonesChanged && syncVolume) {
       final volume = muted ? 0.0 : _restoredOutputVolume();
       if (muted) {
         _rememberOutputVolume(_liveSessionController.outputVolume);
       }
       unawaited(_liveSessionController.setOutputVolume(volume));
     }
-    _setHomeState(() => _headphonesMuted = muted);
-    unawaited(_liveSessionController.setOutputMuted(muted));
+    if (muteMic) {
+      _setMicMutedLocally(true);
+    }
+    if (headphonesChanged) {
+      _setHomeState(() => _headphonesMuted = muted);
+      unawaited(_liveSessionController.setOutputMuted(muted));
+    }
     // Report the headphone state to the server so other participants see it on
     // the live snapshot. Best-effort: a failure here doesn't undo the local
     // mute, which already took effect on the LiveKit session above.
-    unawaited(_patchLiveState(headphonesMuted: muted));
+    if (patchState) {
+      final micMutedPatch = muteMic || (!muted && _micMuted) ? true : null;
+      unawaited(
+        _patchLiveState(
+          micMuted: micMutedPatch,
+          headphonesMuted: headphonesChanged ? muted : null,
+          syncLiveKitMic: micMutedPatch == null,
+        ),
+      );
+    }
   }
 
   void _changeInputVolume(double volume) {
     final normalized = normalizedAudioVolume(volume);
-    _rememberInputVolume(normalized);
+    if (normalized == 0) {
+      _rememberInputVolume(_liveSessionController.inputVolume);
+    } else {
+      _rememberInputVolume(normalized);
+    }
     unawaited(_liveSessionController.setInputVolume(normalized));
     final muted = normalized == 0;
-    if (muted == _micMuted) return;
     if (!muted && _voiceBlocked) return;
-    unawaited(_patchLiveState(micMuted: muted));
+    final micChanged = muted != _micMuted;
+    if (micChanged) {
+      _setMicMutedLocally(muted, syncVolume: false);
+    }
+    final unmuteHeadphones = !muted && _headphonesMuted;
+    if (unmuteHeadphones) {
+      _setHeadphonesMuted(false, patchState: false);
+    }
+    if (!micChanged && !unmuteHeadphones) return;
+    unawaited(
+      _patchLiveState(
+        micMuted: micChanged ? muted : null,
+        headphonesMuted: unmuteHeadphones ? false : null,
+        syncLiveKitMic: false,
+      ),
+    );
   }
 
   void _changeOutputVolume(double volume) {
     final normalized = normalizedAudioVolume(volume);
-    _rememberOutputVolume(normalized);
+    if (normalized == 0) {
+      _rememberOutputVolume(_liveSessionController.outputVolume);
+    } else {
+      _rememberOutputVolume(normalized);
+    }
     unawaited(_liveSessionController.setOutputVolume(normalized));
     _setHeadphonesMuted(normalized == 0, syncVolume: false);
   }
@@ -182,42 +245,28 @@ extension _HomeShellLiveActions on _HomeShellState {
 
   void _syncSettingsAudioVolumeToLive(String kind, double volume) {
     if (kind == 'audioinput') {
-      final normalized = normalizedAudioVolume(volume);
-      _rememberInputVolume(normalized);
-      unawaited(_liveSessionController.setInputVolume(normalized));
-      _setHomeState(() {});
+      _changeInputVolume(volume);
       return;
     }
     if (kind == 'audiooutput') {
-      final normalized = normalizedAudioVolume(volume);
-      _rememberOutputVolume(normalized);
-      unawaited(_liveSessionController.setOutputVolume(normalized));
-      _setHomeState(() {});
+      _changeOutputVolume(volume);
     }
   }
 
   void _rememberInputVolume(double volume) {
-    final normalized = normalizedAudioVolume(volume);
-    _lastInputVolumeBeforeMute = normalized > 0
-        ? normalized
-        : _defaultLiveVolumeRestore;
+    _lastInputVolumeBeforeMute = rememberedAudioVolume(volume);
   }
 
   void _rememberOutputVolume(double volume) {
-    final normalized = normalizedAudioVolume(volume);
-    _lastOutputVolumeBeforeMute = normalized > 0
-        ? normalized
-        : _defaultLiveVolumeRestore;
+    _lastOutputVolumeBeforeMute = rememberedAudioVolume(volume);
   }
 
   double _restoredInputVolume() {
-    final remembered = normalizedAudioVolume(_lastInputVolumeBeforeMute);
-    return remembered > 0 ? remembered : _defaultLiveVolumeRestore;
+    return restoredAudioVolume(_lastInputVolumeBeforeMute);
   }
 
   double _restoredOutputVolume() {
-    final remembered = normalizedAudioVolume(_lastOutputVolumeBeforeMute);
-    return remembered > 0 ? remembered : _defaultLiveVolumeRestore;
+    return restoredAudioVolume(_lastOutputVolumeBeforeMute);
   }
 
   Future<void> _joinLive(String source) async {
@@ -478,6 +527,7 @@ extension _HomeShellLiveActions on _HomeShellState {
     bool? headphonesMuted,
     bool? cameraOn,
     bool? screenSharing,
+    bool syncLiveKitMic = true,
   }) async {
     final roomId = _joinedLiveRoomId;
     if (roomId == null ||
@@ -489,7 +539,7 @@ extension _HomeShellLiveActions on _HomeShellState {
     }
 
     try {
-      final liveKitMicFuture = micMuted == null
+      final liveKitMicFuture = !syncLiveKitMic || micMuted == null
           ? Future<void>.value()
           : _liveSessionController.setMicMuted(micMuted).catchError((_) {});
       final participant = await _liveController.updateMyState(
