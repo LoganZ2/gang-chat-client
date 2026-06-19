@@ -424,6 +424,7 @@ void main() {
                 'avatar_url': '/global.png',
                 'default_avatar_key': 'blue-2',
                 'bio': 'Ship quietly',
+                'gender': 'female',
                 'is_online': true,
                 'common_rooms': [
                   {
@@ -456,6 +457,7 @@ void main() {
     );
 
     expect(profile.user.bio, 'Ship quietly');
+    expect(profile.user.gender, 'female');
     expect(profile.user.roomDisplayName, 'Room Bob');
     expect(profile.user.roomRole, 'admin');
     expect(profile.user.isOnline, isTrue);
@@ -486,6 +488,7 @@ void main() {
                 'avatar_url': '/global.png',
                 'default_avatar_key': 'blue-2',
                 'bio': 'Global profile',
+                'gender': 'male',
                 'is_online': true,
                 'common_rooms': [
                   {
@@ -509,6 +512,7 @@ void main() {
 
     expect(profile.username, 'bob');
     expect(profile.bio, 'Global profile');
+    expect(profile.gender, 'male');
     expect(profile.isOnline, isTrue);
     expect(profile.commonRooms.single.name, 'Ops');
     expect(profile.commonRooms.single.roomRole, 'admin');
