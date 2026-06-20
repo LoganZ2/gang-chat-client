@@ -34,13 +34,10 @@ class HomeSidebar extends StatelessWidget {
     required this.notificationsActive,
     required this.logoutActive,
     required this.hasPendingNotifications,
-    required this.llmSettingsActive,
     required this.onServerSelected,
     required this.onCreateRoom,
     required this.onOpenNotifications,
     required this.onOpenSettings,
-    required this.onOpenLlmSettings,
-    required this.onCompact,
     required this.onLogout,
     this.includeWindowChromeOffset = true,
   });
@@ -59,14 +56,11 @@ class HomeSidebar extends StatelessWidget {
   final bool notificationsActive;
   final bool logoutActive;
   final bool hasPendingNotifications;
-  final bool llmSettingsActive;
   final bool includeWindowChromeOffset;
   final ValueChanged<RoomCard> onServerSelected;
   final VoidCallback onCreateRoom;
   final VoidCallback onOpenNotifications;
   final VoidCallback onOpenSettings;
-  final VoidCallback onOpenLlmSettings;
-  final VoidCallback onCompact;
   final VoidCallback onLogout;
 
   @override
@@ -115,12 +109,9 @@ class HomeSidebar extends StatelessWidget {
                       createRoomActive: createRoomActive,
                       notificationsActive: notificationsActive,
                       hasPendingNotifications: hasPendingNotifications,
-                      llmSettingsActive: llmSettingsActive,
                       onCreateRoom: onCreateRoom,
                       onOpenNotifications: onOpenNotifications,
                       onOpenSettings: onOpenSettings,
-                      onOpenLlmSettings: onOpenLlmSettings,
-                      onCompact: onCompact,
                     ),
                   ],
                 ],
@@ -169,30 +160,25 @@ class HomeSidebar extends StatelessWidget {
     );
   }
 }
+
 class _SidebarFooter extends StatelessWidget {
   const _SidebarFooter({
     required this.settingsActive,
     required this.createRoomActive,
     required this.notificationsActive,
     required this.hasPendingNotifications,
-    required this.llmSettingsActive,
     required this.onCreateRoom,
     required this.onOpenNotifications,
     required this.onOpenSettings,
-    required this.onOpenLlmSettings,
-    required this.onCompact,
   });
 
   final bool settingsActive;
   final bool createRoomActive;
   final bool notificationsActive;
   final bool hasPendingNotifications;
-  final bool llmSettingsActive;
   final VoidCallback onCreateRoom;
   final VoidCallback onOpenNotifications;
   final VoidCallback onOpenSettings;
-  final VoidCallback onOpenLlmSettings;
-  final VoidCallback onCompact;
 
   @override
   Widget build(BuildContext context) {
@@ -200,12 +186,13 @@ class _SidebarFooter extends StatelessWidget {
       height: _footerButtonOuterHeight,
       child: Row(
         children: [
-          _PlusMenuButton(
-            createRoomActive: createRoomActive,
-            llmSettingsActive: llmSettingsActive,
-            onCreateRoom: onCreateRoom,
-            onOpenLlmSettings: onOpenLlmSettings,
-            onCompact: onCompact,
+          ButtonIcon(
+            key: const ValueKey('home-sidebar-create-room-button'),
+            tooltip: '创建房间',
+            icon: const Icon(Icons.add_circle_outline),
+            selected: createRoomActive,
+            onPressed: onCreateRoom,
+            size: _footerButtonSize,
           ),
           const SizedBox(width: _footerButtonGap),
           _NotificationFooterButton(
@@ -223,90 +210,6 @@ class _SidebarFooter extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// The "+" button expands into a popup menu instead of directly creating a
-/// room. Menu items: Create Room, LLM Settings, Compact Context.
-class _PlusMenuButton extends StatelessWidget {
-  const _PlusMenuButton({
-    required this.createRoomActive,
-    required this.llmSettingsActive,
-    required this.onCreateRoom,
-    required this.onOpenLlmSettings,
-    required this.onCompact,
-  });
-
-  final bool createRoomActive;
-  final bool llmSettingsActive;
-  final VoidCallback onCreateRoom;
-  final VoidCallback onOpenLlmSettings;
-  final VoidCallback onCompact;
-
-  @override
-  Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      tooltip: '菜单',
-      offset: const Offset(0, 8),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(UiRadii.md),
-        side: const BorderSide(color: UiColors.border),
-      ),
-      color: UiColors.surface,
-      child: ButtonIcon(
-        key: const ValueKey('home-sidebar-create-room-button'),
-        tooltip: '',
-        icon: const Icon(Icons.add_circle_outline),
-        selected: createRoomActive || llmSettingsActive,
-        onPressed: null,
-        size: _footerButtonSize,
-      ),
-      onSelected: (value) {
-        switch (value) {
-          case 'createRoom':
-            onCreateRoom();
-            break;
-          case 'llmSettings':
-            onOpenLlmSettings();
-            break;
-          case 'compact':
-            onCompact();
-            break;
-        }
-      },
-      itemBuilder: (context) => [
-        const PopupMenuItem(
-          value: 'createRoom',
-          child: Row(
-            children: [
-              Icon(Icons.add, size: 18, color: UiColors.textSecondary),
-              SizedBox(width: 10),
-              Text('创建房间', style: TextStyle(color: UiColors.text, fontSize: 13)),
-            ],
-          ),
-        ),
-        const PopupMenuItem(
-          value: 'llmSettings',
-          child: Row(
-            children: [
-              Icon(Icons.psychology_outlined, size: 18, color: UiColors.textSecondary),
-              SizedBox(width: 10),
-              Text('LLM 设置', style: TextStyle(color: UiColors.text, fontSize: 13)),
-            ],
-          ),
-        ),
-        const PopupMenuItem(
-          value: 'compact',
-          child: Row(
-            children: [
-              Icon(Icons.compress_outlined, size: 18, color: UiColors.textSecondary),
-              SizedBox(width: 10),
-              Text('压缩上下文', style: TextStyle(color: UiColors.text, fontSize: 13)),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }

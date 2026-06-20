@@ -262,7 +262,7 @@ void main() {
     expect(find.text('People'), findsNothing);
     expect(find.text('Files'), findsNothing);
     expect(find.text('设置'), findsNothing);
-    expect(find.byTooltip('菜单'), findsOneWidget);
+    expect(find.byTooltip('创建房间'), findsOneWidget);
     expect(find.byTooltip('通知'), findsOneWidget);
     expect(find.byTooltip('设置'), findsOneWidget);
     expect(find.byTooltip('退出登录'), findsOneWidget);
@@ -666,10 +666,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Open the "+" popup menu, then tap "创建房间" to open the form.
-    await tester.tap(find.byTooltip('菜单'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('创建房间').last);
+    await tester.tap(find.byTooltip('创建房间'));
     await tester.pumpAndSettle();
 
     expect(
@@ -680,15 +677,11 @@ void main() {
           .selected,
       isTrue,
     );
-    expect(find.text('房间信息'), findsOneWidget);
-
-    // Toggle: open popup again and tap "创建房间" to close the form.
-    await tester.tap(find.byTooltip('菜单'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('创建房间').last);
+    expect(find.text('创建房间'), findsOneWidget);
+    await tester.tap(find.byTooltip('创建房间'));
     await tester.pumpAndSettle();
 
-    expect(find.text('房间信息'), findsNothing);
+    expect(find.text('创建房间'), findsNothing);
     expect(
       tester
           .widget<ui.ButtonIcon>(
@@ -698,13 +691,10 @@ void main() {
       isFalse,
     );
 
-    // Reopen the form.
-    await tester.tap(find.byTooltip('菜单'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('创建房间').last);
+    await tester.tap(find.byTooltip('创建房间'));
     await tester.pumpAndSettle();
 
-    expect(find.text('房间信息'), findsOneWidget);
+    expect(find.text('创建房间'), findsOneWidget);
     expect(find.text('房间信息'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '确定'), findsOneWidget);
     expect(find.text('保存房间设置'), findsNothing);
@@ -2173,7 +2163,7 @@ void main() {
     final userSummaryRect = tester.getRect(
       find.byKey(const ValueKey('home-sidebar-user-summary')),
     );
-    final createRect = tester.getRect(find.byTooltip('菜单'));
+    final createRect = tester.getRect(find.byTooltip('创建房间'));
     final notificationsRect = tester.getRect(find.byTooltip('通知'));
     final settingsRect = tester.getRect(find.byTooltip('设置'));
     final logoutRect = tester.getRect(find.byTooltip('退出登录'));

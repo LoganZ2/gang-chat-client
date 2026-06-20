@@ -39,8 +39,6 @@ import '../app/sticker_packs_controller.dart';
 import '../app/voice_message_display.dart' as voice_display;
 import '../app/voice_recorder_controller.dart';
 import '../live/live_session.dart';
-import '../llm/llm_context_service.dart';
-import '../llm/llm_settings_page.dart';
 import '../protocol/api_client.dart'
     show ApiException, UploadCancelledException, UploadTransferController;
 import '../protocol/models.dart';
@@ -88,7 +86,6 @@ enum _ContentMode {
   roomSettings,
   createRoom,
   notifications,
-  llmSettings,
 }
 
 class HomeShell extends StatefulWidget {
@@ -167,7 +164,6 @@ class _HomeShellState extends State<HomeShell> {
   bool _closeConfirming = false;
   bool _exitingApplication = false;
   bool _narrowContentOpen = false;
-  final LlmContextService _llmService = LlmContextService();
   _ContentMode _contentMode = _ContentMode.chat;
   // Bumped to ask an open members panel to reload (e.g. after a
   // `room_join_requests_updated` or `room_role_changed` SSE event). The panel
@@ -248,7 +244,6 @@ class _HomeShellState extends State<HomeShell> {
     _startRealtime();
     unawaited(_loadServers());
     unawaited(_refreshPendingRoomInviteBadge());
-    unawaited(_llmService.loadConfig());
   }
 
   @override
@@ -427,8 +422,6 @@ class _HomeShellState extends State<HomeShell> {
                         searchController: _titleSearchController,
                         searchTapRegionGroup: _searchTapRegionGroup,
                         searchQuery: _searchQuery,
-                        llmService: _llmService,
-                        currentRoomId: _selectedRoom?.id ?? _selectedServerId,
                         onActivateSearch: _activateSearch,
                         onSearchTapOutside: _collapseSearch,
                         onClearSearchQuery: _clearSearchQuery,
