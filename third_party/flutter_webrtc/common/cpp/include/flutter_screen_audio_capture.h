@@ -32,7 +32,9 @@ class ScreenAudioCapture {
   ScreenAudioCapture(const ScreenAudioCapture&) = delete;
   ScreenAudioCapture& operator=(const ScreenAudioCapture&) = delete;
 
-  bool Start(unsigned long target_process_id, bool include_process_tree);
+  bool Start(unsigned long target_process_id,
+             bool include_process_tree,
+             bool allow_system_loopback_fallback);
   void Stop();
 
  private:

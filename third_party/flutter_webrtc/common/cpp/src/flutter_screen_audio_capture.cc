@@ -391,7 +391,9 @@ class ScreenAudioCapture::Impl {
 
   ~Impl() { Stop(); }
 
-  bool Start(unsigned long target_process_id, bool include_process_tree) {
+  bool Start(unsigned long target_process_id,
+             bool include_process_tree,
+             bool allow_system_loopback_fallback) {
     if (running_.load(std::memory_order_acquire)) {
       return true;
     }
@@ -409,7 +411,8 @@ class ScreenAudioCapture::Impl {
     start_result_.store(E_PENDING, std::memory_order_release);
     worker_ = std::thread(&Impl::Run, this,
                           static_cast<DWORD>(target_process_id),
-                          include_process_tree);
+                          include_process_tree,
+                          allow_system_loopback_fallback);
 
     DWORD wait_result =
         WaitForSingleObject(started_event_.get(), kActivationTimeoutMs);
@@ -438,7 +441,9 @@ class ScreenAudioCapture::Impl {
   }
 
  private:
-  void Run(DWORD target_process_id, bool include_process_tree) {
+  void Run(DWORD target_process_id,
+           bool include_process_tree,
+           bool allow_system_loopback_fallback) {
     HRESULT coinit_hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     bool did_initialize_com = SUCCEEDED(coinit_hr);
     if (coinit_hr == RPC_E_CHANGED_MODE) {
@@ -449,7 +454,8 @@ class ScreenAudioCapture::Impl {
     start_result_.store(coinit_hr, std::memory_order_release);
     if (SUCCEEDED(start_result_.load(std::memory_order_acquire))) {
       start_result_.store(
-          InitializeAudioClient(target_process_id, include_process_tree),
+          InitializeAudioClient(target_process_id, include_process_tree,
+                                allow_system_loopback_fallback),
           std::memory_order_release);
     }
     if (SUCCEEDED(start_result_.load(std::memory_order_acquire))) {
@@ -481,7 +487,8 @@ class ScreenAudioCapture::Impl {
   }
 
   HRESULT InitializeAudioClient(DWORD target_process_id,
-                                bool include_process_tree) {
+                                bool include_process_tree,
+                                bool allow_system_loopback_fallback) {
     process_loopback_result_.store(
         InitializeProcessLoopbackAudioClient(target_process_id,
                                              include_process_tree),
@@ -492,6 +499,16 @@ class ScreenAudioCapture::Impl {
 
     audio_client_.Reset();
     audio_capture_client_.Reset();
+
+    if (!allow_system_loopback_fallback) {
+      std::cerr << "Screen audio process loopback failed: 0x" << std::hex
+                << process_loopback_result_.load(std::memory_order_acquire)
+                << std::dec
+                << "; system loopback fallback is disabled to avoid "
+                   "capturing GangChat audio."
+                << std::endl;
+      return process_loopback_result_.load(std::memory_order_acquire);
+    }
 
     // Process loopback is endpoint-independent but requires newer Windows
     // audio support. Fall back to classic system loopback so screen sharing can
@@ -664,8 +681,10 @@ ScreenAudioCapture::ScreenAudioCapture(
 ScreenAudioCapture::~ScreenAudioCapture() = default;
 
 bool ScreenAudioCapture::Start(unsigned long target_process_id,
-                               bool include_process_tree) {
-  return impl_->Start(target_process_id, include_process_tree);
+                               bool include_process_tree,
+                               bool allow_system_loopback_fallback) {
+  return impl_->Start(target_process_id, include_process_tree,
+                      allow_system_loopback_fallback);
 }
 
 void ScreenAudioCapture::Stop() {

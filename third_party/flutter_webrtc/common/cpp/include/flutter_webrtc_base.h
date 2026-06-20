@@ -120,7 +120,8 @@ class FlutterWebRTCBase {
 
   void ConfigureScreenAudioCapture(bool requested,
                                    unsigned long target_process_id,
-                                   bool include_process_tree);
+                                   bool include_process_tree,
+                                   bool allow_system_loopback_fallback);
 
   std::shared_ptr<ScreenAudioCapture> StartScreenAudioCapture(
       scoped_refptr<RTCAudioSource> source);
@@ -161,6 +162,7 @@ class FlutterWebRTCBase {
   bool screen_audio_capture_requested_ = false;
   unsigned long screen_audio_target_process_id_ = 0;
   bool screen_audio_include_process_tree_ = false;
+  bool screen_audio_allow_system_loopback_fallback_ = false;
 #endif
   std::unique_ptr<LocalAudioInputVolumeProcessor>
       local_audio_input_volume_processor_;

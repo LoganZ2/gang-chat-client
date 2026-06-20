@@ -321,19 +321,27 @@ void FlutterScreenCapture::GetDisplayMedia(
 
 #if defined(_WIN32)
   if (WantsScreenAudio(constraints)) {
-    DWORD target_process_id = GetCurrentProcessId();
+    const DWORD current_process_id = GetCurrentProcessId();
+    DWORD target_process_id = current_process_id;
     bool include_process_tree = false;
+    bool allow_system_loopback_fallback = false;
     DWORD window_process_id = 0;
     if (source->type() == kWindow &&
         ResolveWindowProcessId(source->id().std_string(),
-                               &window_process_id)) {
+                               &window_process_id) &&
+        window_process_id != current_process_id) {
       target_process_id = window_process_id;
       include_process_tree = true;
     }
+    // Classic system loopback captures GangChat's own playout as well, which
+    // feeds call audio back into the screen-share track. Require process
+    // loopback so the current process can be excluded for full-screen sharing
+    // and only the target process can be included for window sharing.
     base_->ConfigureScreenAudioCapture(true, target_process_id,
-                                       include_process_tree);
+                                       include_process_tree,
+                                       allow_system_loopback_fallback);
   } else {
-    base_->ConfigureScreenAudioCapture(false, 0, false);
+    base_->ConfigureScreenAudioCapture(false, 0, false, false);
   }
 #endif
 
