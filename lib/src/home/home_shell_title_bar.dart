@@ -39,6 +39,8 @@ class _HomeTitleBar extends StatefulWidget {
     required this.searchController,
     required this.searchTapRegionGroup,
     required this.searchQuery,
+    required this.llmService,
+    this.currentRoomId,
     required this.onActivateSearch,
     required this.onSearchTapOutside,
     required this.onClearSearchQuery,
@@ -48,6 +50,8 @@ class _HomeTitleBar extends StatefulWidget {
   final TextEditingController searchController;
   final Object searchTapRegionGroup;
   final String searchQuery;
+  final LlmContextService llmService;
+  final String? currentRoomId;
   final VoidCallback onActivateSearch;
   final VoidCallback onSearchTapOutside;
   final VoidCallback onClearSearchQuery;
@@ -133,7 +137,15 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
                       child: _WindowDragRegion(
                         windowController: widget.windowController,
                         onDoubleTap: _toggleMaximize,
-                        child: const SizedBox.expand(),
+                        child: Row(
+                          children: [
+                            const SizedBox(width: 8),
+                            _LlmContextBadge(
+                              service: widget.llmService,
+                              roomId: widget.currentRoomId,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     if (!nativeMacControls)
@@ -173,6 +185,71 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
       ),
     );
   }
+}
+
+/// Shows model name and context usage (current/max tokens) in the title bar.
+/// Invisible when LLM is not configured.
+class _LlmContextBadge extends StatelessWidget {
+  const _LlmContextBadge({required this.service, this.roomId});
+
+  final LlmContextService service;
+  final String? roomId;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: service,
+      builder: (context, _) {
+        final config = service.config;
+        if (!config.isConfigured) return const SizedBox.shrink();
+        final tokens = roomId != null ? service.contextTokens(roomId!) : 0;
+        final max = config.contextLength;
+        final pct = max > 0 ? (tokens / max).clamp(0.0, 1.0) : 0.0;
+        final color = pct > 0.8
+            ? UiColors.danger
+            : pct > 0.5
+                ? UiColors.amber
+                : UiColors.textMuted;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: UiColors.surface,
+            borderRadius: BorderRadius.circular(UiRadii.sm),
+            border: Border.all(color: UiColors.border),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.psychology_outlined, size: 13, color: color),
+              const SizedBox(width: 5),
+              Text(
+                config.modelName,
+                style: const TextStyle(
+                  color: UiColors.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(width: 1, height: 10, color: UiColors.border),
+              const SizedBox(width: 6),
+              Text(
+                '${_fmt(tokens)} / ${_fmt(max)}',
+                style: TextStyle(
+                  color: color,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  static String _fmt(int n) =>
+      n >= 1000 ? '${(n / 1000).toStringAsFixed(1)}k' : n.toString();
 }
 
 /// 标题栏中央的搜索框。不复用通用 [Input] 封装,而是一个普通的圆角矩形,

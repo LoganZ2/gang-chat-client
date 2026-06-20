@@ -66,6 +66,13 @@ extension _HomeShellLayout on _HomeShellState {
       );
     }
 
+    if (_contentMode == _ContentMode.llmSettings) {
+      return LlmSettingsPage(
+        service: _llmService,
+        onClose: _closeLlmSettings,
+      );
+    }
+
     if (_selectedServerId == null) return const HomeContent();
     if (_contentMode == _ContentMode.members && _selectedRoom != null) {
       return RoomMembersDialog(
@@ -245,6 +252,9 @@ extension _HomeShellLayout on _HomeShellState {
       onCreateRoom: () => _openCreateRoom(openContent: openContentOnSelect),
       onOpenNotifications: () =>
           _openNotifications(openContent: openContentOnSelect),
+      llmSettingsActive: _contentMode == _ContentMode.llmSettings,
+      onOpenLlmSettings: _openLlmSettings,
+      onCompact: _triggerCompaction,
       onOpenSettings: () => _toggleSettings(openContent: openContentOnSelect),
       onLogout: () => unawaited(_confirmLogout()),
     );

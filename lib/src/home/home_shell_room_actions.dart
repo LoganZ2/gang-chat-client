@@ -157,6 +157,40 @@ extension _HomeShellRoomActions on _HomeShellState {
     _setHomeState(() => _settingsOpen = false);
   }
 
+  void _openLlmSettings() {
+    _setHomeState(() {
+      _settingsOpen = false;
+      _contentMode = _ContentMode.llmSettings;
+      _narrowContentOpen = true;
+    });
+  }
+
+  void _closeLlmSettings() {
+    _setHomeState(() {
+      if (_contentMode == _ContentMode.llmSettings) {
+        _contentMode = _ContentMode.chat;
+        if (_selectedServerId == null) _narrowContentOpen = false;
+      }
+    });
+  }
+
+  void _triggerCompaction() {
+    final roomId = _selectedRoom?.id ?? _selectedServerId;
+    if (roomId == null) return;
+    unawaited(
+      _llmService.compact(roomId).then((ok) {
+        if (!ok && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(_llmService.lastError ?? '压缩失败'),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }),
+    );
+  }
+
   Future<void> _confirmLogout() async {
     if (_logoutConfirming) return;
     _setHomeState(() => _logoutConfirming = true);
