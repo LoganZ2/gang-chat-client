@@ -91,7 +91,8 @@ class ScopedHandle {
 };
 
 class AudioActivationHandler
-    : public IActivateAudioInterfaceCompletionHandler {
+    : public IActivateAudioInterfaceCompletionHandler,
+      public IAgileObject {
  public:
   explicit AudioActivationHandler(HANDLE completed_event)
       : completed_event_(completed_event) {}
@@ -103,6 +104,11 @@ class AudioActivationHandler
     if (riid == __uuidof(IUnknown) ||
         riid == __uuidof(IActivateAudioInterfaceCompletionHandler)) {
       *object = static_cast<IActivateAudioInterfaceCompletionHandler*>(this);
+      AddRef();
+      return S_OK;
+    }
+    if (riid == __uuidof(IAgileObject)) {
+      *object = static_cast<IAgileObject*>(this);
       AddRef();
       return S_OK;
     }
