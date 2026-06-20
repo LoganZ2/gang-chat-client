@@ -1,11 +1,38 @@
 #include "flutter_webrtc.h"
 #include "flutter_data_channel.h"
+#if defined(_WIN32)
+#include "flutter_screen_audio_capture.h"
+#endif
 
 #include "flutter_webrtc/flutter_web_r_t_c_plugin.h"
 
 namespace flutter_webrtc_plugin {
 
 static EventChannelProxy* eventChannelProxy = nullptr;
+
+#if defined(_WIN32)
+EncodableMap screenAudioTrackToMap(
+    scoped_refptr<RTCMediaTrack> track,
+    const std::string& stream_id) {
+  EncodableMap info;
+  info[EncodableValue("streamId")] = EncodableValue(stream_id);
+  info[EncodableValue("id")] = EncodableValue(track->id().std_string());
+  info[EncodableValue("label")] = EncodableValue(track->id().std_string());
+  info[EncodableValue("kind")] = EncodableValue(track->kind().std_string());
+  info[EncodableValue("enabled")] = EncodableValue(track->enabled());
+
+  EncodableMap settings;
+  settings[EncodableValue("deviceId")] = EncodableValue("screen_audio");
+  settings[EncodableValue("kind")] = EncodableValue("audioinput");
+  settings[EncodableValue("autoGainControl")] = EncodableValue(false);
+  settings[EncodableValue("echoCancellation")] = EncodableValue(false);
+  settings[EncodableValue("noiseSuppression")] = EncodableValue(false);
+  settings[EncodableValue("channelCount")] = EncodableValue(2);
+  settings[EncodableValue("sampleRate")] = EncodableValue(48000);
+  info[EncodableValue("settings")] = EncodableValue(settings);
+  return info;
+}
+#endif
 
 FlutterWebRTC::FlutterWebRTC(FlutterWebRTCPlugin* plugin)
     : FlutterWebRTCBase::FlutterWebRTCBase(plugin->messenger(),
@@ -44,6 +71,100 @@ void FlutterWebRTC::HandleMethodCall(
     const EncodableMap configuration = findMap(params, "configuration");
     const EncodableMap constraints = findMap(params, "constraints");
     CreateRTCPeerConnection(configuration, constraints, std::move(result));
+#if defined(_WIN32)
+  } else if (method_call.method_name().compare(
+                 "screenAudioCreatePeerConnection") == 0) {
+    if (!method_call.arguments()) {
+      result->Error("Bad Arguments", "Null arguments received");
+      return;
+    }
+    const EncodableMap params =
+        GetValue<EncodableMap>(*method_call.arguments());
+    const EncodableMap configuration = findMap(params, "configuration");
+    const EncodableMap constraints = findMap(params, "constraints");
+    scoped_refptr<RTCPeerConnectionFactory> factory = ScreenAudioFactory();
+    if (factory == nullptr) {
+      result->Error("screenAudioCreatePeerConnectionFailed",
+                    "screen-audio PeerConnectionFactory is unavailable");
+      return;
+    }
+
+    ParseRTCConfiguration(configuration, configuration_);
+    scoped_refptr<RTCMediaConstraints> media_constraints =
+        ParseMediaConstraints(constraints);
+    std::string uuid = GenerateUUID();
+    scoped_refptr<RTCPeerConnection> pc =
+        factory->Create(configuration_, media_constraints);
+    if (pc == nullptr) {
+      result->Error("screenAudioCreatePeerConnectionFailed",
+                    "failed to create screen-audio PeerConnection");
+      return;
+    }
+    peerconnections_[uuid] = pc;
+
+    std::string event_channel = "FlutterWebRTC/peerConnectionEvent" + uuid;
+    std::unique_ptr<FlutterPeerConnectionObserver> observer(
+        new FlutterPeerConnectionObserver(this, pc, messenger_,
+                                          task_runner_, event_channel, uuid));
+    peerconnection_observers_[uuid] = std::move(observer);
+
+    EncodableMap response;
+    response[EncodableValue("peerConnectionId")] = EncodableValue(uuid);
+    result->Success(EncodableValue(response));
+  } else if (method_call.method_name().compare("screenAudioCreateTrack") ==
+             0) {
+    scoped_refptr<RTCPeerConnectionFactory> factory = ScreenAudioFactory();
+    if (factory == nullptr) {
+      result->Error("screenAudioCreateTrackFailed",
+                    "screen-audio PeerConnectionFactory is unavailable");
+      return;
+    }
+
+    RTCAudioOptions audio_options;
+    audio_options.echo_cancellation = false;
+    audio_options.auto_gain_control = false;
+    audio_options.noise_suppression = false;
+    audio_options.highpass_filter = false;
+
+    scoped_refptr<RTCAudioSource> audio_source =
+        factory->CreateAudioSource(
+            "screen_capture_audio", RTCAudioSource::SourceType::kCustom,
+            audio_options);
+    if (audio_source == nullptr) {
+      result->Error("screenAudioCreateTrackFailed",
+                    "failed to create screen-audio source");
+      return;
+    }
+
+    std::string stream_id = GenerateUUID();
+    std::string track_id = GenerateUUID();
+    scoped_refptr<RTCMediaStream> stream =
+        factory->CreateStream(stream_id.c_str());
+    scoped_refptr<RTCAudioTrack> track =
+        factory->CreateAudioTrack(audio_source, track_id.c_str());
+    if (stream == nullptr || track == nullptr) {
+      result->Error("screenAudioCreateTrackFailed",
+                    "failed to create screen-audio track");
+      return;
+    }
+
+    std::shared_ptr<ScreenAudioCapture> capture =
+        StartScreenAudioCapture(audio_source);
+    if (capture == nullptr) {
+      result->Error("screenAudioCreateTrackFailed",
+                    "screen-audio capture is unavailable");
+      return;
+    }
+
+    stream->AddTrack(track);
+    local_streams_[stream_id] = stream;
+    local_tracks_[track->id().std_string()] = track;
+    RegisterLocalTrackCleanup(track->id().std_string(),
+                              [capture]() { capture->Stop(); });
+
+    result->Success(
+        EncodableValue(screenAudioTrackToMap(track, stream_id)));
+#endif
   } else if (method_call.method_name().compare("getUserMedia") == 0) {
     if (!method_call.arguments()) {
       result->Error("Bad Arguments", "Null constraints arguments received");

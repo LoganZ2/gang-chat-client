@@ -17,14 +17,14 @@ typedef ScreenAudioTokenProvider =
 /// track through a *second* LiveKit Room whose PeerConnections live on an
 /// isolated WebRTC factory.
 ///
-/// The isolated factory's audio device module is `FlutterScreenAudioDevice`
-/// (fed by ScreenCaptureKit), which is fully separate from the primary
-/// factory's CoreAudio microphone ADM. This removes the shared `AudioState`
-/// that would otherwise fan the mic capture into the screen-audio send stream
-/// and race its capture checker (the fatal `audio_send_stream.cc:393`
-/// `RTC_CHECK`).
+/// The isolated factory is fully separate from the primary microphone factory:
+/// macOS feeds it through `FlutterScreenAudioDevice`/ScreenCaptureKit, while
+/// Windows creates the screen-audio track on a second native factory and feeds
+/// it from WASAPI loopback. This removes the shared `AudioState` that would
+/// otherwise fan mic capture into the screen-audio send stream and race its
+/// capture checker (the fatal `audio_send_stream.cc:393` `RTC_CHECK`).
 ///
-/// The aux participant joins with identity `<ownerId>#screen-audio`, is
+/// The aux participant joins with identity `<ownerId>--screen-audio`, is
 /// publish-only (`canSubscribe=false`), and never appears in the roster (no
 /// `live_participants` row is created for it). Receivers merge its audio into
 /// the owner's `screenShareVolume` via the existing `_applyScreenShareVolume`
@@ -49,9 +49,13 @@ class ScreenAudioPublisher {
     required String liveKitUrl,
     required String roomName,
   }) async {
-    debugPrint('screen-audio: starting publisher (url=$liveKitUrl, room=$roomName)');
+    debugPrint(
+      'screen-audio: starting publisher (url=$liveKitUrl, room=$roomName)',
+    );
     final tokenResult = await tokenProvider(roomName);
-    debugPrint('screen-audio: token acquired (identity=${tokenResult.identity})');
+    debugPrint(
+      'screen-audio: token acquired (identity=${tokenResult.identity})',
+    );
 
     final engine = lk.Engine(
       connectOptions: const lk.ConnectOptions(),

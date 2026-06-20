@@ -125,14 +125,14 @@ void main() {
     );
   });
 
-  test('screen-share does not request audio on Windows desktop', () {
+  test('screen-share requests aux audio on Windows desktop', () {
     expect(
       shouldRequestScreenShareAudio(
         sourceId: 'screen-primary',
         isDesktopSourcePickerPlatform: true,
         isWindowsDesktop: true,
       ),
-      isFalse,
+      isTrue,
     );
   });
 

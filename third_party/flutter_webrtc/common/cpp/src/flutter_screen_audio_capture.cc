@@ -13,6 +13,7 @@
 #include <cstring>
 #include <iostream>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #if __has_include(<audioclientactivationparams.h>)
@@ -276,12 +277,35 @@ WAVEFORMATEX CreateCaptureFormat() {
   return format;
 }
 
+class CustomSourceScreenAudioSink : public ScreenAudioFrameSink {
+ public:
+  explicit CustomSourceScreenAudioSink(
+      libwebrtc::scoped_refptr<libwebrtc::RTCAudioSource> audio_source)
+      : audio_source_(audio_source) {}
+
+  void EnqueueAudioData(const void* audio_data,
+                        int bits_per_sample,
+                        int sample_rate,
+                        size_t number_of_channels,
+                        size_t number_of_frames) override {
+    if (audio_source_ == nullptr || audio_data == nullptr ||
+        number_of_frames == 0) {
+      return;
+    }
+    audio_source_->CaptureFrame(audio_data, bits_per_sample, sample_rate,
+                                number_of_channels, number_of_frames);
+  }
+
+ private:
+  libwebrtc::scoped_refptr<libwebrtc::RTCAudioSource> audio_source_;
+};
+
 }  // namespace
 
 class ScreenAudioCapture::Impl {
  public:
-  explicit Impl(libwebrtc::scoped_refptr<libwebrtc::RTCAudioSource> source)
-      : audio_source_(source) {}
+  explicit Impl(std::shared_ptr<ScreenAudioFrameSink> sink)
+      : sink_(std::move(sink)) {}
 
   ~Impl() { Stop(); }
 
@@ -492,6 +516,9 @@ class ScreenAudioCapture::Impl {
   }
 
   void PushFrames(const BYTE* data, UINT32 frames) {
+    if (sink_ == nullptr) {
+      return;
+    }
     UINT32 offset = 0;
     while (offset < frames) {
       UINT32 chunk_frames =
@@ -500,13 +527,16 @@ class ScreenAudioCapture::Impl {
               : (frames - offset);
       const BYTE* chunk =
           data + offset * capture_format_.nBlockAlign;
-      audio_source_->CaptureFrame(chunk, kBitsPerSample, kSampleRate,
-                                  kChannels, chunk_frames);
+      sink_->EnqueueAudioData(chunk, kBitsPerSample, kSampleRate, kChannels,
+                              chunk_frames);
       offset += chunk_frames;
     }
   }
 
   void PushSilentFrames(UINT32 frames) {
+    if (sink_ == nullptr) {
+      return;
+    }
     const size_t sample_count =
         static_cast<size_t>(kFramesPerWebRTCChunk) * kChannels;
     std::vector<int16_t> silence(sample_count, 0);
@@ -516,13 +546,13 @@ class ScreenAudioCapture::Impl {
           (frames - offset) > kFramesPerWebRTCChunk
               ? kFramesPerWebRTCChunk
               : (frames - offset);
-      audio_source_->CaptureFrame(silence.data(), kBitsPerSample, kSampleRate,
-                                  kChannels, chunk_frames);
+      sink_->EnqueueAudioData(silence.data(), kBitsPerSample, kSampleRate,
+                              kChannels, chunk_frames);
       offset += chunk_frames;
     }
   }
 
-  libwebrtc::scoped_refptr<libwebrtc::RTCAudioSource> audio_source_;
+  std::shared_ptr<ScreenAudioFrameSink> sink_;
   std::thread worker_;
   std::atomic<bool> running_{false};
   std::atomic<HRESULT> start_result_{E_PENDING};
@@ -536,9 +566,17 @@ class ScreenAudioCapture::Impl {
   Microsoft::WRL::ComPtr<IAudioCaptureClient> audio_capture_client_;
 };
 
+std::shared_ptr<ScreenAudioFrameSink> CreateScreenAudioCustomSourceSink(
+    libwebrtc::scoped_refptr<libwebrtc::RTCAudioSource> audio_source) {
+  if (audio_source == nullptr) {
+    return nullptr;
+  }
+  return std::make_shared<CustomSourceScreenAudioSink>(audio_source);
+}
+
 ScreenAudioCapture::ScreenAudioCapture(
-    libwebrtc::scoped_refptr<libwebrtc::RTCAudioSource> audio_source)
-    : impl_(std::make_unique<Impl>(audio_source)) {}
+    std::shared_ptr<ScreenAudioFrameSink> sink)
+    : impl_(std::make_unique<Impl>(std::move(sink))) {}
 
 ScreenAudioCapture::~ScreenAudioCapture() = default;
 

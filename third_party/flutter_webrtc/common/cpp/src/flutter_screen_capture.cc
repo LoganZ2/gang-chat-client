@@ -1,12 +1,6 @@
 #include "flutter_screen_capture.h"
 
 #if defined(_WIN32)
-#define FLUTTER_WEBRTC_ENABLE_UNSAFE_WINDOWS_SCREEN_AUDIO 0
-
-#if FLUTTER_WEBRTC_ENABLE_UNSAFE_WINDOWS_SCREEN_AUDIO
-#include "flutter_screen_audio_capture.h"
-#endif
-
 #include <windows.h>
 
 #include <cstdint>
@@ -30,10 +24,6 @@ bool WantsScreenAudio(const EncodableMap& constraints) {
 }
 
 #if defined(_WIN32)
-#if FLUTTER_WEBRTC_ENABLE_UNSAFE_WINDOWS_SCREEN_AUDIO
-constexpr int kScreenAudioSampleRate = 48000;
-constexpr int kScreenAudioChannels = 2;
-
 bool ResolveWindowProcessId(const std::string& source_id,
                             DWORD* process_id) {
   if (process_id == nullptr || source_id.empty()) {
@@ -61,7 +51,6 @@ bool ResolveWindowProcessId(const std::string& source_id,
     return false;
   }
 }
-#endif  // FLUTTER_WEBRTC_ENABLE_UNSAFE_WINDOWS_SCREEN_AUDIO
 #endif
 
 }  // namespace
@@ -330,94 +319,25 @@ void FlutterScreenCapture::GetDisplayMedia(
 
   // AUDIO
 
-  EncodableList audioTracks;
 #if defined(_WIN32)
-#if FLUTTER_WEBRTC_ENABLE_UNSAFE_WINDOWS_SCREEN_AUDIO
   if (WantsScreenAudio(constraints)) {
-    RTCAudioOptions audio_options;
-    audio_options.echo_cancellation = false;
-    audio_options.auto_gain_control = false;
-    audio_options.noise_suppression = false;
-    audio_options.highpass_filter = false;
-
-    scoped_refptr<RTCAudioSource> audio_source =
-        base_->factory_->CreateAudioSource(
-            "screen_capture_audio", RTCAudioSource::SourceType::kCustom,
-            audio_options);
-    scoped_refptr<RTCAudioTrack> audio_track;
-    std::shared_ptr<ScreenAudioCapture> screen_audio_capture;
-
-    if (audio_source.get() != nullptr) {
-      DWORD target_process_id = GetCurrentProcessId();
-      bool include_process_tree = false;
-      DWORD window_process_id = 0;
-      if (source->type() == kWindow &&
-          ResolveWindowProcessId(source->id().std_string(),
-                                 &window_process_id)) {
-        target_process_id = window_process_id;
-        include_process_tree = true;
-      }
-
-      std::string audio_track_id = base_->GenerateUUID();
-      audio_track =
-          base_->factory_->CreateAudioTrack(audio_source, audio_track_id.c_str());
-      screen_audio_capture =
-          std::make_shared<ScreenAudioCapture>(audio_source);
-
-      if (audio_track.get() != nullptr &&
-          screen_audio_capture->Start(target_process_id,
-                                      include_process_tree)) {
-        EncodableMap audio_info;
-        audio_info[EncodableValue("id")] =
-            EncodableValue(audio_track->id().std_string());
-        audio_info[EncodableValue("label")] =
-            EncodableValue(audio_track->id().std_string());
-        audio_info[EncodableValue("kind")] =
-            EncodableValue(audio_track->kind().std_string());
-        audio_info[EncodableValue("enabled")] =
-            EncodableValue(audio_track->enabled());
-
-        EncodableMap audio_settings;
-        audio_settings[EncodableValue("deviceId")] =
-            EncodableValue("screen_audio");
-        audio_settings[EncodableValue("kind")] =
-            EncodableValue("audiooutput");
-        audio_settings[EncodableValue("autoGainControl")] =
-            EncodableValue(false);
-        audio_settings[EncodableValue("echoCancellation")] =
-            EncodableValue(false);
-        audio_settings[EncodableValue("noiseSuppression")] =
-            EncodableValue(false);
-        audio_settings[EncodableValue("channelCount")] =
-            EncodableValue(kScreenAudioChannels);
-        audio_settings[EncodableValue("sampleRate")] =
-            EncodableValue(kScreenAudioSampleRate);
-        audio_info[EncodableValue("settings")] =
-            EncodableValue(audio_settings);
-
-        audioTracks.push_back(EncodableValue(audio_info));
-        stream->AddTrack(audio_track);
-        base_->local_tracks_[audio_track->id().std_string()] = audio_track;
-        base_->RegisterLocalTrackCleanup(
-            audio_track->id().std_string(),
-            [screen_audio_capture]() { screen_audio_capture->Stop(); });
-      } else {
-        std::cerr << "Screen audio capture is unavailable; continuing with "
-                     "video-only screen share."
-                  << std::endl;
-      }
+    DWORD target_process_id = GetCurrentProcessId();
+    bool include_process_tree = false;
+    DWORD window_process_id = 0;
+    if (source->type() == kWindow &&
+        ResolveWindowProcessId(source->id().std_string(),
+                               &window_process_id)) {
+      target_process_id = window_process_id;
+      include_process_tree = true;
     }
-  }
-#else
-  if (WantsScreenAudio(constraints)) {
-    std::cerr
-        << "Windows screen audio capture is disabled because the current "
-           "custom RTCAudioSource path can race WebRTC's audio send stream; "
-           "continuing with video-only screen share."
-        << std::endl;
+    base_->ConfigureScreenAudioCapture(true, target_process_id,
+                                       include_process_tree);
+  } else {
+    base_->ConfigureScreenAudioCapture(false, 0, false);
   }
 #endif
-#endif
+
+  EncodableList audioTracks;
   params[EncodableValue("audioTracks")] = EncodableValue(audioTracks);
 
   stream->AddTrack(track);

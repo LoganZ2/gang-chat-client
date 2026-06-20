@@ -2,6 +2,9 @@
 
 #include "flutter_data_channel.h"
 #include "flutter_peerconnection.h"
+#if defined(_WIN32)
+#include "flutter_screen_audio_capture.h"
+#endif
 
 #include "helper.h"
 
@@ -85,6 +88,10 @@ FlutterWebRTCBase::~FlutterWebRTCBase() {
   if (audio_processing_ != nullptr) {
     audio_processing_->SetCapturePostProcessing(nullptr);
   }
+#if defined(_WIN32)
+  StopScreenAudioCapture();
+  screen_audio_factory_ = nullptr;
+#endif
   LibWebRTC::Terminate();
 }
 
@@ -430,6 +437,62 @@ void FlutterWebRTCBase::RunLocalTrackCleanup(const std::string& id) {
     cleanup();
   }
 }
+
+#if defined(_WIN32)
+scoped_refptr<RTCPeerConnectionFactory> FlutterWebRTCBase::ScreenAudioFactory() {
+  if (screen_audio_factory_ != nullptr) {
+    return screen_audio_factory_;
+  }
+
+  screen_audio_factory_ = LibWebRTC::CreateRTCPeerConnectionFactory();
+  if (screen_audio_factory_ == nullptr ||
+      !screen_audio_factory_->Initialize()) {
+    screen_audio_factory_ = nullptr;
+  }
+  return screen_audio_factory_;
+}
+
+void FlutterWebRTCBase::ConfigureScreenAudioCapture(
+    bool requested,
+    unsigned long target_process_id,
+    bool include_process_tree) {
+  screen_audio_capture_requested_ = requested;
+  screen_audio_target_process_id_ = target_process_id;
+  screen_audio_include_process_tree_ = include_process_tree;
+  if (!requested) {
+    StopScreenAudioCapture();
+  }
+}
+
+std::shared_ptr<ScreenAudioCapture> FlutterWebRTCBase::StartScreenAudioCapture(
+    scoped_refptr<RTCAudioSource> source) {
+  StopScreenAudioCapture();
+  if (!screen_audio_capture_requested_ || source == nullptr ||
+      screen_audio_target_process_id_ == 0) {
+    return nullptr;
+  }
+
+  auto sink = CreateScreenAudioCustomSourceSink(source);
+  if (sink == nullptr) {
+    return nullptr;
+  }
+
+  auto capture = std::make_shared<ScreenAudioCapture>(sink);
+  if (!capture->Start(screen_audio_target_process_id_,
+                      screen_audio_include_process_tree_)) {
+    return nullptr;
+  }
+  screen_audio_capture_ = capture;
+  return capture;
+}
+
+void FlutterWebRTCBase::StopScreenAudioCapture() {
+  if (screen_audio_capture_ != nullptr) {
+    screen_audio_capture_->Stop();
+    screen_audio_capture_.reset();
+  }
+}
+#endif
 
 libwebrtc::scoped_refptr<libwebrtc::RTCRtpSender>
 FlutterWebRTCBase::GetRtpSenderById(RTCPeerConnection* pc, std::string id) {

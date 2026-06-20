@@ -89,15 +89,10 @@ bool shouldRequestScreenShareAudio({
   required bool isDesktopSourcePickerPlatform,
   required bool isWindowsDesktop,
 }) {
-  // The current Windows flutter_webrtc/libwebrtc wrapper publishes screen audio
-  // through a custom RTCAudioSource. That source pushes frames from a WASAPI
-  // worker while WebRTC's ADM also distributes captured frames to every active
-  // AudioSendStream, which can trip AudioSendStream's serialized-audio race
-  // checker. Keep Windows screen sharing video-only until the native custom
-  // source can be routed through WebRTC's serialized audio transport.
-  if (isDesktopSourcePickerPlatform && isWindowsDesktop) {
-    return false;
-  }
+  // Screen audio is published by ScreenAudioPublisher through a separate
+  // native factory/aux participant. getDisplayMedia still receives audio=true
+  // so platform capture can be configured, but the returned stream remains
+  // video-only and is never published on the main factory.
   return true;
 }
 
@@ -304,7 +299,6 @@ class LiveSession extends ChangeNotifier {
   AudioOutputRebinder? _outputRebinder;
   final ScreenAudioTokenProvider? _screenAudioTokenProvider;
   ScreenAudioPublisher? _screenAudioPublisher;
-
 
   lk.Room? _room;
   lk.CancelListenFunc? _cancelEvents;
@@ -951,9 +945,11 @@ class LiveSession extends ChangeNotifier {
     if (event is lk.ActiveSpeakersChangedEvent) {
       _speakingIdentities
         ..clear()
-        ..addAll(event.speakers
-            .where((p) => !_isScreenAudioAux(p.identity))
-            .map((p) => p.identity));
+        ..addAll(
+          event.speakers
+              .where((p) => !_isScreenAudioAux(p.identity))
+              .map((p) => p.identity),
+        );
       notifyListeners();
       return;
     }
@@ -1091,17 +1087,19 @@ class LiveSession extends ChangeNotifier {
 
   /// Start the hidden screen-audio aux participant. The aux room publishes the
   /// screen-share audio track through an isolated WebRTC factory (second
- /// PeerConnectionFactory whose ADM is FlutterScreenAudioDevice), so screen
- /// audio never shares an AudioState with the mic. Requires the main room to
- /// be connected (for the resolved LiveKit URL + room name) and a token
- /// provider to have been injected.
+  /// PeerConnectionFactory fed by the platform screen-audio capture path), so
+  /// screen audio never shares an AudioState with the mic. Requires the main
+  /// room to be connected (for the resolved LiveKit URL + room name) and a
+  /// token provider to have been injected.
   Future<void> _startScreenAudioPublisher() async {
     if (_screenAudioPublisher != null) return;
     final provider = _screenAudioTokenProvider;
     final url = _resolvedLiveKitUrl;
     final name = _roomName;
-    debugPrint('screen-audio: _startScreenAudioPublisher '
-        'provider=${provider != null} url=$url roomName=$name');
+    debugPrint(
+      'screen-audio: _startScreenAudioPublisher '
+      'provider=${provider != null} url=$url roomName=$name',
+    );
     if (provider == null || url == null || name == null) return;
     _screenAudioPublisher = ScreenAudioPublisher(tokenProvider: provider);
     try {
@@ -1213,7 +1211,7 @@ class LiveSession extends ChangeNotifier {
     final localIdentity = room.localParticipant?.identity;
     for (final participant in room.remoteParticipants.values) {
       // Self-echo suppression: the local user's own screen-audio aux
-      // participant (`<ownId>#screen-audio`) is publishing audio the user
+      // participant (`<ownId>--screen-audio`) is publishing audio the user
       // is already hearing locally (it's their own screen). Mute it to 0 so
       // it never plays back to them. Other users' aux tracks play at the
       // screen-share volume.

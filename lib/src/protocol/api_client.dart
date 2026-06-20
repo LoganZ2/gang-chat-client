@@ -381,7 +381,7 @@ abstract interface class GangApi {
   });
 
   /// Issues a publish-only LiveKit token for the caller's hidden screen-audio
-  /// aux participant (identity `<userId>#screen-audio`). Fetched on demand when
+  /// aux participant (identity `<userId>--screen-audio`). Fetched on demand when
   /// the user starts screen-share-with-audio, so the token is always fresh
   /// regardless of how long they have been in the call.
   Future<ScreenAudioToken> issueScreenAudioToken({required String roomId});

@@ -1794,7 +1794,7 @@ class LiveKitConnectionInfo {
 }
 
 /// A publish-only LiveKit token for the hidden screen-audio aux participant
-/// (`<ownerId>#screen-audio`). The aux participant publishes the screen-share
+/// (`<ownerId>--screen-audio`). The aux participant publishes the screen-share
 /// audio track through an isolated WebRTC factory; it is hidden from the
 /// receiver UI and never appears in the roster.
 class ScreenAudioToken {

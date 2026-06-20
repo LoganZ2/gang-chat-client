@@ -32,6 +32,7 @@ using namespace libwebrtc;
 class FlutterVideoRenderer;
 class FlutterRTCDataChannelObserver;
 class FlutterPeerConnectionObserver;
+class ScreenAudioCapture;
 
 class LocalAudioInputVolumeProcessor
     : public RTCAudioProcessing::CustomProcessing {
@@ -114,6 +115,19 @@ class FlutterWebRTCBase {
 
   void RunLocalTrackCleanup(const std::string& id);
 
+#if defined(_WIN32)
+  scoped_refptr<RTCPeerConnectionFactory> ScreenAudioFactory();
+
+  void ConfigureScreenAudioCapture(bool requested,
+                                   unsigned long target_process_id,
+                                   bool include_process_tree);
+
+  std::shared_ptr<ScreenAudioCapture> StartScreenAudioCapture(
+      scoped_refptr<RTCAudioSource> source);
+
+  void StopScreenAudioCapture();
+#endif
+
   EventChannelProxy* event_channel();
 
   libwebrtc::scoped_refptr<libwebrtc::RTCRtpSender> GetRtpSenderById(
@@ -141,6 +155,13 @@ class FlutterWebRTCBase {
   scoped_refptr<RTCVideoDevice> video_device_;
   scoped_refptr<RTCDesktopDevice> desktop_device_;
   scoped_refptr<RTCAudioProcessing> audio_processing_;
+#if defined(_WIN32)
+  scoped_refptr<RTCPeerConnectionFactory> screen_audio_factory_;
+  std::shared_ptr<ScreenAudioCapture> screen_audio_capture_;
+  bool screen_audio_capture_requested_ = false;
+  unsigned long screen_audio_target_process_id_ = 0;
+  bool screen_audio_include_process_tree_ = false;
+#endif
   std::unique_ptr<LocalAudioInputVolumeProcessor>
       local_audio_input_volume_processor_;
   RTCConfiguration configuration_;
