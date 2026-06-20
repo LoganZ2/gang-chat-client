@@ -9,9 +9,12 @@
 #include <wrl/client.h>
 
 #include <atomic>
+#include <condition_variable>
 #include <cstdint>
 #include <cstring>
+#include <deque>
 #include <iostream>
+#include <mutex>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -281,7 +284,12 @@ class CustomSourceScreenAudioSink : public ScreenAudioFrameSink {
  public:
   explicit CustomSourceScreenAudioSink(
       libwebrtc::scoped_refptr<libwebrtc::RTCAudioSource> audio_source)
-      : audio_source_(audio_source) {}
+      : audio_source_(audio_source) {
+    delivery_thread_ = std::thread(&CustomSourceScreenAudioSink::DeliveryLoop,
+                                   this);
+  }
+
+  ~CustomSourceScreenAudioSink() override { Stop(); }
 
   void EnqueueAudioData(const void* audio_data,
                         int bits_per_sample,
@@ -292,12 +300,86 @@ class CustomSourceScreenAudioSink : public ScreenAudioFrameSink {
         number_of_frames == 0) {
       return;
     }
-    audio_source_->CaptureFrame(audio_data, bits_per_sample, sample_rate,
-                                number_of_channels, number_of_frames);
+    const size_t bytes_per_sample =
+        static_cast<size_t>(bits_per_sample / 8);
+    if (bytes_per_sample == 0 || number_of_channels == 0) {
+      return;
+    }
+    const size_t byte_count =
+        number_of_frames * number_of_channels * bytes_per_sample;
+    AudioChunk chunk;
+    chunk.bits_per_sample = bits_per_sample;
+    chunk.sample_rate = sample_rate;
+    chunk.number_of_channels = number_of_channels;
+    chunk.number_of_frames = number_of_frames;
+    chunk.data.resize(byte_count);
+    std::memcpy(chunk.data.data(), audio_data, byte_count);
+
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      if (stopped_) {
+        return;
+      }
+      if (queue_.size() >= kMaxQueuedChunks) {
+        queue_.pop_front();
+      }
+      queue_.push_back(std::move(chunk));
+    }
+    condition_.notify_one();
   }
 
  private:
+  struct AudioChunk {
+    std::vector<uint8_t> data;
+    int bits_per_sample = 0;
+    int sample_rate = 0;
+    size_t number_of_channels = 0;
+    size_t number_of_frames = 0;
+  };
+
+  static constexpr size_t kMaxQueuedChunks = 50;
+
+  void Stop() {
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      stopped_ = true;
+      queue_.clear();
+    }
+    condition_.notify_one();
+    if (delivery_thread_.joinable()) {
+      delivery_thread_.join();
+    }
+  }
+
+  void DeliveryLoop() {
+    while (true) {
+      AudioChunk chunk;
+      {
+        std::unique_lock<std::mutex> lock(mutex_);
+        condition_.wait(lock, [this]() {
+          return stopped_ || !queue_.empty();
+        });
+        if (stopped_ && queue_.empty()) {
+          return;
+        }
+        chunk = std::move(queue_.front());
+        queue_.pop_front();
+      }
+
+      if (audio_source_ != nullptr && !chunk.data.empty()) {
+        audio_source_->CaptureFrame(
+            chunk.data.data(), chunk.bits_per_sample, chunk.sample_rate,
+            chunk.number_of_channels, chunk.number_of_frames);
+      }
+    }
+  }
+
   libwebrtc::scoped_refptr<libwebrtc::RTCAudioSource> audio_source_;
+  std::mutex mutex_;
+  std::condition_variable condition_;
+  std::deque<AudioChunk> queue_;
+  bool stopped_ = false;
+  std::thread delivery_thread_;
 };
 
 }  // namespace
@@ -352,6 +434,7 @@ class ScreenAudioCapture::Impl {
     stop_event_.reset();
     started_event_.reset();
     sample_event_.reset();
+    sink_.reset();
   }
 
  private:

@@ -15,7 +15,6 @@
 #include "base/portable.h"
 #include "base/refcount.h"
 #include "base/scoped_ref_ptr.h"
-#include <stdint.h>
 
 namespace libwebrtc {
 
