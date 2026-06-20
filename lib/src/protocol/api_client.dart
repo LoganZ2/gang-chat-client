@@ -380,6 +380,12 @@ abstract interface class GangApi {
     String? connectionState,
   });
 
+  /// Issues a publish-only LiveKit token for the caller's hidden screen-audio
+  /// aux participant (identity `<userId>#screen-audio`). Fetched on demand when
+  /// the user starts screen-share-with-audio, so the token is always fresh
+  /// regardless of how long they have been in the call.
+  Future<ScreenAudioToken> issueScreenAudioToken({required String roomId});
+
   Future<MusicBoxState> getMusicBoxState(String roomId);
 
   Future<List<MusicBoxSearchResult>> searchMusicBox({
@@ -1539,6 +1545,16 @@ class GangApiClient implements GangApi {
         }),
       );
     }, retryTransientFailures: true).then(LiveJoinResult.fromJson);
+  }
+
+  @override
+  Future<ScreenAudioToken> issueScreenAudioToken({required String roomId}) {
+    return _sendJson((token) {
+      return _httpClient.post(
+        _uri('/rooms/$roomId/live/screen-audio-token'),
+        headers: _headers(token),
+      );
+    }, retryTransientFailures: true).then(ScreenAudioToken.fromJson);
   }
 
   @override

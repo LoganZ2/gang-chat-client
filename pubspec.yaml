@@ -45,6 +45,8 @@ dependency_overrides:
     path: third_party/audioplayers_windows
   flutter_webrtc:
     path: third_party/flutter_webrtc
+  livekit_client:
+    path: third_party/livekit_client
 
 flutter:
   uses-material-design: true

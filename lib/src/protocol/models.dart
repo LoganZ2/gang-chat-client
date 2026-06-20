@@ -1793,6 +1793,36 @@ class LiveKitConnectionInfo {
   }
 }
 
+/// A publish-only LiveKit token for the hidden screen-audio aux participant
+/// (`<ownerId>#screen-audio`). The aux participant publishes the screen-share
+/// audio track through an isolated WebRTC factory; it is hidden from the
+/// receiver UI and never appears in the roster.
+class ScreenAudioToken {
+  const ScreenAudioToken({
+    required this.serverUrl,
+    required this.token,
+    required this.tokenExpiresAt,
+    required this.roomName,
+    required this.identity,
+  });
+
+  final String serverUrl;
+  final String token;
+  final DateTime tokenExpiresAt;
+  final String roomName;
+  final String identity;
+
+  factory ScreenAudioToken.fromJson(Map<String, Object?> json) {
+    return ScreenAudioToken(
+      serverUrl: json['server_url']! as String,
+      token: json['token']! as String,
+      tokenExpiresAt: DateTime.parse(json['token_expires_at']! as String),
+      roomName: json['room_name']! as String,
+      identity: json['identity']! as String,
+    );
+  }
+}
+
 class LiveJoinResult {
   const LiveJoinResult({
     required this.liveKit,

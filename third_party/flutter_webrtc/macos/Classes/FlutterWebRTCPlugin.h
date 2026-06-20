@@ -87,7 +87,15 @@ typedef void (^CapturerStopHandler)(CompletionHandler _Nonnull handler);
 // We snapshot the clean (>= 32 kHz) nominal rate per output device id whenever we
 // observe one, then force it back on call teardown. See gcResetAudioOnLeave.
 @property(nonatomic, strong) NSMutableDictionary<NSString*, NSNumber*>* _Nullable gcCleanOutputSampleRates;
-#endif
+
+// gang-chat fork: a second PeerConnection factory whose audio device module
+// is FlutterScreenAudioDevice (ScreenCaptureKit system audio), fully isolated
+// from the primary factory's CoreAudio microphone ADM. Screen-share audio is
+// published through PeerConnections created by this factory so it never shares
+// an AudioState/AudioTransportImpl with the mic (which would race the send
+// stream's capture checker). Lazily created; nil until first use.
+@property(nonatomic, strong) RTCPeerConnectionFactory* _Nullable screenAudioPeerConnectionFactory;
+ #endif
 
 - (RTCMediaStream* _Nullable)streamForId:(NSString* _Nonnull)streamId
                         peerConnectionId:(NSString* _Nullable)peerConnectionId;

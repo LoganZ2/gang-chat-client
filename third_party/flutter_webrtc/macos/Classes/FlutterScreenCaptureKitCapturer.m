@@ -1,4 +1,5 @@
 #import "FlutterScreenCaptureKitCapturer.h"
+#import "FlutterScreenAudioDevice.h"
 
 #import <CoreGraphics/CoreGraphics.h>
 #import <CoreMedia/CoreMedia.h>
@@ -6,6 +7,9 @@
 #if __has_include(<ScreenCaptureKit/ScreenCaptureKit.h>)
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
 #endif
+
+static const NSInteger kScreenAudioSampleRate = 48000;
+static const NSInteger kScreenAudioChannels = 2;
 
 @interface FlutterScreenCaptureKitCapturer ()
 #if __has_include(<ScreenCaptureKit/ScreenCaptureKit.h>)
@@ -15,7 +19,7 @@
 @property(nonatomic, weak) id<RTCVideoCapturerDelegate> delegate;
 @property(nonatomic, strong) dispatch_queue_t captureQueue;
 #if __has_include(<ScreenCaptureKit/ScreenCaptureKit.h>)
-@property(nonatomic, strong) SCStream *stream;
+@property(nonatomic, strong) SCStream *stream API_AVAILABLE(macos(12.3));
 #endif
 @end
 
@@ -33,32 +37,81 @@
 
 - (void)startCaptureWithFPS:(NSInteger)fps
                    sourceId:(NSString* _Nullable)sourceId
-                  onStarted:(void (^)(NSError * _Nullable error))onStarted {
+              captureWindow:(BOOL)captureWindow
+               captureAudio:(BOOL)captureAudio
+                  onStarted:(void (^_Nonnull)(NSError* _Nullable error))onStarted {
+  NSLog(@"SCK capturer: startCapture fps=%ld captureAudio=%d sourceId=%@ window=%d",
+        (long)fps, captureAudio, sourceId, captureWindow);
 #if __has_include(<ScreenCaptureKit/ScreenCaptureKit.h>)
   if (@available(macOS 12.3, *)) {
+    if (!CGPreflightScreenCaptureAccess()) {
+      if (!CGRequestScreenCaptureAccess()) {
+        NSError *permissionDenied = [NSError errorWithDomain:@"FlutterScreenCaptureKit"
+                                                        code:-3
+                                                    userInfo:@{NSLocalizedDescriptionKey: @"Screen recording permission denied"}];
+        onStarted(permissionDenied);
+        return;
+      }
+    }
     [SCShareableContent getShareableContentWithCompletionHandler:^(SCShareableContent *content, NSError *error) {
       if (error != nil) {
         onStarted(error);
         return;
       }
 
-      SCDisplay *display = [self selectDisplayFromContent:content sourceId:sourceId];
-      if (display == nil) {
-        NSError *noDisplay = [NSError errorWithDomain:@"FlutterScreenCaptureKit"
-                                                 code:-1
-                                             userInfo:@{NSLocalizedDescriptionKey: @"No matching display"}];
-        onStarted(noDisplay);
-        return;
+      SCContentFilter *filter = nil;
+      size_t outputWidth = 1;
+      size_t outputHeight = 1;
+      if (captureWindow) {
+        SCWindow *window = [self selectWindowFromContent:content sourceId:sourceId];
+        if (window == nil) {
+          NSError *noWindow = [NSError errorWithDomain:@"FlutterScreenCaptureKit"
+                                                  code:-1
+                                              userInfo:@{NSLocalizedDescriptionKey: @"No matching window"}];
+          onStarted(noWindow);
+          return;
+        }
+        filter = [[SCContentFilter alloc] initWithDesktopIndependentWindow:window];
+        outputWidth = (size_t)MAX(1.0, ceil(CGRectGetWidth(window.frame)));
+        outputHeight = (size_t)MAX(1.0, ceil(CGRectGetHeight(window.frame)));
+      } else {
+        SCDisplay *display = [self selectDisplayFromContent:content sourceId:sourceId];
+        if (display == nil) {
+          NSError *noDisplay = [NSError errorWithDomain:@"FlutterScreenCaptureKit"
+                                                   code:-1
+                                               userInfo:@{NSLocalizedDescriptionKey: @"No matching display"}];
+          onStarted(noDisplay);
+          return;
+        }
+        filter = [[SCContentFilter alloc] initWithDisplay:display excludingWindows:@[]];
+        outputWidth = (size_t)MAX(1, display.width);
+        outputHeight = (size_t)MAX(1, display.height);
       }
 
-      SCContentFilter *filter = [[SCContentFilter alloc] initWithDisplay:display excludingWindows:@[]];
       SCStreamConfiguration *config = [SCStreamConfiguration new];
-      config.width = display.width;
-      config.height = display.height;
+      config.width = outputWidth;
+      config.height = outputHeight;
       config.minimumFrameInterval = CMTimeMake(1, (int32_t)MAX(1, fps));
       config.pixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarFullRange;
+      if (captureWindow) {
+        config.scalesToFit = YES;
+      }
       if (@available(macOS 13.0, *)) {
         config.showsCursor = YES;
+        if (captureAudio) {
+          NSLog(@"SCK capturer: configuring audio (rate=%ld ch=%ld)",
+                (long)kScreenAudioSampleRate, (long)kScreenAudioChannels);
+          config.sampleRate = kScreenAudioSampleRate;
+          config.channelCount = kScreenAudioChannels;
+          config.capturesAudio = YES;
+          config.excludesCurrentProcessAudio = YES;
+        }
+      } else if (captureAudio) {
+        NSError *unsupportedAudio = [NSError errorWithDomain:@"FlutterScreenCaptureKit"
+                                                        code:-4
+                                                    userInfo:@{NSLocalizedDescriptionKey: @"ScreenCaptureKit audio capture requires macOS 13.0 or newer"}];
+        onStarted(unsupportedAudio);
+        return;
       }
 
       self.stream = [[SCStream alloc] initWithFilter:filter configuration:config delegate:nil];
@@ -72,7 +125,35 @@
         return;
       }
 
+      if (captureAudio) {
+        if (@available(macOS 13.0, *)) {
+          NSError *addAudioOutputError = nil;
+          [self.stream addStreamOutput:self
+                                  type:SCStreamOutputTypeAudio
+                   sampleHandlerQueue:self.captureQueue
+                                error:&addAudioOutputError];
+          if (addAudioOutputError != nil) {
+            NSLog(@"SCK capturer: audio output add FAILED: %@", addAudioOutputError);
+            onStarted(addAudioOutputError);
+            return;
+          }
+          NSLog(@"SCK capturer: audio output added successfully");
+        } else {
+          NSError *unsupportedAudio = [NSError errorWithDomain:@"FlutterScreenCaptureKit"
+                                                          code:-4
+                                                      userInfo:@{NSLocalizedDescriptionKey: @"ScreenCaptureKit audio capture requires macOS 13.0 or newer"}];
+          onStarted(unsupportedAudio);
+          return;
+        }
+      }
+
+      NSLog(@"SCK capturer: starting capture...");
       [self.stream startCaptureWithCompletionHandler:^(NSError * _Nullable startError) {
+        if (startError != nil) {
+          NSLog(@"SCK capturer: startCapture FAILED: %@", startError);
+        } else {
+          NSLog(@"SCK capturer: startCapture succeeded");
+        }
         onStarted(startError);
       }];
     }];
@@ -86,7 +167,81 @@
   onStarted(unavailable);
 }
 
-- (void)stopCaptureWithCompletion:(void (^)(void))completion {
+- (void)startAudioOnlyCaptureForWindowSourceId:(NSString* _Nonnull)sourceId
+                                     onStarted:(void (^_Nonnull)(NSError* _Nullable error))onStarted {
+  NSLog(@"SCK capturer: startAudioOnlyCapture sourceId=%@", sourceId);
+#if __has_include(<ScreenCaptureKit/ScreenCaptureKit.h>)
+  if (@available(macOS 13.0, *)) {
+    if (!CGPreflightScreenCaptureAccess()) {
+      if (!CGRequestScreenCaptureAccess()) {
+        NSError *permissionDenied = [NSError errorWithDomain:@"FlutterScreenCaptureKit"
+                                                        code:-3
+                                                    userInfo:@{NSLocalizedDescriptionKey: @"Screen recording permission denied"}];
+        onStarted(permissionDenied);
+        return;
+      }
+    }
+    [SCShareableContent getShareableContentWithCompletionHandler:^(SCShareableContent *content, NSError *error) {
+      if (error != nil) {
+        onStarted(error);
+        return;
+      }
+      SCWindow *window = [self selectWindowFromContent:content sourceId:sourceId];
+      if (window == nil) {
+        NSError *noWindow = [NSError errorWithDomain:@"FlutterScreenCaptureKit"
+                                                code:-1
+                                            userInfo:@{NSLocalizedDescriptionKey: @"No matching window for audio capture"}];
+        onStarted(noWindow);
+        return;
+      }
+      SCContentFilter *filter = [[SCContentFilter alloc] initWithDesktopIndependentWindow:window];
+
+      SCStreamConfiguration *config = [SCStreamConfiguration new];
+      // SCStream requires a valid video configuration even when only audio is
+      // consumed; keep it minimal since no screen output is added.
+      config.width = (size_t)MAX(2.0, ceil(CGRectGetWidth(window.frame)));
+      config.height = (size_t)MAX(2.0, ceil(CGRectGetHeight(window.frame)));
+      config.minimumFrameInterval = CMTimeMake(1, 1);
+      config.pixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarFullRange;
+      config.scalesToFit = YES;
+      NSLog(@"SCK capturer: configuring audio-only (rate=%ld ch=%ld)",
+            (long)kScreenAudioSampleRate, (long)kScreenAudioChannels);
+      config.sampleRate = kScreenAudioSampleRate;
+      config.channelCount = kScreenAudioChannels;
+      config.capturesAudio = YES;
+      config.excludesCurrentProcessAudio = YES;
+
+      self.stream = [[SCStream alloc] initWithFilter:filter configuration:config delegate:nil];
+      NSError *addAudioOutputError = nil;
+      [self.stream addStreamOutput:self
+                              type:SCStreamOutputTypeAudio
+               sampleHandlerQueue:self.captureQueue
+                            error:&addAudioOutputError];
+      if (addAudioOutputError != nil) {
+        NSLog(@"SCK capturer: audio-only output add FAILED: %@", addAudioOutputError);
+        onStarted(addAudioOutputError);
+        return;
+      }
+      NSLog(@"SCK capturer: audio-only output added successfully");
+      [self.stream startCaptureWithCompletionHandler:^(NSError * _Nullable startError) {
+        if (startError != nil) {
+          NSLog(@"SCK capturer: audio-only startCapture FAILED: %@", startError);
+        } else {
+          NSLog(@"SCK capturer: audio-only startCapture succeeded");
+        }
+        onStarted(startError);
+      }];
+    }];
+    return;
+  }
+#endif
+  NSError *unavailable = [NSError errorWithDomain:@"FlutterScreenCaptureKit"
+                                             code:-2
+                                         userInfo:@{NSLocalizedDescriptionKey: @"ScreenCaptureKit audio capture requires macOS 13.0 or newer"}];
+  onStarted(unavailable);
+}
+
+- (void)stopCaptureWithCompletion:(void (^_Nonnull)(void))completion {
 #if __has_include(<ScreenCaptureKit/ScreenCaptureKit.h>)
   if (@available(macOS 12.3, *)) {
     if (self.stream == nil) {
@@ -98,7 +253,6 @@
     [stream stopCaptureWithCompletionHandler:^(__unused NSError * _Nullable error) {
       completion();
     }];
-    return;
   }
 #endif
   completion();
@@ -129,11 +283,32 @@
   return content.displays.firstObject;
 }
 
+- (SCWindow *)selectWindowFromContent:(SCShareableContent *)content
+                             sourceId:(NSString *)sourceId API_AVAILABLE(macos(12.3)) {
+  if (sourceId == nil || sourceId.length == 0) {
+    return nil;
+  }
+  for (SCWindow *window in content.windows) {
+    if ([[NSString stringWithFormat:@"%u", window.windowID] isEqualToString:sourceId]) {
+      return window;
+    }
+  }
+  return nil;
+}
+
 - (void)stream:(SCStream *)stream
 didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
         ofType:(SCStreamOutputType)type API_AVAILABLE(macos(12.3)) {
-  if (type != SCStreamOutputTypeScreen) {
-    return;
+  if (@available(macOS 13.0, *)) {
+    if (type == SCStreamOutputTypeAudio) {
+      static BOOL loggedFirstAudio = NO;
+      if (!loggedFirstAudio) {
+        loggedFirstAudio = YES;
+        NSLog(@"SCK capturer: first AUDIO sample received, forwarding to device");
+      }
+      [[FlutterScreenAudioDevice sharedInstance] enqueueSampleBuffer:sampleBuffer];
+      return;
+    }
   }
 
   CVPixelBufferRef pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);

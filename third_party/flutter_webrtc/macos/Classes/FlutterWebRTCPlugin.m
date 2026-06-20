@@ -9,6 +9,9 @@
 #import "FlutterRTCPeerConnection.h"
 #import "FlutterRTCVideoRenderer.h"
 #import "FlutterRTCFrameCryptor.h"
+#if TARGET_OS_OSX
+#import "FlutterScreenAudioDevice.h"
+#endif
 #if TARGET_OS_IPHONE
 #import "FlutterRTCMediaRecorder.h"
 #import "FlutterRTCVideoPlatformViewFactory.h"
@@ -310,9 +313,9 @@ static FlutterWebRTCPlugin *sharedSingleton;
         // and its RTCIODevice.deviceId is the CoreAudio AudioDeviceID string,
         // matching the app's native device enumeration. The type-1 AudioEngine
         // ADM only lists a single "default" entry and its AVAudioEngine
-        // delegate never fires on macOS in this WebRTC-SDK build. The type-0
-        // screen-share-audio crash (issue #1986) does not apply: gang-chat
-        // never sets captureScreenAudio (defaults false).
+        // delegate never fires on macOS in this WebRTC-SDK build. ScreenCaptureKit
+        // screen audio is therefore injected through the ADM capture processor;
+        // a custom local RTCAudioSource races WebRTC's AudioSendStream in this SDK.
         _peerConnectionFactory =
             [[RTCPeerConnectionFactory alloc] initWithAudioDeviceModuleType:0
                                                       bypassVoiceProcessing:bypassVoiceProcessing
@@ -345,6 +348,31 @@ static FlutterWebRTCPlugin *sharedSingleton;
         [_peerConnectionFactory setOptions: options];
     }
 }
+
+#if TARGET_OS_OSX
+// Lazily create the second PeerConnectionFactory whose ADM is the shared
+// FlutterScreenAudioDevice (ScreenCaptureKit system audio). It is fully
+// isolated from the primary factory's CoreAudio microphone ADM: its own
+// AudioState, its own AudioTransportImpl, so screen-audio send streams are
+// never fanned the mic capture and never share a send-stream race checker.
+- (RTCPeerConnectionFactory*)screenAudioPeerConnectionFactory {
+  if (_screenAudioPeerConnectionFactory != nil) {
+    return _screenAudioPeerConnectionFactory;
+  }
+  VideoDecoderFactory* decoderFactory = [[VideoDecoderFactory alloc] init];
+  VideoEncoderFactory* encoderFactory = [[VideoEncoderFactory alloc] init];
+  VideoEncoderFactorySimulcast* simulcastFactory =
+      [[VideoEncoderFactorySimulcast alloc] initWithPrimary:encoderFactory
+                                                    fallback:encoderFactory];
+  _screenAudioPeerConnectionFactory =
+      [[RTCPeerConnectionFactory alloc] initWithEncoderFactory:simulcastFactory
+                                                 decoderFactory:decoderFactory
+                                                    audioDevice:[FlutterScreenAudioDevice sharedInstance]];
+  NSLog(@"FlutterWebRTC: created isolated screen-audio PeerConnectionFactory "
+        @"(custom ADM = FlutterScreenAudioDevice).");
+  return _screenAudioPeerConnectionFactory;
+}
+#endif
 
 - (void)handleMethodCall:(FlutterMethodCall*)call result:(FlutterResult)result {
   if ([@"initialize" isEqualToString:call.method]) {
@@ -393,6 +421,63 @@ static FlutterWebRTCPlugin *sharedSingleton;
 
     self.peerConnections[peerConnectionId] = peerConnection;
     result(@{@"peerConnectionId" : peerConnectionId});
+#if TARGET_OS_OSX
+  } else if ([@"screenAudioCreatePeerConnection" isEqualToString:call.method]) {
+    // Create a PeerConnection on the isolated screen-audio factory (custom ADM
+    // = FlutterScreenAudioDevice). The resulting PC is wired exactly like a
+    // normal PC (event channel, delegate, registered in peerConnections), so
+    // the Dart RTCPeerConnection wrapper and addTransceiver work unchanged.
+    NSDictionary* argsMap = call.arguments;
+    NSDictionary* configuration = argsMap[@"configuration"];
+    NSDictionary* constraints = argsMap[@"constraints"];
+
+    RTCPeerConnection* peerConnection = [self.screenAudioPeerConnectionFactory
+        peerConnectionWithConfiguration:[self RTCConfiguration:configuration]
+                            constraints:[self parseMediaConstraints:constraints]
+                               delegate:self];
+
+    peerConnection.remoteStreams = [NSMutableDictionary new];
+    peerConnection.remoteTracks = [NSMutableDictionary new];
+    peerConnection.dataChannels = [NSMutableDictionary new];
+
+    NSString* peerConnectionId = [[NSUUID UUID] UUIDString];
+    peerConnection.flutterId = peerConnectionId;
+
+    peerConnection.eventChannel = [FlutterEventChannel
+        eventChannelWithName:[NSString stringWithFormat:@"FlutterWebRTC/peerConnectionEvent%@",
+                                                        peerConnectionId]
+             binaryMessenger:_messenger];
+    [peerConnection.eventChannel setStreamHandler:peerConnection];
+
+    self.peerConnections[peerConnectionId] = peerConnection;
+    result(@{@"peerConnectionId" : peerConnectionId});
+  } else if ([@"screenAudioCreateTrack" isEqualToString:call.method]) {
+    // Create an audio source + track on the screen-audio factory. The track's
+    // audio is pulled from the factory's ADM (FlutterScreenAudioDevice), which
+    // the ScreenCaptureKit capturer feeds via enqueueSampleBuffer:. The track
+    // is registered in localTracks so addTransceiver can resolve it by id.
+    NSString* trackId = [[NSUUID UUID] UUIDString];
+    NSString* streamId = [[NSUUID UUID] UUIDString];
+
+    RTCMediaStream* stream = [self.screenAudioPeerConnectionFactory mediaStreamWithStreamId:streamId];
+    RTCAudioSource* audioSource =
+        [self.screenAudioPeerConnectionFactory audioSourceWithConstraints:nil];
+    RTCAudioTrack* audioTrack =
+        [self.screenAudioPeerConnectionFactory audioTrackWithSource:audioSource trackId:trackId];
+    [stream addAudioTrack:audioTrack];
+
+    self.localStreams[streamId] = stream;
+    self.localTracks[trackId] = [[LocalAudioTrack alloc] initWithTrack:audioTrack];
+
+    result(@{
+      @"id" : trackId,
+      @"streamId" : streamId,
+      @"kind" : audioTrack.kind ?: @"audio",
+      @"label" : trackId,
+      @"enabled" : @(audioTrack.isEnabled),
+      @"settings" : audioTrack.settings ?: @{}
+    });
+#endif
   } else if ([@"getUserMedia" isEqualToString:call.method]) {
     NSDictionary* argsMap = call.arguments;
     NSDictionary* constraints = argsMap[@"constraints"];

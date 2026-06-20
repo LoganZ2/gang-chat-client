@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../live/live_session.dart';
+import '../live/screen_audio_publisher.dart';
 import '../live/audio_device_restorer.dart';
 import '../live/livekit_url.dart';
 import '../live/system_audio_devices.dart';
@@ -15,7 +16,9 @@ class LiveSessionController {
     required this.audioDeviceStore,
     LiveSession? session,
     AudioDeviceRestorer? audioDeviceRestorer,
-  }) : session = session ?? LiveSession(),
+    ScreenAudioTokenProvider? screenAudioTokenProvider,
+  }) : session = session ??
+           LiveSession(screenAudioTokenProvider: screenAudioTokenProvider),
        _audioDeviceRestorer =
            audioDeviceRestorer ??
            ((store) async {

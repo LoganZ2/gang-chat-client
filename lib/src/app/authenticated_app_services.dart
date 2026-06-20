@@ -46,6 +46,8 @@ class AuthenticatedAppServices {
         LiveSessionController(
           apiBaseUrl: context.apiBaseUrl,
           audioDeviceStore: audioDeviceStore,
+          screenAudioTokenProvider: (roomId) =>
+              api.issueScreenAudioToken(roomId: roomId),
         );
     return AuthenticatedAppServices._(
       context: context,

@@ -1,6 +1,7 @@
 #import <objc/runtime.h>
 
 #import "FlutterRTCDesktopCapturer.h"
+#import "FlutterRTCMediaStream.h"
 
 #if TARGET_OS_IPHONE
 #import <ReplayKit/ReplayKit.h>
@@ -9,8 +10,10 @@
 #endif
 
 #import "VideoProcessingAdapter.h"
+#import "LocalAudioTrack.h"
 #import "LocalVideoTrack.h"
 #if TARGET_OS_OSX
+#import "AudioManager.h"
 #import "FlutterScreenCaptureKitCapturer.h"
 #endif
 
@@ -23,11 +26,57 @@ NSArray<RTCDesktopSource*>* _captureSources;
 @implementation FlutterWebRTCPlugin (DesktopCapturer)
 
 - (void)getDisplayMedia:(NSDictionary*)constraints result:(FlutterResult)result {
+  NSLog(@"getDisplayMedia: called with constraints=%@", constraints);
   NSString* mediaStreamId = [[NSUUID UUID] UUIDString];
   RTCMediaStream* mediaStream = [self.peerConnectionFactory mediaStreamWithStreamId:mediaStreamId];
   RTCVideoSource* videoSource = [self.peerConnectionFactory videoSourceForScreenCast:YES];
   NSString* trackUUID = [[NSUUID UUID] UUIDString];
   VideoProcessingAdapter *videoProcessingAdapter = [[VideoProcessingAdapter alloc] initWithRTCVideoSource:videoSource];
+  __block BOOL didCompleteGetDisplayMedia = NO;
+  void (^returnSuccess)(void) = ^{
+    if (didCompleteGetDisplayMedia) return;
+    didCompleteGetDisplayMedia = YES;
+
+    RTCVideoTrack* videoTrack = [self.peerConnectionFactory videoTrackWithSource:videoSource
+                                                                         trackId:trackUUID];
+    [mediaStream addVideoTrack:videoTrack];
+
+    LocalVideoTrack *localVideoTrack = [[LocalVideoTrack alloc] initWithTrack:videoTrack videoProcessing:videoProcessingAdapter];
+    [self.localTracks setObject:localVideoTrack forKey:trackUUID];
+
+    NSMutableArray* audioTracks = [NSMutableArray array];
+    NSMutableArray* videoTracks = [NSMutableArray array];
+    for (RTCAudioTrack* track in mediaStream.audioTracks) {
+      [self.localTracks setObject:[[LocalAudioTrack alloc] initWithTrack:track] forKey:track.trackId];
+      [audioTracks addObject:@{
+        @"id" : track.trackId,
+        @"kind" : track.kind,
+        @"label" : track.trackId,
+        @"enabled" : @(track.isEnabled),
+        @"remote" : @(YES),
+        @"readyState" : @"live",
+        @"settings" : track.settings ?: @{}
+      }];
+    }
+    for (RTCVideoTrack* track in mediaStream.videoTracks) {
+      [videoTracks addObject:@{
+        @"id" : track.trackId,
+        @"kind" : track.kind,
+        @"label" : track.trackId,
+        @"enabled" : @(track.isEnabled),
+        @"remote" : @(YES),
+        @"readyState" : @"live"
+      }];
+    }
+
+    self.localStreams[mediaStreamId] = mediaStream;
+    result(@{@"streamId" : mediaStreamId, @"audioTracks" : audioTracks, @"videoTracks" : videoTracks});
+  };
+  void (^returnError)(NSString*, NSString*) = ^(NSString* code, NSString* message) {
+    if (didCompleteGetDisplayMedia) return;
+    didCompleteGetDisplayMedia = YES;
+    result([FlutterError errorWithCode:code message:message details:nil]);
+  };
   
 #if TARGET_OS_IPHONE
   BOOL useBroadcastExtension = false;
@@ -76,6 +125,8 @@ NSArray<RTCDesktopSource*>* _captureSources;
       [picker performSelector:selector withObject:nil];
     }
   }
+  returnSuccess();
+  return;
 #endif
 
 #if TARGET_OS_OSX
@@ -90,6 +141,10 @@ NSArray<RTCDesktopSource*>* _captureSources;
           }
       }
   */
+  id audioConstraints = constraints[@"audio"];
+  BOOL captureAudio =
+      ([audioConstraints isKindOfClass:[NSNumber class]] && [audioConstraints boolValue]) ||
+      [audioConstraints isKindOfClass:[NSDictionary class]];
   NSString* sourceId = nil;
   BOOL useDefaultScreen = NO;
   NSInteger fps = 30;
@@ -102,7 +157,7 @@ NSArray<RTCDesktopSource*>* _captureSources;
       if (deviceId[@"exact"] != nil) {
         sourceId = deviceId[@"exact"];
         if (sourceId == nil) {
-          result(@{@"error" : @"No deviceId.exact found"});
+          returnError(@"getDisplayMedia", @"No deviceId.exact found");
           return;
         }
       }
@@ -122,88 +177,140 @@ NSArray<RTCDesktopSource*>* _captureSources;
   FlutterScreenCaptureKitCapturer* screenCaptureKitCapturer = nil;
   RTCDesktopSource* source = nil;
   BOOL useScreenCaptureKit = NO;
+  BOOL captureWindowWithScreenCaptureKit = NO;
 
   if (useDefaultScreen) {
     useScreenCaptureKit = YES;
   } else {
     source = [self getSourceById:sourceId];
     if (source == nil) {
-      result(@{@"error" : [NSString stringWithFormat:@"No source found for id: %@", sourceId]});
+      returnError(@"getDisplayMedia",
+                  [NSString stringWithFormat:@"No source found for id: %@", sourceId]);
       return;
     }
     if (source.sourceType == RTCDesktopSourceTypeScreen) {
       useScreenCaptureKit = YES;
     } else {
+      // Window capture uses RTCDesktopCapturer for video (SCK window video
+      // capture has quirks). But RTCDesktopCapturer cannot capture audio, so
+      // when audio is requested we ALSO start a parallel audio-only SCK stream
+      // filtered to the same window; its samples go to FlutterScreenAudioDevice
+      // (factory-2's ADM) exactly like the full-screen path.
       desktopCapturer = [[RTCDesktopCapturer alloc] initWithSource:source
                                                           delegate:self
                                                    captureDelegate:videoProcessingAdapter];
+      if (captureAudio) {
+        if (@available(macOS 13.0, *)) {
+          screenCaptureKitCapturer =
+              [[FlutterScreenCaptureKitCapturer alloc] initWithDelegate:videoProcessingAdapter];
+        } else {
+          returnError(@"getDisplayMedia", @"ScreenCaptureKit audio capture requires macOS 13.0 or newer");
+          return;
+        }
+      }
     }
   }
+  // Screen audio is no longer mixed into the microphone: when captureAudio is
+  // set, ScreenCaptureKit captures system audio and the capturer forwards it
+  // to the isolated FlutterScreenAudioDevice (the second factory's ADM). The
+  // stream returned here is video-only; the audio is published separately
+  NSLog(@"getDisplayMedia: useScreenCaptureKit=%d source=%p captureAudio=%d",
+        useScreenCaptureKit, source, captureAudio);
   if (useScreenCaptureKit) {
     if (@available(macOS 12.3, *)) {
       screenCaptureKitCapturer =
           [[FlutterScreenCaptureKitCapturer alloc] initWithDelegate:videoProcessingAdapter];
+      self.videoCapturerStopHandlers[trackUUID] = ^(CompletionHandler handler) {
+        NSLog(@"stop screencapturekit capture: trackID %@", trackUUID);
+        [screenCaptureKitCapturer stopCaptureWithCompletion:^{
+          handler();
+        }];
+      };
       [screenCaptureKitCapturer startCaptureWithFPS:fps
                                            sourceId:sourceId
+                                      captureWindow:captureWindowWithScreenCaptureKit
+                                       // Always capture audio on macOS 13+: SCK
+                                       // forwards it to FlutterScreenAudioDevice
+                                       // (factory-2's ADM), never to this MediaStream.
+                                       // The MediaStream is video-only regardless.
+                                       captureAudio:YES
                                           onStarted:^(NSError * _Nullable error) {
                                             if (error != nil) {
                                               NSLog(@"ScreenCaptureKit start failed: %@", error);
+                                              [self.videoCapturerStopHandlers removeObjectForKey:trackUUID];
+                                              [screenCaptureKitCapturer stopCaptureWithCompletion:^{}];
+                                              returnError(@"getDisplayMedia", error.localizedDescription ?: @"ScreenCaptureKit start failed");
                                             } else {
-                                              NSLog(@"start screencapturekit capture: for  sourceId: %@, fps: %lu",
-                                                    sourceId, fps);
+                                              NSLog(@"start screencapturekit capture: sourceId: %@, type: %@, fps: %lu, audio: %@",
+                                                    sourceId, captureWindowWithScreenCaptureKit ? @"window" : @"screen", fps,
+                                                    captureAudio ? @"yes" : @"no");
+                                              returnSuccess();
                                             }
                                           }];
     } else {
       NSLog(@"ScreenCaptureKit not available, falling back to RTCDesktopCapturer");
-      desktopCapturer = [[RTCDesktopCapturer alloc] initWithDefaultScreen:self
-                                                          captureDelegate:videoProcessingAdapter];
+      if (captureAudio) {
+        returnError(@"getDisplayMedia", @"ScreenCaptureKit audio capture requires macOS 13.0 or newer");
+        return;
+      }
+      if (source != nil && source.sourceType == RTCDesktopSourceTypeWindow) {
+        desktopCapturer = [[RTCDesktopCapturer alloc] initWithSource:source
+                                                            delegate:self
+                                                     captureDelegate:videoProcessingAdapter];
+      } else {
+        desktopCapturer = [[RTCDesktopCapturer alloc] initWithDefaultScreen:self
+                                                            captureDelegate:videoProcessingAdapter];
+      }
     }
   }
 
-  if (screenCaptureKitCapturer == nil) {
+  NSString* desktopSourceType =
+      source == nil || source.sourceType == RTCDesktopSourceTypeScreen ? @"screen" : @"window";
+  if (screenCaptureKitCapturer != nil && !useScreenCaptureKit) {
+    // Window capture with audio: RTCDesktopCapturer (video) + audio-only SCK
+    // (audio). Audio-only SCK start is async and non-blocking — audio failure
+    // must not block the video share.
     [desktopCapturer startCaptureWithFPS:fps];
     NSLog(@"start desktop capture: sourceId: %@, type: %@, fps: %lu", sourceId,
-          source.sourceType == RTCDesktopSourceTypeScreen ? @"screen" : @"window", fps);
+          desktopSourceType, fps);
+    [screenCaptureKitCapturer startAudioOnlyCaptureForWindowSourceId:sourceId
+                                                           onStarted:^(NSError * _Nullable audioError) {
+      if (audioError != nil) {
+        NSLog(@"Window audio-only SCK start failed: %@", audioError);
+      } else {
+        NSLog(@"Window audio-only SCK started successfully");
+      }
+    }];
+    self.videoCapturerStopHandlers[trackUUID] = ^(CompletionHandler handler) {
+      NSLog(@"stop desktop+sck-audio capture: sourceId: %@, type: %@, trackID %@", sourceId,
+            desktopSourceType, trackUUID);
+      [desktopCapturer stopCapture];
+      [screenCaptureKitCapturer stopCaptureWithCompletion:^{
+        handler();
+      }];
+    };
+    returnSuccess();
+    return;
+  } else if (screenCaptureKitCapturer == nil) {
+    // Plain desktop capture (window without audio, or non-SCK fallback).
+    [desktopCapturer startCaptureWithFPS:fps];
+    NSLog(@"start desktop capture: sourceId: %@, type: %@, fps: %lu", sourceId,
+          desktopSourceType, fps);
 
     self.videoCapturerStopHandlers[trackUUID] = ^(CompletionHandler handler) {
       NSLog(@"stop desktop capture: sourceId: %@, type: %@, trackID %@", sourceId,
-            source.sourceType == RTCDesktopSourceTypeScreen ? @"screen" : @"window", trackUUID);
+            desktopSourceType, trackUUID);
       [desktopCapturer stopCapture];
       handler();
     };
+    returnSuccess();
+    return;
   } else {
-    self.videoCapturerStopHandlers[trackUUID] = ^(CompletionHandler handler) {
-      NSLog(@"stop screencapturekit capture: trackID %@", trackUUID);
-      [screenCaptureKitCapturer stopCaptureWithCompletion:handler];
-    };
+    // Full-screen SCK path: video+audio already started together above.
+    return;
   }
 #endif
 
-  RTCVideoTrack* videoTrack = [self.peerConnectionFactory videoTrackWithSource:videoSource
-                                                                       trackId:trackUUID];
-  [mediaStream addVideoTrack:videoTrack];
-
-  LocalVideoTrack *localVideoTrack = [[LocalVideoTrack alloc] initWithTrack:videoTrack videoProcessing:videoProcessingAdapter];
-
-  [self.localTracks setObject:localVideoTrack forKey:trackUUID];
-
-  NSMutableArray* audioTracks = [NSMutableArray array];
-  NSMutableArray* videoTracks = [NSMutableArray array];
-
-  for (RTCVideoTrack* track in mediaStream.videoTracks) {
-    [videoTracks addObject:@{
-      @"id" : track.trackId,
-      @"kind" : track.kind,
-      @"label" : track.trackId,
-      @"enabled" : @(track.isEnabled),
-      @"remote" : @(YES),
-      @"readyState" : @"live"
-    }];
-  }
-
-  self.localStreams[mediaStreamId] = mediaStream;
-  result(
-      @{@"streamId" : mediaStreamId, @"audioTracks" : audioTracks, @"videoTracks" : videoTracks});
 }
 
 - (void)getDesktopSources:(NSDictionary*)argsMap result:(FlutterResult)result {

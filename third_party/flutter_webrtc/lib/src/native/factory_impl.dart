@@ -8,6 +8,7 @@ import 'desktop_capturer_impl.dart';
 import 'frame_cryptor_impl.dart';
 import 'media_recorder_impl.dart';
 import 'media_stream_impl.dart';
+import 'media_stream_track_impl.dart';
 import 'mediadevices_impl.dart';
 import 'navigator_impl.dart';
 import 'rtc_peerconnection_impl.dart';
@@ -124,3 +125,47 @@ FrameCryptorFactory get frameCryptorFactory => FrameCryptorFactoryImpl.instance;
 
 DataPacketCryptorFactory get dataPacketCryptorFactory =>
     DataPacketCryptorFactoryImpl.instance;
+
+// gang-chat fork: screen-share audio isolation (macOS).
+//
+// createScreenAudioPeerConnection creates a PeerConnection on a second
+// RTCPeerConnectionFactory whose audio device module is a custom
+// FlutterScreenAudioDevice fed by ScreenCaptureKit. This keeps screen audio
+// on a fully independent AudioState from the microphone ADM, so the two never
+// share a send-stream capture race checker. The returned PeerConnection is
+// wired exactly like a normal one (event channel + delegate), so addTransceiver
+// / negotiate / dispose all work unchanged.
+Future<RTCPeerConnection> createScreenAudioPeerConnection(
+    Map<String, dynamic> configuration,
+    [Map<String, dynamic> constraints = const {}]) async {
+  final response = await WebRTC.invokeMethod(
+    'screenAudioCreatePeerConnection',
+    <String, dynamic>{
+      'configuration': configuration,
+      'constraints': constraints.isEmpty
+          ? <String, dynamic>{
+              'mandatory': <String, dynamic>{},
+              'optional': <Map<String, dynamic>>[
+                {'DtlsSrtpKeyAgreement': true},
+              ],
+            }
+          : constraints,
+    },
+  );
+  final peerConnectionId = response['peerConnectionId'] as String;
+  return RTCPeerConnectionNative(peerConnectionId, configuration);
+}
+
+// createScreenAudioTrack creates an audio track on the screen-audio factory.
+// Its audio is pulled from FlutterScreenAudioDevice (the second factory's ADM),
+// which the ScreenCaptureKit capturer feeds. Returns a MediaStream containing
+// the single audio track, matching LocalAudioTrack.create's shape so the
+// caller can wrap it with LocalAudioTrack(screenShareAudio, stream, ...).
+Future<MediaStream> createScreenAudioTrack() async {
+  final response = await WebRTC.invokeMethod('screenAudioCreateTrack');
+  final streamId = response['streamId'] as String;
+  final stream = MediaStreamNative(streamId, 'local');
+  final track = MediaStreamTrackNative.fromMap(response, 'local');
+  await stream.addTrack(track, addToNative: false);
+  return stream;
+}

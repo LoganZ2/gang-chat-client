@@ -12,6 +12,28 @@ import '../protocol/models.dart' show musicBoxBotIdentity;
 import 'audio_output_rebinder.dart';
 import 'screen_share_quality.dart';
 import 'system_audio_devices.dart';
+import 'screen_audio_publisher.dart';
+
+/// Suffix of the hidden screen-audio aux participant identity
+/// (`<ownerId>--screen-audio`). These participants publish screen-share audio
+/// through an isolated factory and must be filtered out of the UI (they are
+/// never real users). On the owner's own receiver, their audio must also be
+/// muted to avoid self-echo. The `--` separator is URL-safe (unlike `#`,
+/// which is truncated as a URL fragment in the LiveKit WebSocket signal path,
+/// causing the aux identity to collide with the main room participant).
+const _screenAudioAuxSuffix = '--screen-audio';
+
+/// Whether [identity] is a hidden screen-audio aux participant.
+bool _isScreenAudioAux(String identity) =>
+    identity.endsWith(_screenAudioAuxSuffix);
+
+/// Whether [identity] is the LOCAL user's own screen-audio aux participant
+/// (the one whose audio would echo back if played). [localIdentity] is the
+/// main room's local participant identity (== userID).
+bool _isOwnScreenAudioAux(String identity, String? localIdentity) {
+  if (localIdentity == null || localIdentity.isEmpty) return false;
+  return identity == '$localIdentity$_screenAudioAuxSuffix';
+}
 
 /// A capturable desktop source (a whole screen or a single window), used to
 /// populate the screen-share picker. Wraps flutter_webrtc's source so the UI
@@ -272,18 +294,25 @@ class LiveSession extends ChangeNotifier {
   /// recovery (tests, non-macOS). The default wires a real macOS rebinder.
   LiveSession({
     AudioOutputRebinder? Function(LiveSession session)? outputRebinderFactory,
+    ScreenAudioTokenProvider? screenAudioTokenProvider,
   }) : _outputRebinderFactory =
-           outputRebinderFactory ?? _defaultOutputRebinderFactory;
+           outputRebinderFactory ?? _defaultOutputRebinderFactory,
+       _screenAudioTokenProvider = screenAudioTokenProvider;
 
   final AudioOutputRebinder? Function(LiveSession session)
   _outputRebinderFactory;
   AudioOutputRebinder? _outputRebinder;
+  final ScreenAudioTokenProvider? _screenAudioTokenProvider;
+  ScreenAudioPublisher? _screenAudioPublisher;
+
 
   lk.Room? _room;
   lk.CancelListenFunc? _cancelEvents;
   String? _roomName;
   bool _connecting = false;
   bool _screenSharing = false;
+  bool _localMicrophonePublishUnavailable = false;
+  String? _resolvedLiveKitUrl;
   bool _canPublish = true;
   double _inputVolume = defaultAudioVolume;
   double _outputVolume = defaultAudioVolume;
@@ -398,6 +427,7 @@ class LiveSession extends ChangeNotifier {
     final local = room.localParticipant;
     if (local != null) collect(local, isLocal: true);
     for (final remote in room.remoteParticipants.values) {
+      if (_isScreenAudioAux(remote.identity)) continue;
       collect(remote, isLocal: false);
     }
     return result;
@@ -479,7 +509,9 @@ class LiveSession extends ChangeNotifier {
     );
     _room = room;
     _roomName = roomName;
+    _resolvedLiveKitUrl = url;
     _screenSharing = false;
+    _localMicrophonePublishUnavailable = false;
     _canPublish = true;
     _cancelEvents = room.events.listen(_onEvent);
 
@@ -522,6 +554,8 @@ class LiveSession extends ChangeNotifier {
       _roomName = null;
       _connecting = false;
       _screenSharing = false;
+      _localMicrophonePublishUnavailable = false;
+      unawaited(_stopScreenAudioPublisher());
       _speakingIdentities.clear();
       _micMutedByIdentity.clear();
       unawaited(_resetLocalInputVolume());
@@ -541,13 +575,20 @@ class LiveSession extends ChangeNotifier {
   /// treated as the same local mute.
   Future<void> setMicMuted(bool muted) async {
     _micMuted = muted;
+    if (!muted) {
+      _localMicrophonePublishUnavailable = false;
+    }
     await _applyLocalMicrophoneState();
     _refreshAllMicStates();
     notifyListeners();
   }
 
   Future<void> setInputVolume(double volume) async {
+    final wasMutedByVolume = _inputVolume <= 0;
     _inputVolume = normalizedAudioVolume(volume);
+    if (wasMutedByVolume && _inputVolume > 0) {
+      _localMicrophonePublishUnavailable = false;
+    }
     await _applyLocalMicrophoneState();
   }
 
@@ -558,6 +599,7 @@ class LiveSession extends ChangeNotifier {
   Future<void> setInputDeviceId(String? deviceId) async {
     if (_inputDeviceId == deviceId) return;
     _inputDeviceId = deviceId;
+    _localMicrophonePublishUnavailable = false;
     final local = _room?.localParticipant;
     if (local == null) return;
     // Republish only if a mic track exists; otherwise the new id is picked up
@@ -646,16 +688,40 @@ class LiveSession extends ChangeNotifier {
           ),
         ),
       );
-      await local.setScreenShareEnabled(
-        true,
-        captureScreenAudio: captureScreenAudio,
-        screenShareCaptureOptions: options,
-      );
-      _screenSharing = true;
-      await _applyScreenShareScale();
+      try {
+        await local.setScreenShareEnabled(
+          true,
+          // Never let livekit_client create an audio track on factory-1:
+          // that track would pull from the mic ADM (not SCK), get published
+          // alongside the video, and race the send-stream capture checker.
+          // Screen audio is published separately on factory-2 by our
+          // ScreenAudioPublisher. SCK still captures audio for the device
+          // (forced in the native getDisplayMedia), but no audio track is
+          // returned in the MediaStream.
+          captureScreenAudio: false,
+          screenShareCaptureOptions: options,
+        );
+        _screenSharing = true;
+        await _applyScreenShareScale();
+      } catch (_) {
+        rethrow;
+      }
+      // Start the screen-audio aux publisher in the background so it never
+      // blocks the screen-share video. If the aux room fails to connect (ICE,
+      // token, etc.) the video share still works — just without independent
+      // audio. Errors are logged, not surfaced: the user didn't ask to "share
+      // audio", they asked to "share screen", and audio is best-effort.
+      if (captureScreenAudio) {
+        unawaited(
+          _startScreenAudioPublisher().catchError((Object e) {
+            debugPrint('screen-audio publisher failed: $e');
+          }),
+        );
+      }
     } else {
       await local.setScreenShareEnabled(false);
       _screenSharing = false;
+      await _stopScreenAudioPublisher();
     }
     notifyListeners();
     return _screenSharing;
@@ -810,12 +876,15 @@ class LiveSession extends ChangeNotifier {
     _stopOutputRebinder();
     _room = null;
     _roomName = null;
+    _resolvedLiveKitUrl = null;
     _connecting = false;
     _screenSharing = false;
+    _localMicrophonePublishUnavailable = false;
     _canPublish = true;
     _speakingIdentities.clear();
     _micMutedByIdentity.clear();
     await _resetLocalInputVolume();
+    await _stopScreenAudioPublisher();
     if (cancel != null) {
       try {
         await cancel();
@@ -846,6 +915,8 @@ class LiveSession extends ChangeNotifier {
     _room = null;
     _roomName = null;
     _screenSharing = false;
+    _localMicrophonePublishUnavailable = false;
+    unawaited(_stopScreenAudioPublisher());
     _speakingIdentities.clear();
     _micMutedByIdentity.clear();
     unawaited(_resetLocalInputVolume());
@@ -880,11 +951,19 @@ class LiveSession extends ChangeNotifier {
     if (event is lk.ActiveSpeakersChangedEvent) {
       _speakingIdentities
         ..clear()
-        ..addAll(event.speakers.map((p) => p.identity));
+        ..addAll(event.speakers
+            .where((p) => !_isScreenAudioAux(p.identity))
+            .map((p) => p.identity));
       notifyListeners();
       return;
     }
     if (event is lk.ParticipantConnectedEvent) {
+      if (_isScreenAudioAux(event.participant.identity)) {
+        // An aux participant joining still means a new screen-audio track may
+        // arrive; apply the volume so the track plays at the right level.
+        unawaited(_applyScreenShareVolume());
+        return;
+      }
       _micMutedByIdentity[event.participant.identity] = _isMicMuted(
         event.participant,
       );
@@ -895,6 +974,10 @@ class LiveSession extends ChangeNotifier {
       return;
     }
     if (event is lk.ParticipantDisconnectedEvent) {
+      if (_isScreenAudioAux(event.participant.identity)) {
+        unawaited(_applyScreenShareVolume());
+        return;
+      }
       _micMutedByIdentity.remove(event.participant.identity);
       _speakingIdentities.remove(event.participant.identity);
       notifyListeners();
@@ -932,12 +1015,18 @@ class LiveSession extends ChangeNotifier {
       _refreshAllMicStates();
       // A local screen-share track can be stopped from the OS (e.g. the
       // "stop sharing" bar); keep our flag honest.
+      final wasScreenSharing = _screenSharing;
       _screenSharing = _localHasScreenShare();
+      if (wasScreenSharing && !_screenSharing) {
+        unawaited(_stopScreenAudioPublisher());
+      }
       notifyListeners();
       return;
     }
     if (event is lk.RoomDisconnectedEvent) {
       _screenSharing = false;
+      _localMicrophonePublishUnavailable = false;
+      unawaited(_stopScreenAudioPublisher());
       _speakingIdentities.clear();
       _micMutedByIdentity.clear();
       notifyListeners();
@@ -972,6 +1061,7 @@ class LiveSession extends ChangeNotifier {
       _micMutedByIdentity[local.identity] = _shouldMuteLocalMicrophone;
     }
     for (final p in room.remoteParticipants.values) {
+      if (_isScreenAudioAux(p.identity)) continue;
       _micMutedByIdentity[p.identity] = _isMicMuted(p);
     }
   }
@@ -995,6 +1085,42 @@ class LiveSession extends ChangeNotifier {
     );
   }
 
+  void _markLocalMicrophonePublishUnavailable() {
+    _localMicrophonePublishUnavailable = true;
+  }
+
+  /// Start the hidden screen-audio aux participant. The aux room publishes the
+  /// screen-share audio track through an isolated WebRTC factory (second
+ /// PeerConnectionFactory whose ADM is FlutterScreenAudioDevice), so screen
+ /// audio never shares an AudioState with the mic. Requires the main room to
+ /// be connected (for the resolved LiveKit URL + room name) and a token
+ /// provider to have been injected.
+  Future<void> _startScreenAudioPublisher() async {
+    if (_screenAudioPublisher != null) return;
+    final provider = _screenAudioTokenProvider;
+    final url = _resolvedLiveKitUrl;
+    final name = _roomName;
+    debugPrint('screen-audio: _startScreenAudioPublisher '
+        'provider=${provider != null} url=$url roomName=$name');
+    if (provider == null || url == null || name == null) return;
+    _screenAudioPublisher = ScreenAudioPublisher(tokenProvider: provider);
+    try {
+      await _screenAudioPublisher!.start(liveKitUrl: url, roomName: name);
+    } catch (e, st) {
+      debugPrint('screen-audio: publisher start failed: $e\n$st');
+      _screenAudioPublisher = null;
+      rethrow;
+    }
+  }
+
+  Future<void> _stopScreenAudioPublisher() async {
+    final publisher = _screenAudioPublisher;
+    _screenAudioPublisher = null;
+    if (publisher != null) {
+      await publisher.stop();
+    }
+  }
+
   Future<void> _applyLocalMicrophoneState() async {
     final local = _room?.localParticipant;
     await _applyLocalInputVolume();
@@ -1005,14 +1131,20 @@ class LiveSession extends ChangeNotifier {
     );
     if (microphonePublication == null &&
         !_shouldMuteLocalMicrophone &&
-        _canPublish) {
-      await local.setMicrophoneEnabled(
-        true,
-        audioCaptureOptions: _audioCaptureOptions(),
-      );
-      microphonePublication = local.getTrackPublicationBySource(
-        lk.TrackSource.microphone,
-      );
+        _canPublish &&
+        !_localMicrophonePublishUnavailable) {
+      try {
+        await local.setMicrophoneEnabled(
+          true,
+          audioCaptureOptions: _audioCaptureOptions(),
+        );
+        microphonePublication = local.getTrackPublicationBySource(
+          lk.TrackSource.microphone,
+        );
+      } catch (_) {
+        _markLocalMicrophonePublishUnavailable();
+        return;
+      }
     }
     if (microphonePublication == null) return;
 
@@ -1078,14 +1210,24 @@ class LiveSession extends ChangeNotifier {
   Future<void> _applyScreenShareVolume() async {
     final room = _room;
     if (room == null) return;
+    final localIdentity = room.localParticipant?.identity;
     for (final participant in room.remoteParticipants.values) {
+      // Self-echo suppression: the local user's own screen-audio aux
+      // participant (`<ownId>#screen-audio`) is publishing audio the user
+      // is already hearing locally (it's their own screen). Mute it to 0 so
+      // it never plays back to them. Other users' aux tracks play at the
+      // screen-share volume.
+      final isOwnAux = _isOwnScreenAudioAux(
+        participant.identity,
+        localIdentity,
+      );
       for (final pub in participant.audioTrackPublications) {
         if (pub.source != lk.TrackSource.screenShareAudio) continue;
         final track = pub.track;
         if (track == null) continue;
         try {
           await rtc.Helper.setVolume(
-            _screenShareVolume,
+            isOwnAux ? 0.0 : _screenShareVolume,
             track.mediaStreamTrack,
           );
         } catch (_) {}
