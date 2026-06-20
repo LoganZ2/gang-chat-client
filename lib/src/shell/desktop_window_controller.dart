@@ -10,7 +10,7 @@ import '../lifecycle/shutdown_hooks.dart';
 
 const appWindowBackground = Color(0xFF14171D);
 
-const _responsiveAppWindowMinSize = Size(390, 480);
+const _responsiveAppWindowMinSize = Size(560, 600);
 const _appWindowSize = Size(1180, 760);
 const _unboundedWindowSize = Size(100000, 100000);
 const _minimumWindowSize = Size(1, 1);
