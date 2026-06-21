@@ -24,6 +24,7 @@ class FlutterWebRTCPluginImpl : public FlutterWebRTCPlugin {
     // Uses new instead of make_unique due to private constructor.
     std::unique_ptr<FlutterWebRTCPluginImpl> plugin(
         new FlutterWebRTCPluginImpl(registrar, std::move(channel)));
+    plugin->EnsureWebRTC();
     channel_pointer->SetMethodCallHandler(
         [plugin_pointer = plugin.get()](const auto& call, auto result) {
           plugin_pointer->HandleMethodCall(call, std::move(result));

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 
 double CurrentTime() {
   return static_cast<double>(
@@ -11,28 +12,50 @@ double CurrentTime() {
          1000.0;
 }
 
-int magnitudeIndex(std::vector<float> magnitudes, float frequency,
+int magnitudeIndex(const std::vector<float> &magnitudes, float frequency,
                    float sampleRate) {
   return static_cast<int>(float(magnitudes.size()) * frequency / sampleRate /
                           2);
 }
 
-std::vector<float> computeBands(std::vector<float> magnitudes,
+std::vector<float> computeBands(const std::vector<float> &magnitudes,
                                 float minFrequency, float maxFrequency,
                                 int bandsCount, float sampleRate) {
-  float actualMaxFrequency = std::min(sampleRate / 2, maxFrequency);
-  std::vector<float> bandMagnitudes(bandsCount, 0.0f);
+  std::vector<float> bandMagnitudes(std::max(0, bandsCount), 0.0f);
+  if (bandMagnitudes.empty() || magnitudes.empty() ||
+      !std::isfinite(sampleRate) || sampleRate <= 0.0f) {
+    return bandMagnitudes;
+  }
 
-  int magLowerRange = magnitudeIndex(magnitudes, minFrequency, sampleRate);
-  int magUpperRange =
-      magnitudeIndex(magnitudes, actualMaxFrequency, sampleRate);
-  float ratio = float(magUpperRange - magLowerRange) / float(bandsCount);
+  float actualMaxFrequency = std::min(sampleRate / 2.0f, maxFrequency);
+  if (!std::isfinite(actualMaxFrequency) || actualMaxFrequency <= 0.0f ||
+      actualMaxFrequency <= minFrequency) {
+    return bandMagnitudes;
+  }
 
-  for (int i = 0; i < bandsCount; ++i) {
+  const int maxMagnitudeIndex = static_cast<int>(magnitudes.size()) - 1;
+  int magLowerRange = std::clamp(
+      magnitudeIndex(magnitudes, minFrequency, sampleRate), 0,
+      maxMagnitudeIndex);
+  int magUpperRange = std::clamp(
+      magnitudeIndex(magnitudes, actualMaxFrequency, sampleRate), 0,
+      static_cast<int>(magnitudes.size()));
+  if (magUpperRange <= magLowerRange) {
+    magUpperRange =
+        std::min(magLowerRange + 1, static_cast<int>(magnitudes.size()));
+  }
+
+  float ratio =
+      float(magUpperRange - magLowerRange) / float(bandMagnitudes.size());
+
+  for (int i = 0; i < static_cast<int>(bandMagnitudes.size()); ++i) {
     int magsStartIdx =
         static_cast<int>(floorf(float(i) * ratio)) + magLowerRange;
     int magsEndIdx =
         static_cast<int>(floorf(float(i + 1) * ratio)) + magLowerRange;
+    magsStartIdx = std::clamp(magsStartIdx, 0, maxMagnitudeIndex);
+    magsEndIdx = std::clamp(magsEndIdx, magsStartIdx + 1,
+                            static_cast<int>(magnitudes.size()));
 
     int count = magsEndIdx - magsStartIdx;
     if (count > 0) {
@@ -74,11 +97,11 @@ AudioVisualizer::AudioVisualizer(int bands_count, bool is_centered,
                                  double smoothing_time_constant,
                                  float min_frequency, float max_frequency,
                                  float min_db, float max_db)
-    : bands_count_(bands_count), is_centered_(is_centered),
+    : bands_count_(std::max(0, bands_count)), is_centered_(is_centered),
       min_frequency_(min_frequency), max_frequency_(max_frequency),
       min_db_(min_db), max_db_(max_db),
       smoothing_time_constant_(smoothing_time_constant),
-      bands_(bands_count, 0.0f),
+      bands_(bands_count_, 0.0f),
       fft_processor_(std::make_unique<FFTProcessor>(
           FFTProcessor::kDefaultFFTSize, smoothing_time_constant_)) {}
 
@@ -86,6 +109,12 @@ AudioVisualizer::~AudioVisualizer() {}
 
 bool AudioVisualizer::Process(const int16_t *audioData, unsigned int numSamples,
                               float sampleRate, std::vector<float> &output) {
+  if (audioData == nullptr || numSamples == 0 || bands_count_ <= 0 ||
+      numSamples > FFTProcessor::kInputBufferSize ||
+      !std::isfinite(sampleRate) || sampleRate <= 0.0f || !fft_processor_) {
+    output.clear();
+    return false;
+  }
 
   fft_processor_->WriteInput(audioData, numSamples);
   std::vector<float> magnitudes(FFTProcessor::kDefaultFFTSize / 2, 0.0f);
@@ -93,8 +122,15 @@ bool AudioVisualizer::Process(const int16_t *audioData, unsigned int numSamples,
 
   auto bands = computeBands(magnitudes, min_frequency_, max_frequency_,
                             bands_count_, sampleRate);
+  if (bands.empty()) {
+    output.clear();
+    return false;
+  }
+  if (bands_.size() != bands.size()) {
+    bands_.assign(bands.size(), 0.0f);
+  }
 
-  for (int i = 0; i < bands.size(); ++i) {
+  for (int i = 0; i < static_cast<int>(bands.size()); ++i) {
     float db = 1.0f - (fmax(min_db_, fmin(max_db_, bands[i])) * -1.0f) / 100.0f;
     db = std::sqrt(db);
     bands_[i] = db;

@@ -26,10 +26,16 @@
 #include <flutter_webrtc/flutter_web_r_t_c_plugin.h>
 
 #include <algorithm>
+#include <atomic>
 #include <iomanip>
+#include <limits>
+#include <list>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <sstream>
+#include <unordered_map>
+#include <vector>
 
 #include "audio_visualizer.h"
 #include "task_runner_windows.h"
@@ -55,40 +61,73 @@ public:
                 &&events)
             -> std::unique_ptr<
                 flutter::StreamHandlerError<flutter::EncodableValue>> {
-          sink_ = std::move(events);
-          std::weak_ptr<flutter::EventSink<flutter::EncodableValue>> weak_sink =
-              sink_;
-          for (auto &event : event_queue_) {
+          std::list<flutter::EncodableValue> queued_events;
+          {
+            std::lock_guard<std::mutex> lock(sink_mutex_);
+            sink_ = std::move(events);
+            queued_events.swap(event_queue_);
+            on_listen_called_.store(true);
+          }
+          for (auto &event : queued_events) {
             PostEvent(event);
           }
-          event_queue_.clear();
-          on_listen_called_ = true;
           return nullptr;
         },
         [&](const flutter::EncodableValue *arguments)
             -> std::unique_ptr<
                 flutter::StreamHandlerError<flutter::EncodableValue>> {
-          on_listen_called_ = false;
+          on_listen_called_.store(false);
+          std::lock_guard<std::mutex> lock(sink_mutex_);
+          sink_.reset();
           return nullptr;
         });
 
     channel_->SetStreamHandler(std::move(handler));
     audio_visualizer_ =
         std::make_unique<AudioVisualizer>(bar_count_, is_centered_);
-    ((libwebrtc::RTCAudioTrack *)media_track_.get())->AddSink(this);
+    if (media_track_) {
+      audio_track_ = dynamic_cast<libwebrtc::RTCAudioTrack *>(media_track_.get());
+    }
+    if (audio_track_ != nullptr) {
+      audio_track_->AddSink(this);
+    } else {
+      removed_.store(true);
+    }
   }
-  ~VisualizerSink() override {}
+  ~VisualizerSink() override { RemoveSink(); }
 
 public:
   void OnData(const void *audio_data, int bits_per_sample, int sample_rate,
               size_t number_of_channels, size_t number_of_frames) override {
-    if (!on_listen_called_) {
+    if (removed_.load() || !on_listen_called_.load() || audio_data == nullptr ||
+        bits_per_sample != 16 || sample_rate <= 0 ||
+        number_of_channels == 0 || number_of_frames == 0) {
       return;
     }
+
+    if (number_of_frames >
+        (std::numeric_limits<size_t>::max)() / number_of_channels) {
+      return;
+    }
+    const size_t sample_count = number_of_frames * number_of_channels;
+    if (sample_count == 0 ||
+        sample_count > static_cast<size_t>(
+                           (std::numeric_limits<unsigned int>::max)())) {
+      return;
+    }
+
     std::vector<float> bands;
-    if (audio_visualizer_->Process((const int16_t *)audio_data,
-                                   (unsigned int)number_of_frames,
-                                   float(sample_rate), bands)) {
+    bool processed = false;
+    {
+      std::lock_guard<std::mutex> lock(audio_mutex_);
+      if (removed_.load() || !audio_visualizer_) {
+        return;
+      }
+      processed = audio_visualizer_->Process(
+          static_cast<const int16_t *>(audio_data),
+          static_cast<unsigned int>(sample_count), float(sample_rate), bands);
+    }
+    if (processed) {
       // Post the processed data to the event sink
       EncodableList bands_list = EncodableList(bands.begin(), bands.end());
       Success(EncodableValue(bands_list));
@@ -96,18 +135,21 @@ public:
   }
 
   void Success(const flutter::EncodableValue &event, bool cache_event = true) {
-    if (on_listen_called_) {
+    if (on_listen_called_.load()) {
       PostEvent(event);
-    } else {
-      if (cache_event) {
-        event_queue_.push_back(event);
-      }
+    } else if (cache_event) {
+      std::lock_guard<std::mutex> lock(sink_mutex_);
+      event_queue_.push_back(event);
     }
   }
 
   void PostEvent(const flutter::EncodableValue &event) {
+    std::weak_ptr<flutter::EventSink<EncodableValue>> weak_sink;
+    {
+      std::lock_guard<std::mutex> lock(sink_mutex_);
+      weak_sink = sink_;
+    }
     if (task_runner_) {
-      std::weak_ptr<flutter::EventSink<EncodableValue>> weak_sink = sink_;
       task_runner_->EnqueueTask([weak_sink, event]() {
         auto sink = weak_sink.lock();
         if (sink) {
@@ -115,12 +157,27 @@ public:
         }
       });
     } else {
-      sink_->Success(event);
+      auto sink = weak_sink.lock();
+      if (sink) {
+        sink->Success(event);
+      }
     }
   }
 
   void RemoveSink() {
-    ((libwebrtc::RTCAudioTrack *)media_track_.get())->RemoveSink(this);
+    if (removed_.exchange(true)) {
+      return;
+    }
+    if (audio_track_ != nullptr) {
+      audio_track_->RemoveSink(this);
+      audio_track_ = nullptr;
+    }
+
+    std::lock_guard<std::mutex> lock(audio_mutex_);
+  }
+
+  bool IsAttached() const {
+    return audio_track_ != nullptr && !removed_.load();
   }
 
 private:
@@ -129,8 +186,12 @@ private:
   std::unique_ptr<flutter::EventChannel<flutter::EncodableValue>> channel_;
   std::shared_ptr<flutter::EventSink<flutter::EncodableValue>> sink_;
   std::list<flutter::EncodableValue> event_queue_;
-  bool on_listen_called_ = false;
+  std::mutex sink_mutex_;
+  std::mutex audio_mutex_;
+  std::atomic<bool> on_listen_called_{false};
+  std::atomic<bool> removed_{false};
   libwebrtc::scoped_refptr<libwebrtc::RTCMediaTrack> media_track_;
+  libwebrtc::RTCAudioTrack *audio_track_ = nullptr;
   bool is_centered_ = false;
   int bar_count_ = 7;
 };
@@ -144,6 +205,8 @@ public:
   virtual ~LiveKitPlugin();
 
 private:
+  flutter_webrtc_plugin::FlutterWebRTC *WebRTCInstance();
+
   // Called when a method is called on this plugin's channel from Dart.
   void HandleMethodCall(
       const flutter::MethodCall<flutter::EncodableValue> &method_call,
@@ -181,6 +244,13 @@ LiveKitPlugin::LiveKitPlugin(BinaryMessenger *messenger)
 
 LiveKitPlugin::~LiveKitPlugin() {}
 
+flutter_webrtc_plugin::FlutterWebRTC *LiveKitPlugin::WebRTCInstance() {
+  if (webrtc_instance_ == nullptr) {
+    webrtc_instance_ = FlutterWebRTCPluginSharedInstance();
+  }
+  return webrtc_instance_;
+}
+
 void LiveKitPlugin::HandleMethodCall(
     const flutter::MethodCall<flutter::EncodableValue> &method_call,
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
@@ -200,20 +270,40 @@ void LiveKitPlugin::HandleMethodCall(
                     "trackId and visualizerId are required");
       return;
     }
+    auto *webrtc_instance = WebRTCInstance();
+    if (webrtc_instance == nullptr) {
+      result->Error("WebRTC Not Initialized",
+                    "Flutter WebRTC is not available for audio visualizer");
+      return;
+    }
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaTrack> media_track =
-        webrtc_instance_->MediaTrackForId(trackId);
+        webrtc_instance->MediaTrackForId(trackId);
     if (!media_track) {
       result->Error("Track Not Found", "No media track found for the given ID");
       return;
+    }
+    if (barCount <= 0) {
+      barCount = AudioVisualizer::kDefaultBandsCount;
     }
     std::ostringstream oss;
     oss << "io.livekit.audio.visualizer/eventChannel-" << trackId << "-"
         << visualizerId;
 
-    mutex_.lock();
-    visualizers_[visualizerId] = std::make_unique<VisualizerSink>(
+    auto visualizer = std::make_unique<VisualizerSink>(
         messenger_, oss.str(), media_track, isCentered, barCount);
-    mutex_.unlock();
+    if (!visualizer->IsAttached()) {
+      result->Error("Visualizer Not Started",
+                    "Failed to attach the audio visualizer sink");
+      return;
+    }
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto it = visualizers_.find(visualizerId);
+    if (it != visualizers_.end()) {
+      it->second->RemoveSink();
+      visualizers_.erase(it);
+    }
+    visualizers_[visualizerId] = std::move(visualizer);
 
     result->Success(flutter::EncodableValue(true));
   } else if (method_call.method_name().compare("stopVisualizer") == 0) {
@@ -225,22 +315,18 @@ void LiveKitPlugin::HandleMethodCall(
         GetValue<flutter::EncodableMap>(*method_call.arguments());
     std::string trackId = findString(args, "trackId");
     std::string visualizerId = findString(args, "visualizerId");
-
-    libwebrtc::scoped_refptr<libwebrtc::RTCMediaTrack> media_track =
-        webrtc_instance_->MediaTrackForId(trackId);
-    if (!media_track) {
-      result->Error("Track Not Found", "No media track found for the given ID");
+    if (trackId.empty() || visualizerId.empty()) {
+      result->Error("Invalid Arguments",
+                    "trackId and visualizerId are required");
       return;
     }
 
-    mutex_.lock();
+    std::lock_guard<std::mutex> lock(mutex_);
     auto it = visualizers_.find(visualizerId);
     if (it != visualizers_.end()) {
       it->second->RemoveSink();
       visualizers_.erase(it);
-      mutex_.unlock();
     } else {
-      mutex_.unlock();
       result->Error("Visualizer Not Found",
                     "No visualizer found for the given visualizerId");
       return;

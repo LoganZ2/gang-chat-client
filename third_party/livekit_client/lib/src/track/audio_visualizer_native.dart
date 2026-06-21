@@ -30,13 +30,16 @@ class AudioVisualizerNative extends AudioVisualizer {
       return;
     }
 
-    await Native.startVisualizer(
+    final started = await Native.startVisualizer(
       mediaStreamTrack.id!,
       isCentered: visualizerOptions.centeredBands,
       barCount: visualizerOptions.barCount,
       visualizerId: visualizerId,
       smoothTransition: visualizerOptions.smoothTransition,
     );
+    if (!started) {
+      throw StateError('Failed to start native audio visualizer.');
+    }
 
     _eventChannel = EventChannel('io.livekit.audio.visualizer/eventChannel-${mediaStreamTrack.id}-$visualizerId');
     _streamSubscription = _eventChannel?.receiveBroadcastStream().listen((event) {
