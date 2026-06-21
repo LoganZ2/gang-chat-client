@@ -272,6 +272,26 @@ HRESULT ActivateDefaultRenderAudioClient(
                                      audio_client->GetAddressOf()));
 }
 
+HRESULT SetLoopbackAudioClientCategory(
+    const Microsoft::WRL::ComPtr<IAudioClient>& audio_client) {
+  if (audio_client == nullptr) {
+    return E_POINTER;
+  }
+
+  Microsoft::WRL::ComPtr<IAudioClient2> audio_client2;
+  HRESULT hr = audio_client.As(&audio_client2);
+  if (FAILED(hr) || audio_client2 == nullptr) {
+    return hr;
+  }
+
+  AudioClientProperties properties = {};
+  properties.cbSize = sizeof(properties);
+  // Loopback capture is valid with AudioCategory_Other and should not mark the
+  // app as an active communications session.
+  properties.eCategory = AudioCategory_Other;
+  return audio_client2->SetClientProperties(&properties);
+}
+
 WAVEFORMATEX CreateCaptureFormat() {
   WAVEFORMATEX format = {};
   format.wFormatTag = WAVE_FORMAT_PCM;
@@ -551,6 +571,12 @@ class ScreenAudioCapture::Impl {
     }
 
     capture_format_ = CreateCaptureFormat();
+    HRESULT category_hr = SetLoopbackAudioClientCategory(audio_client);
+    if (FAILED(category_hr)) {
+      std::cerr << "Failed to set screen audio category: 0x" << std::hex
+                << category_hr << std::dec << std::endl;
+    }
+
     HRESULT hr = audio_client->Initialize(
         AUDCLNT_SHAREMODE_SHARED,
         AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK |

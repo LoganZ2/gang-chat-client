@@ -1,0 +1,77 @@
+diff --git a/modules/audio_device/win/core_audio_base_win.cc b/modules/audio_device/win/core_audio_base_win.cc
+--- a/modules/audio_device/win/core_audio_base_win.cc
++++ b/modules/audio_device/win/core_audio_base_win.cc
+@@ -389,6 +389,6 @@ bool CoreAudioBase::Init() {
+   if (core_audio_utility::GetAudioClientVersion() >= 2) {
+     if (FAILED(core_audio_utility::SetClientProperties(
+-            static_cast<IAudioClient2*>(audio_client.Get())))) {
++            static_cast<IAudioClient2*>(audio_client.Get()), GetDataFlow()))) {
+       return false;
+     }
+   }
+diff --git a/modules/audio_device/win/core_audio_utility_win.cc b/modules/audio_device/win/core_audio_utility_win.cc
+--- a/modules/audio_device/win/core_audio_utility_win.cc
++++ b/modules/audio_device/win/core_audio_utility_win.cc
+@@ -30,6 +30,18 @@ namespace {
+ 
+ using core_audio_utility::ErrorToString;
+ 
++AUDIO_STREAM_CATEGORY AudioCategoryForDataFlow(EDataFlow data_flow) {
++  switch (data_flow) {
++    case eRender:
++      return AudioCategory_Media;
++    case eCapture:
++      return AudioCategory_Other;
++    case eAll:
++    default:
++      return AudioCategory_Other;
++  }
++}
++
+ // Converts from channel mask to list of included channels.
+ // Each audio data format contains channels for one or more of the positions
+ // listed below. The number of channels simply equals the number of nonzero
+@@ -895,7 +909,7 @@ ComPtr<IAudioClient3> CreateClient3(absl::string_view device_id,
+   return CreateClient3Internal(device.Get());
+ }
+ 
+-HRESULT SetClientProperties(IAudioClient2* client) {
++HRESULT SetClientProperties(IAudioClient2* client, EDataFlow data_flow) {
+   RTC_DLOG(LS_INFO) << "SetClientProperties";
+   RTC_DCHECK(client);
+   if (GetAudioClientVersion() < 2) {
+@@ -904,9 +918,8 @@ HRESULT SetClientProperties(IAudioClient2* client) {
+   }
+   AudioClientProperties props = {0};
+   props.cbSize = sizeof(AudioClientProperties);
+-  // Real-time VoIP communication.
+-  // TODO(henrika): other categories?
+-  props.eCategory = AudioCategory_Communications;
++  props.eCategory = AudioCategoryForDataFlow(data_flow);
++  RTC_DLOG(LS_INFO) << "category: " << static_cast<int>(props.eCategory);
+   // Hardware-offloaded audio processing allows the main audio processing tasks
+   // to be performed outside the computer's main CPU. Check support and log the
+   // result but hard-code `bIsOffload` to FALSE for now.
+diff --git a/modules/audio_device/win/core_audio_utility_win.h b/modules/audio_device/win/core_audio_utility_win.h
+--- a/modules/audio_device/win/core_audio_utility_win.h
++++ b/modules/audio_device/win/core_audio_utility_win.h
+@@ -389,13 +389,13 @@ Microsoft::WRL::ComPtr<IAudioClient2> CreateClient2(absl::string_view device_id,
+ Microsoft::WRL::ComPtr<IAudioClient3> CreateClient3(absl::string_view device_id,
+                                                     EDataFlow data_flow,
+                                                     ERole role);
+ 
+-// Sets the AudioCategory_Communications category. Should be called before
+-// GetSharedModeMixFormat() and IsFormatSupported(). The `client` argument must
+-// be an IAudioClient2 or IAudioClient3 interface pointer, hence only supported
+-// on Windows 8 and above.
+-// TODO(henrika): evaluate effect (if any).
+-HRESULT SetClientProperties(IAudioClient2* client);
++// Sets a Windows audio category matching the stream direction. Should be
++// called before GetSharedModeMixFormat() and IsFormatSupported(). The `client`
++// argument must be an IAudioClient2 or IAudioClient3 interface pointer, hence
++// only supported on Windows 8 and above. Returns AUDCLNT_E_UNSUPPORTED_FORMAT
++// if `GetAudioClientVersion()` < 2.
++HRESULT SetClientProperties(IAudioClient2* client, EDataFlow data_flow);
+ 
+ // Returns the buffer size limits of the hardware audio engine in
+ // 100-nanosecond units given a specified `format`. Does not require prior
