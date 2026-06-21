@@ -552,7 +552,7 @@ class ScreenAudioCapture::Impl {
     if (FAILED(hr)) {
       return hr;
     }
-    return InitializeAudioClientStream(audio_client);
+    return InitializeAudioClientStream(audio_client, false);
   }
 
   HRESULT InitializeSystemLoopbackAudioClient() {
@@ -561,20 +561,23 @@ class ScreenAudioCapture::Impl {
     if (FAILED(hr)) {
       return hr;
     }
-    return InitializeAudioClientStream(audio_client);
+    return InitializeAudioClientStream(audio_client, true);
   }
 
   HRESULT InitializeAudioClientStream(
-      Microsoft::WRL::ComPtr<IAudioClient> audio_client) {
+      Microsoft::WRL::ComPtr<IAudioClient> audio_client,
+      bool set_audio_category) {
     if (audio_client == nullptr) {
       return E_POINTER;
     }
 
     capture_format_ = CreateCaptureFormat();
-    HRESULT category_hr = SetLoopbackAudioClientCategory(audio_client);
-    if (FAILED(category_hr)) {
-      std::cerr << "Failed to set screen audio category: 0x" << std::hex
-                << category_hr << std::dec << std::endl;
+    if (set_audio_category) {
+      HRESULT category_hr = SetLoopbackAudioClientCategory(audio_client);
+      if (FAILED(category_hr)) {
+        std::cerr << "Failed to set screen audio category: 0x" << std::hex
+                  << category_hr << std::dec << std::endl;
+      }
     }
 
     HRESULT hr = audio_client->Initialize(
