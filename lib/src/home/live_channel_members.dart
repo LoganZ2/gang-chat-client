@@ -42,6 +42,10 @@ class _LiveMemberStage extends StatelessWidget {
     required this.onToggleParticipantHeadphonesModeration,
     required this.canRemoveParticipant,
     required this.onRemoveParticipant,
+    this.onResolveParticipantProfile,
+    this.onResolveParticipantRoomProfile,
+    this.onEnterParticipantProfileRoom,
+    this.participantProfileActionBuilder,
   });
 
   final List<LiveParticipant> participants;
@@ -61,6 +65,10 @@ class _LiveMemberStage extends StatelessWidget {
   final ValueChanged<LiveParticipant> onToggleParticipantHeadphonesModeration;
   final bool Function(LiveParticipant participant) canRemoveParticipant;
   final ValueChanged<LiveParticipant> onRemoveParticipant;
+  final UserProfileResolver? onResolveParticipantProfile;
+  final RoomProfileResolver? onResolveParticipantRoomProfile;
+  final ValueChanged<PublicRoom>? onEnterParticipantProfileRoom;
+  final UserProfileActionBuilder? participantProfileActionBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -87,6 +95,7 @@ class _LiveMemberStage extends StatelessWidget {
                   for (final participant in participants)
                     _LiveMemberCard(
                       participant: participant,
+                      currentUser: currentUser,
                       local: participant.user.id == currentUser.id,
                       speaking: speakingUserIds.contains(participant.user.id),
                       previewTrack: _memberPreviewTrack(
@@ -114,6 +123,13 @@ class _LiveMemberStage extends StatelessWidget {
                           onToggleParticipantHeadphonesModeration,
                       canRemoveParticipant: canRemoveParticipant,
                       onRemoveParticipant: onRemoveParticipant,
+                      onResolveParticipantProfile: onResolveParticipantProfile,
+                      onResolveParticipantRoomProfile:
+                          onResolveParticipantRoomProfile,
+                      onEnterParticipantProfileRoom:
+                          onEnterParticipantProfileRoom,
+                      participantProfileActionBuilder:
+                          participantProfileActionBuilder,
                     ),
                 ],
               ),
@@ -128,6 +144,7 @@ class _LiveMemberStage extends StatelessWidget {
 class _LiveMemberCard extends StatelessWidget {
   const _LiveMemberCard({
     required this.participant,
+    required this.currentUser,
     required this.local,
     required this.speaking,
     required this.onSelectPreview,
@@ -141,11 +158,16 @@ class _LiveMemberCard extends StatelessWidget {
     required this.onToggleParticipantHeadphonesModeration,
     required this.canRemoveParticipant,
     required this.onRemoveParticipant,
+    this.onResolveParticipantProfile,
+    this.onResolveParticipantRoomProfile,
+    this.onEnterParticipantProfileRoom,
+    this.participantProfileActionBuilder,
     this.selectableTrack,
     this.previewTrack,
   });
 
   final LiveParticipant participant;
+  final CurrentUser currentUser;
   final bool local;
   final bool speaking;
   final LiveVideoTrack? previewTrack;
@@ -162,6 +184,10 @@ class _LiveMemberCard extends StatelessWidget {
   final ValueChanged<LiveParticipant> onToggleParticipantHeadphonesModeration;
   final bool Function(LiveParticipant participant) canRemoveParticipant;
   final ValueChanged<LiveParticipant> onRemoveParticipant;
+  final UserProfileResolver? onResolveParticipantProfile;
+  final RoomProfileResolver? onResolveParticipantRoomProfile;
+  final ValueChanged<PublicRoom>? onEnterParticipantProfileRoom;
+  final UserProfileActionBuilder? participantProfileActionBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -326,14 +352,24 @@ class _LiveMemberCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Center(
-                    child: Avatar(
-                      label: name,
-                      imageUrl: AppConfigScope.of(
-                        context,
-                      ).resolveAssetUrl(participant.user.avatarUrl),
-                      defaultAvatarKey: participant.user.defaultAvatarKey,
-                      size: 42,
-                      showBorder: false,
+                    child: UserHoverCard(
+                      user: participant.user,
+                      currentUser: currentUser,
+                      onResolveProfile: onResolveParticipantProfile,
+                      onResolveRoomProfile: onResolveParticipantRoomProfile,
+                      onEnterCommonRoom: onEnterParticipantProfileRoom,
+                      profileActionBuilder: participantProfileActionBuilder,
+                      inLive: true,
+                      showRoomRole: true,
+                      child: Avatar(
+                        label: name,
+                        imageUrl: AppConfigScope.of(
+                          context,
+                        ).resolveAssetUrl(participant.user.avatarUrl),
+                        defaultAvatarKey: participant.user.defaultAvatarKey,
+                        size: 42,
+                        showBorder: false,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 5),

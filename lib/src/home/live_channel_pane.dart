@@ -10,6 +10,7 @@ import '../live/live_session.dart';
 import '../live/live_video_track_view.dart';
 import '../protocol/models.dart';
 import '../ui/ui.dart';
+import 'room_profile_card.dart';
 
 part 'live_channel_members.dart';
 part 'live_channel_media.dart';
@@ -116,6 +117,10 @@ class LiveChannelPane extends StatefulWidget {
     required this.onToggleParticipantHeadphonesModeration,
     required this.canRemoveParticipant,
     required this.onRemoveParticipant,
+    this.onResolveParticipantProfile,
+    this.onResolveParticipantRoomProfile,
+    this.onEnterParticipantProfileRoom,
+    this.participantProfileActionBuilder,
   });
 
   final String title;
@@ -187,6 +192,10 @@ class LiveChannelPane extends StatefulWidget {
   final ValueChanged<LiveParticipant> onToggleParticipantHeadphonesModeration;
   final bool Function(LiveParticipant participant) canRemoveParticipant;
   final ValueChanged<LiveParticipant> onRemoveParticipant;
+  final UserProfileResolver? onResolveParticipantProfile;
+  final RoomProfileResolver? onResolveParticipantRoomProfile;
+  final ValueChanged<PublicRoom>? onEnterParticipantProfileRoom;
+  final UserProfileActionBuilder? participantProfileActionBuilder;
 
   @override
   State<LiveChannelPane> createState() => _LiveChannelPaneState();
@@ -298,6 +307,14 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                                 canRemoveParticipant:
                                     widget.canRemoveParticipant,
                                 onRemoveParticipant: widget.onRemoveParticipant,
+                                onResolveParticipantProfile:
+                                    widget.onResolveParticipantProfile,
+                                onResolveParticipantRoomProfile:
+                                    widget.onResolveParticipantRoomProfile,
+                                onEnterParticipantProfileRoom:
+                                    widget.onEnterParticipantProfileRoom,
+                                participantProfileActionBuilder:
+                                    widget.participantProfileActionBuilder,
                               ),
                             ),
                           ],

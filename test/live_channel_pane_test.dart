@@ -196,6 +196,72 @@ void main() {
     );
   });
 
+  testWidgets('live member avatar opens a profile card on tap and hover', (
+    tester,
+  ) async {
+    final searchController = TextEditingController();
+    addTearDown(searchController.dispose);
+    final resolvedIds = <String>[];
+    final live = _liveState([
+      _participant(
+        id: 'live_phabe',
+        user: _user('phabe', 'Phabe', roomRole: 'member'),
+      ),
+    ]);
+
+    Future<UserSummary> resolveProfile(UserSummary user) async {
+      resolvedIds.add(user.id);
+      return UserSummary(
+        id: user.id,
+        username: 'resolved_phabe',
+        displayName: 'Resolved Phabe',
+        avatarUrl: user.avatarUrl,
+        defaultAvatarKey: user.defaultAvatarKey,
+        roomDisplayName: 'Resolved Room Phabe',
+        roomRole: 'admin',
+        uid: '20002',
+        bio: 'Live card profile',
+        isOnline: false,
+      );
+    }
+
+    await tester.pumpWidget(
+      _host(
+        searchController: searchController,
+        live: live,
+        onResolveParticipantProfile: resolveProfile,
+      ),
+    );
+
+    final avatar = find.byWidgetPredicate(
+      (widget) => widget is ui.Avatar && widget.label == 'Phabe',
+    );
+    expect(avatar, findsOneWidget);
+    expect(find.text('@resolved_phabe'), findsNothing);
+
+    await tester.tap(avatar);
+    await tester.pumpAndSettle();
+
+    expect(resolvedIds, ['phabe']);
+    expect(find.text('@resolved_phabe'), findsOneWidget);
+    expect(find.text('Resolved Room Phabe'), findsOneWidget);
+    expect(find.text('Live card profile'), findsOneWidget);
+    expect(find.text('语音'), findsOneWidget);
+    expect(find.text('管理员'), findsOneWidget);
+
+    await tester.tapAt(const Offset(4, 4));
+    await tester.pumpAndSettle();
+    expect(find.text('@resolved_phabe'), findsNothing);
+
+    final hover = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await hover.addPointer(location: Offset.zero);
+    addTearDown(hover.removePointer);
+    await hover.moveTo(tester.getCenter(avatar));
+    await tester.pumpAndSettle();
+
+    expect(find.text('@resolved_phabe'), findsOneWidget);
+  });
+
   testWidgets('remote live member controls adjust user volume and can kick', (
     tester,
   ) async {
@@ -574,6 +640,7 @@ Widget _host({
   ValueChanged<LiveParticipant>? onToggleParticipantHeadphonesModeration,
   bool Function(LiveParticipant participant)? canRemoveParticipant,
   ValueChanged<LiveParticipant>? onRemoveParticipant,
+  Future<UserSummary> Function(UserSummary user)? onResolveParticipantProfile,
 }) {
   return MaterialApp(
     theme: ui.uiTheme(),
@@ -644,6 +711,7 @@ Widget _host({
                 onToggleParticipantHeadphonesModeration ?? (_) {},
             canRemoveParticipant: canRemoveParticipant ?? ((_) => false),
             onRemoveParticipant: onRemoveParticipant ?? ((_) {}),
+            onResolveParticipantProfile: onResolveParticipantProfile,
           ),
         ),
       ),

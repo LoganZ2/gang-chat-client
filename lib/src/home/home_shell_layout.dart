@@ -157,6 +157,10 @@ extension _HomeShellLayout on _HomeShellState {
         canRemoveParticipant: _canRemoveLiveParticipant,
         onRemoveParticipant: (participant) =>
             unawaited(_removeLiveParticipant(participant)),
+        onResolveParticipantProfile: _resolveSenderProfile,
+        onResolveParticipantRoomProfile: _resolveRoomProfile,
+        onEnterParticipantProfileRoom: _openNotificationRoom,
+        participantProfileActionBuilder: _messageProfileAction,
       );
     }
 
