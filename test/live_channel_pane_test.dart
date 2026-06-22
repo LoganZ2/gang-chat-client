@@ -241,6 +241,8 @@ void main() {
       ),
       findsOneWidget,
     );
+    _expectBelowTooltip(tester, '静音Phabe');
+    expect(find.byTooltip('静音Phabe音量'), findsNothing);
 
     final hover = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await hover.addPointer(location: tester.getCenter(volumeButton));
@@ -272,6 +274,17 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(kickButton);
     expect(removed.single.user.id, 'phabe');
+
+    await tester.pumpWidget(
+      _host(
+        searchController: searchController,
+        live: live,
+        height: 600,
+        participantVoiceVolume: (userId) => userId == 'phabe' ? 0 : 1,
+      ),
+    );
+    _expectBelowTooltip(tester, '取消静音Phabe');
+    expect(find.byTooltip('取消静音Phabe音量'), findsNothing);
   });
 
   testWidgets('remote live member moderation controls use danger icons', (
@@ -310,6 +323,12 @@ void main() {
     final headphonesButton = find.byKey(
       const ValueKey<String>('live-member-status:headphones:phabe'),
     );
+    expect(
+      find.byKey(const ValueKey<String>('live-member-activity:phabe')),
+      findsNothing,
+    );
+    expect(find.text('已被禁言'), findsNothing);
+    expect(find.text('已被隔离'), findsNothing);
     expect(
       tester
           .widget<Icon>(

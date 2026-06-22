@@ -456,9 +456,10 @@ class _LiveMemberStatusRow extends StatelessWidget {
           ),
           value: voiceVolume,
           semanticLabel: '$participantName语音音量',
-          infoMessage: voiceVolume <= 0
-              ? '还原$participantName音量'
-              : '静音$participantName音量',
+          infoMessage: _memberVoiceVolumeToggleLabel(
+            participantName: participantName,
+            voiceVolume: voiceVolume,
+          ),
           onChanged: onVoiceVolumeChanged,
           maxValue: maxParticipantVoiceVolume,
           valueFormatter: participantVoiceVolumePercentText,
@@ -469,9 +470,10 @@ class _LiveMemberStatusRow extends StatelessWidget {
           child: _LiveMemberStatusButton(
             icon: _memberVoiceVolumeIcon(voiceVolume),
             active: voiceVolume > 0,
-            tooltip: voiceVolume <= 0
-                ? '还原$participantName音量'
-                : '静音$participantName音量',
+            tooltip: _memberVoiceVolumeToggleLabel(
+              participantName: participantName,
+              voiceVolume: voiceVolume,
+            ),
             onPressed: onVoiceVolumeToggle,
             showHoverInfo: false,
           ),
@@ -593,6 +595,13 @@ IconData _memberVoiceVolumeIcon(double volume) {
   return Icons.volume_up;
 }
 
+String _memberVoiceVolumeToggleLabel({
+  required String participantName,
+  required double voiceVolume,
+}) {
+  return voiceVolume <= 0 ? '取消静音$participantName' : '静音$participantName';
+}
+
 const _memberStatusButtonDimension = (_memberCardWidth - 24.0) / 4;
 
 double _memberVoiceVolumePanelHeight(double buttonDimension) {
@@ -635,11 +644,6 @@ Color _participantMetaColor(
   LiveParticipant participant, {
   required bool speaking,
 }) {
-  if (participant.micBlocked ||
-      participant.headphonesBlocked ||
-      participant.voiceBlocked) {
-    return UiColors.danger;
-  }
   if (participant.screenSharing || participant.cameraOn || speaking) {
     return UiColors.accent;
   }
@@ -651,8 +655,6 @@ IconData? _participantMetaIcon(
   LiveParticipant participant, {
   required bool speaking,
 }) {
-  if (participant.headphonesBlocked) return Icons.headset_off;
-  if (participant.micBlocked || participant.voiceBlocked) return Icons.mic_off;
   if (participant.screenSharing) return Icons.screen_share_outlined;
   if (participant.cameraOn) return Icons.videocam;
   if (speaking) return Icons.mic;
@@ -676,8 +678,6 @@ class _LiveMemberVideo extends StatelessWidget {
 }
 
 String _participantMeta(LiveParticipant participant, {required bool speaking}) {
-  if (participant.headphonesBlocked) return '已被隔离';
-  if (participant.micBlocked || participant.voiceBlocked) return '已被禁言';
   if (participant.screenSharing) return '正在共享屏幕';
   if (participant.cameraOn) return '摄像头已开启';
   if (participant.micMuted) return '已静音';
