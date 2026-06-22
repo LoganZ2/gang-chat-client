@@ -149,6 +149,11 @@ extension _HomeShellLayout on _HomeShellState {
         participantVoiceVolume: _participantVoiceVolume,
         onParticipantVoiceVolumeChanged: _changeParticipantVoiceVolume,
         onParticipantVoiceMuteToggled: _toggleParticipantVoiceMute,
+        canModerateParticipant: _canModerateLiveParticipant,
+        onToggleParticipantMicModeration: (participant) =>
+            unawaited(_toggleLiveParticipantMicModeration(participant)),
+        onToggleParticipantHeadphonesModeration: (participant) =>
+            unawaited(_toggleLiveParticipantHeadphonesModeration(participant)),
         canRemoveParticipant: _canRemoveLiveParticipant,
         onRemoveParticipant: (participant) =>
             unawaited(_removeLiveParticipant(participant)),

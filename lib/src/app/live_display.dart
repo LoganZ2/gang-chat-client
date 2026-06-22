@@ -84,7 +84,10 @@ LiveParticipantTileState liveParticipantTileState(
   required bool speaking,
 }) {
   final broadcasting = participant.cameraOn || participant.screenSharing;
-  final micMutedForDisplay = participant.voiceBlocked || participant.micMuted;
+  final micMutedForDisplay =
+      participant.micBlocked ||
+      participant.voiceBlocked ||
+      participant.micMuted;
   return LiveParticipantTileState(
     broadcasting: broadcasting,
     highlighted: speaking || broadcasting,

@@ -45,6 +45,18 @@ class LiveOutputMutePatch {
   final bool headphonesMuted;
 }
 
+enum LiveModerationAction {
+  kick('kick'),
+  muteMic('mute_mic'),
+  blockVoice('block_voice'),
+  restoreVoice('restore_voice'),
+  restoreHeadphones('restore_headphones');
+
+  const LiveModerationAction(this.apiValue);
+
+  final String apiValue;
+}
+
 class LiveJoinResultPatch {
   const LiveJoinResultPatch({
     required this.micMuted,
@@ -192,10 +204,22 @@ class LiveController {
     required String roomId,
     required String userId,
   }) {
+    return moderateParticipant(
+      roomId: roomId,
+      userId: userId,
+      action: LiveModerationAction.kick,
+    );
+  }
+
+  Future<void> moderateParticipant({
+    required String roomId,
+    required String userId,
+    required LiveModerationAction action,
+  }) {
     return api.moderateLiveParticipant(
       roomId: roomId,
       userId: userId,
-      action: 'kick',
+      action: action.apiValue,
     );
   }
 
@@ -362,6 +386,44 @@ class LiveController {
       participants: replaced ? participants : [...participants, participant],
       updatedAt: DateTime.now().toUtc(),
     );
+  }
+
+  LiveState? patchModeratedParticipant({
+    required LiveState? live,
+    required LiveParticipant participant,
+    required LiveModerationAction action,
+  }) {
+    final moderated = switch (action) {
+      LiveModerationAction.muteMic => participant.copyWith(
+        micMuted: true,
+        micBlocked: true,
+        voiceBlocked: true,
+      ),
+      LiveModerationAction.blockVoice => participant.copyWith(
+        micMuted: true,
+        micBlocked: true,
+        headphonesMuted: true,
+        headphonesBlocked: true,
+        headphonesListening: false,
+        voiceBlocked: true,
+      ),
+      LiveModerationAction.restoreVoice => participant.copyWith(
+        micMuted: false,
+        micBlocked: false,
+        headphonesMuted: false,
+        headphonesBlocked: false,
+        headphonesListening: true,
+        voiceBlocked: false,
+      ),
+      LiveModerationAction.restoreHeadphones => participant.copyWith(
+        headphonesMuted: false,
+        headphonesBlocked: false,
+        headphonesListening: true,
+      ),
+      LiveModerationAction.kick => participant,
+    };
+    if (action == LiveModerationAction.kick) return live;
+    return mergeParticipant(live, moderated);
   }
 
   LiveState? _removeUserFromLiveState({

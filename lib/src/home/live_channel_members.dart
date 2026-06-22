@@ -37,6 +37,9 @@ class _LiveMemberStage extends StatelessWidget {
     required this.participantVoiceVolume,
     required this.onParticipantVoiceVolumeChanged,
     required this.onParticipantVoiceMuteToggled,
+    required this.canModerateParticipant,
+    required this.onToggleParticipantMicModeration,
+    required this.onToggleParticipantHeadphonesModeration,
     required this.canRemoveParticipant,
     required this.onRemoveParticipant,
   });
@@ -53,6 +56,9 @@ class _LiveMemberStage extends StatelessWidget {
   final void Function(String userId, double volume)
   onParticipantVoiceVolumeChanged;
   final ValueChanged<String> onParticipantVoiceMuteToggled;
+  final bool Function(LiveParticipant participant) canModerateParticipant;
+  final ValueChanged<LiveParticipant> onToggleParticipantMicModeration;
+  final ValueChanged<LiveParticipant> onToggleParticipantHeadphonesModeration;
   final bool Function(LiveParticipant participant) canRemoveParticipant;
   final ValueChanged<LiveParticipant> onRemoveParticipant;
 
@@ -101,6 +107,11 @@ class _LiveMemberStage extends StatelessWidget {
                           onParticipantVoiceVolumeChanged,
                       onParticipantVoiceMuteToggled:
                           onParticipantVoiceMuteToggled,
+                      canModerateParticipant: canModerateParticipant,
+                      onToggleParticipantMicModeration:
+                          onToggleParticipantMicModeration,
+                      onToggleParticipantHeadphonesModeration:
+                          onToggleParticipantHeadphonesModeration,
                       canRemoveParticipant: canRemoveParticipant,
                       onRemoveParticipant: onRemoveParticipant,
                     ),
@@ -125,6 +136,9 @@ class _LiveMemberCard extends StatelessWidget {
     required this.participantVoiceVolume,
     required this.onParticipantVoiceVolumeChanged,
     required this.onParticipantVoiceMuteToggled,
+    required this.canModerateParticipant,
+    required this.onToggleParticipantMicModeration,
+    required this.onToggleParticipantHeadphonesModeration,
     required this.canRemoveParticipant,
     required this.onRemoveParticipant,
     this.selectableTrack,
@@ -143,6 +157,9 @@ class _LiveMemberCard extends StatelessWidget {
   final void Function(String userId, double volume)
   onParticipantVoiceVolumeChanged;
   final ValueChanged<String> onParticipantVoiceMuteToggled;
+  final bool Function(LiveParticipant participant) canModerateParticipant;
+  final ValueChanged<LiveParticipant> onToggleParticipantMicModeration;
+  final ValueChanged<LiveParticipant> onToggleParticipantHeadphonesModeration;
   final bool Function(LiveParticipant participant) canRemoveParticipant;
   final ValueChanged<LiveParticipant> onRemoveParticipant;
 
@@ -159,6 +176,7 @@ class _LiveMemberCard extends StatelessWidget {
         ? UiColors.borderStrong
         : UiColors.border;
     final activityIcon = _participantMetaIcon(participant, speaking: speaking);
+    final canModerate = !local && canModerateParticipant(participant);
     final activityTag = activityIcon == null
         ? null
         : _LiveMemberActivityTag(
@@ -173,8 +191,17 @@ class _LiveMemberCard extends StatelessWidget {
       participant: participant,
       participantName: name,
       micMutedForDisplay: state.micMutedForDisplay,
-      onToggleMic: local && !participant.voiceBlocked ? onToggleMic : null,
-      onToggleHeadphones: local ? onToggleHeadphones : null,
+      moderationControls: canModerate,
+      onToggleMic: local
+          ? onToggleMic
+          : canModerate
+          ? () => onToggleParticipantMicModeration(participant)
+          : null,
+      onToggleHeadphones: local
+          ? onToggleHeadphones
+          : canModerate
+          ? () => onToggleParticipantHeadphonesModeration(participant)
+          : null,
       voiceVolume: local ? null : participantVoiceVolume(participant.user.id),
       onVoiceVolumeChanged: local
           ? null
@@ -364,6 +391,7 @@ class _LiveMemberStatusRow extends StatelessWidget {
     required this.participant,
     required this.participantName,
     required this.micMutedForDisplay,
+    required this.moderationControls,
     this.onToggleMic,
     this.onToggleHeadphones,
     this.voiceVolume,
@@ -375,6 +403,7 @@ class _LiveMemberStatusRow extends StatelessWidget {
   final LiveParticipant participant;
   final String participantName;
   final bool micMutedForDisplay;
+  final bool moderationControls;
   final VoidCallback? onToggleMic;
   final VoidCallback? onToggleHeadphones;
   final double? voiceVolume;
@@ -385,7 +414,11 @@ class _LiveMemberStatusRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final listening =
-        participant.headphonesListening && !participant.headphonesMuted;
+        participant.headphonesListening &&
+        !participant.headphonesMuted &&
+        !participant.headphonesBlocked;
+    final micModerated = participant.micBlocked || participant.voiceBlocked;
+    final headphonesModerated = participant.headphonesBlocked;
     final voiceVolume = this.voiceVolume;
     final onVoiceVolumeChanged = this.onVoiceVolumeChanged;
     final buttons = <Widget>[
@@ -393,13 +426,14 @@ class _LiveMemberStatusRow extends StatelessWidget {
         key: ValueKey<String>('live-member-status:mic:${participant.user.id}'),
         icon: micMutedForDisplay ? Icons.mic_off : Icons.mic,
         active: !micMutedForDisplay,
-        danger: participant.voiceBlocked,
+        danger: micModerated,
         onPressed: onToggleMic,
-        tooltip: participant.voiceBlocked
-            ? '已被禁言'
-            : micMutedForDisplay
-            ? '麦克风关闭'
-            : '麦克风开启',
+        tooltip: _liveMemberMicTooltip(
+          micMutedForDisplay: micMutedForDisplay,
+          micModerated: micModerated,
+          headphonesModerated: headphonesModerated,
+          moderationControls: moderationControls,
+        ),
       ),
       _LiveMemberStatusButton(
         key: ValueKey<String>(
@@ -407,8 +441,13 @@ class _LiveMemberStatusRow extends StatelessWidget {
         ),
         icon: listening ? Icons.headphones : Icons.headset_off,
         active: listening,
+        danger: headphonesModerated,
         onPressed: onToggleHeadphones,
-        tooltip: listening ? '正在收听' : '已关闭收听',
+        tooltip: _liveMemberHeadphonesTooltip(
+          listening: listening,
+          headphonesModerated: headphonesModerated,
+          moderationControls: moderationControls,
+        ),
       ),
       if (voiceVolume != null && onVoiceVolumeChanged != null)
         _HoverVolumeButton(
@@ -560,6 +599,33 @@ double _memberVoiceVolumePanelHeight(double buttonDimension) {
   return _hoverVolumePanelHeight * buttonDimension / _controlButtonSize;
 }
 
+String _liveMemberMicTooltip({
+  required bool micMutedForDisplay,
+  required bool micModerated,
+  required bool headphonesModerated,
+  required bool moderationControls,
+}) {
+  if (moderationControls) {
+    if (micModerated && headphonesModerated) return '解除隔离';
+    if (micModerated) return '取消禁言';
+    return '禁言';
+  }
+  if (micModerated) return '已被禁言';
+  return micMutedForDisplay ? '麦克风关闭' : '麦克风开启';
+}
+
+String _liveMemberHeadphonesTooltip({
+  required bool listening,
+  required bool headphonesModerated,
+  required bool moderationControls,
+}) {
+  if (moderationControls) {
+    return headphonesModerated ? '恢复耳机' : '隔离';
+  }
+  if (headphonesModerated) return '已被隔离';
+  return listening ? '正在收听' : '已关闭收听';
+}
+
 Color _liveMemberNameColor(UserSummary user, {required bool local}) {
   if (local) return UiColors.accent;
   return roleBadgeForegroundColorForLabel(room_display.roomRoleLabel(user));
@@ -569,7 +635,11 @@ Color _participantMetaColor(
   LiveParticipant participant, {
   required bool speaking,
 }) {
-  if (participant.voiceBlocked) return UiColors.danger;
+  if (participant.micBlocked ||
+      participant.headphonesBlocked ||
+      participant.voiceBlocked) {
+    return UiColors.danger;
+  }
   if (participant.screenSharing || participant.cameraOn || speaking) {
     return UiColors.accent;
   }
@@ -581,7 +651,8 @@ IconData? _participantMetaIcon(
   LiveParticipant participant, {
   required bool speaking,
 }) {
-  if (participant.voiceBlocked) return Icons.mic_off;
+  if (participant.headphonesBlocked) return Icons.headset_off;
+  if (participant.micBlocked || participant.voiceBlocked) return Icons.mic_off;
   if (participant.screenSharing) return Icons.screen_share_outlined;
   if (participant.cameraOn) return Icons.videocam;
   if (speaking) return Icons.mic;
@@ -605,7 +676,8 @@ class _LiveMemberVideo extends StatelessWidget {
 }
 
 String _participantMeta(LiveParticipant participant, {required bool speaking}) {
-  if (participant.voiceBlocked) return '已被禁言';
+  if (participant.headphonesBlocked) return '已被隔离';
+  if (participant.micBlocked || participant.voiceBlocked) return '已被禁言';
   if (participant.screenSharing) return '正在共享屏幕';
   if (participant.cameraOn) return '摄像头已开启';
   if (participant.micMuted) return '已静音';

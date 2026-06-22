@@ -111,6 +111,9 @@ class LiveChannelPane extends StatefulWidget {
     required this.onScreenShareVolumeChanged,
     required this.onParticipantVoiceVolumeChanged,
     required this.onParticipantVoiceMuteToggled,
+    required this.canModerateParticipant,
+    required this.onToggleParticipantMicModeration,
+    required this.onToggleParticipantHeadphonesModeration,
     required this.canRemoveParticipant,
     required this.onRemoveParticipant,
   });
@@ -179,6 +182,9 @@ class LiveChannelPane extends StatefulWidget {
   final void Function(String userId, double volume)
   onParticipantVoiceVolumeChanged;
   final ValueChanged<String> onParticipantVoiceMuteToggled;
+  final bool Function(LiveParticipant participant) canModerateParticipant;
+  final ValueChanged<LiveParticipant> onToggleParticipantMicModeration;
+  final ValueChanged<LiveParticipant> onToggleParticipantHeadphonesModeration;
   final bool Function(LiveParticipant participant) canRemoveParticipant;
   final ValueChanged<LiveParticipant> onRemoveParticipant;
 
@@ -283,6 +289,12 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                                     widget.onParticipantVoiceVolumeChanged,
                                 onParticipantVoiceMuteToggled:
                                     widget.onParticipantVoiceMuteToggled,
+                                canModerateParticipant:
+                                    widget.canModerateParticipant,
+                                onToggleParticipantMicModeration:
+                                    widget.onToggleParticipantMicModeration,
+                                onToggleParticipantHeadphonesModeration: widget
+                                    .onToggleParticipantHeadphonesModeration,
                                 canRemoveParticipant:
                                     widget.canRemoveParticipant,
                                 onRemoveParticipant: widget.onRemoveParticipant,

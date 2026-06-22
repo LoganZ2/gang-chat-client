@@ -927,6 +927,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final requestedPaths = <String>[];
+    final liveModerationActions = <String>[];
     final liveSession = _FakeLiveSession();
     final liveSessionController = _FakeLiveSessionController(
       session: liveSession,
@@ -935,7 +936,10 @@ void main() {
       MaterialApp(
         theme: ui.uiTheme(),
         home: HomePage(
-          app: _homeTestAppContext(requestedPaths: requestedPaths),
+          app: _homeTestAppContext(
+            requestedPaths: requestedPaths,
+            liveModerationActions: liveModerationActions,
+          ),
           audioDeviceStore: const _FakeAudioDeviceStore(),
           liveSessionController: liveSessionController,
           realtime: _NoopRealtimeService(),
@@ -1006,12 +1010,20 @@ void main() {
     final remoteVoiceVolumeButton = find.byKey(
       const ValueKey<String>('live-member-status:voice-volume:user-2'),
     );
+    final remoteMicButton = find.byKey(
+      const ValueKey<String>('live-member-status:mic:user-2'),
+    );
+    final remoteHeadphonesButton = find.byKey(
+      const ValueKey<String>('live-member-status:headphones:user-2'),
+    );
     final remoteKickButton = find.byKey(
       const ValueKey<String>('live-member-status:kick:user-2'),
     );
     expect(selfVoiceVolumeButton, findsNothing);
     expect(selfKickButton, findsNothing);
     expect(remoteVoiceVolumeButton, findsOneWidget);
+    expect(remoteMicButton, findsOneWidget);
+    expect(remoteHeadphonesButton, findsOneWidget);
     expect(remoteKickButton, findsOneWidget);
 
     final memberHover = await tester.createGesture(
@@ -1033,11 +1045,40 @@ void main() {
 
     await memberHover.removePointer();
     await tester.pumpAndSettle();
+    await tester.tap(remoteMicButton);
+    await tester.pumpAndSettle();
+    expect(find.text('禁言此用户'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ui.Button, '禁言'));
+    await tester.pumpAndSettle();
+    expect(liveModerationActions.last, 'mute_mic');
+
+    await tester.tap(remoteHeadphonesButton);
+    await tester.pumpAndSettle();
+    expect(find.text('隔离此用户'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ui.Button, '隔离'));
+    await tester.pumpAndSettle();
+    expect(liveModerationActions.last, 'block_voice');
+
+    await tester.tap(remoteHeadphonesButton);
+    await tester.pumpAndSettle();
+    expect(find.text('恢复耳机'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ui.Button, '恢复'));
+    await tester.pumpAndSettle();
+    expect(liveModerationActions.last, 'restore_headphones');
+
+    await tester.tap(remoteMicButton);
+    await tester.pumpAndSettle();
+    expect(find.text('取消禁言'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ui.Button, '解除'));
+    await tester.pumpAndSettle();
+    expect(liveModerationActions.last, 'restore_voice');
+
     await tester.tap(remoteKickButton);
     await tester.pumpAndSettle();
     expect(find.text('踢出语音频道'), findsOneWidget);
     await tester.tap(find.widgetWithText(ui.Button, '踢出'));
     await tester.pumpAndSettle();
+    expect(liveModerationActions.last, 'kick');
     expect(
       requestedPaths,
       contains(
@@ -4001,6 +4042,7 @@ AuthenticatedAppContext _homeTestAppContext({
   List<Map<String, Object?>>? roomCreations,
   List<Map<String, Object?>>? liveJoinRequests,
   List<Map<String, Object?>>? liveStateUpdates,
+  List<String>? liveModerationActions,
   String currentRoomRole = 'owner',
   bool currentUserIsSuperuser = false,
   String secondaryMemberRole = 'member',
@@ -4041,6 +4083,7 @@ AuthenticatedAppContext _homeTestAppContext({
       roomCreations: roomCreations,
       liveJoinRequests: liveJoinRequests,
       liveStateUpdates: liveStateUpdates,
+      liveModerationActions: liveModerationActions,
       currentRoomRole: currentRoomRole,
       secondaryMemberRole: secondaryMemberRole,
       includeActionComparisonMember: includeActionComparisonMember,
@@ -4055,6 +4098,7 @@ GangApi _roomsApi({
   List<Map<String, Object?>>? roomCreations,
   List<Map<String, Object?>>? liveJoinRequests,
   List<Map<String, Object?>>? liveStateUpdates,
+  List<String>? liveModerationActions,
   String currentRoomRole = 'owner',
   String secondaryMemberRole = 'member',
   bool includeActionComparisonMember = false,
@@ -4434,9 +4478,18 @@ GangApi _roomsApi({
       if (request.url.path ==
           '/api/v1/rooms/server-alpha/live/participants/user-2/moderation') {
         expect(request.method, 'POST');
-        expect(jsonDecode(request.body) as Map<String, Object?>, {
-          'action': 'kick',
-        });
+        final body = jsonDecode(request.body) as Map<String, Object?>;
+        liveModerationActions?.add(body['action']! as String);
+        expect(
+          body['action'],
+          isIn([
+            'kick',
+            'mute_mic',
+            'block_voice',
+            'restore_voice',
+            'restore_headphones',
+          ]),
+        );
         return _jsonResponse({'ok': true});
       }
       if (request.url.path == '/api/v1/rooms/server-alpha/join-requests') {
@@ -4778,7 +4831,9 @@ Map<String, Object?> _liveParticipantJson({
   required Map<String, Object?> user,
   required String liveSessionId,
   bool micMuted = false,
+  bool micBlocked = false,
   bool headphonesMuted = false,
+  bool headphonesBlocked = false,
   bool voiceBlocked = false,
   bool cameraOn = false,
   bool screenSharing = false,
@@ -4788,7 +4843,10 @@ Map<String, Object?> _liveParticipantJson({
     'user': user,
     'joined_at': '2026-06-05T08:00:00Z',
     'mic_muted': micMuted,
+    'mic_blocked': micBlocked,
     'headphones_muted': headphonesMuted,
+    'headphones_blocked': headphonesBlocked,
+    'headphones_listening': !headphonesMuted && !headphonesBlocked,
     'voice_blocked': voiceBlocked,
     'camera_on': cameraOn,
     'screen_sharing': screenSharing,

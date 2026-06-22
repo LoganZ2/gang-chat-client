@@ -276,24 +276,113 @@ extension _HomeShellLiveActions on _HomeShellState {
     _setHomeState(() {});
   }
 
+  bool _canModerateLiveParticipant(LiveParticipant participant) {
+    final room = _selectedRoom;
+    if (room == null ||
+        _busyLiveMemberRemovalIds.contains(participant.user.id) ||
+        _busyLiveMemberModerationIds.contains(participant.user.id)) {
+      return false;
+    }
+    return _liveParticipantPermission(
+      participant: participant,
+      room: room,
+    ).canRemoveMember;
+  }
+
   bool _canRemoveLiveParticipant(LiveParticipant participant) {
     final room = _selectedRoom;
     if (room == null ||
         _busyLiveMemberRemovalIds.contains(participant.user.id)) {
       return false;
     }
+    return _liveParticipantPermission(
+      participant: participant,
+      room: room,
+    ).canRemoveMember;
+  }
+
+  member_filter.RoomMemberPermissionState _liveParticipantPermission({
+    required LiveParticipant participant,
+    required RoomDetail room,
+  }) {
     final managementPermission = room_display.roomManagementPermissionState(
       room: room,
       currentUser: _currentUser,
     );
-    final permission = member_filter.roomMemberPermissionState(
+    return member_filter.roomMemberPermissionState(
       member: _roomMemberFromLiveParticipant(participant, room),
       currentUser: _currentUser,
       canEditCreatorOnly: managementPermission.canEditCreatorOnly,
       canManageMembers: room.isAdmin || _currentUser.isSuperuser,
       ownerUserId: room.createdBy?.id,
     );
-    return permission.canRemoveMember;
+  }
+
+  Future<void> _toggleLiveParticipantMicModeration(
+    LiveParticipant participant,
+  ) {
+    final blocked = participant.micBlocked || participant.voiceBlocked;
+    final action = blocked
+        ? LiveModerationAction.restoreVoice
+        : LiveModerationAction.muteMic;
+    return _moderateLiveParticipant(participant, action);
+  }
+
+  Future<void> _toggleLiveParticipantHeadphonesModeration(
+    LiveParticipant participant,
+  ) {
+    final action = participant.headphonesBlocked
+        ? LiveModerationAction.restoreHeadphones
+        : LiveModerationAction.blockVoice;
+    return _moderateLiveParticipant(participant, action);
+  }
+
+  Future<void> _moderateLiveParticipant(
+    LiveParticipant participant,
+    LiveModerationAction action,
+  ) async {
+    final room = _selectedRoom;
+    if (room == null || !_canModerateLiveParticipant(participant)) return;
+    final member = _roomMemberFromLiveParticipant(participant, room);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => _LiveMemberModerationConfirmDialog(
+        member: member,
+        action: action,
+        isolated: participant.headphonesBlocked,
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final userId = participant.user.id;
+    if (_busyLiveMemberModerationIds.contains(userId)) return;
+    _setHomeState(() {
+      _busyLiveMemberModerationIds.add(userId);
+      _roomError = null;
+    });
+    try {
+      await _liveController.moderateParticipant(
+        roomId: room.id,
+        userId: userId,
+        action: action,
+      );
+      if (!mounted) return;
+      final live = _liveController.patchModeratedParticipant(
+        live: _live,
+        participant: participant,
+        action: action,
+      );
+      _setHomeState(() {
+        _busyLiveMemberModerationIds.remove(userId);
+        _live = live;
+        _roomError = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      _setHomeState(() {
+        _busyLiveMemberModerationIds.remove(userId);
+        _roomError = error.toString();
+      });
+    }
   }
 
   Future<void> _removeLiveParticipant(LiveParticipant participant) async {
@@ -772,5 +861,72 @@ class _LiveMemberRemoveConfirmDialog extends StatelessWidget {
         style: UiTypography.body,
       ),
     );
+  }
+}
+
+class _LiveMemberModerationConfirmDialog extends StatelessWidget {
+  const _LiveMemberModerationConfirmDialog({
+    required this.member,
+    required this.action,
+    required this.isolated,
+  });
+
+  final RoomMember member;
+  final LiveModerationAction action;
+  final bool isolated;
+
+  @override
+  Widget build(BuildContext context) {
+    return DialogFrame(
+      title: _title,
+      icon: Icons.warning_amber_outlined,
+      actions: [
+        Button(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('取消'),
+        ),
+        Button(
+          tone: ButtonTone.danger,
+          onPressed: () => Navigator.of(context).pop(true),
+          child: Text(_confirmLabel),
+        ),
+      ],
+      child: Text(_body, style: UiTypography.body),
+    );
+  }
+
+  String get _name => member_filter.roomMemberDisplayName(member);
+
+  String get _title {
+    return switch (action) {
+      LiveModerationAction.muteMic => '禁言此用户',
+      LiveModerationAction.blockVoice => '隔离此用户',
+      LiveModerationAction.restoreVoice => isolated ? '解除隔离' : '取消禁言',
+      LiveModerationAction.restoreHeadphones => '恢复耳机',
+      LiveModerationAction.kick => '踢出语音频道',
+    };
+  }
+
+  String get _confirmLabel {
+    return switch (action) {
+      LiveModerationAction.muteMic => '禁言',
+      LiveModerationAction.blockVoice => '隔离',
+      LiveModerationAction.restoreVoice => '解除',
+      LiveModerationAction.restoreHeadphones => '恢复',
+      LiveModerationAction.kick => '踢出',
+    };
+  }
+
+  String get _body {
+    return switch (action) {
+      LiveModerationAction.muteMic => '确定要禁言 $_name 吗？禁言后对方的麦克风不会上传到语音频道。',
+      LiveModerationAction.blockVoice => '确定要隔离 $_name 吗？隔离后对方的麦克风和耳机会被强制关闭。',
+      LiveModerationAction.restoreVoice =>
+        isolated
+            ? '确定要解除 $_name 的隔离吗？麦克风和耳机会恢复到正常状态。'
+            : '确定要取消 $_name 的禁言吗？麦克风会恢复到正常状态。',
+      LiveModerationAction.restoreHeadphones => '确定要恢复 $_name 的耳机吗？麦克风仍会保持禁言。',
+      LiveModerationAction.kick => '确定要将 $_name 踢出语音频道吗？',
+    };
   }
 }

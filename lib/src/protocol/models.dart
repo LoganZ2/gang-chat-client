@@ -1592,7 +1592,9 @@ class LiveParticipant {
     required this.user,
     required this.joinedAt,
     required this.micMuted,
+    this.micBlocked = false,
     required this.headphonesMuted,
+    this.headphonesBlocked = false,
     this.headphonesListening = true,
     required this.voiceBlocked,
     required this.cameraOn,
@@ -1604,7 +1606,9 @@ class LiveParticipant {
   final UserSummary user;
   final DateTime joinedAt;
   final bool micMuted;
+  final bool micBlocked;
   final bool headphonesMuted;
+  final bool headphonesBlocked;
 
   /// Whether the participant is actively listening (headphones engaged).
   /// Inverse-ish of [headphonesMuted] but sent explicitly by the server;
@@ -1621,6 +1625,36 @@ class LiveParticipant {
   final bool screenSharing;
 
   final String connectionState;
+
+  LiveParticipant copyWith({
+    String? liveSessionId,
+    UserSummary? user,
+    DateTime? joinedAt,
+    bool? micMuted,
+    bool? micBlocked,
+    bool? headphonesMuted,
+    bool? headphonesBlocked,
+    bool? headphonesListening,
+    bool? voiceBlocked,
+    bool? cameraOn,
+    bool? screenSharing,
+    String? connectionState,
+  }) {
+    return LiveParticipant(
+      liveSessionId: liveSessionId ?? this.liveSessionId,
+      user: user ?? this.user,
+      joinedAt: joinedAt ?? this.joinedAt,
+      micMuted: micMuted ?? this.micMuted,
+      micBlocked: micBlocked ?? this.micBlocked,
+      headphonesMuted: headphonesMuted ?? this.headphonesMuted,
+      headphonesBlocked: headphonesBlocked ?? this.headphonesBlocked,
+      headphonesListening: headphonesListening ?? this.headphonesListening,
+      voiceBlocked: voiceBlocked ?? this.voiceBlocked,
+      cameraOn: cameraOn ?? this.cameraOn,
+      screenSharing: screenSharing ?? this.screenSharing,
+      connectionState: connectionState ?? this.connectionState,
+    );
+  }
 
   factory LiveParticipant.fromJson(Map<String, Object?> json) {
     final commonRooms = _listOfMaps(
@@ -1645,7 +1679,9 @@ class LiveParticipant {
       user: user,
       joinedAt: DateTime.parse(json['joined_at']! as String),
       micMuted: json['mic_muted']! as bool,
+      micBlocked: json['mic_blocked'] as bool? ?? false,
       headphonesMuted: json['headphones_muted'] as bool? ?? false,
+      headphonesBlocked: json['headphones_blocked'] as bool? ?? false,
       headphonesListening: json['headphones_listening'] as bool? ?? true,
       voiceBlocked: json['voice_blocked'] as bool? ?? false,
       cameraOn: json['camera_on']! as bool,

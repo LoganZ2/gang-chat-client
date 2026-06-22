@@ -354,7 +354,8 @@ abstract interface class GangApi {
   });
 
   /// Applies an admin moderation action to a live participant. [action] is one
-  /// of `kick`, `mute_mic`, `block_voice`, `restore_voice`.
+  /// of `kick`, `mute_mic`, `block_voice`, `restore_voice`,
+  /// `restore_headphones`.
   Future<void> moderateLiveParticipant({
     required String roomId,
     required String userId,

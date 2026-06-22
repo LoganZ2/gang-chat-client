@@ -274,6 +274,72 @@ void main() {
     expect(removed.single.user.id, 'phabe');
   });
 
+  testWidgets('remote live member moderation controls use danger icons', (
+    tester,
+  ) async {
+    final searchController = TextEditingController();
+    addTearDown(searchController.dispose);
+    final remoteUser = _user('phabe', 'Phabe', roomRole: 'member');
+    final live = _liveState([
+      _participant(
+        id: 'live_phabe',
+        user: remoteUser,
+        micMuted: true,
+        micBlocked: true,
+        headphonesMuted: true,
+        headphonesBlocked: true,
+        voiceBlocked: true,
+      ),
+    ]);
+    final micModerations = <LiveParticipant>[];
+    final headphonesModerations = <LiveParticipant>[];
+
+    await tester.pumpWidget(
+      _host(
+        searchController: searchController,
+        live: live,
+        canModerateParticipant: (_) => true,
+        onToggleParticipantMicModeration: micModerations.add,
+        onToggleParticipantHeadphonesModeration: headphonesModerations.add,
+      ),
+    );
+
+    final micButton = find.byKey(
+      const ValueKey<String>('live-member-status:mic:phabe'),
+    );
+    final headphonesButton = find.byKey(
+      const ValueKey<String>('live-member-status:headphones:phabe'),
+    );
+    expect(
+      tester
+          .widget<Icon>(
+            find.descendant(
+              of: micButton,
+              matching: find.byIcon(Icons.mic_off),
+            ),
+          )
+          .color,
+      ui.UiColors.danger,
+    );
+    expect(
+      tester
+          .widget<Icon>(
+            find.descendant(
+              of: headphonesButton,
+              matching: find.byIcon(Icons.headset_off),
+            ),
+          )
+          .color,
+      ui.UiColors.danger,
+    );
+
+    await tester.tap(micButton);
+    await tester.tap(headphonesButton);
+
+    expect(micModerations.single.user.id, 'phabe');
+    expect(headphonesModerations.single.user.id, 'phabe');
+  });
+
   testWidgets(
     'live member media cards show top-left name and keep status controls',
     (tester) async {
@@ -484,6 +550,9 @@ Widget _host({
   double Function(String userId)? participantVoiceVolume,
   void Function(String userId, double volume)? onParticipantVoiceVolumeChanged,
   ValueChanged<String>? onParticipantVoiceMuteToggled,
+  bool Function(LiveParticipant participant)? canModerateParticipant,
+  ValueChanged<LiveParticipant>? onToggleParticipantMicModeration,
+  ValueChanged<LiveParticipant>? onToggleParticipantHeadphonesModeration,
   bool Function(LiveParticipant participant)? canRemoveParticipant,
   ValueChanged<LiveParticipant>? onRemoveParticipant,
 }) {
@@ -549,6 +618,11 @@ Widget _host({
                 onParticipantVoiceVolumeChanged ?? ((_, _) {}),
             onParticipantVoiceMuteToggled:
                 onParticipantVoiceMuteToggled ?? (_) {},
+            canModerateParticipant: canModerateParticipant ?? ((_) => false),
+            onToggleParticipantMicModeration:
+                onToggleParticipantMicModeration ?? (_) {},
+            onToggleParticipantHeadphonesModeration:
+                onToggleParticipantHeadphonesModeration ?? (_) {},
             canRemoveParticipant: canRemoveParticipant ?? ((_) => false),
             onRemoveParticipant: onRemoveParticipant ?? ((_) {}),
           ),
@@ -649,7 +723,10 @@ LiveParticipant _participant({
   required String id,
   required UserSummary user,
   bool micMuted = false,
+  bool micBlocked = false,
   bool headphonesMuted = false,
+  bool headphonesBlocked = false,
+  bool voiceBlocked = false,
   bool cameraOn = false,
   bool screenSharing = false,
 }) {
@@ -658,8 +735,11 @@ LiveParticipant _participant({
     user: user,
     joinedAt: DateTime.utc(2026, 6, 11, 9),
     micMuted: micMuted,
+    micBlocked: micBlocked,
     headphonesMuted: headphonesMuted,
-    voiceBlocked: false,
+    headphonesBlocked: headphonesBlocked,
+    headphonesListening: !headphonesMuted && !headphonesBlocked,
+    voiceBlocked: voiceBlocked,
     cameraOn: cameraOn,
     screenSharing: screenSharing,
     connectionState: 'connected',
