@@ -146,6 +146,12 @@ extension _HomeShellLayout on _HomeShellState {
         onMusicBoxVolumeChanged: (volume) =>
             unawaited(_liveSessionController.setMusicBoxVolume(volume)),
         onScreenShareVolumeChanged: _changeScreenShareVolume,
+        participantVoiceVolume: _participantVoiceVolume,
+        onParticipantVoiceVolumeChanged: _changeParticipantVoiceVolume,
+        onParticipantVoiceMuteToggled: _toggleParticipantVoiceMute,
+        canRemoveParticipant: _canRemoveLiveParticipant,
+        onRemoveParticipant: (participant) =>
+            unawaited(_removeLiveParticipant(participant)),
       );
     }
 

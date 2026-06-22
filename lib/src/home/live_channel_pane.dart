@@ -104,10 +104,15 @@ class LiveChannelPane extends StatefulWidget {
     required this.outputVolume,
     required this.musicBoxVolume,
     required this.screenShareVolume,
+    required this.participantVoiceVolume,
     required this.onInputVolumeChanged,
     required this.onOutputVolumeChanged,
     required this.onMusicBoxVolumeChanged,
     required this.onScreenShareVolumeChanged,
+    required this.onParticipantVoiceVolumeChanged,
+    required this.onParticipantVoiceMuteToggled,
+    required this.canRemoveParticipant,
+    required this.onRemoveParticipant,
   });
 
   final String title;
@@ -163,10 +168,19 @@ class LiveChannelPane extends StatefulWidget {
   /// ordinary voice output.
   final double screenShareVolume;
 
+  /// Per-user relative voice volume (0-2) for ordinary remote speaker audio.
+  /// Screen-share audio remains controlled by [screenShareVolume].
+  final double Function(String userId) participantVoiceVolume;
+
   final ValueChanged<double> onInputVolumeChanged;
   final ValueChanged<double> onOutputVolumeChanged;
   final ValueChanged<double> onMusicBoxVolumeChanged;
   final ValueChanged<double> onScreenShareVolumeChanged;
+  final void Function(String userId, double volume)
+  onParticipantVoiceVolumeChanged;
+  final ValueChanged<String> onParticipantVoiceMuteToggled;
+  final bool Function(LiveParticipant participant) canRemoveParticipant;
+  final ValueChanged<LiveParticipant> onRemoveParticipant;
 
   @override
   State<LiveChannelPane> createState() => _LiveChannelPaneState();
@@ -263,6 +277,15 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                                 onSelectStage: _selectStage,
                                 onToggleMic: widget.onToggleMic,
                                 onToggleHeadphones: widget.onToggleHeadphones,
+                                participantVoiceVolume:
+                                    widget.participantVoiceVolume,
+                                onParticipantVoiceVolumeChanged:
+                                    widget.onParticipantVoiceVolumeChanged,
+                                onParticipantVoiceMuteToggled:
+                                    widget.onParticipantVoiceMuteToggled,
+                                canRemoveParticipant:
+                                    widget.canRemoveParticipant,
+                                onRemoveParticipant: widget.onRemoveParticipant,
                               ),
                             ),
                           ],

@@ -6,6 +6,7 @@ import '../live/audio_device_restorer.dart';
 import '../live/livekit_url.dart';
 import '../live/system_audio_devices.dart';
 import '../protocol/models.dart';
+import 'audio_levels.dart';
 import 'audio_device_store.dart';
 
 typedef AudioDeviceRestorer = Future<String?> Function(AudioDeviceStore store);
@@ -17,7 +18,8 @@ class LiveSessionController {
     LiveSession? session,
     AudioDeviceRestorer? audioDeviceRestorer,
     ScreenAudioTokenProvider? screenAudioTokenProvider,
-  }) : session = session ??
+  }) : session =
+           session ??
            LiveSession(screenAudioTokenProvider: screenAudioTokenProvider),
        _audioDeviceRestorer =
            audioDeviceRestorer ??
@@ -47,6 +49,10 @@ class LiveSessionController {
   final AudioDeviceStore audioDeviceStore;
   final LiveSession session;
   final AudioDeviceRestorer _audioDeviceRestorer;
+  final Set<String> _restoredParticipantVoiceVolumeIds = <String>{};
+  final Set<String> _restoringParticipantVoiceVolumeIds = <String>{};
+  final Map<String, double> _participantVoiceVolumeBeforeMute =
+      <String, double>{};
 
   Future<List<ScreenSource>> listScreenSources() {
     return LiveSession.listScreenSources();
@@ -119,6 +125,34 @@ class LiveSessionController {
 
   double get outputVolume => session.outputVolume;
 
+  double participantVoiceVolume(String userId) {
+    return session.participantVoiceVolume(userId);
+  }
+
+  Future<bool> restoreParticipantVoiceVolume(String userId) async {
+    if (userId.isEmpty ||
+        _restoredParticipantVoiceVolumeIds.contains(userId) ||
+        _restoringParticipantVoiceVolumeIds.contains(userId)) {
+      return false;
+    }
+    _restoringParticipantVoiceVolumeIds.add(userId);
+    final before = session.participantVoiceVolume(userId);
+    try {
+      final volume = await audioDeviceStore.readParticipantVoiceVolume(userId);
+      if (_restoredParticipantVoiceVolumeIds.contains(userId)) return false;
+      await session.setParticipantVoiceVolume(userId, volume);
+      final restored = session.participantVoiceVolume(userId);
+      if (restored > 0) _participantVoiceVolumeBeforeMute[userId] = restored;
+      _restoredParticipantVoiceVolumeIds.add(userId);
+      return restored != before;
+    } catch (_) {
+      _restoredParticipantVoiceVolumeIds.add(userId);
+      return false;
+    } finally {
+      _restoringParticipantVoiceVolumeIds.remove(userId);
+    }
+  }
+
   Future<void> setOutputVolume(double volume) async {
     await session.setOutputVolume(volume);
     try {
@@ -126,6 +160,35 @@ class LiveSessionController {
     } catch (_) {
       // A failed persist shouldn't undo the live change.
     }
+  }
+
+  Future<void> setParticipantVoiceVolume(String userId, double volume) async {
+    await session.setParticipantVoiceVolume(
+      userId,
+      normalizedParticipantVoiceVolume(volume),
+    );
+    final normalized = session.participantVoiceVolume(userId);
+    if (normalized > 0) _participantVoiceVolumeBeforeMute[userId] = normalized;
+    _restoredParticipantVoiceVolumeIds.add(userId);
+    try {
+      await audioDeviceStore.writeParticipantVoiceVolume(userId, normalized);
+    } catch (_) {
+      // A failed persist shouldn't undo the live change; it just won't survive
+      // the next launch.
+    }
+  }
+
+  Future<void> toggleParticipantVoiceMuted(String userId) {
+    final current = session.participantVoiceVolume(userId);
+    if (current <= 0) {
+      return setParticipantVoiceVolume(
+        userId,
+        _participantVoiceVolumeBeforeMute[userId] ??
+            defaultParticipantVoiceVolume,
+      );
+    }
+    _participantVoiceVolumeBeforeMute[userId] = current;
+    return setParticipantVoiceVolume(userId, 0);
   }
 
   double get musicBoxVolume => session.musicBoxVolume;

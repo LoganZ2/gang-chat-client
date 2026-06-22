@@ -186,6 +186,7 @@ class _HomeShellState extends State<HomeShell> {
   bool _cameraOn = false;
   bool _screenSharing = false;
   bool _voiceBlocked = false;
+  final Set<String> _busyLiveMemberRemovalIds = <String>{};
   // The selected room's music box snapshot, or null when not loaded / disabled.
   // Overwritten wholesale from state fetches, write responses, and the
   // `music_box_changed` SSE event; never merged field by field.

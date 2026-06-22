@@ -21,6 +21,7 @@ class LocalAudioDeviceStore extends AudioDeviceStore {
   static const _musicBoxVolumeKey = 'gang.musicBoxVolume';
   static const _screenShareVolumeKey = 'gang.screenShareVolume';
   static const _screenShareMaxHeightKey = 'gang.screenShareMaxHeight';
+  static const _participantVoiceVolumePrefix = 'gang.participantVoiceVolume.';
 
   @override
   Future<StoredAudioDevices> read() async {
@@ -87,8 +88,32 @@ class LocalAudioDeviceStore extends AudioDeviceStore {
     );
   }
 
+  @override
+  Future<double> readParticipantVoiceVolume(String userId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final value = prefs.getDouble(_participantVoiceVolumeKey(userId));
+    if (value == null) return defaultParticipantVoiceVolume;
+    return normalizedParticipantVoiceVolume(value);
+  }
+
+  @override
+  Future<void> writeParticipantVoiceVolume(String userId, double volume) async {
+    final prefs = await SharedPreferences.getInstance();
+    final normalized = normalizedParticipantVoiceVolume(volume);
+    final key = _participantVoiceVolumeKey(userId);
+    if (normalized == defaultParticipantVoiceVolume) {
+      await prefs.remove(key);
+      return;
+    }
+    await prefs.setDouble(key, normalized);
+  }
+
   double _readVolume(SharedPreferences prefs, String key) {
     final value = prefs.getDouble(key);
     return value == null ? defaultAudioVolume : normalizedAudioVolume(value);
+  }
+
+  String _participantVoiceVolumeKey(String userId) {
+    return '$_participantVoiceVolumePrefix${Uri.encodeComponent(userId)}';
   }
 }

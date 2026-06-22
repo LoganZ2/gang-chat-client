@@ -23,6 +23,7 @@ void main() {
     expect(stored.musicBoxVolume, 0.5);
     expect(stored.screenShareVolume, 0.5);
     expect(stored.screenShareMaxHeight, 1080);
+    expect(await store.readParticipantVoiceVolume('user_2'), 1.0);
   });
 
   test('writes round-trip through SharedPreferences', () async {
@@ -35,6 +36,7 @@ void main() {
     await store.writeMusicBoxVolume(0.2);
     await store.writeScreenShareVolume(0.8);
     await store.writeScreenShareMaxHeight(720);
+    await store.writeParticipantVoiceVolume('user/2', 1.75);
 
     final stored = await store.read();
     expect(stored.inputDeviceId, '87');
@@ -44,6 +46,10 @@ void main() {
     expect(stored.musicBoxVolume, closeTo(0.2, 1e-9));
     expect(stored.screenShareVolume, closeTo(0.8, 1e-9));
     expect(stored.screenShareMaxHeight, 720);
+    expect(
+      await store.readParticipantVoiceVolume('user/2'),
+      closeTo(1.75, 1e-9),
+    );
   });
 
   test(
@@ -63,10 +69,14 @@ void main() {
 
     await store.writeOutputVolume(5.0);
     await store.writeScreenShareVolume(-0.5);
+    await store.writeParticipantVoiceVolume('user_2', 5.0);
+    await store.writeParticipantVoiceVolume('user_3', -1.0);
     final stored = await store.read();
 
     expect(stored.outputVolume, normalizedAudioVolume(5.0));
     expect(stored.outputVolume, 1.0);
     expect(stored.screenShareVolume, 0.0);
+    expect(await store.readParticipantVoiceVolume('user_2'), 2.0);
+    expect(await store.readParticipantVoiceVolume('user_3'), 0.0);
   });
 }

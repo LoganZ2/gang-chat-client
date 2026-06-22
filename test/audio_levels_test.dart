@@ -15,6 +15,14 @@ void main() {
     expect(audioVolumePercentText(1.7), '100%');
   });
 
+  test('participant voice volume supports 200 percent boosts', () {
+    expect(normalizedParticipantVoiceVolume(-0.2), 0);
+    expect(normalizedParticipantVoiceVolume(1.25), 1.25);
+    expect(normalizedParticipantVoiceVolume(3), 2);
+    expect(participantVoiceVolumePercentText(1.25), '125%');
+    expect(participantVoiceVolumePercentText(3), '200%');
+  });
+
   test('level meter helpers calculate segment counts and active bars', () {
     expect(audioLevelSegmentCount(120), 24);
     expect(audioLevelSegmentCount(420), 35);

@@ -312,6 +312,7 @@ class LiveSession extends ChangeNotifier {
   double _outputVolume = defaultAudioVolume;
   double _musicBoxVolume = defaultAudioVolume;
   double _screenShareVolume = defaultAudioVolume;
+  final Map<String, double> _participantVoiceVolumes = <String, double>{};
   bool _outputMuted = false;
   // Local mic mute (Option A): muting keeps the capture running and only zeroes
   // the outgoing audio, so it never tears down the CoreAudio input. Tearing it
@@ -357,6 +358,13 @@ class LiveSession extends ChangeNotifier {
   bool get canPublish => _canPublish;
   double get inputVolume => _inputVolume;
   double get outputVolume => _outputVolume;
+
+  /// Per-remote-user relative volume for ordinary voice audio. Defaults to
+  /// 100%, then multiplies with [outputVolume]. Screen-share audio is excluded
+  /// and continues to use [screenShareVolume].
+  double participantVoiceVolume(String userId) {
+    return _participantVoiceVolumes[userId] ?? defaultParticipantVoiceVolume;
+  }
 
   /// Local listening volume applied only to the music box bot's audio track,
   /// independent of [outputVolume] (which covers every other remote speaker).
@@ -625,6 +633,16 @@ class LiveSession extends ChangeNotifier {
   Future<void> setOutputVolume(double volume) async {
     _outputVolume = normalizedAudioVolume(volume);
     await _applyOutputVolume();
+  }
+
+  Future<void> setParticipantVoiceVolume(String userId, double volume) async {
+    final normalized = normalizedParticipantVoiceVolume(volume);
+    if (normalized == defaultParticipantVoiceVolume) {
+      _participantVoiceVolumes.remove(userId);
+    } else {
+      _participantVoiceVolumes[userId] = normalized;
+    }
+    await _applyParticipantVoiceVolume(userId);
   }
 
   Future<void> setMusicBoxVolume(double volume) async {
@@ -1174,19 +1192,36 @@ class LiveSession extends ChangeNotifier {
   Future<void> _applyOutputVolume() async {
     final room = _room;
     if (room == null) return;
-    final volume = _outputMuted ? 0.0 : _outputVolume;
     for (final participant in room.remoteParticipants.values) {
       // The music box bot has its own independent volume knob; leave it to
       // _applyMusicBoxVolume so the two don't fight over the same track.
       if (participant.identity == musicBoxBotIdentity) continue;
-      for (final pub in participant.audioTrackPublications) {
-        if (pub.source == lk.TrackSource.screenShareAudio) continue;
-        final track = pub.track;
-        if (track == null) continue;
-        try {
-          await rtc.Helper.setVolume(volume, track.mediaStreamTrack);
-        } catch (_) {}
-      }
+      await _applyParticipantVoiceVolumeToParticipant(participant);
+    }
+  }
+
+  Future<void> _applyParticipantVoiceVolume(String userId) async {
+    final participant = _room?.remoteParticipants[userId];
+    if (participant == null || participant.identity == musicBoxBotIdentity) {
+      return;
+    }
+    await _applyParticipantVoiceVolumeToParticipant(participant);
+  }
+
+  Future<void> _applyParticipantVoiceVolumeToParticipant(
+    lk.RemoteParticipant participant,
+  ) async {
+    final baseVolume = _outputMuted ? 0.0 : _outputVolume;
+    final volume = normalizedParticipantVoiceVolume(
+      baseVolume * participantVoiceVolume(participant.identity),
+    );
+    for (final pub in participant.audioTrackPublications) {
+      if (pub.source == lk.TrackSource.screenShareAudio) continue;
+      final track = pub.track;
+      if (track == null) continue;
+      try {
+        await rtc.Helper.setVolume(volume, track.mediaStreamTrack);
+      } catch (_) {}
     }
   }
 

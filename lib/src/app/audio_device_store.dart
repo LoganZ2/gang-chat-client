@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'audio_device_preferences.dart';
+import 'audio_levels.dart';
 
 export 'audio_device_preferences.dart';
 
@@ -52,4 +53,13 @@ class AudioDeviceStore {
       'AudioDeviceStore.writeScreenShareMaxHeight must be implemented.',
     );
   }
+
+  Future<double> readParticipantVoiceVolume(String userId) async {
+    return defaultParticipantVoiceVolume;
+  }
+
+  Future<void> writeParticipantVoiceVolume(
+    String userId,
+    double volume,
+  ) async {}
 }

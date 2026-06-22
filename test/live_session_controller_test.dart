@@ -99,6 +99,7 @@ void main() {
     await controller.setOutputMuted(true);
     await controller.setInputVolume(0.4);
     await controller.setOutputVolume(0.6);
+    await controller.setParticipantVoiceVolume('user_2', 0.25);
     await controller.setScreenShareVolume(0.8);
 
     expect(session.micMutes, [true]);
@@ -108,6 +109,8 @@ void main() {
     expect(session.outputMutes, [true]);
     expect(session.inputVolumes, [0.4]);
     expect(session.outputVolumes, [0.6]);
+    expect(session.participantVoiceVolumeWrites, ['user_2:0.25']);
+    expect(controller.participantVoiceVolume('user_2'), 0.25);
     expect(session.screenShareVolumes, [0.8]);
   });
 
@@ -125,13 +128,43 @@ void main() {
 
       await controller.setInputVolume(0.4);
       await controller.setOutputVolume(0.6);
+      await controller.setParticipantVoiceVolume('user_2', 1.5);
       await controller.setScreenShareVolume(0.8);
 
       expect(store.inputVolumeWrites, [0.4]);
       expect(store.outputVolumeWrites, [0.6]);
+      expect(store.participantVoiceVolumeWrites, ['user_2:1.50']);
       expect(store.screenShareVolumeWrites, [0.8]);
     },
   );
+
+  test('participant voice volume restores and toggles local mute', () async {
+    final session = _FakeLiveSession();
+    final store = _RecordingAudioDeviceStore(
+      storedParticipantVoiceVolumes: {'user_2': 1.5},
+    );
+    final controller = LiveSessionController(
+      apiBaseUrl: 'https://api.example.test/api/v1',
+      session: session,
+      audioDeviceStore: store,
+      audioDeviceRestorer: (_) async => null,
+    );
+
+    expect(await controller.restoreParticipantVoiceVolume('user_2'), isTrue);
+    expect(controller.participantVoiceVolume('user_2'), 1.5);
+
+    await controller.toggleParticipantVoiceMuted('user_2');
+    expect(controller.participantVoiceVolume('user_2'), 0);
+
+    await controller.toggleParticipantVoiceMuted('user_2');
+    expect(controller.participantVoiceVolume('user_2'), 1.5);
+    expect(session.participantVoiceVolumeWrites, [
+      'user_2:1.50',
+      'user_2:0.00',
+      'user_2:1.50',
+    ]);
+    expect(store.participantVoiceVolumeWrites, ['user_2:0.00', 'user_2:1.50']);
+  });
 
   test('setScreenShareMaxHeight applies to the session and persists', () async {
     final session = _FakeLiveSession();
@@ -186,6 +219,7 @@ class _FakeLiveSession extends LiveSession {
   int disconnects = 0;
   final inputVolumes = <double>[];
   final outputVolumes = <double>[];
+  final participantVoiceVolumeWrites = <String>[];
   final screenShareVolumes = <double>[];
   final outputMutes = <bool>[];
   final micMutes = <bool>[];
@@ -198,6 +232,7 @@ class _FakeLiveSession extends LiveSession {
   double _inputVolume = defaultAudioVolume;
   double _outputVolume = defaultAudioVolume;
   double _screenShareVolume = defaultAudioVolume;
+  final _participantVoiceVolumes = <String, double>{};
 
   void emitChange() => notifyListeners();
 
@@ -206,6 +241,11 @@ class _FakeLiveSession extends LiveSession {
 
   @override
   double get outputVolume => _outputVolume;
+
+  @override
+  double participantVoiceVolume(String userId) {
+    return _participantVoiceVolumes[userId] ?? 1.0;
+  }
 
   @override
   double get screenShareVolume => _screenShareVolume;
@@ -246,6 +286,12 @@ class _FakeLiveSession extends LiveSession {
   }
 
   @override
+  Future<void> setParticipantVoiceVolume(String userId, double volume) async {
+    _participantVoiceVolumes[userId] = volume;
+    participantVoiceVolumeWrites.add('$userId:${volume.toStringAsFixed(2)}');
+  }
+
+  @override
   Future<void> setScreenShareVolume(double volume) async {
     _screenShareVolume = volume;
     screenShareVolumes.add(volume);
@@ -283,11 +329,18 @@ class _FakeLiveSession extends LiveSession {
 }
 
 class _RecordingAudioDeviceStore extends AudioDeviceStore {
-  _RecordingAudioDeviceStore({this.storedScreenShareMaxHeight = 1080});
+  _RecordingAudioDeviceStore({
+    this.storedScreenShareMaxHeight = 1080,
+    Map<String, double> storedParticipantVoiceVolumes = const {},
+  }) : _storedParticipantVoiceVolumes = Map<String, double>.from(
+         storedParticipantVoiceVolumes,
+       );
 
   final int storedScreenShareMaxHeight;
+  final Map<String, double> _storedParticipantVoiceVolumes;
   final inputVolumeWrites = <double>[];
   final outputVolumeWrites = <double>[];
+  final participantVoiceVolumeWrites = <String>[];
   final screenShareVolumeWrites = <double>[];
   final screenShareWrites = <int>[];
 
@@ -309,6 +362,17 @@ class _RecordingAudioDeviceStore extends AudioDeviceStore {
   @override
   Future<void> writeOutputVolume(double volume) async {
     outputVolumeWrites.add(volume);
+  }
+
+  @override
+  Future<double> readParticipantVoiceVolume(String userId) async {
+    return _storedParticipantVoiceVolumes[userId] ?? 1.0;
+  }
+
+  @override
+  Future<void> writeParticipantVoiceVolume(String userId, double volume) async {
+    _storedParticipantVoiceVolumes[userId] = volume;
+    participantVoiceVolumeWrites.add('$userId:${volume.toStringAsFixed(2)}');
   }
 
   @override

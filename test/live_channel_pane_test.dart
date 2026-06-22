@@ -85,6 +85,12 @@ void main() {
       final shareButtonFinder = find.byKey(
         const ValueKey<String>('live-member-status:screen-share:current_user'),
       );
+      final voiceVolumeButtonFinder = find.byKey(
+        const ValueKey<String>('live-member-status:voice-volume:current_user'),
+      );
+      final kickButtonFinder = find.byKey(
+        const ValueKey<String>('live-member-status:kick:current_user'),
+      );
 
       expect(avatar.active, isFalse);
       expect(avatar.showBorder, isFalse);
@@ -116,6 +122,8 @@ void main() {
       expect(micButtonRect.right, closeTo(headphonesButtonRect.left, 0.01));
       expect(cameraButtonFinder, findsNothing);
       expect(shareButtonFinder, findsNothing);
+      expect(voiceVolumeButtonFinder, findsNothing);
+      expect(kickButtonFinder, findsNothing);
       expect(
         find.descendant(of: cardFinder, matching: find.byType(ui.ButtonIcon)),
         findsNothing,
@@ -176,6 +184,94 @@ void main() {
     expect(find.text('已静音'), findsNothing);
     expect(activityTag, findsNothing);
     expect(find.byTooltip('正在收听'), findsWidgets);
+    expect(
+      find.byKey(
+        const ValueKey<String>('live-member-status:voice-volume:phabe'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('live-member-status:kick:phabe')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('remote live member controls adjust user volume and can kick', (
+    tester,
+  ) async {
+    final searchController = TextEditingController();
+    addTearDown(searchController.dispose);
+    final remoteUser = _user('phabe', 'Phabe', roomRole: 'member');
+    final live = _liveState([_participant(id: 'live_phabe', user: remoteUser)]);
+    final volumeChanges = <double>[];
+    final volumeToggles = <String>[];
+    final removed = <LiveParticipant>[];
+
+    await tester.pumpWidget(
+      _host(
+        searchController: searchController,
+        live: live,
+        height: 600,
+        participantVoiceVolume: (userId) => userId == 'phabe' ? 0.4 : 1,
+        onParticipantVoiceVolumeChanged: (userId, volume) {
+          if (userId == 'phabe') volumeChanges.add(volume);
+        },
+        onParticipantVoiceMuteToggled: volumeToggles.add,
+        canRemoveParticipant: (_) => true,
+        onRemoveParticipant: removed.add,
+      ),
+    );
+
+    final volumeButton = find.byKey(
+      const ValueKey<String>('live-member-status:voice-volume:phabe'),
+    );
+    final kickButton = find.byKey(
+      const ValueKey<String>('live-member-status:kick:phabe'),
+    );
+    expect(volumeButton, findsOneWidget);
+    expect(kickButton, findsOneWidget);
+    expect(
+      find.descendant(of: kickButton, matching: find.byIcon(Icons.exit_to_app)),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: volumeButton,
+        matching: find.byIcon(Icons.volume_down),
+      ),
+      findsOneWidget,
+    );
+
+    final hover = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await hover.addPointer(location: tester.getCenter(volumeButton));
+    await tester.pump();
+    final volumeSlider = find.byKey(
+      const ValueKey<String>('live-volume-slider:Phabe语音音量'),
+    );
+    expect(volumeSlider, findsOneWidget);
+    final volumePanel = find.byKey(
+      const ValueKey<String>('live-volume-panel:Phabe语音音量'),
+    );
+    expect(tester.getSize(volumePanel).width, closeTo(32.5, 1e-9));
+    expect(tester.getSize(volumePanel).height, closeTo(144 * 32.5 / 44, 1e-9));
+    await tester.tapAt(
+      tester.getRect(volumeSlider).bottomCenter - const Offset(0, 1),
+    );
+    await tester.pump();
+    expect(volumeChanges.last, closeTo(0, 1e-9));
+    await tester.tapAt(
+      tester.getRect(volumeSlider).topCenter + const Offset(0, 1),
+    );
+    await tester.pump();
+    expect(volumeChanges.last, closeTo(2, 0.05));
+    await tester.tap(volumeButton);
+    await tester.pump();
+    expect(volumeToggles, ['phabe']);
+
+    await hover.removePointer();
+    await tester.pumpAndSettle();
+    await tester.tap(kickButton);
+    expect(removed.single.user.id, 'phabe');
   });
 
   testWidgets(
@@ -385,6 +481,11 @@ Widget _host({
   VoidCallback? onToggleShare,
   ValueChanged<LiveStageSelection?>? onStageSelectionChanged,
   List<LiveVideoTrack> videoTracks = const [],
+  double Function(String userId)? participantVoiceVolume,
+  void Function(String userId, double volume)? onParticipantVoiceVolumeChanged,
+  ValueChanged<String>? onParticipantVoiceMuteToggled,
+  bool Function(LiveParticipant participant)? canRemoveParticipant,
+  ValueChanged<LiveParticipant>? onRemoveParticipant,
 }) {
   return MaterialApp(
     theme: ui.uiTheme(),
@@ -443,6 +544,13 @@ Widget _host({
             onOutputVolumeChanged: (_) {},
             onMusicBoxVolumeChanged: (_) {},
             onScreenShareVolumeChanged: (_) {},
+            participantVoiceVolume: participantVoiceVolume ?? ((_) => 1),
+            onParticipantVoiceVolumeChanged:
+                onParticipantVoiceVolumeChanged ?? ((_, _) {}),
+            onParticipantVoiceMuteToggled:
+                onParticipantVoiceMuteToggled ?? (_) {},
+            canRemoveParticipant: canRemoveParticipant ?? ((_) => false),
+            onRemoveParticipant: onRemoveParticipant ?? ((_) {}),
           ),
         ),
       ),
@@ -473,6 +581,12 @@ void _expectMediaMemberCard(
   );
   final shareButtonFinder = find.byKey(
     const ValueKey<String>('live-member-status:screen-share:current_user'),
+  );
+  final voiceVolumeButtonFinder = find.byKey(
+    const ValueKey<String>('live-member-status:voice-volume:current_user'),
+  );
+  final kickButtonFinder = find.byKey(
+    const ValueKey<String>('live-member-status:kick:current_user'),
   );
   final nameFinder = find.descendant(
     of: cardFinder,
@@ -511,6 +625,8 @@ void _expectMediaMemberCard(
   );
   expect(cameraButtonFinder, findsNothing);
   expect(shareButtonFinder, findsNothing);
+  expect(voiceVolumeButtonFinder, findsNothing);
+  expect(kickButtonFinder, findsNothing);
   expect(nameRect.left, lessThan(tagRect.left));
   expect(nameRect.top, lessThan(videoRect.top));
   expect(nameRect.bottom, lessThan(micButtonRect.top));

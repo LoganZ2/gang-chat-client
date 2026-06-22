@@ -34,6 +34,11 @@ class _LiveMemberStage extends StatelessWidget {
     required this.onSelectStage,
     required this.onToggleMic,
     required this.onToggleHeadphones,
+    required this.participantVoiceVolume,
+    required this.onParticipantVoiceVolumeChanged,
+    required this.onParticipantVoiceMuteToggled,
+    required this.canRemoveParticipant,
+    required this.onRemoveParticipant,
   });
 
   final List<LiveParticipant> participants;
@@ -44,6 +49,12 @@ class _LiveMemberStage extends StatelessWidget {
   final ValueChanged<LiveVideoTrack> onSelectStage;
   final VoidCallback? onToggleMic;
   final VoidCallback onToggleHeadphones;
+  final double Function(String userId) participantVoiceVolume;
+  final void Function(String userId, double volume)
+  onParticipantVoiceVolumeChanged;
+  final ValueChanged<String> onParticipantVoiceMuteToggled;
+  final bool Function(LiveParticipant participant) canRemoveParticipant;
+  final ValueChanged<LiveParticipant> onRemoveParticipant;
 
   @override
   Widget build(BuildContext context) {
@@ -85,6 +96,13 @@ class _LiveMemberStage extends StatelessWidget {
                       onSelectPreview: onSelectStage,
                       onToggleMic: onToggleMic,
                       onToggleHeadphones: onToggleHeadphones,
+                      participantVoiceVolume: participantVoiceVolume,
+                      onParticipantVoiceVolumeChanged:
+                          onParticipantVoiceVolumeChanged,
+                      onParticipantVoiceMuteToggled:
+                          onParticipantVoiceMuteToggled,
+                      canRemoveParticipant: canRemoveParticipant,
+                      onRemoveParticipant: onRemoveParticipant,
                     ),
                 ],
               ),
@@ -104,6 +122,11 @@ class _LiveMemberCard extends StatelessWidget {
     required this.onSelectPreview,
     required this.onToggleMic,
     required this.onToggleHeadphones,
+    required this.participantVoiceVolume,
+    required this.onParticipantVoiceVolumeChanged,
+    required this.onParticipantVoiceMuteToggled,
+    required this.canRemoveParticipant,
+    required this.onRemoveParticipant,
     this.selectableTrack,
     this.previewTrack,
   });
@@ -116,6 +139,12 @@ class _LiveMemberCard extends StatelessWidget {
   final ValueChanged<LiveVideoTrack> onSelectPreview;
   final VoidCallback? onToggleMic;
   final VoidCallback onToggleHeadphones;
+  final double Function(String userId) participantVoiceVolume;
+  final void Function(String userId, double volume)
+  onParticipantVoiceVolumeChanged;
+  final ValueChanged<String> onParticipantVoiceMuteToggled;
+  final bool Function(LiveParticipant participant) canRemoveParticipant;
+  final ValueChanged<LiveParticipant> onRemoveParticipant;
 
   @override
   Widget build(BuildContext context) {
@@ -142,9 +171,21 @@ class _LiveMemberCard extends StatelessWidget {
           );
     final statusRow = _LiveMemberStatusRow(
       participant: participant,
+      participantName: name,
       micMutedForDisplay: state.micMutedForDisplay,
       onToggleMic: local && !participant.voiceBlocked ? onToggleMic : null,
       onToggleHeadphones: local ? onToggleHeadphones : null,
+      voiceVolume: local ? null : participantVoiceVolume(participant.user.id),
+      onVoiceVolumeChanged: local
+          ? null
+          : (volume) =>
+                onParticipantVoiceVolumeChanged(participant.user.id, volume),
+      onVoiceVolumeToggle: local
+          ? null
+          : () => onParticipantVoiceMuteToggled(participant.user.id),
+      onRemoveMember: !local && canRemoveParticipant(participant)
+          ? () => onRemoveParticipant(participant)
+          : null,
     );
     if (previewTrack != null) {
       return SizedBox(
@@ -321,21 +362,33 @@ class _LiveMemberActivityTag extends StatelessWidget {
 class _LiveMemberStatusRow extends StatelessWidget {
   const _LiveMemberStatusRow({
     required this.participant,
+    required this.participantName,
     required this.micMutedForDisplay,
     this.onToggleMic,
     this.onToggleHeadphones,
+    this.voiceVolume,
+    this.onVoiceVolumeChanged,
+    this.onVoiceVolumeToggle,
+    this.onRemoveMember,
   });
 
   final LiveParticipant participant;
+  final String participantName;
   final bool micMutedForDisplay;
   final VoidCallback? onToggleMic;
   final VoidCallback? onToggleHeadphones;
+  final double? voiceVolume;
+  final ValueChanged<double>? onVoiceVolumeChanged;
+  final VoidCallback? onVoiceVolumeToggle;
+  final VoidCallback? onRemoveMember;
 
   @override
   Widget build(BuildContext context) {
     final listening =
         participant.headphonesListening && !participant.headphonesMuted;
-    final buttons = [
+    final voiceVolume = this.voiceVolume;
+    final onVoiceVolumeChanged = this.onVoiceVolumeChanged;
+    final buttons = <Widget>[
       _LiveMemberStatusButton(
         key: ValueKey<String>('live-member-status:mic:${participant.user.id}'),
         icon: micMutedForDisplay ? Icons.mic_off : Icons.mic,
@@ -357,6 +410,44 @@ class _LiveMemberStatusRow extends StatelessWidget {
         onPressed: onToggleHeadphones,
         tooltip: listening ? '正在收听' : '已关闭收听',
       ),
+      if (voiceVolume != null && onVoiceVolumeChanged != null)
+        _HoverVolumeButton(
+          key: ValueKey<String>(
+            'live-member-status:voice-volume:${participant.user.id}',
+          ),
+          value: voiceVolume,
+          semanticLabel: '$participantName语音音量',
+          infoMessage: voiceVolume <= 0
+              ? '还原$participantName音量'
+              : '静音$participantName音量',
+          onChanged: onVoiceVolumeChanged,
+          maxValue: maxParticipantVoiceVolume,
+          valueFormatter: participantVoiceVolumePercentText,
+          panelWidth: _memberStatusButtonDimension,
+          panelHeight: _memberVoiceVolumePanelHeight(
+            _memberStatusButtonDimension,
+          ),
+          child: _LiveMemberStatusButton(
+            icon: _memberVoiceVolumeIcon(voiceVolume),
+            active: voiceVolume > 0,
+            tooltip: voiceVolume <= 0
+                ? '还原$participantName音量'
+                : '静音$participantName音量',
+            onPressed: onVoiceVolumeToggle,
+            showHoverInfo: false,
+          ),
+        ),
+      if (onRemoveMember != null)
+        _LiveMemberStatusButton(
+          key: ValueKey<String>(
+            'live-member-status:kick:${participant.user.id}',
+          ),
+          icon: Icons.exit_to_app,
+          active: false,
+          danger: true,
+          tooltip: '踢出语音频道',
+          onPressed: onRemoveMember,
+        ),
     ];
 
     return LayoutBuilder(
@@ -413,6 +504,7 @@ class _LiveMemberStatusButton extends StatelessWidget {
     required this.tooltip,
     this.onPressed,
     this.danger = false,
+    this.showHoverInfo = true,
   });
 
   final IconData icon;
@@ -420,6 +512,7 @@ class _LiveMemberStatusButton extends StatelessWidget {
   final bool danger;
   final String tooltip;
   final VoidCallback? onPressed;
+  final bool showHoverInfo;
 
   @override
   Widget build(BuildContext context) {
@@ -432,27 +525,39 @@ class _LiveMemberStatusButton extends StatelessWidget {
         ? UiColors.selected
         : UiColors.surfacePressed.withValues(alpha: 0.72);
     final enabled = onPressed != null;
-    return _HoverInfo(
-      message: tooltip,
-      child: MouseRegion(
-        cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onPressed,
-          child: Semantics(
-            button: true,
-            enabled: enabled,
-            selected: active,
-            label: tooltip,
-            child: DecoratedBox(
-              decoration: BoxDecoration(color: background),
-              child: Center(child: Icon(icon, color: foreground, size: 13)),
-            ),
+    final button = MouseRegion(
+      cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onPressed,
+        child: Semantics(
+          button: true,
+          enabled: enabled,
+          selected: active,
+          label: tooltip,
+          child: DecoratedBox(
+            decoration: BoxDecoration(color: background),
+            child: Center(child: Icon(icon, color: foreground, size: 13)),
           ),
         ),
       ),
     );
+    if (!showHoverInfo) return button;
+    return _HoverInfo(message: tooltip, child: button);
   }
+}
+
+IconData _memberVoiceVolumeIcon(double volume) {
+  final normalized = normalizedParticipantVoiceVolume(volume);
+  if (normalized <= 0) return Icons.volume_off;
+  if (normalized < defaultParticipantVoiceVolume) return Icons.volume_down;
+  return Icons.volume_up;
+}
+
+const _memberStatusButtonDimension = (_memberCardWidth - 24.0) / 4;
+
+double _memberVoiceVolumePanelHeight(double buttonDimension) {
+  return _hoverVolumePanelHeight * buttonDimension / _controlButtonSize;
 }
 
 Color _liveMemberNameColor(UserSummary user, {required bool local}) {

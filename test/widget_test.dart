@@ -997,6 +997,54 @@ void main() {
       ),
       findsNothing,
     );
+    final selfVoiceVolumeButton = find.byKey(
+      const ValueKey<String>('live-member-status:voice-volume:user-1'),
+    );
+    final selfKickButton = find.byKey(
+      const ValueKey<String>('live-member-status:kick:user-1'),
+    );
+    final remoteVoiceVolumeButton = find.byKey(
+      const ValueKey<String>('live-member-status:voice-volume:user-2'),
+    );
+    final remoteKickButton = find.byKey(
+      const ValueKey<String>('live-member-status:kick:user-2'),
+    );
+    expect(selfVoiceVolumeButton, findsNothing);
+    expect(selfKickButton, findsNothing);
+    expect(remoteVoiceVolumeButton, findsOneWidget);
+    expect(remoteKickButton, findsOneWidget);
+
+    final memberHover = await tester.createGesture(
+      kind: PointerDeviceKind.mouse,
+    );
+    await memberHover.addPointer(
+      location: tester.getCenter(remoteVoiceVolumeButton),
+    );
+    await tester.pump();
+    final memberVolumeSlider = find.byKey(
+      const ValueKey<String>('live-volume-slider:Morgan语音音量'),
+    );
+    expect(memberVolumeSlider, findsOneWidget);
+    await tester.tapAt(
+      tester.getRect(memberVolumeSlider).bottomCenter - const Offset(0, 1),
+    );
+    await tester.pump();
+    expect(liveSession.participantVoiceVolumeWrites.last, 'user-2:0.00');
+
+    await memberHover.removePointer();
+    await tester.pumpAndSettle();
+    await tester.tap(remoteKickButton);
+    await tester.pumpAndSettle();
+    expect(find.text('踢出语音频道'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ui.Button, '踢出'));
+    await tester.pumpAndSettle();
+    expect(
+      requestedPaths,
+      contains(
+        '/api/v1/rooms/server-alpha/live/participants/user-2/moderation',
+      ),
+    );
+    expect(find.text('Morgan'), findsNothing);
 
     await tester.tap(_liveControl('mic'));
     await tester.pumpAndSettle();
@@ -4383,6 +4431,14 @@ GangApi _roomsApi({
           return _jsonResponse({'ok': true});
         }
       }
+      if (request.url.path ==
+          '/api/v1/rooms/server-alpha/live/participants/user-2/moderation') {
+        expect(request.method, 'POST');
+        expect(jsonDecode(request.body) as Map<String, Object?>, {
+          'action': 'kick',
+        });
+        return _jsonResponse({'ok': true});
+      }
       if (request.url.path == '/api/v1/rooms/server-alpha/join-requests') {
         return _jsonResponse({
           'requests': [
@@ -5123,6 +5179,7 @@ class _FakeLiveSession extends LiveSession {
   int disconnects = 0;
   final inputVolumes = <double>[];
   final outputVolumes = <double>[];
+  final participantVoiceVolumeWrites = <String>[];
   final screenShareVolumes = <double>[];
   final micMutes = <bool>[];
   final outputMutes = <bool>[];
@@ -5165,6 +5222,12 @@ class _FakeLiveSession extends LiveSession {
   Future<void> setOutputVolume(double volume) async {
     outputVolumes.add(volume);
     await super.setOutputVolume(volume);
+  }
+
+  @override
+  Future<void> setParticipantVoiceVolume(String userId, double volume) async {
+    participantVoiceVolumeWrites.add('$userId:${volume.toStringAsFixed(2)}');
+    await super.setParticipantVoiceVolume(userId, volume);
   }
 
   @override

@@ -188,6 +188,17 @@ class LiveController {
     return api.updateMyLiveState(roomId: roomId, connectionState: 'left');
   }
 
+  Future<void> kickParticipant({
+    required String roomId,
+    required String userId,
+  }) {
+    return api.moderateLiveParticipant(
+      roomId: roomId,
+      userId: userId,
+      action: 'kick',
+    );
+  }
+
   LiveJoinStatePatch patchJoinStarted({required String? joinedLiveRoomId}) {
     return LiveJoinStatePatch(
       joinedLiveRoomId: joinedLiveRoomId,

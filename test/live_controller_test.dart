@@ -319,6 +319,35 @@ void main() {
     expect(participant.connectionState, 'left');
   });
 
+  test('kickParticipant uses live moderation kick action', () async {
+    Map<String, Object?>? body;
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(
+          request.url.path,
+          '/api/v1/rooms/room_1/live/participants/bob/moderation',
+        );
+        body =
+            jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>;
+        return http.Response(
+          jsonEncode({'ok': true}),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }),
+    );
+    addTearDown(api.close);
+
+    await LiveController(
+      api: api,
+    ).kickParticipant(roomId: 'room_1', userId: 'bob');
+
+    expect(body, {'action': 'kick'});
+  });
+
   test('patchJoinResult mirrors participant flags and room live preview', () {
     final api = GangApiClient(
       baseUrl: 'http://example.test/api/v1',

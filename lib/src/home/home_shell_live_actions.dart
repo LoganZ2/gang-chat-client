@@ -243,6 +243,113 @@ extension _HomeShellLiveActions on _HomeShellState {
     unawaited(_liveSessionController.setScreenShareVolume(volume));
   }
 
+  double _participantVoiceVolume(String userId) {
+    unawaited(_restoreParticipantVoiceVolume(userId));
+    return _liveSessionController.participantVoiceVolume(userId);
+  }
+
+  void _changeParticipantVoiceVolume(String userId, double volume) {
+    unawaited(_setParticipantVoiceVolume(userId, volume));
+  }
+
+  void _toggleParticipantVoiceMute(String userId) {
+    unawaited(_toggleParticipantVoiceMuted(userId));
+  }
+
+  Future<void> _restoreParticipantVoiceVolume(String userId) async {
+    final changed = await _liveSessionController.restoreParticipantVoiceVolume(
+      userId,
+    );
+    if (!changed || !mounted) return;
+    _setHomeState(() {});
+  }
+
+  Future<void> _setParticipantVoiceVolume(String userId, double volume) async {
+    await _liveSessionController.setParticipantVoiceVolume(userId, volume);
+    if (!mounted) return;
+    _setHomeState(() {});
+  }
+
+  Future<void> _toggleParticipantVoiceMuted(String userId) async {
+    await _liveSessionController.toggleParticipantVoiceMuted(userId);
+    if (!mounted) return;
+    _setHomeState(() {});
+  }
+
+  bool _canRemoveLiveParticipant(LiveParticipant participant) {
+    final room = _selectedRoom;
+    if (room == null ||
+        _busyLiveMemberRemovalIds.contains(participant.user.id)) {
+      return false;
+    }
+    final managementPermission = room_display.roomManagementPermissionState(
+      room: room,
+      currentUser: _currentUser,
+    );
+    final permission = member_filter.roomMemberPermissionState(
+      member: _roomMemberFromLiveParticipant(participant, room),
+      currentUser: _currentUser,
+      canEditCreatorOnly: managementPermission.canEditCreatorOnly,
+      canManageMembers: room.isAdmin || _currentUser.isSuperuser,
+      ownerUserId: room.createdBy?.id,
+    );
+    return permission.canRemoveMember;
+  }
+
+  Future<void> _removeLiveParticipant(LiveParticipant participant) async {
+    final room = _selectedRoom;
+    if (room == null || !_canRemoveLiveParticipant(participant)) return;
+    final member = _roomMemberFromLiveParticipant(participant, room);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => _LiveMemberRemoveConfirmDialog(member: member),
+    );
+    if (confirmed != true || !mounted) return;
+    final userId = participant.user.id;
+    if (_busyLiveMemberRemovalIds.contains(userId)) return;
+    _setHomeState(() {
+      _busyLiveMemberRemovalIds.add(userId);
+      _roomError = null;
+    });
+    try {
+      await _liveController.kickParticipant(roomId: room.id, userId: userId);
+      if (!mounted) return;
+      final patch = _liveController.removeUserFromLive(
+        live: _live,
+        rooms: _servers,
+        roomId: room.id,
+        userId: userId,
+      );
+      _setHomeState(() {
+        _busyLiveMemberRemovalIds.remove(userId);
+        _live = patch.live;
+        _servers = patch.rooms;
+        _roomError = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      _setHomeState(() {
+        _busyLiveMemberRemovalIds.remove(userId);
+        _roomError = error.toString();
+      });
+    }
+  }
+
+  RoomMember _roomMemberFromLiveParticipant(
+    LiveParticipant participant,
+    RoomDetail room,
+  ) {
+    final role =
+        participant.user.roomRole ??
+        (participant.user.id == room.createdBy?.id ? 'owner' : 'member');
+    return RoomMember(
+      user: participant.user,
+      role: role,
+      joinedAt: participant.joinedAt,
+      roomDisplayName: participant.user.roomDisplayName,
+    );
+  }
+
   void _syncSettingsAudioVolumeToLive(String kind, double volume) {
     if (kind == 'audioinput') {
       _changeInputVolume(volume);
@@ -636,5 +743,34 @@ extension _HomeShellLiveActions on _HomeShellState {
       return;
     }
     await _patchLiveState(screenSharing: true);
+  }
+}
+
+class _LiveMemberRemoveConfirmDialog extends StatelessWidget {
+  const _LiveMemberRemoveConfirmDialog({required this.member});
+
+  final RoomMember member;
+
+  @override
+  Widget build(BuildContext context) {
+    return DialogFrame(
+      title: '踢出语音频道',
+      icon: Icons.warning_amber_outlined,
+      actions: [
+        Button(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('取消'),
+        ),
+        Button(
+          tone: ButtonTone.danger,
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('踢出'),
+        ),
+      ],
+      child: Text(
+        '确定要将 ${member_filter.roomMemberDisplayName(member)} 踢出语音频道吗？',
+        style: UiTypography.body,
+      ),
+    );
   }
 }

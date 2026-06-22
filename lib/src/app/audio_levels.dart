@@ -8,6 +8,17 @@ String audioVolumePercentText(double volume) {
   return '${(normalizedAudioVolume(volume) * 100).round()}%';
 }
 
+const defaultParticipantVoiceVolume = 1.0;
+const maxParticipantVoiceVolume = 2.0;
+
+double normalizedParticipantVoiceVolume(double volume) {
+  return volume.clamp(0.0, maxParticipantVoiceVolume).toDouble();
+}
+
+String participantVoiceVolumePercentText(double volume) {
+  return '${(normalizedParticipantVoiceVolume(volume) * 100).round()}%';
+}
+
 int audioLevelSegmentCount(
   double availableWidth, {
   double segmentWidth = 12,

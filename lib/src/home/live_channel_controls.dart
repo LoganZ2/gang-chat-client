@@ -298,6 +298,10 @@ class _HoverVolumeButton extends StatefulWidget {
     required this.infoMessage,
     required this.onChanged,
     this.enabled = true,
+    this.maxValue = 1.0,
+    this.valueFormatter,
+    this.panelWidth = _controlButtonSize,
+    this.panelHeight = _hoverVolumePanelHeight,
   });
 
   final Widget child;
@@ -306,6 +310,10 @@ class _HoverVolumeButton extends StatefulWidget {
   final String infoMessage;
   final ValueChanged<double> onChanged;
   final bool enabled;
+  final double maxValue;
+  final String Function(double value)? valueFormatter;
+  final double panelWidth;
+  final double panelHeight;
 
   @override
   State<_HoverVolumeButton> createState() => _HoverVolumeButtonState();
@@ -319,13 +327,24 @@ class _HoverVolumeButtonState extends State<_HoverVolumeButton> {
   bool _targetHovered = false;
   bool _overlayHovered = false;
   bool _dragging = false;
-  late double _value = normalizedAudioVolume(widget.value);
+  late double _value = _normalize(widget.value);
+
+  double get _maxValue => widget.maxValue <= 0 ? 1.0 : widget.maxValue;
+  double get _panelWidth =>
+      widget.panelWidth.clamp(1.0, double.infinity).toDouble();
+  double get _panelHeight =>
+      widget.panelHeight.clamp(1.0, double.infinity).toDouble();
+
+  double _normalize(double value) {
+    return value.clamp(0.0, _maxValue).toDouble();
+  }
 
   @override
   void didUpdateWidget(_HoverVolumeButton oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.value != widget.value) {
-      _value = normalizedAudioVolume(widget.value);
+    if (oldWidget.value != widget.value ||
+        oldWidget.maxValue != widget.maxValue) {
+      _value = _normalize(widget.value);
       _markOverlayNeedsBuild();
     }
     if (!widget.enabled) _hideOverlay();
@@ -359,19 +378,20 @@ class _HoverVolumeButtonState extends State<_HoverVolumeButton> {
     );
     final targetSize = targetBox.size;
     final overlaySize = overlayBox.size;
-    final maxPanelLeft = (overlaySize.width - _controlButtonSize).clamp(
+    final panelWidth = _panelWidth;
+    final panelHeight = _panelHeight;
+    final maxPanelLeft = (overlaySize.width - panelWidth).clamp(
       0.0,
       double.infinity,
     );
-    final maxPanelTop = (overlaySize.height - _hoverVolumePanelHeight).clamp(
+    final maxPanelTop = (overlaySize.height - panelHeight).clamp(
       0.0,
       double.infinity,
     );
-    final panelLeft =
-        (targetOffset.dx + (targetSize.width - _controlButtonSize) / 2)
-            .clamp(0.0, maxPanelLeft)
-            .toDouble();
-    final panelTop = (targetOffset.dy - _hoverVolumePanelHeight - 8)
+    final panelLeft = (targetOffset.dx + (targetSize.width - panelWidth) / 2)
+        .clamp(0.0, maxPanelLeft)
+        .toDouble();
+    final panelTop = (targetOffset.dy - panelHeight - 8)
         .clamp(0.0, maxPanelTop)
         .toDouble();
     _overlayEntry = OverlayEntry(
@@ -406,7 +426,7 @@ class _HoverVolumeButtonState extends State<_HoverVolumeButton> {
   }
 
   void _setValue(double value) {
-    final normalized = normalizedAudioVolume(value);
+    final normalized = _normalize(value);
     setState(() => _value = normalized);
     _overlayEntry?.markNeedsBuild();
     widget.onChanged(normalized);
@@ -420,8 +440,8 @@ class _HoverVolumeButtonState extends State<_HoverVolumeButton> {
     return Positioned(
       left: left,
       top: top,
-      width: _controlButtonSize,
-      height: _hoverVolumePanelHeight,
+      width: _panelWidth,
+      height: _panelHeight,
       child: MouseRegion(
         onEnter: (_) {
           _overlayHovered = true;
@@ -433,6 +453,10 @@ class _HoverVolumeButtonState extends State<_HoverVolumeButton> {
         },
         child: _HoverVolumePanel(
           value: _value,
+          maxValue: _maxValue,
+          valueFormatter: widget.valueFormatter,
+          width: _panelWidth,
+          height: _panelHeight,
           semanticLabel: widget.semanticLabel,
           onChanged: _setValue,
           onChangeStart: (_) {
@@ -470,24 +494,33 @@ class _HoverVolumeButtonState extends State<_HoverVolumeButton> {
 class _HoverVolumePanel extends StatelessWidget {
   const _HoverVolumePanel({
     required this.value,
+    required this.maxValue,
+    required this.width,
+    required this.height,
     required this.semanticLabel,
     required this.onChanged,
     required this.onChangeStart,
     required this.onChangeEnd,
+    this.valueFormatter,
   });
 
   final double value;
+  final double maxValue;
+  final double width;
+  final double height;
   final String semanticLabel;
   final ValueChanged<double> onChanged;
   final ValueChanged<double> onChangeStart;
   final ValueChanged<double> onChangeEnd;
+  final String Function(double value)? valueFormatter;
 
   @override
   Widget build(BuildContext context) {
-    final normalized = normalizedAudioVolume(value);
+    final normalized = value.clamp(0.0, maxValue).toDouble();
+    final scale = (width / _controlButtonSize).clamp(0.65, 1.0).toDouble();
     return Semantics(
       label: semanticLabel,
-      value: audioVolumePercentText(normalized),
+      value: _volumePercentText(normalized),
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: UiColors.surface,
@@ -503,13 +536,16 @@ class _HoverVolumePanel extends StatelessWidget {
         ),
         child: SizedBox(
           key: ValueKey<String>('live-volume-panel:$semanticLabel'),
-          width: _controlButtonSize,
-          height: _hoverVolumePanelHeight,
+          width: width,
+          height: height,
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
+            padding: EdgeInsets.symmetric(vertical: 12 * scale),
             child: Center(
               child: _HoverVolumeSlider(
                 value: normalized,
+                maxValue: maxValue,
+                scale: scale,
+                valueFormatter: valueFormatter,
                 semanticLabel: semanticLabel,
                 onChanged: onChanged,
                 onChangeStart: onChangeStart,
@@ -521,22 +557,32 @@ class _HoverVolumePanel extends StatelessWidget {
       ),
     );
   }
+
+  String _volumePercentText(double value) {
+    return valueFormatter?.call(value) ?? audioVolumePercentText(value);
+  }
 }
 
 class _HoverVolumeSlider extends StatefulWidget {
   const _HoverVolumeSlider({
     required this.value,
+    required this.maxValue,
+    required this.scale,
     required this.semanticLabel,
     required this.onChanged,
     required this.onChangeStart,
     required this.onChangeEnd,
+    this.valueFormatter,
   });
 
   final double value;
+  final double maxValue;
+  final double scale;
   final String semanticLabel;
   final ValueChanged<double> onChanged;
   final ValueChanged<double> onChangeStart;
   final ValueChanged<double> onChangeEnd;
+  final String Function(double value)? valueFormatter;
 
   @override
   State<_HoverVolumeSlider> createState() => _HoverVolumeSliderState();
@@ -546,14 +592,24 @@ class _HoverVolumeSliderState extends State<_HoverVolumeSlider> {
   int? _pointer;
   bool _thumbHovered = false;
   bool _dragging = false;
-  late double _interactionValue = normalizedAudioVolume(widget.value);
+  late double _interactionValue = _value;
 
-  double get _value => normalizedAudioVolume(widget.value);
+  double get _maxValue => widget.maxValue <= 0 ? 1.0 : widget.maxValue;
+  double get _scale => widget.scale.clamp(0.65, 1.0).toDouble();
+  double get _thumbWidth => _hoverVolumeThumbWidth * _scale;
+  double get _thumbHeight => _hoverVolumeThumbHeight * _scale;
+  double get _trackThickness => _hoverVolumeTrackThickness * _scale;
+  double get _percentGap => _hoverVolumePercentGap * _scale;
+  double get _percentWidth => _hoverVolumePercentWidth * _scale;
+  double get _percentHeight => _hoverVolumePercentHeight * _scale;
+
+  double get _value => widget.value.clamp(0.0, _maxValue).toDouble();
+  double get _fraction => (_value / _maxValue).clamp(0.0, 1.0).toDouble();
 
   double _fractionFromPosition(Offset localPosition, Size size) {
-    final travel = size.height - _hoverVolumeThumbHeight;
+    final travel = size.height - _thumbHeight;
     if (travel <= 0) return 0;
-    return (1 - (localPosition.dy - _hoverVolumeThumbHeight / 2) / travel)
+    return (1 - (localPosition.dy - _thumbHeight / 2) / travel)
         .clamp(0.0, 1.0)
         .toDouble();
   }
@@ -562,8 +618,9 @@ class _HoverVolumeSliderState extends State<_HoverVolumeSlider> {
     final renderObject = context.findRenderObject();
     if (renderObject is! RenderBox) return;
     final fraction = _fractionFromPosition(localPosition, renderObject.size);
-    _interactionValue = fraction;
-    widget.onChanged(fraction);
+    final value = fraction * _maxValue;
+    _interactionValue = value;
+    widget.onChanged(value);
   }
 
   void _handlePointerDown(PointerDownEvent event) {
@@ -602,7 +659,8 @@ class _HoverVolumeSliderState extends State<_HoverVolumeSlider> {
 
   @override
   Widget build(BuildContext context) {
-    final percentText = audioVolumePercentText(_value);
+    final percentText =
+        widget.valueFormatter?.call(_value) ?? audioVolumePercentText(_value);
     final showPercent = _thumbHovered || _dragging;
 
     return MouseRegion(
@@ -615,29 +673,35 @@ class _HoverVolumeSliderState extends State<_HoverVolumeSlider> {
         onPointerCancel: _handlePointerCancel,
         child: SizedBox(
           key: ValueKey<String>('live-volume-slider:${widget.semanticLabel}'),
-          width: _hoverVolumeThumbWidth,
+          width: _thumbWidth,
           child: LayoutBuilder(
             builder: (context, constraints) {
               final height = constraints.maxHeight;
-              final travel = (height - _hoverVolumeThumbHeight).clamp(
-                0.0,
-                double.infinity,
-              );
-              final thumbBottom = travel * _value;
+              final thumbHeight = _thumbHeight;
+              final thumbWidth = _thumbWidth;
+              final trackThickness = _trackThickness;
+              final percentGap = _percentGap;
+              final percentWidth = _percentWidth;
+              final percentHeight = _percentHeight;
+              final travel = (height - thumbHeight).clamp(0.0, double.infinity);
+              final thumbBottom = travel * _fraction;
               final labelBottom = _sidePercentBottom(
                 height: height,
                 thumbBottom: thumbBottom,
+                thumbHeight: thumbHeight,
+                percentHeight: percentHeight,
               );
               return Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  _HoverVolumeTrack(),
+                  _HoverVolumeTrack(
+                    thumbWidth: thumbWidth,
+                    trackThickness: trackThickness,
+                  ),
                   Positioned(
-                    left:
-                        (_hoverVolumeThumbWidth - _hoverVolumeTrackThickness) /
-                        2,
+                    left: (thumbWidth - trackThickness) / 2,
                     bottom: 0,
-                    width: _hoverVolumeTrackThickness,
+                    width: trackThickness,
                     height: thumbBottom,
                     child: DecoratedBox(
                       key: ValueKey<String>(
@@ -646,19 +710,17 @@ class _HoverVolumeSliderState extends State<_HoverVolumeSlider> {
                       decoration: BoxDecoration(
                         color: UiColors.accent,
                         borderRadius: BorderRadius.vertical(
-                          bottom: Radius.circular(
-                            _hoverVolumeTrackThickness / 2,
-                          ),
+                          bottom: Radius.circular(trackThickness / 2),
                         ),
                       ),
                     ),
                   ),
                   if (showPercent)
                     Positioned(
-                      left: _hoverVolumeThumbWidth + _hoverVolumePercentGap,
+                      left: thumbWidth + percentGap,
                       bottom: labelBottom,
-                      width: _hoverVolumePercentWidth,
-                      height: _hoverVolumePercentHeight,
+                      width: percentWidth,
+                      height: percentHeight,
                       child: DecoratedBox(
                         key: ValueKey<String>(
                           'live-volume-percent:${widget.semanticLabel}',
@@ -672,7 +734,7 @@ class _HoverVolumeSliderState extends State<_HoverVolumeSlider> {
                             percentText,
                             style: UiTypography.label.copyWith(
                               color: Colors.black87,
-                              fontSize: 10,
+                              fontSize: 10 * _scale,
                             ),
                           ),
                         ),
@@ -681,8 +743,8 @@ class _HoverVolumeSliderState extends State<_HoverVolumeSlider> {
                   Positioned(
                     left: 0,
                     bottom: thumbBottom,
-                    width: _hoverVolumeThumbWidth,
-                    height: _hoverVolumeThumbHeight,
+                    width: thumbWidth,
+                    height: thumbHeight,
                     child: MouseRegion(
                       onEnter: (_) => setState(() => _thumbHovered = true),
                       onExit: (_) => setState(() => _thumbHovered = false),
@@ -690,10 +752,10 @@ class _HoverVolumeSliderState extends State<_HoverVolumeSlider> {
                         key: ValueKey<String>(
                           'live-volume-thumb:${widget.semanticLabel}',
                         ),
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           color: UiColors.text,
                           borderRadius: BorderRadius.all(
-                            Radius.circular(_hoverVolumeThumbHeight / 2),
+                            Radius.circular(thumbHeight / 2),
                           ),
                         ),
                       ),
@@ -711,26 +773,35 @@ class _HoverVolumeSliderState extends State<_HoverVolumeSlider> {
   double _sidePercentBottom({
     required double height,
     required double thumbBottom,
+    required double thumbHeight,
+    required double percentHeight,
   }) {
-    return (thumbBottom +
-            (_hoverVolumeThumbHeight - _hoverVolumePercentHeight) / 2)
-        .clamp(0.0, height - _hoverVolumePercentHeight)
+    return (thumbBottom + (thumbHeight - percentHeight) / 2)
+        .clamp(0.0, height - percentHeight)
         .toDouble();
   }
 }
 
 class _HoverVolumeTrack extends StatelessWidget {
+  const _HoverVolumeTrack({
+    required this.thumbWidth,
+    required this.trackThickness,
+  });
+
+  final double thumbWidth;
+  final double trackThickness;
+
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      left: (_hoverVolumeThumbWidth - _hoverVolumeTrackThickness) / 2,
+      left: (thumbWidth - trackThickness) / 2,
       top: 0,
       bottom: 0,
-      width: _hoverVolumeTrackThickness,
+      width: trackThickness,
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: UiColors.surfacePressed,
-          borderRadius: BorderRadius.circular(_hoverVolumeTrackThickness / 2),
+          borderRadius: BorderRadius.circular(trackThickness / 2),
         ),
       ),
     );
