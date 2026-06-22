@@ -263,8 +263,6 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                                 onSelectStage: _selectStage,
                                 onToggleMic: widget.onToggleMic,
                                 onToggleHeadphones: widget.onToggleHeadphones,
-                                onToggleCamera: widget.onToggleCamera,
-                                onToggleShare: widget.onToggleShare,
                               ),
                             ),
                           ],

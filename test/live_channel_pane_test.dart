@@ -39,14 +39,12 @@ void main() {
       final live = _liveState([
         _participant(id: 'live_self', user: user, headphonesMuted: true),
       ]);
-      var shareToggles = 0;
 
       await tester.pumpWidget(
         _host(
           searchController: searchController,
           live: live,
           speakingUserIds: const {'current_user'},
-          onToggleShare: () => shareToggles += 1,
         ),
       );
 
@@ -67,7 +65,10 @@ void main() {
       final avatarRect = tester.getRect(find.byWidget(avatar));
       final name = tester.widget<Text>(find.text('Room Me'));
       final nameRect = tester.getRect(find.text('Room Me'));
-      final activeLabelRect = tester.getRect(find.text('正在说话'));
+      final activityTag = find.byKey(
+        const ValueKey<String>('live-member-activity:current_user'),
+      );
+      final activeTagRect = tester.getRect(activityTag);
       final micButtonRect = tester.getRect(
         find.byKey(
           const ValueKey<String>('live-member-status:mic:current_user'),
@@ -78,15 +79,12 @@ void main() {
           const ValueKey<String>('live-member-status:headphones:current_user'),
         ),
       );
-      final cameraButtonRect = tester.getRect(
-        find.byKey(
-          const ValueKey<String>('live-member-status:camera:current_user'),
-        ),
+      final cameraButtonFinder = find.byKey(
+        const ValueKey<String>('live-member-status:camera:current_user'),
       );
       final shareButtonFinder = find.byKey(
         const ValueKey<String>('live-member-status:screen-share:current_user'),
       );
-      final shareButtonRect = tester.getRect(shareButtonFinder);
 
       expect(avatar.active, isFalse);
       expect(avatar.showBorder, isFalse);
@@ -96,20 +94,28 @@ void main() {
       expect(name.style?.color, ui.UiColors.accent);
       expect(nameRect.top, greaterThan(avatarRect.bottom));
       expect(find.textContaining('(you)'), findsNothing);
-      expect(activeLabelRect.right, lessThanOrEqualTo(cardRect.right));
-      expect(activeLabelRect.top, lessThan(nameRect.top));
-      expect(activeLabelRect.bottom, lessThan(avatarRect.top));
-      expect(cardRect.bottom - shareButtonRect.bottom, lessThan(14));
+      expect(find.text('正在说话'), findsNothing);
+      expect(activityTag, findsOneWidget);
+      expect(
+        find.descendant(of: activityTag, matching: find.byIcon(Icons.mic)),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: activityTag, matching: find.byType(DecoratedBox)),
+        findsNothing,
+      );
+      expect(activeTagRect.right, lessThanOrEqualTo(cardRect.right));
+      expect(activeTagRect.top, lessThan(nameRect.top));
+      expect(activeTagRect.bottom, lessThan(avatarRect.top));
+      expect(cardRect.bottom - headphonesButtonRect.bottom, lessThan(14));
       expect(micButtonRect.width, closeTo(micButtonRect.height, 0.01));
       expect(
         headphonesButtonRect.width,
         closeTo(headphonesButtonRect.height, 0.01),
       );
-      expect(cameraButtonRect.width, closeTo(cameraButtonRect.height, 0.01));
-      expect(shareButtonRect.width, closeTo(shareButtonRect.height, 0.01));
       expect(micButtonRect.right, closeTo(headphonesButtonRect.left, 0.01));
-      expect(headphonesButtonRect.right, closeTo(cameraButtonRect.left, 0.01));
-      expect(cameraButtonRect.right, closeTo(shareButtonRect.left, 0.01));
+      expect(cameraButtonFinder, findsNothing);
+      expect(shareButtonFinder, findsNothing);
       expect(
         find.descendant(of: cardFinder, matching: find.byType(ui.ButtonIcon)),
         findsNothing,
@@ -134,28 +140,6 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(
-        find.descendant(
-          of: find.byKey(
-            const ValueKey<String>('live-member-status:camera:current_user'),
-          ),
-          matching: find.byIcon(Icons.videocam_outlined),
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(
-          of: find.byKey(
-            const ValueKey<String>(
-              'live-member-status:screen-share:current_user',
-            ),
-          ),
-          matching: find.byIcon(Icons.screen_share_outlined),
-        ),
-        findsOneWidget,
-      );
-      await tester.tap(shareButtonFinder);
-      expect(shareToggles, 1);
     },
   );
 
@@ -169,7 +153,9 @@ void main() {
       'Phabe',
       roomRole: 'member',
     ).copyWith(defaultAvatarKey: 'green-2');
-    final live = _liveState([_participant(id: 'live_phabe', user: remoteUser)]);
+    final live = _liveState([
+      _participant(id: 'live_phabe', user: remoteUser, micMuted: true),
+    ]);
 
     await tester.pumpWidget(
       _host(searchController: searchController, live: live, height: 600),
@@ -183,6 +169,13 @@ void main() {
     );
 
     expect(avatar.defaultAvatarKey, 'green-2');
+    final activityTag = find.byKey(
+      const ValueKey<String>('live-member-activity:phabe'),
+    );
+    expect(find.text('正在收听'), findsNothing);
+    expect(find.text('已静音'), findsNothing);
+    expect(activityTag, findsNothing);
+    expect(find.byTooltip('正在收听'), findsWidgets);
   });
 
   testWidgets(
@@ -200,7 +193,6 @@ void main() {
       };
       addTearDown(resetLiveVideoTrackRendererForTest);
       var stageSelections = 0;
-      var shareToggles = 0;
 
       Future<void> pumpMediaCard({required bool screenShare}) async {
         final user = _currentUser.toSummary().copyWith(
@@ -228,32 +220,22 @@ void main() {
               ),
             ],
             onStageSelectionChanged: (_) => stageSelections += 1,
-            onToggleShare: () => shareToggles += 1,
           ),
         );
         await tester.pump();
       }
 
       await pumpMediaCard(screenShare: false);
-      _expectMediaMemberCard(tester);
+      _expectMediaMemberCard(tester, activityIcon: Icons.videocam);
       await tester.tap(
         find.byKey(
           const ValueKey<String>('live-video-renderer:current_user:false'),
         ),
       );
       expect(stageSelections, 1);
-      await tester.tap(
-        find.byKey(
-          const ValueKey<String>(
-            'live-member-status:screen-share:current_user',
-          ),
-        ),
-      );
-      expect(shareToggles, 1);
-      expect(stageSelections, 1);
 
       await pumpMediaCard(screenShare: true);
-      _expectMediaMemberCard(tester);
+      _expectMediaMemberCard(tester, activityIcon: Icons.screen_share_outlined);
     },
   );
 
@@ -340,7 +322,7 @@ void main() {
 
     _expectBelowTooltip(tester, '关闭麦克风');
     _expectBelowTooltip(tester, '关闭耳机');
-    _expectBelowTooltip(tester, '摄像头关闭');
+    _expectBelowTooltip(tester, '开启摄像头');
 
     final hover = await tester.createGesture(kind: PointerDeviceKind.mouse);
     final cameraControl = find.byKey(
@@ -468,11 +450,12 @@ Widget _host({
   );
 }
 
-void _expectMediaMemberCard(WidgetTester tester) {
+void _expectMediaMemberCard(
+  WidgetTester tester, {
+  required IconData activityIcon,
+}) {
   final cardFinder = find.ancestor(
-    of: find.byKey(
-      const ValueKey<String>('live-member-status:mic:current_user'),
-    ),
+    of: find.text('Room Me'),
     matching: find.byType(ui.PressableSurface),
   );
   final card = tester.widget<ui.PressableSurface>(cardFinder);
@@ -480,23 +463,29 @@ void _expectMediaMemberCard(WidgetTester tester) {
   final micButtonRect = tester.getRect(
     find.byKey(const ValueKey<String>('live-member-status:mic:current_user')),
   );
-  final shareButtonRect = tester.getRect(
+  final headphonesButtonRect = tester.getRect(
     find.byKey(
-      const ValueKey<String>('live-member-status:screen-share:current_user'),
+      const ValueKey<String>('live-member-status:headphones:current_user'),
     ),
+  );
+  final cameraButtonFinder = find.byKey(
+    const ValueKey<String>('live-member-status:camera:current_user'),
+  );
+  final shareButtonFinder = find.byKey(
+    const ValueKey<String>('live-member-status:screen-share:current_user'),
   );
   final nameFinder = find.descendant(
     of: cardFinder,
     matching: find.text('Room Me'),
   );
   final nameRect = tester.getRect(nameFinder);
-  final tagTextFinder = find.descendant(
+  final activityTag = find.descendant(
     of: cardFinder,
-    matching: find.byWidgetPredicate(
-      (widget) => widget is Text && widget.data != 'Room Me',
+    matching: find.byKey(
+      const ValueKey<String>('live-member-activity:current_user'),
     ),
   );
-  final tagRect = tester.getRect(tagTextFinder);
+  final tagRect = tester.getRect(activityTag);
   final videoRect = tester.getRect(
     find.descendant(of: cardFinder, matching: find.byType(LiveVideoTrackView)),
   );
@@ -511,13 +500,24 @@ void _expectMediaMemberCard(WidgetTester tester) {
     findsNothing,
   );
   expect(nameFinder, findsOneWidget);
-  expect(tagTextFinder, findsOneWidget);
+  expect(activityTag, findsOneWidget);
+  expect(
+    find.descendant(of: activityTag, matching: find.byIcon(activityIcon)),
+    findsOneWidget,
+  );
+  expect(
+    find.descendant(of: activityTag, matching: find.byType(DecoratedBox)),
+    findsNothing,
+  );
+  expect(cameraButtonFinder, findsNothing);
+  expect(shareButtonFinder, findsNothing);
   expect(nameRect.left, lessThan(tagRect.left));
   expect(nameRect.top, lessThan(videoRect.top));
   expect(nameRect.bottom, lessThan(micButtonRect.top));
   expect(tagRect.top, lessThan(micButtonRect.top));
   expect(tagRect.right, lessThanOrEqualTo(cardRect.right));
-  expect(cardRect.bottom - shareButtonRect.bottom, lessThan(14));
+  expect(micButtonRect.right, closeTo(headphonesButtonRect.left, 0.01));
+  expect(cardRect.bottom - headphonesButtonRect.bottom, lessThan(14));
 }
 
 LiveState _liveState(List<LiveParticipant> participants) {

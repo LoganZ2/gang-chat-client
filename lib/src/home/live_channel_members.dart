@@ -34,8 +34,6 @@ class _LiveMemberStage extends StatelessWidget {
     required this.onSelectStage,
     required this.onToggleMic,
     required this.onToggleHeadphones,
-    required this.onToggleCamera,
-    required this.onToggleShare,
   });
 
   final List<LiveParticipant> participants;
@@ -46,8 +44,6 @@ class _LiveMemberStage extends StatelessWidget {
   final ValueChanged<LiveVideoTrack> onSelectStage;
   final VoidCallback? onToggleMic;
   final VoidCallback onToggleHeadphones;
-  final VoidCallback onToggleCamera;
-  final VoidCallback onToggleShare;
 
   @override
   Widget build(BuildContext context) {
@@ -89,8 +85,6 @@ class _LiveMemberStage extends StatelessWidget {
                       onSelectPreview: onSelectStage,
                       onToggleMic: onToggleMic,
                       onToggleHeadphones: onToggleHeadphones,
-                      onToggleCamera: onToggleCamera,
-                      onToggleShare: onToggleShare,
                     ),
                 ],
               ),
@@ -110,8 +104,6 @@ class _LiveMemberCard extends StatelessWidget {
     required this.onSelectPreview,
     required this.onToggleMic,
     required this.onToggleHeadphones,
-    required this.onToggleCamera,
-    required this.onToggleShare,
     this.selectableTrack,
     this.previewTrack,
   });
@@ -124,8 +116,6 @@ class _LiveMemberCard extends StatelessWidget {
   final ValueChanged<LiveVideoTrack> onSelectPreview;
   final VoidCallback? onToggleMic;
   final VoidCallback onToggleHeadphones;
-  final VoidCallback onToggleCamera;
-  final VoidCallback onToggleShare;
 
   @override
   Widget build(BuildContext context) {
@@ -139,17 +129,22 @@ class _LiveMemberCard extends StatelessWidget {
     final borderColor = state.highlighted
         ? UiColors.borderStrong
         : UiColors.border;
-    final activityTag = _LiveMemberActivityTag(
-      label: _participantMeta(participant, speaking: speaking),
-      color: _participantMetaColor(participant, speaking: speaking),
-    );
+    final activityIcon = _participantMetaIcon(participant, speaking: speaking);
+    final activityTag = activityIcon == null
+        ? null
+        : _LiveMemberActivityTag(
+            key: ValueKey<String>(
+              'live-member-activity:${participant.user.id}',
+            ),
+            label: _participantMeta(participant, speaking: speaking),
+            icon: activityIcon,
+            color: _participantMetaColor(participant, speaking: speaking),
+          );
     final statusRow = _LiveMemberStatusRow(
       participant: participant,
       micMutedForDisplay: state.micMutedForDisplay,
       onToggleMic: local && !participant.voiceBlocked ? onToggleMic : null,
       onToggleHeadphones: local ? onToggleHeadphones : null,
-      onToggleCamera: local ? onToggleCamera : null,
-      onToggleShare: local ? onToggleShare : null,
     );
     if (previewTrack != null) {
       return SizedBox(
@@ -211,8 +206,10 @@ class _LiveMemberCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    activityTag,
+                    if (activityTag != null) ...[
+                      const SizedBox(width: 6),
+                      activityTag,
+                    ],
                   ],
                 ),
               ),
@@ -253,7 +250,8 @@ class _LiveMemberCard extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Positioned(top: 8, right: 9, child: activityTag),
+            if (activityTag != null)
+              Positioned(top: 8, right: 9, child: activityTag),
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 33, 12, 8),
               child: Column(
@@ -294,34 +292,26 @@ class _LiveMemberCard extends StatelessWidget {
 }
 
 class _LiveMemberActivityTag extends StatelessWidget {
-  const _LiveMemberActivityTag({required this.label, required this.color});
+  const _LiveMemberActivityTag({
+    super.key,
+    required this.label,
+    required this.icon,
+    required this.color,
+  });
 
   final String label;
+  final IconData icon;
   final Color color;
 
   @override
   Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 84),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: UiColors.surfacePressed.withValues(alpha: 0.72),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: color.withValues(alpha: 0.36)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: UiTypography.label.copyWith(
-              color: color,
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              height: 1.15,
-            ),
-          ),
+    return Tooltip(
+      message: label,
+      child: Semantics(
+        label: label,
+        child: SizedBox.square(
+          dimension: 24,
+          child: Center(child: Icon(icon, color: color, size: 15)),
         ),
       ),
     );
@@ -334,16 +324,12 @@ class _LiveMemberStatusRow extends StatelessWidget {
     required this.micMutedForDisplay,
     this.onToggleMic,
     this.onToggleHeadphones,
-    this.onToggleCamera,
-    this.onToggleShare,
   });
 
   final LiveParticipant participant;
   final bool micMutedForDisplay;
   final VoidCallback? onToggleMic;
   final VoidCallback? onToggleHeadphones;
-  final VoidCallback? onToggleCamera;
-  final VoidCallback? onToggleShare;
 
   @override
   Widget build(BuildContext context) {
@@ -371,61 +357,45 @@ class _LiveMemberStatusRow extends StatelessWidget {
         onPressed: onToggleHeadphones,
         tooltip: listening ? '正在收听' : '已关闭收听',
       ),
-      _LiveMemberStatusButton(
-        key: ValueKey<String>(
-          'live-member-status:camera:${participant.user.id}',
-        ),
-        icon: participant.cameraOn ? Icons.videocam : Icons.videocam_outlined,
-        active: participant.cameraOn,
-        onPressed: onToggleCamera,
-        tooltip: participant.cameraOn ? '摄像头已开启' : '摄像头关闭',
-      ),
-      _LiveMemberStatusButton(
-        key: ValueKey<String>(
-          'live-member-status:screen-share:${participant.user.id}',
-        ),
-        icon: participant.screenSharing
-            ? Icons.stop_screen_share
-            : Icons.screen_share_outlined,
-        active: participant.screenSharing,
-        onPressed: onToggleShare,
-        tooltip: participant.screenSharing ? '正在共享屏幕' : '未共享屏幕',
-      ),
     ];
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final dimension = constraints.maxWidth / buttons.length;
+        final dimension = constraints.maxWidth / 4;
+        final rowWidth = dimension * buttons.length;
         final radius = BorderRadius.circular(UiRadii.sm);
-        return SizedBox(
-          height: dimension,
-          child: ClipRRect(
-            borderRadius: radius,
-            child: DecoratedBox(
-              position: DecorationPosition.foreground,
-              decoration: BoxDecoration(
-                borderRadius: radius,
-                border: Border.all(color: UiColors.border),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  for (var index = 0; index < buttons.length; index++)
-                    SizedBox.square(
-                      dimension: dimension,
-                      child: DecoratedBox(
-                        position: DecorationPosition.foreground,
-                        decoration: BoxDecoration(
-                          border: Border(
-                            left: index == 0
-                                ? BorderSide.none
-                                : const BorderSide(color: UiColors.border),
+        return Center(
+          child: SizedBox(
+            width: rowWidth,
+            height: dimension,
+            child: ClipRRect(
+              borderRadius: radius,
+              child: DecoratedBox(
+                position: DecorationPosition.foreground,
+                decoration: BoxDecoration(
+                  borderRadius: radius,
+                  border: Border.all(color: UiColors.border),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (var index = 0; index < buttons.length; index++)
+                      SizedBox.square(
+                        dimension: dimension,
+                        child: DecoratedBox(
+                          position: DecorationPosition.foreground,
+                          decoration: BoxDecoration(
+                            border: Border(
+                              left: index == 0
+                                  ? BorderSide.none
+                                  : const BorderSide(color: UiColors.border),
+                            ),
                           ),
+                          child: buttons[index],
                         ),
-                        child: buttons[index],
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -500,6 +470,17 @@ Color _participantMetaColor(
   }
   if (participant.micMuted) return UiColors.textMuted;
   return UiColors.textSecondary;
+}
+
+IconData? _participantMetaIcon(
+  LiveParticipant participant, {
+  required bool speaking,
+}) {
+  if (participant.voiceBlocked) return Icons.mic_off;
+  if (participant.screenSharing) return Icons.screen_share_outlined;
+  if (participant.cameraOn) return Icons.videocam;
+  if (speaking) return Icons.mic;
+  return null;
 }
 
 class _LiveMemberVideo extends StatelessWidget {
