@@ -495,40 +495,16 @@ class _LiveMemberStatusRow extends StatelessWidget {
       builder: (context, constraints) {
         final dimension = constraints.maxWidth / 4;
         final rowWidth = dimension * buttons.length;
-        final radius = BorderRadius.circular(UiRadii.sm);
         return Center(
           child: SizedBox(
             width: rowWidth,
             height: dimension,
-            child: ClipRRect(
-              borderRadius: radius,
-              child: DecoratedBox(
-                position: DecorationPosition.foreground,
-                decoration: BoxDecoration(
-                  borderRadius: radius,
-                  border: Border.all(color: UiColors.border),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    for (var index = 0; index < buttons.length; index++)
-                      SizedBox.square(
-                        dimension: dimension,
-                        child: DecoratedBox(
-                          position: DecorationPosition.foreground,
-                          decoration: BoxDecoration(
-                            border: Border(
-                              left: index == 0
-                                  ? BorderSide.none
-                                  : const BorderSide(color: UiColors.border),
-                            ),
-                          ),
-                          child: buttons[index],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (final button in buttons)
+                  SizedBox.square(dimension: dimension, child: button),
+              ],
             ),
           ),
         );
@@ -562,9 +538,6 @@ class _LiveMemberStatusButton extends StatelessWidget {
         : active
         ? UiColors.accent
         : UiColors.textMuted;
-    final background = active
-        ? UiColors.selected
-        : UiColors.surfacePressed.withValues(alpha: 0.72);
     final enabled = onPressed != null;
     final button = MouseRegion(
       cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
@@ -576,10 +549,7 @@ class _LiveMemberStatusButton extends StatelessWidget {
           enabled: enabled,
           selected: active,
           label: tooltip,
-          child: DecoratedBox(
-            decoration: BoxDecoration(color: background),
-            child: Center(child: Icon(icon, color: foreground, size: 13)),
-          ),
+          child: Center(child: Icon(icon, color: foreground, size: 13)),
         ),
       ),
     );
