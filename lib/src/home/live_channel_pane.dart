@@ -25,6 +25,8 @@ const _musicBoxPanelWidth = 270.0;
 const _memberCardWidth = 154.0;
 const _memberCardHeight = _memberCardWidth;
 const _controlButtonSize = 44.0;
+const _controlHoverInfoBelowReserve = 4.0;
+const _controlHoverInfoVerticalOffset = 24.0;
 // How far the docked music box panel extends below the stage's bottom edge,
 // reaching down over the control-bar gap to align with the control bar.
 const _musicBoxPanelBottomDrop = 16.0 + _controlButtonSize;
@@ -335,6 +337,7 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                   onMusicBoxSkip: widget.onMusicBoxSkip,
                   onCollapse: widget.onBackToChat,
                 ),
+                const SizedBox(height: _controlHoverInfoBelowReserve),
               ],
             ),
           ),

@@ -1,3 +1,5 @@
+import 'dart:ui' show PointerDeviceKind;
+
 import 'package:client/src/config/app_config.dart';
 import 'package:client/src/home/live_channel_pane.dart';
 import 'package:client/src/live/live_session.dart';
@@ -170,7 +172,7 @@ void main() {
     final live = _liveState([_participant(id: 'live_phabe', user: remoteUser)]);
 
     await tester.pumpWidget(
-      _host(searchController: searchController, live: live),
+      _host(searchController: searchController, live: live, height: 600),
     );
 
     final avatar = tester.widget<ui.Avatar>(
@@ -316,6 +318,60 @@ void main() {
       ui.UiColors.roleSuperuser,
     );
   });
+
+  testWidgets('live buttons show hover info below their targets', (
+    tester,
+  ) async {
+    final searchController = TextEditingController();
+    addTearDown(searchController.dispose);
+    final live = _liveState([
+      _participant(
+        id: 'live_self',
+        user: _currentUser.toSummary().copyWith(
+          roomDisplayName: 'Room Me',
+          roomRole: 'member',
+        ),
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      _host(searchController: searchController, live: live),
+    );
+
+    _expectBelowTooltip(tester, '关闭麦克风');
+    _expectBelowTooltip(tester, '关闭耳机');
+    _expectBelowTooltip(tester, '摄像头关闭');
+
+    final hover = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    final cameraControl = find.byKey(
+      const ValueKey<String>('live-control:camera'),
+    );
+    await hover.addPointer(location: tester.getCenter(cameraControl));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    final cameraInfoText = find.text('开启摄像头');
+    expect(cameraInfoText, findsOneWidget);
+    expect(
+      tester.getRect(cameraInfoText).top,
+      greaterThan(tester.getRect(cameraControl).bottom),
+    );
+
+    await hover.removePointer();
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+  });
+}
+
+void _expectBelowTooltip(WidgetTester tester, String message) {
+  expect(find.byTooltip(message), findsOneWidget);
+  final tooltip = find.byWidgetPredicate(
+    (widget) => widget is Tooltip && widget.message == message,
+  );
+  expect(tooltip, findsOneWidget);
+  expect(tester.widget<Tooltip>(tooltip).preferBelow, isTrue);
+  expect(tester.widget<Tooltip>(tooltip).verticalOffset, 24);
 }
 
 const _currentUser = CurrentUser(

@@ -462,9 +462,8 @@ class _LiveMemberStatusButton extends StatelessWidget {
         ? UiColors.selected
         : UiColors.surfacePressed.withValues(alpha: 0.72);
     final enabled = onPressed != null;
-    return Tooltip(
+    return _HoverInfo(
       message: tooltip,
-      waitDuration: const Duration(milliseconds: 350),
       child: MouseRegion(
         cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
         child: GestureDetector(

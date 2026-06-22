@@ -73,6 +73,7 @@ class _LiveControlBar extends StatelessWidget {
             key: const ValueKey<String>('live-control:mic'),
             value: inputVolume,
             semanticLabel: '麦克风输入音量',
+            infoMessage: micControl.mutedForDisplay ? '打开麦克风' : '关闭麦克风',
             onChanged: onInputVolumeChanged,
             child: ButtonIcon(
               icon: Icon(
@@ -87,6 +88,7 @@ class _LiveControlBar extends StatelessWidget {
             key: const ValueKey<String>('live-control:headphones'),
             value: outputVolume,
             semanticLabel: '语音输出音量',
+            infoMessage: headphonesMuted ? '打开耳机' : '关闭耳机',
             onChanged: onOutputVolumeChanged,
             child: ButtonIcon(
               icon: Icon(
@@ -97,17 +99,21 @@ class _LiveControlBar extends StatelessWidget {
               size: _controlButtonSize,
             ),
           ),
-          ButtonIcon(
-            key: const ValueKey<String>('live-control:camera'),
-            icon: Icon(cameraOn ? Icons.videocam : Icons.videocam_outlined),
-            selected: cameraOn,
-            onPressed: onToggleCamera,
-            size: _controlButtonSize,
+          _HoverInfo(
+            message: cameraOn ? '关闭摄像头' : '开启摄像头',
+            child: ButtonIcon(
+              key: const ValueKey<String>('live-control:camera'),
+              icon: Icon(cameraOn ? Icons.videocam : Icons.videocam_outlined),
+              selected: cameraOn,
+              onPressed: onToggleCamera,
+              size: _controlButtonSize,
+            ),
           ),
           _HoverVolumeButton(
             key: const ValueKey<String>('live-control:screen-share'),
             value: screenShareVolume,
             semanticLabel: '共享屏幕输出音量',
+            infoMessage: screenSharing ? '停止共享屏幕' : '共享屏幕',
             onChanged: onScreenShareVolumeChanged,
             enabled: watchingRemoteScreenShare,
             child: ButtonIcon(
@@ -121,12 +127,15 @@ class _LiveControlBar extends StatelessWidget {
               size: _controlButtonSize,
             ),
           ),
-          ButtonIcon(
-            key: const ValueKey<String>('live-control:leave'),
-            icon: const Icon(Icons.call_end),
-            tone: ButtonTone.danger,
-            onPressed: joining ? null : onLeave,
-            size: _controlButtonSize,
+          _HoverInfo(
+            message: joining ? '正在加入语音' : '离开语音频道',
+            child: ButtonIcon(
+              key: const ValueKey<String>('live-control:leave'),
+              icon: const Icon(Icons.call_end),
+              tone: ButtonTone.danger,
+              onPressed: joining ? null : onLeave,
+              size: _controlButtonSize,
+            ),
           ),
         ];
 
@@ -159,20 +168,26 @@ class _LiveControlBar extends StatelessWidget {
                 runSpacing: 10,
                 children: [
                   if (!joined)
-                    Button(
-                      height: _controlButtonSize,
-                      loading: joining,
-                      icon: const Icon(Icons.call),
-                      onPressed: onJoin,
-                      child: const Text('加入'),
+                    _HoverInfo(
+                      message: joining ? '正在加入语音' : '加入语音频道',
+                      child: Button(
+                        height: _controlButtonSize,
+                        loading: joining,
+                        icon: const Icon(Icons.call),
+                        onPressed: onJoin,
+                        child: const Text('加入'),
+                      ),
                     )
                   else
                     ...controls,
-                  ButtonIcon(
-                    key: const ValueKey<String>('live-control:collapse'),
-                    icon: const Icon(Icons.keyboard_arrow_up),
-                    onPressed: onCollapse,
-                    size: _controlButtonSize,
+                  _HoverInfo(
+                    message: '收起语音频道',
+                    child: ButtonIcon(
+                      key: const ValueKey<String>('live-control:collapse'),
+                      icon: const Icon(Icons.keyboard_arrow_up),
+                      onPressed: onCollapse,
+                      size: _controlButtonSize,
+                    ),
                   ),
                 ],
               ),
@@ -187,23 +202,29 @@ class _LiveControlBar extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (!joined) ...[
-              Button(
-                height: _controlButtonSize,
-                loading: joining,
-                icon: const Icon(Icons.call),
-                onPressed: onJoin,
-                child: const Text('加入'),
+              _HoverInfo(
+                message: joining ? '正在加入语音' : '加入语音频道',
+                child: Button(
+                  height: _controlButtonSize,
+                  loading: joining,
+                  icon: const Icon(Icons.call),
+                  onPressed: onJoin,
+                  child: const Text('加入'),
+                ),
               ),
               const SizedBox(width: 12),
             ] else ...[
               ..._withControlGaps(controls),
               const SizedBox(width: 10),
             ],
-            ButtonIcon(
-              key: const ValueKey<String>('live-control:collapse'),
-              icon: const Icon(Icons.keyboard_arrow_up),
-              onPressed: onCollapse,
-              size: _controlButtonSize,
+            _HoverInfo(
+              message: '收起语音频道',
+              child: ButtonIcon(
+                key: const ValueKey<String>('live-control:collapse'),
+                icon: const Icon(Icons.keyboard_arrow_up),
+                onPressed: onCollapse,
+                size: _controlButtonSize,
+              ),
             ),
           ],
         );
@@ -245,12 +266,36 @@ const _hoverVolumePercentWidth = 40.0;
 const _hoverVolumePercentHeight = 18.0;
 const _hoverVolumePercentGap = 6.0;
 
+class _HoverInfo extends StatelessWidget {
+  const _HoverInfo({
+    required this.message,
+    required this.child,
+    this.enabled = true,
+  });
+
+  final String message;
+  final Widget child;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!enabled || message.isEmpty) return child;
+    return Tooltip(
+      message: message,
+      preferBelow: true,
+      verticalOffset: _controlHoverInfoVerticalOffset,
+      child: child,
+    );
+  }
+}
+
 class _HoverVolumeButton extends StatefulWidget {
   const _HoverVolumeButton({
     super.key,
     required this.child,
     required this.value,
     required this.semanticLabel,
+    required this.infoMessage,
     required this.onChanged,
     this.enabled = true,
   });
@@ -258,6 +303,7 @@ class _HoverVolumeButton extends StatefulWidget {
   final Widget child;
   final double value;
   final String semanticLabel;
+  final String infoMessage;
   final ValueChanged<double> onChanged;
   final bool enabled;
 
@@ -404,16 +450,19 @@ class _HoverVolumeButtonState extends State<_HoverVolumeButton> {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) {
-        _targetHovered = true;
-        _showOverlay();
-      },
-      onExit: (_) {
-        _targetHovered = false;
-        _scheduleHide();
-      },
-      child: widget.child,
+    return _HoverInfo(
+      message: widget.infoMessage,
+      child: MouseRegion(
+        onEnter: (_) {
+          _targetHovered = true;
+          _showOverlay();
+        },
+        onExit: (_) {
+          _targetHovered = false;
+          _scheduleHide();
+        },
+        child: widget.child,
+      ),
     );
   }
 }
@@ -770,29 +819,42 @@ class _InlineMusicBox extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 6),
-                    ButtonIcon(
-                      key: const ValueKey<String>('live-control:music-toggle'),
-                      icon: Icon(isPause ? Icons.pause : Icons.play_arrow),
-                      tone: ButtonTone.primary,
-                      onPressed: hasQueue ? onTogglePlayback : null,
-                      size: 30,
+                    _HoverInfo(
+                      message: isPause ? '暂停音乐' : '播放音乐',
+                      child: ButtonIcon(
+                        key: const ValueKey<String>(
+                          'live-control:music-toggle',
+                        ),
+                        icon: Icon(isPause ? Icons.pause : Icons.play_arrow),
+                        tone: ButtonTone.primary,
+                        onPressed: hasQueue ? onTogglePlayback : null,
+                        size: 30,
+                      ),
                     ),
                     if (showSkip) ...[
                       const SizedBox(width: 4),
-                      ButtonIcon(
-                        key: const ValueKey<String>('live-control:music-skip'),
-                        icon: const Icon(Icons.skip_next),
-                        onPressed: hasQueue ? onSkip : null,
-                        size: 30,
+                      _HoverInfo(
+                        message: '下一首',
+                        child: ButtonIcon(
+                          key: const ValueKey<String>(
+                            'live-control:music-skip',
+                          ),
+                          icon: const Icon(Icons.skip_next),
+                          onPressed: hasQueue ? onSkip : null,
+                          size: 30,
+                        ),
                       ),
                     ],
                     const SizedBox(width: 4),
-                    ButtonIcon(
-                      key: const ValueKey<String>('live-control:music-queue'),
-                      icon: const Icon(Icons.queue_music),
-                      selected: expanded,
-                      onPressed: onToggleExpand,
-                      size: 30,
+                    _HoverInfo(
+                      message: expanded ? '收起音乐面板' : '打开音乐面板',
+                      child: ButtonIcon(
+                        key: const ValueKey<String>('live-control:music-queue'),
+                        icon: const Icon(Icons.queue_music),
+                        selected: expanded,
+                        onPressed: onToggleExpand,
+                        size: 30,
+                      ),
                     ),
                   ],
                 );

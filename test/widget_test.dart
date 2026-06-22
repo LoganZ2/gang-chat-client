@@ -953,7 +953,7 @@ void main() {
     expect(find.text('Morgan'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '加入'), findsOneWidget);
     expect(_liveControl('collapse'), findsOneWidget);
-    expect(find.byTooltip('收起语音频道'), findsNothing);
+    expect(find.byTooltip('收起语音频道'), findsOneWidget);
     expect(find.byTooltip('已加入语音'), findsNothing);
 
     await tester.tap(find.widgetWithText(ui.Button, '加入'));
@@ -976,9 +976,12 @@ void main() {
     expect(_liveControl('leave'), findsOneWidget);
     expect(find.byTooltip('静音'), findsNothing);
     expect(find.byTooltip('耳机静音'), findsNothing);
-    expect(find.byTooltip('共享屏幕'), findsNothing);
-    expect(find.byTooltip('开启摄像头'), findsNothing);
+    expect(find.byTooltip('关闭麦克风'), findsOneWidget);
+    expect(find.byTooltip('关闭耳机'), findsOneWidget);
+    expect(find.byTooltip('共享屏幕'), findsOneWidget);
+    expect(find.byTooltip('开启摄像头'), findsOneWidget);
     expect(find.byTooltip('离开'), findsNothing);
+    expect(find.byTooltip('离开语音频道'), findsOneWidget);
     expect(find.byTooltip('已加入语音'), findsOneWidget);
     expect(
       find.descendant(
@@ -1076,6 +1079,10 @@ void main() {
       tester.getSize(_liveControl('mic')).width,
     );
     expect(tester.getSize(micVolumePanel).height, lessThan(174));
+    expect(
+      tester.getRect(micVolumePanel).bottom,
+      lessThan(tester.getRect(_liveControl('mic')).top),
+    );
     expect(tester.getSize(micVolumeFill).width, greaterThanOrEqualTo(7));
     final fillDecoration =
         tester.widget<DecoratedBox>(micVolumeFill).decoration as BoxDecoration;
