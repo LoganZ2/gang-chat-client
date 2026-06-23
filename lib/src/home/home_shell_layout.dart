@@ -74,10 +74,12 @@ extension _HomeShellLayout on _HomeShellState {
         currentUser: _currentUser,
         initialLive: _live ?? _selectedRoom!.live,
         initialSearchQuery: _membersInitialSearchQuery,
+        hasPendingJoinRequests: _selectedRoomHasPendingJoinRequests,
         reloadToken: _membersReloadToken,
         embedded: true,
         onClose: _openChat,
         onChanged: () => unawaited(_loadServers()),
+        onPendingJoinRequestsChanged: _handleSelectedJoinRequestsChanged,
         onOpenRoom: _openNotificationRoom,
       );
     }
@@ -208,6 +210,7 @@ extension _HomeShellLayout on _HomeShellState {
       composerAttachments: _stagedAttachmentViews,
       fileActionHighlighted:
           _pickingAttachments || _stagedAttachments.isNotEmpty,
+      hasPendingJoinRequests: _selectedRoomHasPendingJoinRequests,
       onSubmit: (value) => unawaited(_sendText(value)),
       onSendSticker: (sticker) => unawaited(_sendSticker(sticker)),
       onLoadStickers: () => unawaited(_loadStickerPacks(forceReload: true)),

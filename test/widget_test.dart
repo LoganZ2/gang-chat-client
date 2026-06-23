@@ -1760,6 +1760,11 @@ void main() {
     await tester.tap(find.text('Alpha Room'));
     await tester.pumpAndSettle();
 
+    expect(
+      find.byKey(const ValueKey('room-members-entry-badge')),
+      findsOneWidget,
+    );
+
     await tester.tap(find.byIcon(Icons.groups_outlined));
     await tester.pumpAndSettle();
 
@@ -1767,6 +1772,7 @@ void main() {
     expect(find.text('房间成员'), findsOneWidget);
     expect(find.text('新成员'), findsOneWidget);
     expect(find.text('黑名单'), findsOneWidget);
+    expect(find.byKey(const ValueKey('new-members-tab-badge')), findsOneWidget);
     expect(find.text('邀请成员'), findsNothing);
     expect(find.text('语音 1'), findsOneWidget);
     expect(find.text('在线 2'), findsOneWidget);
@@ -1965,6 +1971,11 @@ void main() {
       await tester.tap(find.text('Alpha Room'));
       await tester.pumpAndSettle();
 
+      expect(
+        find.byKey(const ValueKey('room-members-entry-badge')),
+        findsNothing,
+      );
+
       await tester.tap(find.byTooltip('房间成员'));
       await tester.pumpAndSettle();
 
@@ -2009,6 +2020,11 @@ void main() {
 
     await tester.tap(find.text('Alpha Room'));
     await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('room-members-entry-badge')),
+      findsNothing,
+    );
 
     await tester.tap(find.byTooltip('房间成员'));
     await tester.pumpAndSettle();

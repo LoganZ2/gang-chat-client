@@ -8,6 +8,7 @@ class _RoomHeader extends StatelessWidget {
     required this.memberCount,
     required this.onlineMemberCount,
     required this.liveParticipantCount,
+    required this.hasPendingJoinRequests,
     required this.onLivePressed,
     required this.onMembersPressed,
     required this.onSettingsPressed,
@@ -19,6 +20,7 @@ class _RoomHeader extends StatelessWidget {
   final int? memberCount;
   final int? onlineMemberCount;
   final int? liveParticipantCount;
+  final bool hasPendingJoinRequests;
   final VoidCallback onLivePressed;
   final VoidCallback onMembersPressed;
   final VoidCallback onSettingsPressed;
@@ -51,6 +53,7 @@ class _RoomHeader extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             _RoomHeaderActions(
+              hasPendingJoinRequests: hasPendingJoinRequests,
               onMembersPressed: onMembersPressed,
               onSettingsPressed: onSettingsPressed,
             ),
@@ -152,10 +155,12 @@ class _LiveChannelHeaderCard extends StatelessWidget {
 
 class _RoomHeaderActions extends StatelessWidget {
   const _RoomHeaderActions({
+    required this.hasPendingJoinRequests,
     required this.onMembersPressed,
     required this.onSettingsPressed,
   });
 
+  final bool hasPendingJoinRequests;
   final VoidCallback onMembersPressed;
   final VoidCallback onSettingsPressed;
 
@@ -169,6 +174,8 @@ class _RoomHeaderActions extends StatelessWidget {
           _HeaderIconButton(
             tooltip: '房间成员',
             icon: Icons.groups_outlined,
+            showBadge: hasPendingJoinRequests,
+            badgeKey: const ValueKey('room-members-entry-badge'),
             onPressed: onMembersPressed,
           ),
           const SizedBox(height: _headerActionGap),
@@ -188,11 +195,15 @@ class _HeaderIconButton extends StatelessWidget {
     required this.tooltip,
     required this.icon,
     required this.onPressed,
+    this.showBadge = false,
+    this.badgeKey,
   });
 
   final String tooltip;
   final IconData icon;
   final VoidCallback onPressed;
+  final bool showBadge;
+  final Key? badgeKey;
 
   @override
   Widget build(BuildContext context) {
@@ -207,7 +218,21 @@ class _HeaderIconButton extends StatelessWidget {
       onPressed: onPressed,
       backgroundColor: UiColors.surface,
       borderColor: UiColors.border,
-      child: Center(child: Icon(icon, size: 16, color: UiColors.textSecondary)),
+      child: Center(
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Icon(icon, size: 16, color: UiColors.textSecondary),
+            if (showBadge)
+              Positioned(
+                key: badgeKey,
+                top: -5,
+                right: -5,
+                child: const BadgeDot(size: 8),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

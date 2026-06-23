@@ -61,6 +61,7 @@ class ChatPane extends StatelessWidget {
     required this.error,
     required this.sending,
     required this.sendError,
+    this.hasPendingJoinRequests = false,
     required this.composerController,
     required this.composerPanelController,
     required this.stickerPanel,
@@ -104,6 +105,7 @@ class ChatPane extends StatelessWidget {
   final String? error;
   final bool sending;
   final String? sendError;
+  final bool hasPendingJoinRequests;
   final TextEditingController composerController;
   final ChatComposerController composerPanelController;
   final sticker_display.StickerPanelLoadState stickerPanel;
@@ -166,6 +168,7 @@ class ChatPane extends StatelessWidget {
             onlineMemberCount:
                 room?.onlineMemberCount ?? roomCard?.onlineMemberCount,
             liveParticipantCount: liveParticipantCount,
+            hasPendingJoinRequests: hasPendingJoinRequests,
             onLivePressed: onOpenLiveChannel,
             onMembersPressed: onOpenRoomMembers,
             onSettingsPressed: onOpenRoomSettings,

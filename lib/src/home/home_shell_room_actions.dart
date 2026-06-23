@@ -54,6 +54,7 @@ extension _HomeShellRoomActions on _HomeShellState {
           _messages = const [];
           _fileTransfers = const {};
           _fileDownloads = const {};
+          _selectedRoomHasPendingJoinRequests = false;
           _resetMusicBox();
           _contentMode = _ContentMode.chat;
           if (shouldDisconnectLive) {
@@ -93,6 +94,7 @@ extension _HomeShellRoomActions on _HomeShellState {
       _fileTransfers = const {};
       _fileDownloads = const {};
       _membersInitialSearchQuery = '';
+      _selectedRoomHasPendingJoinRequests = false;
       _stagedAttachments.clear();
       _roomError = null;
       _sendError = null;
@@ -113,6 +115,7 @@ extension _HomeShellRoomActions on _HomeShellState {
         _loadingRoom = false;
         _roomError = null;
       });
+      unawaited(_refreshSelectedJoinRequestBadge(snapshot.detail));
       unawaited(_loadMusicBox(server.id));
     } catch (error) {
       if (!mounted || _selectedServerId != server.id) return;
@@ -473,6 +476,7 @@ extension _HomeShellRoomActions on _HomeShellState {
       _settingsOpen = false;
       _contentMode = _ContentMode.chat;
       _membersInitialSearchQuery = '';
+      _selectedRoomHasPendingJoinRequests = false;
       _roomError = null;
       _sendError = null;
       _loadingRoom = false;
@@ -492,6 +496,7 @@ extension _HomeShellRoomActions on _HomeShellState {
       _live = room.live;
       _roomError = null;
     });
+    unawaited(_refreshSelectedJoinRequestBadge(room));
   }
 
   void _applyManagedRoomRemoved(String roomId) {
@@ -507,6 +512,7 @@ extension _HomeShellRoomActions on _HomeShellState {
         _contentMode = _ContentMode.chat;
         _membersInitialSearchQuery = '';
         _settingsOpen = false;
+        _selectedRoomHasPendingJoinRequests = false;
         _roomError = null;
         _sendError = null;
         _narrowContentOpen = false;

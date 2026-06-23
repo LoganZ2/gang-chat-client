@@ -1,6 +1,71 @@
 part of 'home_shell.dart';
 
 extension _HomeShellNotifications on _HomeShellState {
+  bool _canShowJoinRequestBadgeForRoom(RoomDetail room) {
+    final access = room_display.roomAccessState(
+      room: room,
+      currentUser: _currentUser,
+    );
+    return access.canReviewJoinRequests &&
+        room_invites.roomInvitesEnabled(room.joinPolicy);
+  }
+
+  void _applyRoomNavigationBadgePatch(
+    room_badges.RoomNavigationBadgePatch? patch,
+  ) {
+    if (patch == null || !mounted) return;
+    _setHomeState(() {
+      _hasPendingRoomInvites = patch.hasPendingRoomInvites;
+      _selectedRoomHasPendingJoinRequests =
+          patch.selectedRoomHasPendingJoinRequests;
+    });
+  }
+
+  void _setSelectedJoinRequestBadge(bool hasPending) {
+    _applyRoomNavigationBadgePatch(
+      room_badges.selectedJoinRequestBadgeUpdated(
+        currentHasPendingRoomInvites: _hasPendingRoomInvites,
+        currentSelectedRoomHasPendingJoinRequests:
+            _selectedRoomHasPendingJoinRequests,
+        hasPending: hasPending,
+      ),
+    );
+  }
+
+  void _handleSelectedJoinRequestsChanged(bool hasPending) {
+    final room = _selectedRoom;
+    if (room == null) return;
+    _setSelectedJoinRequestBadge(
+      hasPending && _canShowJoinRequestBadgeForRoom(room),
+    );
+  }
+
+  Future<void> _refreshSelectedJoinRequestBadge([RoomDetail? room]) async {
+    final target = room ?? _selectedRoom;
+    if (target == null) {
+      _setSelectedJoinRequestBadge(false);
+      return;
+    }
+    if (!_canShowJoinRequestBadgeForRoom(target)) {
+      _setSelectedJoinRequestBadge(false);
+      return;
+    }
+    try {
+      final hasPending = await _roomsController.hasPendingJoinRequests(
+        target,
+        canReviewJoinRequests: true,
+      );
+      if (!mounted || _selectedServerId != target.id) return;
+      final currentRoom = _selectedRoom;
+      _setSelectedJoinRequestBadge(
+        hasPending &&
+            currentRoom != null &&
+            currentRoom.id == target.id &&
+            _canShowJoinRequestBadgeForRoom(currentRoom),
+      );
+    } catch (_) {}
+  }
+
   void _openNotifications({required bool openContent}) {
     if (!_settingsOpen && _contentMode == _ContentMode.notifications) {
       _closeNotifications();
@@ -75,10 +140,18 @@ extension _HomeShellNotifications on _HomeShellState {
         _roomsController.listRoomApplications(),
       ).wait;
       if (!mounted) return;
-      _setHomeState(
-        () => _hasPendingRoomInvites =
-            invites.isNotEmpty || applications.isNotEmpty,
-      );
+      _setHomeState(() {
+        final patch = room_badges.roomInviteBadgeUpdated(
+          currentHasPendingRoomInvites: _hasPendingRoomInvites,
+          currentSelectedRoomHasPendingJoinRequests:
+              _selectedRoomHasPendingJoinRequests,
+          hasPending: invites.isNotEmpty || applications.isNotEmpty,
+        );
+        if (patch == null) return;
+        _hasPendingRoomInvites = patch.hasPendingRoomInvites;
+        _selectedRoomHasPendingJoinRequests =
+            patch.selectedRoomHasPendingJoinRequests;
+      });
     } catch (_) {}
   }
 

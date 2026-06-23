@@ -2,6 +2,7 @@ export 'avatar.dart';
 export 'avatar_picker.dart';
 export 'app_config_scope.dart';
 export 'anchored_panel.dart';
+export 'badge_dot.dart';
 export 'button.dart';
 export 'feedback.dart';
 export 'chat_composer.dart';

@@ -10,10 +10,12 @@ class RoomMembersDialog extends StatefulWidget {
     required this.currentUser,
     required this.initialLive,
     this.initialSearchQuery = '',
+    this.hasPendingJoinRequests = false,
     this.reloadToken = 0,
     this.embedded = false,
     this.onClose,
     this.onChanged,
+    this.onPendingJoinRequestsChanged,
     this.onOpenRoom,
   });
 
@@ -22,6 +24,7 @@ class RoomMembersDialog extends StatefulWidget {
   final CurrentUser currentUser;
   final LiveState initialLive;
   final String initialSearchQuery;
+  final bool hasPendingJoinRequests;
 
   /// Incremented by the host when a realtime event (join requests updated, role
   /// changed) means this panel's data is stale. A change triggers a reload.
@@ -30,6 +33,7 @@ class RoomMembersDialog extends StatefulWidget {
   final bool embedded;
   final VoidCallback? onClose;
   final VoidCallback? onChanged;
+  final ValueChanged<bool>? onPendingJoinRequestsChanged;
   final ValueChanged<PublicRoom>? onOpenRoom;
 
   @override
@@ -97,6 +101,8 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
 
   bool get _canViewNewMembers =>
       room_invites.roomInvitesEnabled(_room.joinPolicy);
+
+  bool get _canViewJoinRequests => _canViewNewMembers && _canReviewRequests;
 
   bool get _canManageMembers => room_display
       .roomAccessState(room: _room, currentUser: widget.currentUser)
@@ -265,7 +271,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       final snapshot = await widget.controller.loadRoomMembersSnapshot(
         roomId: _room.id,
         fallbackLive: _live,
-        includeJoinRequests: _canViewNewMembers && _canReviewRequests,
+        includeJoinRequests: _canViewJoinRequests,
       );
       if (!mounted) return;
       setState(() {
@@ -275,6 +281,10 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
         _requestError = snapshot.joinRequestsError;
         _loading = false;
       });
+      _notifyPendingJoinRequestsChanged(
+        snapshot.joinRequests,
+        snapshot.joinRequestsError,
+      );
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -477,6 +487,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
         _changed = true;
         _notice = approve ? '申请已通过' : '申请已拒绝';
       });
+      _notifyPendingJoinRequestsChanged(_requests, _requestError);
       if (approve) unawaited(_load());
     } catch (error) {
       if (!mounted) return;
@@ -485,6 +496,14 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
         _requestError = error.toString();
       });
     }
+  }
+
+  void _notifyPendingJoinRequestsChanged(
+    List<JoinRequest> requests,
+    String? requestError,
+  ) {
+    if (!_canViewJoinRequests || requestError != null) return;
+    widget.onPendingJoinRequestsChanged?.call(requests.isNotEmpty);
   }
 
   Future<void> _showJoinRequestDetails(JoinRequest request) async {
@@ -706,6 +725,9 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
     if (activeSection == _RoomMembersSection.blacklist && !_canViewBlacklist) {
       activeSection = _RoomMembersSection.roomMembers;
     }
+    final showJoinRequestsBadge =
+        _canViewJoinRequests &&
+        (widget.hasPendingJoinRequests || _requests.isNotEmpty);
     final sections = <Segment<_RoomMembersSection>>[
       const Segment(
         value: _RoomMembersSection.roomMembers,
@@ -713,10 +735,12 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
         icon: Icons.groups_outlined,
       ),
       if (_canViewNewMembers)
-        const Segment(
+        Segment(
           value: _RoomMembersSection.newMembers,
           label: '新成员',
           icon: Icons.person_add_alt_1,
+          showBadge: showJoinRequestsBadge,
+          badgeKey: ValueKey('new-members-tab-badge'),
         ),
       if (_canViewBlacklist)
         const Segment(
@@ -822,7 +846,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
           onOpenRoom: widget.onOpenRoom,
           onInvite: _invite,
         ),
-        if (_canReviewRequests)
+        if (_canViewJoinRequests)
           _JoinRequestsSection(
             requests: _requests,
             currentUser: widget.currentUser,

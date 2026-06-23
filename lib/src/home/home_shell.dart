@@ -28,7 +28,9 @@ import '../app/messages_controller.dart';
 import '../app/music_box_controller.dart';
 import '../app/music_box_display.dart' as music_box_display;
 import '../app/realtime_controller.dart';
+import '../app/room_badges.dart' as room_badges;
 import '../app/room_display.dart' as room_display;
+import '../app/room_invites.dart' as room_invites;
 import '../app/room_join.dart' as room_join;
 import '../app/room_members_filter.dart' as member_filter;
 import '../app/room_notifications.dart' as room_notifications;
@@ -177,6 +179,7 @@ class _HomeShellState extends State<HomeShell> {
   String? _busyNotificationInviteId;
   String? _busyNotificationApplicationId;
   bool _hasPendingRoomInvites = false;
+  bool _selectedRoomHasPendingJoinRequests = false;
   String? _joinedLiveRoomId;
   bool _joiningLive = false;
   bool _micMuted = true;
@@ -301,6 +304,7 @@ class _HomeShellState extends State<HomeShell> {
       _busyNotificationInviteId = null;
       _busyNotificationApplicationId = null;
       _hasPendingRoomInvites = false;
+      _selectedRoomHasPendingJoinRequests = false;
       _joinedLiveRoomId = null;
       _joiningLive = false;
       _micMuted = true;

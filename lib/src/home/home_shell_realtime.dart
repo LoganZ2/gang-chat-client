@@ -123,6 +123,7 @@ extension _HomeShellRealtime on _HomeShellState {
   }
 
   void _applyRoomUpdated(Map<String, dynamic> data) {
+    final previousJoinPolicy = _selectedRoom?.joinPolicy;
     final room = _roomsController.roomCardFromSnapshot(data);
     if (room == null || !mounted) return;
     final shouldRefreshMessages =
@@ -139,6 +140,12 @@ extension _HomeShellRealtime on _HomeShellState {
       _selectedRoom = patch.selectedRoom;
       if (patch.shouldReloadMembers) _membersReloadToken++;
     });
+    final selectedRoom = patch.selectedRoom;
+    if (selectedRoom != null &&
+        selectedRoom.id == room.id &&
+        previousJoinPolicy != selectedRoom.joinPolicy) {
+      unawaited(_refreshSelectedJoinRequestBadge(selectedRoom));
+    }
     if (shouldRefreshMessages) {
       unawaited(_refreshSelectedMessagesSilently(room.id));
     }
@@ -173,7 +180,7 @@ extension _HomeShellRealtime on _HomeShellState {
       rooms: _servers,
       selectedRoomId: _selectedServerId,
       selectedRoom: _selectedRoom,
-      selectedRoomHasPendingJoinRequests: false,
+      selectedRoomHasPendingJoinRequests: _selectedRoomHasPendingJoinRequests,
       messages: _messages,
       live: _live,
       livePanelOpen: _contentMode == _ContentMode.live,
@@ -186,6 +193,8 @@ extension _HomeShellRealtime on _HomeShellState {
       _servers = patch.rooms;
       _selectedServerId = patch.selectedRoomId;
       _selectedRoom = patch.selectedRoom;
+      _selectedRoomHasPendingJoinRequests =
+          patch.selectedRoomHasPendingJoinRequests;
       _messages = patch.messages;
       _live = patch.live;
       _settingsOpen = patch.settingsOpen;
@@ -223,6 +232,7 @@ extension _HomeShellRealtime on _HomeShellState {
       // bump the members reload token to re-pull that list if the panel's open.
       _membersReloadToken++;
     });
+    unawaited(_refreshSelectedJoinRequestBadge(patch.selectedRoom));
   }
 
   /// Applies a `room_join_requests_updated` event: the pending join-request set
@@ -236,5 +246,6 @@ extension _HomeShellRealtime on _HomeShellState {
     unawaited(_refreshPendingRoomInviteBadge());
     if (roomId == null || roomId != _selectedServerId) return;
     _setHomeState(() => _membersReloadToken++);
+    unawaited(_refreshSelectedJoinRequestBadge());
   }
 }

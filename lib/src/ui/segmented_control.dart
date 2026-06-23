@@ -1,13 +1,22 @@
 import 'package:flutter/material.dart';
 
+import 'badge_dot.dart';
 import 'tokens.dart';
 
 class Segment<T> {
-  const Segment({required this.value, required this.label, this.icon});
+  const Segment({
+    required this.value,
+    required this.label,
+    this.icon,
+    this.showBadge = false,
+    this.badgeKey,
+  });
 
   final T value;
   final String label;
   final IconData? icon;
+  final bool showBadge;
+  final Key? badgeKey;
 }
 
 class SegmentedControl<T> extends StatefulWidget {
@@ -170,7 +179,8 @@ class _SegmentedControlState<T> extends State<SegmentedControl<T>> {
       textScaler: scale,
     )..layout();
     final iconWidth = segment.icon == null ? 0.0 : _iconSize + _iconGap;
-    return painter.width + iconWidth + (_segmentPadding * 2);
+    final badgeWidth = segment.showBadge ? 8.0 : 0.0;
+    return painter.width + iconWidth + badgeWidth + (_segmentPadding * 2);
   }
 
   List<double> _resolvedSegmentWidths({
@@ -276,40 +286,54 @@ class _SegmentHitTarget<T> extends StatelessWidget {
         onTapUp: (_) => onPressedChanged(false),
         onTapCancel: () => onPressedChanged(false),
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
-          curve: Curves.easeOutCubic,
-          transform: Matrix4.translationValues(0, capTop, 0),
-          height: height,
-          padding: const EdgeInsets.symmetric(
-            horizontal: _SegmentedControlState._segmentPadding,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (segment.icon != null) ...[
-                Icon(
-                  segment.icon,
-                  size: _SegmentedControlState._iconSize,
-                  color: foreground,
-                ),
-                const SizedBox(width: _SegmentedControlState._iconGap),
-              ],
-              Flexible(
-                child: Text(
-                  segment.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: foreground,
-                    fontSize: 13,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                  ),
-                ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 140),
+              curve: Curves.easeOutCubic,
+              transform: Matrix4.translationValues(0, capTop, 0),
+              height: height,
+              padding: const EdgeInsets.symmetric(
+                horizontal: _SegmentedControlState._segmentPadding,
               ),
-            ],
-          ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (segment.icon != null) ...[
+                    Icon(
+                      segment.icon,
+                      size: _SegmentedControlState._iconSize,
+                      color: foreground,
+                    ),
+                    const SizedBox(width: _SegmentedControlState._iconGap),
+                  ],
+                  Flexible(
+                    child: Text(
+                      segment.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: foreground,
+                        fontSize: 13,
+                        fontWeight: selected
+                            ? FontWeight.w600
+                            : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (segment.showBadge)
+              Positioned(
+                key: segment.badgeKey,
+                top: capTop + 4,
+                right: 8,
+                child: const BadgeDot(size: 7),
+              ),
+          ],
         ),
       ),
     );
