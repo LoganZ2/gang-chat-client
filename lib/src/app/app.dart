@@ -24,6 +24,7 @@ export 'messages_controller.dart';
 export 'realtime_controller.dart';
 export 'room_display.dart';
 export 'room_badges.dart';
+export 'room_blacklist.dart';
 export 'room_forms.dart';
 export 'room_invites.dart';
 export 'room_join.dart';

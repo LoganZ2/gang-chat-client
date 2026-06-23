@@ -1208,6 +1208,30 @@ class RoomInvite {
   }
 }
 
+class RoomBlacklistEntry {
+  const RoomBlacklistEntry({
+    required this.user,
+    required this.createdAt,
+    this.blockedBy,
+  });
+
+  final UserSummary user;
+  final DateTime createdAt;
+  final UserSummary? blockedBy;
+
+  factory RoomBlacklistEntry.fromJson(Map<String, Object?> json) {
+    return RoomBlacklistEntry(
+      user: UserSummary.fromJson(json['user']! as Map<String, Object?>),
+      createdAt:
+          _parseDateTime(json['created_at']) ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      blockedBy: _nullableMap(json['blocked_by']) == null
+          ? null
+          : UserSummary.fromJson(_nullableMap(json['blocked_by'])!),
+    );
+  }
+}
+
 class RoomApplication {
   const RoomApplication({
     required this.id,

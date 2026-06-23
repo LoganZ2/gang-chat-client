@@ -431,6 +431,361 @@ class _InviteUserRow extends StatelessWidget {
   }
 }
 
+class _BlockUserSection extends StatelessWidget {
+  const _BlockUserSection({
+    required this.controller,
+    required this.currentUser,
+    required this.query,
+    required this.searching,
+    required this.results,
+    required this.members,
+    required this.blacklist,
+    required this.busyUserIds,
+    required this.error,
+    required this.enabled,
+    required this.onResolveProfile,
+    required this.onResolveRoomProfile,
+    required this.onOpenRoom,
+    required this.onBlock,
+    required this.onUnblock,
+  });
+
+  final TextEditingController controller;
+  final CurrentUser currentUser;
+  final String query;
+  final bool searching;
+  final List<UserSummary> results;
+  final List<RoomMember> members;
+  final List<RoomBlacklistEntry> blacklist;
+  final Set<String> busyUserIds;
+  final String? error;
+  final bool enabled;
+  final Future<UserSummary> Function(UserSummary user) onResolveProfile;
+  final RoomProfileResolver onResolveRoomProfile;
+  final ValueChanged<PublicRoom>? onOpenRoom;
+  final ValueChanged<UserSummary> onBlock;
+  final ValueChanged<UserSummary> onUnblock;
+
+  @override
+  Widget build(BuildContext context) {
+    final candidates = room_blacklist.roomBlacklistCandidates(
+      searchResults: results,
+      blacklist: blacklist,
+      members: members,
+      query: query,
+      busyUserIds: busyUserIds,
+    );
+    return SettingsCard(
+      title: '拉黑用户',
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Input(
+              controller: controller,
+              hintText: '按用户名、昵称或 UID 搜索',
+              prefixIcon: Icons.block,
+              enabled: enabled,
+              showClearButton: true,
+              textInputAction: TextInputAction.search,
+            ),
+            if (error != null) ...[
+              const SizedBox(height: 8),
+              _NoticeStrip(message: error!, danger: true),
+            ],
+            if (searching) ...[
+              const SizedBox(height: 10),
+              const LinearProgressIndicator(
+                minHeight: 2,
+                color: UiColors.accent,
+                backgroundColor: UiColors.surfacePressed,
+              ),
+            ] else if (enabled && query.length >= 2) ...[
+              const SizedBox(height: 8),
+              if (candidates.isEmpty)
+                Text(
+                  '未找到用户',
+                  style: UiTypography.label.copyWith(color: UiColors.textMuted),
+                )
+              else
+                for (final candidate in candidates) ...[
+                  _BlockUserRow(
+                    user: candidate.user,
+                    currentUser: currentUser,
+                    query: query,
+                    member: candidate.member,
+                    blocked: candidate.blocked,
+                    superuser: candidate.superuser,
+                    busy: candidate.busy,
+                    enabled: enabled,
+                    onResolveProfile: onResolveProfile,
+                    onResolveRoomProfile: onResolveRoomProfile,
+                    onOpenRoom: onOpenRoom,
+                    onBlock: () => onBlock(candidate.user),
+                    onUnblock: () => onUnblock(candidate.user),
+                  ),
+                  if (candidate != candidates.last) const SizedBox(height: 6),
+                ],
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _BlockUserRow extends StatelessWidget {
+  const _BlockUserRow({
+    required this.user,
+    required this.currentUser,
+    required this.query,
+    required this.member,
+    required this.blocked,
+    required this.superuser,
+    required this.busy,
+    required this.enabled,
+    required this.onResolveProfile,
+    required this.onResolveRoomProfile,
+    required this.onOpenRoom,
+    required this.onBlock,
+    required this.onUnblock,
+  });
+
+  final UserSummary user;
+  final CurrentUser currentUser;
+  final String query;
+  final bool member;
+  final bool blocked;
+  final bool superuser;
+  final bool busy;
+  final bool enabled;
+  final Future<UserSummary> Function(UserSummary user) onResolveProfile;
+  final RoomProfileResolver onResolveRoomProfile;
+  final ValueChanged<PublicRoom>? onOpenRoom;
+  final VoidCallback onBlock;
+  final VoidCallback onUnblock;
+
+  @override
+  Widget build(BuildContext context) {
+    final actionLabel = member
+        ? '房间成员'
+        : superuser
+        ? '超级用户'
+        : blocked
+        ? '取消拉黑'
+        : '拉黑';
+    final onPressed = !enabled || member || superuser
+        ? null
+        : blocked
+        ? onUnblock
+        : onBlock;
+    return _RowSurface(
+      compact: true,
+      child: Row(
+        children: [
+          UserHoverCard(
+            user: user,
+            currentUser: currentUser,
+            onResolveProfile: onResolveProfile,
+            onResolveRoomProfile: onResolveRoomProfile,
+            onEnterCommonRoom: onOpenRoom,
+            child: Avatar(
+              label: room_display.userPrimaryName(user),
+              imageUrl: AppConfigScope.of(
+                context,
+              ).resolveAssetUrl(user.avatarUrl),
+              defaultAvatarKey: user.defaultAvatarKey,
+              size: 32,
+            ),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                HighlightedText(
+                  text: room_display.userPrimaryName(user),
+                  query: query,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: UiTypography.label.copyWith(
+                    color: UiColors.text,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                HighlightedText(
+                  text: room_display.userUsernameLabel(user),
+                  query: query,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: UiTypography.label.copyWith(color: UiColors.textMuted),
+                ),
+              ],
+            ),
+          ),
+          Button(
+            height: 34,
+            loading: busy,
+            tone: blocked ? ButtonTone.neutral : ButtonTone.danger,
+            onPressed: onPressed,
+            child: Text(actionLabel),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BlacklistSection extends StatelessWidget {
+  const _BlacklistSection({
+    required this.entries,
+    required this.currentUser,
+    required this.busyUserIds,
+    required this.loading,
+    required this.error,
+    required this.onResolveProfile,
+    required this.onResolveRoomProfile,
+    required this.onOpenRoom,
+    required this.onUnblock,
+  });
+
+  final List<RoomBlacklistEntry> entries;
+  final CurrentUser currentUser;
+  final Set<String> busyUserIds;
+  final bool loading;
+  final String? error;
+  final Future<UserSummary> Function(UserSummary user) onResolveProfile;
+  final RoomProfileResolver onResolveRoomProfile;
+  final ValueChanged<PublicRoom>? onOpenRoom;
+  final ValueChanged<UserSummary> onUnblock;
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsCard(
+      title: '黑名单',
+      children: [
+        ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 64),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (error != null) _NoticeStrip(message: error!, danger: true),
+              if (loading) ...[
+                const SizedBox(height: 8),
+                const LinearProgressIndicator(
+                  minHeight: 2,
+                  color: UiColors.accent,
+                  backgroundColor: UiColors.surfacePressed,
+                ),
+              ] else if (entries.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12, bottom: 6),
+                  child: Text(
+                    '暂无黑名单用户',
+                    style: UiTypography.label.copyWith(
+                      color: UiColors.textMuted,
+                    ),
+                  ),
+                )
+              else
+                for (final entry in entries) ...[
+                  _BlacklistUserRow(
+                    user: entry.user,
+                    currentUser: currentUser,
+                    busy: busyUserIds.contains(entry.user.id),
+                    onResolveProfile: onResolveProfile,
+                    onResolveRoomProfile: onResolveRoomProfile,
+                    onOpenRoom: onOpenRoom,
+                    onUnblock: () => onUnblock(entry.user),
+                  ),
+                  if (entry != entries.last) const SizedBox(height: 6),
+                ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BlacklistUserRow extends StatelessWidget {
+  const _BlacklistUserRow({
+    required this.user,
+    required this.currentUser,
+    required this.busy,
+    required this.onResolveProfile,
+    required this.onResolveRoomProfile,
+    required this.onOpenRoom,
+    required this.onUnblock,
+  });
+
+  final UserSummary user;
+  final CurrentUser currentUser;
+  final bool busy;
+  final Future<UserSummary> Function(UserSummary user) onResolveProfile;
+  final RoomProfileResolver onResolveRoomProfile;
+  final ValueChanged<PublicRoom>? onOpenRoom;
+  final VoidCallback onUnblock;
+
+  @override
+  Widget build(BuildContext context) {
+    return _RowSurface(
+      compact: true,
+      child: Row(
+        children: [
+          UserHoverCard(
+            user: user,
+            currentUser: currentUser,
+            onResolveProfile: onResolveProfile,
+            onResolveRoomProfile: onResolveRoomProfile,
+            onEnterCommonRoom: onOpenRoom,
+            child: Avatar(
+              label: room_display.userPrimaryName(user),
+              imageUrl: AppConfigScope.of(
+                context,
+              ).resolveAssetUrl(user.avatarUrl),
+              defaultAvatarKey: user.defaultAvatarKey,
+              size: 32,
+            ),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  room_display.userPrimaryName(user),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: UiTypography.label.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  room_display.userUsernameLabel(user),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: UiTypography.label.copyWith(color: UiColors.textMuted),
+                ),
+              ],
+            ),
+          ),
+          Button(
+            height: 34,
+            loading: busy,
+            onPressed: onUnblock,
+            child: const Text('取消拉黑'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _JoinRequestsSection extends StatelessWidget {
   const _JoinRequestsSection({
     required this.requests,

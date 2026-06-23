@@ -651,6 +651,77 @@ void main() {
     api.close();
   });
 
+  test('listRoomBlacklist requests and parses blocked users', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/api/v1/rooms/room_1/blacklist');
+        expect(request.headers['authorization'], 'Bearer token');
+
+        return http.Response(
+          jsonEncode({
+            'blacklist': [_roomBlacklistEntryJson()],
+            'next_cursor': null,
+          }),
+          200,
+        );
+      }),
+    );
+
+    final entries = await api.listRoomBlacklist('room_1');
+
+    expect(entries.single.user.username, 'blocked_user');
+    expect(entries.single.blockedBy?.username, 'alice');
+    api.close();
+  });
+
+  test('blockRoomUser posts target id and parses entry', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/v1/rooms/room_1/blacklist');
+        expect(request.headers['authorization'], 'Bearer token');
+        expect(request.headers['idempotency-key'], isNotEmpty);
+        expect(
+          jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>,
+          {'user_id': 'user_2'},
+        );
+
+        return http.Response(
+          jsonEncode({'entry': _roomBlacklistEntryJson()}),
+          201,
+        );
+      }),
+    );
+
+    final entry = await api.blockRoomUser(roomId: 'room_1', userId: 'user_2');
+
+    expect(entry.user.id, 'user_2');
+    api.close();
+  });
+
+  test('unblockRoomUser deletes the blocked user entry', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'DELETE');
+        expect(request.url.path, '/api/v1/rooms/room_1/blacklist/user_2');
+        expect(request.headers['authorization'], 'Bearer token');
+
+        return http.Response(jsonEncode({'ok': true}), 200);
+      }),
+    );
+
+    await api.unblockRoomUser(roomId: 'room_1', userId: 'user_2');
+
+    api.close();
+  });
+
   test('joinRoom posts an optional application reason', () async {
     final api = GangApiClient(
       baseUrl: 'http://example.test/api/v1',
@@ -2395,6 +2466,28 @@ Map<String, Object?> _roomInviteJson({
       'room_display_name': 'Alice in Invite Room',
       'room_role': inviterRoomRole,
     },
+  };
+}
+
+Map<String, Object?> _roomBlacklistEntryJson() {
+  return {
+    'user': {
+      'id': 'user_2',
+      'uid': '1000002',
+      'username': 'blocked_user',
+      'display_name': 'Blocked User',
+      'avatar_url': null,
+      'default_avatar_key': 'red-2',
+    },
+    'blocked_by': {
+      'id': 'user_1',
+      'uid': '1000001',
+      'username': 'alice',
+      'display_name': 'Alice',
+      'avatar_url': null,
+      'default_avatar_key': 'blue-3',
+    },
+    'created_at': '2026-05-31T13:00:00Z',
   };
 }
 

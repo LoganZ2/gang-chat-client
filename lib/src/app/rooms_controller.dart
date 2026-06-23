@@ -892,6 +892,24 @@ class RoomsController {
     return api.inviteMember(roomId: roomId, userId: userId);
   }
 
+  Future<List<RoomBlacklistEntry>> listRoomBlacklist(String roomId) {
+    return api.listRoomBlacklist(roomId);
+  }
+
+  Future<RoomBlacklistEntry> blockRoomUser({
+    required String roomId,
+    required String userId,
+  }) {
+    return api.blockRoomUser(roomId: roomId, userId: userId);
+  }
+
+  Future<void> unblockRoomUser({
+    required String roomId,
+    required String userId,
+  }) {
+    return api.unblockRoomUser(roomId: roomId, userId: userId);
+  }
+
   Future<List<UserSummary>> searchUsers({
     required String query,
     int limit = 20,

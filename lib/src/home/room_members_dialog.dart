@@ -39,28 +39,40 @@ class RoomMembersDialog extends StatefulWidget {
 class _RoomMembersDialogState extends State<RoomMembersDialog> {
   final _memberSearchController = TextEditingController();
   final _inviteSearchController = TextEditingController();
+  final _blockSearchController = TextEditingController();
   final _busyRequestIds = <String>{};
   final _busyMemberIds = <String>{};
   final _busyInviteUserIds = <String>{};
+  final _busyBlockUserIds = <String>{};
   final _pendingInviteUserIds = <String>{};
 
   Timer? _inviteSearchDebounce;
+  Timer? _blockSearchDebounce;
   int _inviteSearchSeq = 0;
+  int _blockSearchSeq = 0;
 
   late RoomDetail _room;
   late LiveState _live;
   List<RoomMember> _members = const [];
   List<JoinRequest> _requests = const [];
   List<UserSummary> _inviteResults = const [];
+  List<UserSummary> _blockResults = const [];
+  List<RoomBlacklistEntry> _blacklist = const [];
 
   bool _loading = true;
   bool _searchingInvites = false;
+  bool _searchingBlocks = false;
+  bool _loadingBlacklist = false;
+  bool _blacklistLoaded = false;
   bool _changed = false;
   String _memberQuery = '';
   String _inviteQuery = '';
+  String _blockQuery = '';
   String? _error;
   String? _requestError;
   String? _inviteError;
+  String? _blockError;
+  String? _blacklistError;
   String? _notice;
   String? _activeJoinRequestDetailId;
   member_filter.RoomMemberPresenceFilter _presenceFilter =
@@ -96,14 +108,17 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
     _applyMemberSearchQuery(widget.initialSearchQuery);
     _memberSearchController.addListener(_onMemberSearchChanged);
     _inviteSearchController.addListener(_onInviteSearchChanged);
+    _blockSearchController.addListener(_onBlockSearchChanged);
     unawaited(_load());
   }
 
   @override
   void dispose() {
     _inviteSearchDebounce?.cancel();
+    _blockSearchDebounce?.cancel();
     _memberSearchController.dispose();
     _inviteSearchController.dispose();
+    _blockSearchController.dispose();
     super.dispose();
   }
 
@@ -124,11 +139,18 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
     // (canReviewRequests, canManageMembers) reflect the new role.
     if (widget.reloadToken != oldWidget.reloadToken ||
         !identical(widget.room, oldWidget.room)) {
+      final roomChanged = widget.room.id != oldWidget.room.id;
       _room = widget.room;
+      if (roomChanged) {
+        _resetBlacklistState();
+      }
       if (liveChanged && liveBelongsToRoom) {
         _live = widget.initialLive;
       }
       unawaited(_load());
+      if (_section == _RoomMembersSection.blacklist) {
+        unawaited(_loadBlacklist());
+      }
     } else if (liveChanged && liveBelongsToRoom) {
       setState(() => _live = widget.initialLive);
     }
@@ -141,6 +163,25 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       return;
     }
     Navigator.of(context).pop(_changed);
+  }
+
+  void _selectSection(_RoomMembersSection section) {
+    setState(() => _section = section);
+    if (section == _RoomMembersSection.blacklist && !_blacklistLoaded) {
+      unawaited(_loadBlacklist());
+    }
+  }
+
+  void _resetBlacklistState() {
+    _blockSearchDebounce?.cancel();
+    _blockSearchSeq += 1;
+    _blockResults = const [];
+    _blacklist = const [];
+    _searchingBlocks = false;
+    _loadingBlacklist = false;
+    _blacklistLoaded = false;
+    _blockError = null;
+    _blacklistError = null;
   }
 
   void _onMemberSearchChanged() {
@@ -182,6 +223,28 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
     });
   }
 
+  void _onBlockSearchChanged() {
+    if (!_canManageMembers) return;
+    final query = _blockSearchController.text.trim();
+    setState(() {
+      _blockQuery = query;
+      _blockError = null;
+      if (query.isEmpty) {
+        _blockResults = const [];
+        _searchingBlocks = false;
+      }
+    });
+    _blockSearchDebounce?.cancel();
+    if (query.length < 2) {
+      _blockSearchSeq += 1;
+      return;
+    }
+    final seq = ++_blockSearchSeq;
+    _blockSearchDebounce = Timer(const Duration(milliseconds: 260), () {
+      unawaited(_searchBlockCandidates(query, seq));
+    });
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -211,6 +274,30 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
     }
   }
 
+  Future<void> _loadBlacklist() async {
+    if (!_canManageMembers) return;
+    if (_loadingBlacklist) return;
+    setState(() {
+      _loadingBlacklist = true;
+      _blacklistError = null;
+    });
+    try {
+      final entries = await widget.controller.listRoomBlacklist(_room.id);
+      if (!mounted) return;
+      setState(() {
+        _blacklist = entries;
+        _blacklistLoaded = true;
+        _loadingBlacklist = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadingBlacklist = false;
+        _blacklistError = error.toString();
+      });
+    }
+  }
+
   Future<void> _searchInviteCandidates(String query, int seq) async {
     if (!_canInviteMembers) return;
     setState(() {
@@ -232,6 +319,31 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       setState(() {
         _searchingInvites = false;
         _inviteError = error.toString();
+      });
+    }
+  }
+
+  Future<void> _searchBlockCandidates(String query, int seq) async {
+    if (!_canManageMembers) return;
+    setState(() {
+      _searchingBlocks = true;
+      _blockError = null;
+    });
+    try {
+      final results = await widget.controller.searchUsers(
+        query: query,
+        limit: 20,
+      );
+      if (!mounted || seq != _blockSearchSeq) return;
+      setState(() {
+        _blockResults = results;
+        _searchingBlocks = false;
+      });
+    } catch (error) {
+      if (!mounted || seq != _blockSearchSeq) return;
+      setState(() {
+        _searchingBlocks = false;
+        _blockError = error.toString();
       });
     }
   }
@@ -260,6 +372,74 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       setState(() {
         _busyInviteUserIds.remove(user.id);
         _inviteError = error.toString();
+      });
+    }
+  }
+
+  Future<void> _blockUser(UserSummary user) async {
+    if (!_canManageMembers) return;
+    if (_busyBlockUserIds.contains(user.id)) return;
+    if (_blacklist.any((entry) => entry.user.id == user.id)) return;
+    if (_members.any((member) => member.user.id == user.id)) return;
+    if (user.isSuperuser) return;
+    setState(() {
+      _busyBlockUserIds.add(user.id);
+      _blockError = null;
+      _blacklistError = null;
+      _notice = null;
+    });
+    try {
+      final entry = await widget.controller.blockRoomUser(
+        roomId: _room.id,
+        userId: user.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _busyBlockUserIds.remove(user.id);
+        _blacklist = room_blacklist.upsertRoomBlacklistEntry(_blacklist, entry);
+        _blacklistLoaded = true;
+        _changed = true;
+        _notice = '已加入黑名单';
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _busyBlockUserIds.remove(user.id);
+        _blockError = error.toString();
+      });
+    }
+  }
+
+  Future<void> _unblockUser(UserSummary user) async {
+    if (!_canManageMembers) return;
+    if (_busyBlockUserIds.contains(user.id)) return;
+    setState(() {
+      _busyBlockUserIds.add(user.id);
+      _blockError = null;
+      _blacklistError = null;
+      _notice = null;
+    });
+    try {
+      await widget.controller.unblockRoomUser(
+        roomId: _room.id,
+        userId: user.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _busyBlockUserIds.remove(user.id);
+        _blacklist = room_blacklist.removeRoomBlacklistEntry(
+          _blacklist,
+          user.id,
+        );
+        _blacklistLoaded = true;
+        _changed = true;
+        _notice = '已取消拉黑';
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _busyBlockUserIds.remove(user.id);
+        _blacklistError = error.toString();
       });
     }
   }
@@ -518,7 +698,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       pinned: SegmentedControl<_RoomMembersSection>(
         expanded: true,
         value: _section,
-        onChanged: (section) => setState(() => _section = section),
+        onChanged: _selectSection,
         segments: const [
           Segment(
             value: _RoomMembersSection.roomMembers,
@@ -537,11 +717,15 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
           ),
         ],
       ),
-      headerAction: _canReviewRequests
+      headerAction:
+          _canReviewRequests ||
+              (_section == _RoomMembersSection.blacklist && _canManageMembers)
           ? ButtonIcon(
               tooltip: '刷新',
               icon: const Icon(Icons.refresh),
-              onPressed: _load,
+              onPressed: _section == _RoomMembersSection.blacklist
+                  ? _loadBlacklist
+                  : _load,
               size: 38,
             )
           : null,
@@ -550,7 +734,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
         _RoomMembersSection.newMembers => _buildNewMembersBody(
           effectiveMembers,
         ),
-        _RoomMembersSection.blacklist => const SettingsList(children: []),
+        _RoomMembersSection.blacklist => _buildBlacklistBody(effectiveMembers),
       },
     );
   }
@@ -628,6 +812,43 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
             onApprove: (request) => _reviewRequest(request, true),
             onReject: (request) => _reviewRequest(request, false),
           ),
+      ],
+    );
+  }
+
+  Widget _buildBlacklistBody(List<RoomMember> effectiveMembers) {
+    return SettingsList(
+      children: [
+        if (_notice != null)
+          _NoticeStrip(message: _notice!, icon: Icons.check_circle_outline),
+        _BlockUserSection(
+          controller: _blockSearchController,
+          currentUser: widget.currentUser,
+          query: _blockQuery,
+          searching: _searchingBlocks,
+          results: _blockResults,
+          members: effectiveMembers,
+          blacklist: _blacklist,
+          busyUserIds: _busyBlockUserIds,
+          error: _blockError,
+          enabled: _canManageMembers,
+          onResolveProfile: _resolveUserProfile,
+          onResolveRoomProfile: _resolveRoomProfile,
+          onOpenRoom: widget.onOpenRoom,
+          onBlock: _blockUser,
+          onUnblock: _unblockUser,
+        ),
+        _BlacklistSection(
+          entries: _blacklist,
+          currentUser: widget.currentUser,
+          busyUserIds: _busyBlockUserIds,
+          loading: _loadingBlacklist,
+          error: _blacklistError,
+          onResolveProfile: _resolveUserProfile,
+          onResolveRoomProfile: _resolveRoomProfile,
+          onOpenRoom: widget.onOpenRoom,
+          onUnblock: _unblockUser,
+        ),
       ],
     );
   }

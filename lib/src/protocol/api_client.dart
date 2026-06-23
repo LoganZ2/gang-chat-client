@@ -261,6 +261,18 @@ abstract interface class GangApi {
     required String userId,
   });
 
+  Future<List<RoomBlacklistEntry>> listRoomBlacklist(String roomId);
+
+  Future<RoomBlacklistEntry> blockRoomUser({
+    required String roomId,
+    required String userId,
+  });
+
+  Future<void> unblockRoomUser({
+    required String roomId,
+    required String userId,
+  });
+
   Future<List<RoomInvite>> listRoomInvites({String status = 'pending'});
 
   Future<JoinRoomResult> reviewRoomInvite({
@@ -1212,6 +1224,52 @@ class GangApiClient implements GangApi {
       );
     });
     return RoomInvite.fromJson(decoded['invite']! as Map<String, Object?>);
+  }
+
+  @override
+  Future<List<RoomBlacklistEntry>> listRoomBlacklist(String roomId) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.get(
+        _uri('/rooms/$roomId/blacklist'),
+        headers: _headers(token),
+      );
+    }, retryTransientFailures: true);
+    return (decoded['blacklist'] as List<Object?>? ??
+            decoded['items'] as List<Object?>? ??
+            const [])
+        .cast<Map<String, Object?>>()
+        .map(RoomBlacklistEntry.fromJson)
+        .toList();
+  }
+
+  @override
+  Future<RoomBlacklistEntry> blockRoomUser({
+    required String roomId,
+    required String userId,
+  }) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.post(
+        _uri('/rooms/$roomId/blacklist'),
+        headers: _headers(token, idempotencyKey: newUuid()),
+        body: encodeJsonBody({'user_id': userId}),
+      );
+    });
+    return RoomBlacklistEntry.fromJson(
+      decoded['entry']! as Map<String, Object?>,
+    );
+  }
+
+  @override
+  Future<void> unblockRoomUser({
+    required String roomId,
+    required String userId,
+  }) async {
+    await _sendJson((token) {
+      return _httpClient.delete(
+        _uri('/rooms/$roomId/blacklist/$userId'),
+        headers: _headers(token),
+      );
+    });
   }
 
   @override
