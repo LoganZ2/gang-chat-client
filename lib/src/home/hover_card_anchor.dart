@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../ui/ui.dart';
 
@@ -176,7 +177,7 @@ class _HoverCardAnchorState extends State<HoverCardAnchor> {
     _parentCoordinator?.showOnlyChild(this);
     if (_portalVisible && _portal.isShowing) return;
     _portalVisible = true;
-    _portal.show();
+    _showPortalController();
     _syncParentActivity();
   }
 
@@ -200,8 +201,31 @@ class _HoverCardAnchorState extends State<HoverCardAnchor> {
     _coordinator.dismissOpenChild();
     _portalVisible = false;
     _parentCoordinator?.releaseOpenChild(this);
-    if (_portal.isShowing) _portal.hide();
+    _hidePortalController();
     _syncParentActivity();
+  }
+
+  void _showPortalController() {
+    _mutatePortalWhenAllowed(() {
+      if (!mounted || !_portalVisible || _portal.isShowing) return;
+      _portal.show();
+    });
+  }
+
+  void _hidePortalController() {
+    _mutatePortalWhenAllowed(() {
+      if (!mounted || _portalVisible || !_portal.isShowing) return;
+      _portal.hide();
+    });
+  }
+
+  void _mutatePortalWhenAllowed(VoidCallback mutation) {
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      SchedulerBinding.instance.addPostFrameCallback((_) => mutation());
+      return;
+    }
+    mutation();
   }
 
   void _dismiss() {
@@ -226,7 +250,7 @@ class _HoverCardAnchorState extends State<HoverCardAnchor> {
     _closeTimer = Timer(widget.closeDelay, () {
       if (!mounted || _wantsOpen) return;
       _portalVisible = false;
-      if (_portal.isShowing) _portal.hide();
+      _hidePortalController();
       _syncParentActivity();
     });
   }

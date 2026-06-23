@@ -28,6 +28,7 @@ import 'package:client/src/settings/settings_page.dart';
 import 'package:client/src/shell/desktop_window_controller.dart';
 import 'package:client/src/shell/login_page.dart';
 import 'package:client/src/ui/ui.dart' as ui;
+import 'package:client/src/home/hover_card_anchor.dart';
 import 'package:client/src/home/home_page.dart';
 import 'package:client/src/home/live_channel_pane.dart' as live_pane;
 import 'package:client/ui_showcase.dart' as showcase;
@@ -82,6 +83,53 @@ void main() {
       ),
       isNull,
     );
+  });
+
+  testWidgets('hover card reset hides portal safely during rebuild', (
+    WidgetTester tester,
+  ) async {
+    var resetKey = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              return Center(
+                child: HoverCardAnchor(
+                  resetKey: resetKey,
+                  cardBuilder: (context) => TextButton(
+                    onPressed: () => setState(() => resetKey++),
+                    child: const Text('Reset card'),
+                  ),
+                  child: const SizedBox.square(
+                    key: ValueKey('hover-card-anchor'),
+                    dimension: 40,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await gesture.moveTo(
+      tester.getCenter(find.byKey(const ValueKey('hover-card-anchor'))),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Reset card'), findsOneWidget);
+
+    await tester.tap(find.text('Reset card'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('app renders login entrypoint on real auth gate', (
@@ -1716,13 +1764,36 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('成员'), findsAtLeastNWidgets(1));
-    expect(find.text('邀请成员'), findsOneWidget);
+    expect(find.text('房间成员'), findsOneWidget);
+    expect(find.text('新成员'), findsOneWidget);
+    expect(find.text('黑名单'), findsOneWidget);
+    expect(find.text('邀请成员'), findsNothing);
     expect(find.text('语音 1'), findsOneWidget);
     expect(find.text('在线 2'), findsOneWidget);
     expect(find.text('管理员 1'), findsOneWidget);
     expect(find.text('创建者 1'), findsOneWidget);
+    expect(
+      tester.getRect(find.byKey(const ValueKey('room-members-list'))).height,
+      greaterThan(260),
+    );
     expect(find.text('@riley'), findsNothing);
     expect(find.text('10000001'), findsNothing);
+    expect(find.text('Kai'), findsWidgets);
+    expect(find.text('Morgan'), findsWidgets);
+    expect(find.text('uid-1 · @kai'), findsNothing);
+    expect(find.text('user-2 · @morgan'), findsNothing);
+    expect(find.text('创建者'), findsWidgets);
+    expect(requestedPaths, contains('/api/v1/rooms/server-alpha/members'));
+    expect(
+      requestedPaths,
+      contains('/api/v1/rooms/server-alpha/join-requests'),
+    );
+
+    await tester.tap(find.text('新成员'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('邀请成员'), findsOneWidget);
+    expect(find.text('加入申请'), findsOneWidget);
     expect(find.byTooltip('详情'), findsOneWidget);
     await tester.ensureVisible(find.byTooltip('详情'));
     await tester.pumpAndSettle();
@@ -1743,16 +1814,6 @@ void main() {
       tester.widget<ui.ButtonIcon>(_buttonIconWithTooltip('详情')).selected,
       isFalse,
     );
-    expect(find.text('Kai'), findsWidgets);
-    expect(find.text('Morgan'), findsWidgets);
-    expect(find.text('uid-1 · @kai'), findsNothing);
-    expect(find.text('user-2 · @morgan'), findsNothing);
-    expect(find.text('创建者'), findsWidgets);
-    expect(requestedPaths, contains('/api/v1/rooms/server-alpha/members'));
-    expect(
-      requestedPaths,
-      contains('/api/v1/rooms/server-alpha/join-requests'),
-    );
 
     await tester.ensureVisible(_textFieldWithHint('按用户名、昵称或 UID 搜索'));
     await tester.pumpAndSettle();
@@ -1761,10 +1822,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Morgan'), findsAtLeastNWidgets(1));
+    expect(find.text('@morgan'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '在房间内'), findsOneWidget);
 
     await tester.enterText(_textFieldWithHint('按用户名、昵称或 UID 搜索'), '');
     await tester.pump(const Duration(milliseconds: 320));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('房间成员'));
     await tester.pumpAndSettle();
 
     await tester.ensureVisible(find.byTooltip('设为管理员'));
@@ -1799,6 +1864,9 @@ void main() {
     );
     expect(find.text('Morgan'), findsNothing);
 
+    await tester.tap(find.text('新成员'));
+    await tester.pumpAndSettle();
+
     await tester.ensureVisible(_textFieldWithHint('按用户名、昵称或 UID 搜索'));
     await tester.pumpAndSettle();
     await tester.enterText(_textFieldWithHint('按用户名、昵称或 UID 搜索'), 'ri');
@@ -1807,9 +1875,13 @@ void main() {
 
     expect(requestedPaths, contains('/api/v1/users/search'));
     expect(find.textContaining('Riley'), findsAtLeastNWidgets(1));
-    expect(find.textContaining('@riley'), findsNothing);
+    expect(find.text('@riley'), findsOneWidget);
+    expect(find.text('@river'), findsOneWidget);
+    expect(find.text('@rina'), findsOneWidget);
+    expect(find.text('@riko'), findsOneWidget);
+    expect(find.text('@rita'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(ui.Button, '邀请'));
+    await tester.tap(find.widgetWithText(ui.Button, '邀请').first);
     await tester.pumpAndSettle();
 
     expect(requestedPaths, contains('/api/v1/rooms/server-alpha/invites'));
@@ -4520,6 +4592,30 @@ GangApi _roomsApi({
               id: 'user-3',
               username: 'riley',
               displayName: 'Riley',
+              isOnline: true,
+            ),
+            _userJson(
+              id: 'user-5',
+              username: 'river',
+              displayName: 'River',
+              isOnline: true,
+            ),
+            _userJson(
+              id: 'user-6',
+              username: 'rina',
+              displayName: 'Rina',
+              isOnline: true,
+            ),
+            _userJson(
+              id: 'user-7',
+              username: 'riko',
+              displayName: 'Riko',
+              isOnline: true,
+            ),
+            _userJson(
+              id: 'user-8',
+              username: 'rita',
+              displayName: 'Rita',
               isOnline: true,
             ),
           ],

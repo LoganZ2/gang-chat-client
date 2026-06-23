@@ -707,10 +707,7 @@ int roomMemberSearchRank(RoomMember member, String query) {
   }
 
   if (contains(member.user.uid) || contains(member.user.id)) return 0;
-  if (contains(member.roomDisplayName) ||
-      contains(member.user.roomDisplayName) ||
-      contains(member.user.displayName) ||
-      contains(member.user.username)) {
+  if (contains(member.user.displayName) || contains(member.user.username)) {
     return 1;
   }
   if (contains(member.remarkName)) return 2;

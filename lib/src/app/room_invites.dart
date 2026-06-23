@@ -110,7 +110,9 @@ List<RoomInviteCandidate> roomInviteCandidates({
   }
 
   for (final user in searchResults) {
-    add(user);
+    if (_userIdentityMatchesQuery(user, normalizedQuery)) {
+      add(user);
+    }
   }
   if (normalizedQuery.isNotEmpty) {
     for (final member in members) {
@@ -129,6 +131,20 @@ List<RoomInviteCandidate> roomInviteCandidates({
         busy: busySet.contains(user.id),
       ),
   ];
+}
+
+bool _userIdentityMatchesQuery(UserSummary user, String normalizedQuery) {
+  if (normalizedQuery.isEmpty) return true;
+
+  bool contains(String? value) {
+    final text = value?.trim().toLowerCase();
+    return text != null && text.isNotEmpty && text.contains(normalizedQuery);
+  }
+
+  return contains(user.uid) ||
+      contains(user.id) ||
+      contains(user.username) ||
+      contains(user.displayName);
 }
 
 bool canStartRoomInvite({

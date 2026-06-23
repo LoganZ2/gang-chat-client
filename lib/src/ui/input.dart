@@ -25,6 +25,7 @@ class Input extends StatefulWidget {
     this.obscureText = false,
     this.autofillHints,
     this.keyboardType,
+    this.textInputAction,
     this.prefixIcon,
     this.suffix,
     this.showClearButton = false,
@@ -47,6 +48,7 @@ class Input extends StatefulWidget {
   final bool obscureText;
   final Iterable<String>? autofillHints;
   final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
   final IconData? prefixIcon;
   final Widget? suffix;
   final bool showClearButton;
@@ -76,9 +78,24 @@ class _InputState extends State<Input> {
 
   FocusNode get _effectiveFocusNode => widget.focusNode ?? _localFocusNode!;
 
-  int get _effectiveMinLines => widget.obscureText ? 1 : widget.minLines;
+  bool get _isSearchInput {
+    final hintText = widget.hintText.trim();
+    final clearTooltip = widget.clearTooltip.trim();
+    return widget.prefixIcon == Icons.search ||
+        hintText.contains('搜索') ||
+        (widget.showClearButton && clearTooltip.contains('搜索'));
+  }
 
-  int? get _effectiveMaxLines => widget.obscureText ? 1 : widget.maxLines;
+  int get _effectiveMinLines =>
+      widget.obscureText || _isSearchInput ? 1 : widget.minLines;
+
+  int? get _effectiveMaxLines =>
+      widget.obscureText || _isSearchInput ? 1 : widget.maxLines;
+
+  TextInputAction? get _effectiveTextInputAction {
+    if (widget.textInputAction != null) return widget.textInputAction;
+    return _isSearchInput ? TextInputAction.search : null;
+  }
 
   @override
   void initState() {
@@ -167,6 +184,7 @@ class _InputState extends State<Input> {
         obscureText: widget.obscureText,
         autofillHints: widget.autofillHints,
         keyboardType: widget.keyboardType,
+        textInputAction: _effectiveTextInputAction,
         minLines: _effectiveMinLines,
         maxLines: _effectiveMaxLines,
         onSubmitted: widget.onSubmitted,
@@ -297,10 +315,7 @@ class _InputState extends State<Input> {
       textScaler: MediaQuery.textScalerOf(context),
     )..layout();
     final lineHeight = painter.preferredLineHeight;
-    final verticalPadding = math.max(
-      0.0,
-      (widget.height - lineHeight) / 2,
-    );
+    final verticalPadding = math.max(0.0, (widget.height - lineHeight) / 2);
     final textOffset = math.min(_inputTextVerticalOffset, verticalPadding);
     return EdgeInsets.fromLTRB(
       _inputHorizontalPadding,

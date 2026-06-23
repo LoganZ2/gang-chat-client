@@ -319,7 +319,7 @@ class _InviteSection extends StatelessWidget {
                   style: UiTypography.label.copyWith(color: UiColors.textMuted),
                 )
               else
-                for (final candidate in candidates.take(4)) ...[
+                for (final candidate in candidates) ...[
                   _InviteUserRow(
                     user: candidate.user,
                     currentUser: currentUser,
@@ -333,8 +333,7 @@ class _InviteSection extends StatelessWidget {
                     onOpenRoom: onOpenRoom,
                     onInvite: () => onInvite(candidate.user),
                   ),
-                  if (candidate != candidates.take(4).last)
-                    const SizedBox(height: 6),
+                  if (candidate != candidates.last) const SizedBox(height: 6),
                 ],
             ],
           ],
@@ -395,12 +394,29 @@ class _InviteUserRow extends StatelessWidget {
           ),
           const SizedBox(width: 9),
           Expanded(
-            child: HighlightedText(
-              text: room_display.userPrimaryName(user),
-              query: query,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: UiTypography.label.copyWith(fontWeight: FontWeight.w600),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                HighlightedText(
+                  text: room_display.userPrimaryName(user),
+                  query: query,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: UiTypography.label.copyWith(
+                    color: UiColors.text,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                HighlightedText(
+                  text: room_display.userUsernameLabel(user),
+                  query: query,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: UiTypography.label.copyWith(color: UiColors.textMuted),
+                ),
+              ],
             ),
           ),
           Button(

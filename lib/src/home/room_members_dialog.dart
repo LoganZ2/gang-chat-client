@@ -1,5 +1,7 @@
 part of 'room_management.dart';
 
+enum _RoomMembersSection { roomMembers, newMembers, blacklist }
+
 class RoomMembersDialog extends StatefulWidget {
   const RoomMembersDialog({
     super.key,
@@ -65,6 +67,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       member_filter.RoomMemberPresenceFilter.all;
   member_filter.RoomMemberRoleFilter _roleFilter =
       member_filter.RoomMemberRoleFilter.all;
+  _RoomMembersSection _section = _RoomMembersSection.roomMembers;
   bool _syncingMemberSearch = false;
 
   bool get _canReviewRequests => room_display
@@ -110,7 +113,10 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
     final liveChanged = !identical(widget.initialLive, oldWidget.initialLive);
     final liveBelongsToRoom = widget.initialLive.roomId == widget.room.id;
     if (widget.initialSearchQuery != oldWidget.initialSearchQuery) {
-      setState(() => _applyMemberSearchQuery(widget.initialSearchQuery));
+      setState(() {
+        _applyMemberSearchQuery(widget.initialSearchQuery);
+        _section = _RoomMembersSection.roomMembers;
+      });
     }
     // The host bumps reloadToken when a realtime event invalidates this panel
     // (join requests changed, or the current user's role changed). Re-pull the
@@ -509,6 +515,28 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       maxHeight: _dialogMaxHeight,
       embedded: widget.embedded,
       onClose: _close,
+      pinned: SegmentedControl<_RoomMembersSection>(
+        expanded: true,
+        value: _section,
+        onChanged: (section) => setState(() => _section = section),
+        segments: const [
+          Segment(
+            value: _RoomMembersSection.roomMembers,
+            label: '房间成员',
+            icon: Icons.groups_outlined,
+          ),
+          Segment(
+            value: _RoomMembersSection.newMembers,
+            label: '新成员',
+            icon: Icons.person_add_alt_1,
+          ),
+          Segment(
+            value: _RoomMembersSection.blacklist,
+            label: '黑名单',
+            icon: Icons.block,
+          ),
+        ],
+      ),
       headerAction: _canReviewRequests
           ? ButtonIcon(
               tooltip: '刷新',
@@ -517,11 +545,32 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
               size: 38,
             )
           : null,
-      child: SettingsList(
+      child: switch (_section) {
+        _RoomMembersSection.roomMembers => _buildRoomMembersBody(filterCounts),
+        _RoomMembersSection.newMembers => _buildNewMembersBody(
+          effectiveMembers,
+        ),
+        _RoomMembersSection.blacklist => const SettingsList(children: []),
+      },
+    );
+  }
+
+  Widget _buildRoomMembersBody(
+    member_filter.RoomMemberFilterCounts filterCounts,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (_notice != null)
+          if (_notice != null) ...[
             _NoticeStrip(message: _notice!, icon: Icons.check_circle_outline),
-          if (_error != null) _NoticeStrip(message: _error!, danger: true),
+            const SizedBox(height: 14),
+          ],
+          if (_error != null) ...[
+            _NoticeStrip(message: _error!, danger: true),
+            const SizedBox(height: 14),
+          ],
           _MemberFilters(
             controller: _memberSearchController,
             filterCounts: filterCounts,
@@ -531,39 +580,55 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
                 setState(() => _presenceFilter = value),
             onRoleChanged: (value) => setState(() => _roleFilter = value),
           ),
-          SizedBox(height: 220, child: _buildMemberList()),
-          _InviteSection(
-            controller: _inviteSearchController,
-            currentUser: widget.currentUser,
-            query: _inviteQuery,
-            searching: _searchingInvites,
-            results: _inviteResults,
-            members: effectiveMembers,
-            pendingInviteUserIds: _pendingInviteUserIds,
-            busyUserIds: _busyInviteUserIds,
-            error: _inviteError,
-            enabled: _canInviteMembers,
-            onResolveProfile: _resolveUserProfile,
-            onResolveRoomProfile: _resolveRoomProfile,
-            onOpenRoom: widget.onOpenRoom,
-            onInvite: _invite,
-          ),
-          if (_canReviewRequests)
-            _JoinRequestsSection(
-              requests: _requests,
-              currentUser: widget.currentUser,
-              busyRequestIds: _busyRequestIds,
-              activeDetailRequestId: _activeJoinRequestDetailId,
-              error: _requestError,
-              onResolveProfile: _resolveMemberProfile,
-              onResolveRoomProfile: _resolveRoomProfile,
-              onOpenRoom: widget.onOpenRoom,
-              onDetail: _showJoinRequestDetails,
-              onApprove: (request) => _reviewRequest(request, true),
-              onReject: (request) => _reviewRequest(request, false),
+          const SizedBox(height: 14),
+          Expanded(
+            child: SizedBox.expand(
+              key: const ValueKey('room-members-list'),
+              child: _buildMemberList(),
             ),
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildNewMembersBody(List<RoomMember> effectiveMembers) {
+    return SettingsList(
+      children: [
+        if (_notice != null)
+          _NoticeStrip(message: _notice!, icon: Icons.check_circle_outline),
+        if (_error != null) _NoticeStrip(message: _error!, danger: true),
+        _InviteSection(
+          controller: _inviteSearchController,
+          currentUser: widget.currentUser,
+          query: _inviteQuery,
+          searching: _searchingInvites,
+          results: _inviteResults,
+          members: effectiveMembers,
+          pendingInviteUserIds: _pendingInviteUserIds,
+          busyUserIds: _busyInviteUserIds,
+          error: _inviteError,
+          enabled: _canInviteMembers,
+          onResolveProfile: _resolveUserProfile,
+          onResolveRoomProfile: _resolveRoomProfile,
+          onOpenRoom: widget.onOpenRoom,
+          onInvite: _invite,
+        ),
+        if (_canReviewRequests)
+          _JoinRequestsSection(
+            requests: _requests,
+            currentUser: widget.currentUser,
+            busyRequestIds: _busyRequestIds,
+            activeDetailRequestId: _activeJoinRequestDetailId,
+            error: _requestError,
+            onResolveProfile: _resolveMemberProfile,
+            onResolveRoomProfile: _resolveRoomProfile,
+            onOpenRoom: widget.onOpenRoom,
+            onDetail: _showJoinRequestDetails,
+            onApprove: (request) => _reviewRequest(request, true),
+            onReject: (request) => _reviewRequest(request, false),
+          ),
+      ],
     );
   }
 

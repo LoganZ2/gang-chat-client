@@ -6,7 +6,10 @@ import 'package:client/src/protocol/models.dart';
 void main() {
   test('roomInviteCandidates combines search results and matching members', () {
     final candidates = roomInviteCandidates(
-      searchResults: [_user('external'), _user('member')],
+      searchResults: [
+        _user('external', displayName: 'Alpha External'),
+        _user('member', displayName: 'Alpha Member'),
+      ],
       members: [
         _member('member', uid: '1001'),
         _member('remark', remarkName: 'Alpha note'),
@@ -23,6 +26,35 @@ void main() {
     expect(candidates[1].existing, isTrue);
     expect(candidates[2].existing, isTrue);
   });
+
+  test(
+    'roomInviteCandidates ignores room names in search results and members',
+    () {
+      final candidates = roomInviteCandidates(
+        searchResults: [
+          _user(
+            'room_context',
+            roomDisplayName: 'Alpha Room Alias',
+            commonRooms: const [
+              UserCommonRoom(
+                id: 'room_1',
+                rid: 'R10001',
+                name: 'Alpha Common Room',
+                roomDisplayName: 'Alpha Shared Name',
+              ),
+            ],
+          ),
+          _user('display_match', displayName: 'Alpha Person'),
+        ],
+        members: [
+          _member('room_member', roomDisplayName: 'Alpha Current Room Name'),
+        ],
+        query: 'alpha',
+      );
+
+      expect(candidates.map((item) => item.user.id), ['display_match']);
+    },
+  );
 
   test('roomInviteCandidates marks pending and busy invite states', () {
     final candidates = roomInviteCandidates(
@@ -332,24 +364,35 @@ RoomMember _member(
   String id, {
   String? uid,
   String? remarkName,
+  String? roomDisplayName,
   bool isSuperuser = false,
 }) {
   return RoomMember(
     user: _user(id, uid: uid, isSuperuser: isSuperuser),
     role: 'member',
     joinedAt: DateTime.utc(2026, 6, 5),
+    roomDisplayName: roomDisplayName,
     remarkName: remarkName,
   );
 }
 
-UserSummary _user(String id, {String? uid, bool isSuperuser = false}) {
+UserSummary _user(
+  String id, {
+  String? uid,
+  String? displayName,
+  String? roomDisplayName,
+  List<UserCommonRoom> commonRooms = const [],
+  bool isSuperuser = false,
+}) {
   return UserSummary(
     id: id,
     username: 'user_$id',
-    displayName: 'User $id',
+    displayName: displayName ?? 'User $id',
     avatarUrl: null,
     defaultAvatarKey: 'blue-3',
     uid: uid,
+    roomDisplayName: roomDisplayName,
+    commonRooms: commonRooms,
     isSuperuser: isSuperuser,
   );
 }

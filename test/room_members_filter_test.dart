@@ -283,6 +283,49 @@ void main() {
     ]);
   });
 
+  test('member search ignores room display names from any context', () {
+    final members = [
+      _member(
+        'shared_context',
+        displayName: 'Shared Context',
+        userRoomDisplayName: 'Alpha From Another Room',
+      ),
+      _member(
+        'current_room_name',
+        displayName: 'Current User',
+        roomDisplayName: 'Alpha Current',
+      ),
+      _member('profile_name', displayName: 'Alpha Profile'),
+    ];
+
+    final sharedContextOnly = visibleRoomMembers(
+      members: members,
+      live: _live(),
+      presenceFilter: RoomMemberPresenceFilter.all,
+      roleFilter: RoomMemberRoleFilter.all,
+      query: 'another room',
+    );
+    expect(sharedContextOnly, isEmpty);
+
+    final currentRoomDisplayNameOnly = visibleRoomMembers(
+      members: members,
+      live: _live(),
+      presenceFilter: RoomMemberPresenceFilter.all,
+      roleFilter: RoomMemberRoleFilter.all,
+      query: 'alpha current',
+    );
+    expect(currentRoomDisplayNameOnly, isEmpty);
+
+    final profileName = visibleRoomMembers(
+      members: members,
+      live: _live(),
+      presenceFilter: RoomMemberPresenceFilter.all,
+      roleFilter: RoomMemberRoleFilter.all,
+      query: 'alpha profile',
+    );
+    expect(profileName.map((member) => member.user.id), ['profile_name']);
+  });
+
   test('replaceRoomMember swaps the member with the same user id', () {
     final members = [_member('a'), _member('b'), _member('c')];
     final updated = _member('b', role: 'admin');
@@ -709,6 +752,7 @@ RoomMember _member(
   String? uid,
   String? displayName,
   String? roomDisplayName,
+  String? userRoomDisplayName,
   String? remarkName,
   bool isOnline = true,
   bool isSuperuser = false,
@@ -720,7 +764,7 @@ RoomMember _member(
     avatarUrl: null,
     defaultAvatarKey: 'blue-3',
     uid: uid,
-    roomDisplayName: roomDisplayName,
+    roomDisplayName: userRoomDisplayName ?? roomDisplayName,
     roomRole: role,
     isSuperuser: isSuperuser,
   );

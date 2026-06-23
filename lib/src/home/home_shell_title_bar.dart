@@ -242,6 +242,7 @@ class _TitleSearchFieldState extends State<_TitleSearchField> {
               controller: widget.controller,
               focusNode: _focusNode,
               maxLines: 1,
+              textInputAction: TextInputAction.search,
               onTap: widget.onActivated,
               cursorColor: UiColors.accent,
               cursorWidth: 1.5,
