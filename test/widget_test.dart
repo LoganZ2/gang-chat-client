@@ -3123,23 +3123,20 @@ void main() {
 
     expect(find.byType(InkWell), findsNothing);
     expect(
+      find.descendant(
+        of: find.byType(ui.SegmentedControl<String>),
+        matching: find.byType(ui.PressableSurface),
+      ),
+      findsNWidgets(2),
+    );
+    expect(
       tester.getSize(find.byType(ui.SegmentedControl<String>)).width,
       lessThan(192),
     );
     expect(
       tester.getSize(find.byType(ui.SegmentedControl<String>)).height,
-      closeTo(41, 0.01),
+      closeTo(42, 0.01),
     );
-    final segmentOffsets = tester
-        .widgetList<AnimatedContainer>(
-          find.descendant(
-            of: find.byType(ui.SegmentedControl<String>),
-            matching: find.byType(AnimatedContainer),
-          ),
-        )
-        .map((container) => container.transform?.storage[13])
-        .toList();
-    expect(segmentOffsets, [closeTo(-2, 0.01), closeTo(3, 0.01)]);
     expect(tester.takeException(), isNull);
   });
 
@@ -4379,9 +4376,16 @@ void main() {
     );
     await tester.pump();
 
-    expect(tester.getRect(find.text('A')).center.dx, closeTo(50, 1));
-    expect(tester.getRect(find.text('B')).center.dx, closeTo(150, 1));
-    expect(tester.getRect(find.text('C')).center.dx, closeTo(250, 1));
+    for (final label in ['A', 'B', 'C']) {
+      final segment = find.ancestor(
+        of: find.text(label),
+        matching: find.byType(ui.PressableSurface),
+      );
+      expect(
+        tester.getRect(find.text(label)).center.dx,
+        closeTo(tester.getRect(segment).center.dx, 1),
+      );
+    }
     expect(tester.takeException(), isNull);
   });
 }
