@@ -42,7 +42,7 @@ part 'settings_audio_widgets.dart';
 const _primaryDark = Color(0xFF14171D);
 const _primaryDarkLow = Color(0xFF181C24);
 const _borderColor = Color(0xFF2A2F38);
-const _cyan = Color(0xFF6FCFA6);
+const _cyan = UiColors.controlAccent;
 const _textPrimary = Color(0xFFECEFF1);
 const _textSecondary = Color(0xFFB0B8C0);
 const _textMuted = Color(0xFF6F7785);

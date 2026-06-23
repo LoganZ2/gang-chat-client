@@ -22,6 +22,7 @@ abstract final class UiColors {
   static const textSecondary = Color(0xFFB0B8C0);
   static const textMuted = Color(0xFF6F7785);
   static const accent = Color(0xFF52A07C);
+  static const controlAccent = Color(0xFF6FCFA6);
   static const violet = Color(0xFFB8A3FF);
   static const amber = Color(0xFFD4B675);
   static const danger = Color(0xFFE58383);

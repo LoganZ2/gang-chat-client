@@ -100,9 +100,9 @@ class _SegmentedControlState<T> extends State<SegmentedControl<T>> {
                     padding: const EdgeInsets.symmetric(
                       horizontal: _segmentPadding,
                     ),
-                    backgroundColor: UiColors.surface,
+                    backgroundColor: UiColors.background,
                     selectedBackgroundColor: UiColors.selected,
-                    pressedBackgroundColor: UiColors.surfacePressed,
+                    pressedBackgroundColor: UiColors.surfaceLow,
                     borderColor: UiColors.border,
                     selectedBorderColor: UiColors.selectedBorder,
                     borderRadius: UiRadii.md,
@@ -169,7 +169,9 @@ class _SegmentContent<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final foreground = selected ? UiColors.accent : UiColors.textSecondary;
+    final foreground = selected
+        ? UiColors.controlAccent
+        : UiColors.textSecondary;
     return Stack(
       fit: StackFit.expand,
       clipBehavior: Clip.none,
@@ -194,7 +196,7 @@ class _SegmentContent<T> extends StatelessWidget {
                   style: TextStyle(
                     color: foreground,
                     fontSize: 13,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),

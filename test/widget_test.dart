@@ -3129,6 +3129,35 @@ void main() {
       ),
       findsNWidgets(2),
     );
+    final surfaces = tester
+        .widgetList<ui.PressableSurface>(
+          find.descendant(
+            of: find.byType(ui.SegmentedControl<String>),
+            matching: find.byType(ui.PressableSurface),
+          ),
+        )
+        .toList();
+    expect(surfaces.first.backgroundColor, ui.UiColors.background);
+    expect(surfaces.first.selectedBackgroundColor, ui.UiColors.selected);
+    expect(surfaces.first.pressedBackgroundColor, ui.UiColors.surfaceLow);
+    expect(surfaces.first.selected, isTrue);
+    expect(surfaces.last.selected, isFalse);
+    expect(
+      tester.widget<Text>(find.text('Chat')).style?.color,
+      ui.UiColors.controlAccent,
+    );
+    expect(
+      tester.widget<Text>(find.text('Forms')).style?.color,
+      ui.UiColors.textSecondary,
+    );
+    expect(
+      tester.widget<Text>(find.text('Chat')).style?.fontWeight,
+      FontWeight.w600,
+    );
+    expect(
+      tester.widget<Text>(find.text('Forms')).style?.fontWeight,
+      FontWeight.w600,
+    );
     expect(
       tester.getSize(find.byType(ui.SegmentedControl<String>)).width,
       lessThan(192),
