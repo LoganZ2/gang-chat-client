@@ -34,6 +34,17 @@ RoomBlacklistSearchBodyState roomBlacklistSearchBodyState({
   return RoomBlacklistSearchBodyState.results;
 }
 
+String roomBlacklistActionLabel({
+  required bool member,
+  required bool superuser,
+  required bool blocked,
+}) {
+  if (member) return '在房间内';
+  if (superuser) return '超级用户';
+  if (blocked) return '取消拉黑';
+  return '拉黑';
+}
+
 List<RoomBlacklistCandidate> roomBlacklistCandidates({
   required Iterable<UserSummary> searchResults,
   required Iterable<RoomBlacklistEntry> blacklist,

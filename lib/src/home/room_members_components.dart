@@ -567,13 +567,11 @@ class _BlockUserRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final actionLabel = member
-        ? '房间成员'
-        : superuser
-        ? '超级用户'
-        : blocked
-        ? '取消拉黑'
-        : '拉黑';
+    final actionLabel = room_blacklist.roomBlacklistActionLabel(
+      member: member,
+      superuser: superuser,
+      blocked: blocked,
+    );
     final onPressed = !enabled || member || superuser
         ? null
         : blocked

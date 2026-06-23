@@ -1954,6 +1954,7 @@ void main() {
             app: _homeTestAppContext(
               requestedPaths: requestedPaths,
               currentRoomRole: 'member',
+              currentRoomJoinPolicy: 'closed',
             ),
             realtime: _NoopRealtimeService(),
           ),
@@ -1968,13 +1969,59 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('成员'), findsAtLeastNWidgets(1));
+      expect(find.text('房间成员'), findsNothing);
+      expect(find.text('新成员'), findsNothing);
+      expect(find.text('黑名单'), findsNothing);
       expect(find.text('Morgan'), findsWidgets);
       expect(find.byTooltip('踢出此用户'), findsNothing);
       expect(find.byTooltip('设为管理员'), findsNothing);
       expect(find.byTooltip('转让创建者'), findsNothing);
       expect(requestedPaths, contains('/api/v1/rooms/server-alpha/members'));
+      expect(
+        requestedPaths,
+        isNot(contains('/api/v1/rooms/server-alpha/join-requests')),
+      );
+      expect(
+        requestedPaths,
+        isNot(contains('/api/v1/rooms/server-alpha/blacklist')),
+      );
     },
   );
+
+  testWidgets('authenticated home shell hides new members for closed rooms', (
+    WidgetTester tester,
+  ) async {
+    final requestedPaths = <String>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(
+            requestedPaths: requestedPaths,
+            currentRoomJoinPolicy: 'closed',
+          ),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('房间成员'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('房间成员'), findsOneWidget);
+    expect(find.text('新成员'), findsNothing);
+    expect(find.text('黑名单'), findsOneWidget);
+    expect(requestedPaths, contains('/api/v1/rooms/server-alpha/members'));
+    expect(
+      requestedPaths,
+      isNot(contains('/api/v1/rooms/server-alpha/join-requests')),
+    );
+  });
 
   testWidgets('authenticated home shell lets superusers remove creators', (
     WidgetTester tester,
@@ -4116,6 +4163,7 @@ AuthenticatedAppContext _homeTestAppContext({
   List<Map<String, Object?>>? liveStateUpdates,
   List<String>? liveModerationActions,
   String currentRoomRole = 'owner',
+  String currentRoomJoinPolicy = 'approval_required',
   bool currentUserIsSuperuser = false,
   String secondaryMemberRole = 'member',
   bool includeActionComparisonMember = false,
@@ -4157,6 +4205,7 @@ AuthenticatedAppContext _homeTestAppContext({
       liveStateUpdates: liveStateUpdates,
       liveModerationActions: liveModerationActions,
       currentRoomRole: currentRoomRole,
+      currentRoomJoinPolicy: currentRoomJoinPolicy,
       secondaryMemberRole: secondaryMemberRole,
       includeActionComparisonMember: includeActionComparisonMember,
     ),
@@ -4172,6 +4221,7 @@ GangApi _roomsApi({
   List<Map<String, Object?>>? liveStateUpdates,
   List<String>? liveModerationActions,
   String currentRoomRole = 'owner',
+  String currentRoomJoinPolicy = 'approval_required',
   String secondaryMemberRole = 'member',
   bool includeActionComparisonMember = false,
 }) {
@@ -4214,7 +4264,7 @@ GangApi _roomsApi({
                 name: created['name']! as String,
                 memberCount: 1,
               ),
-            ..._serverListJson,
+            ..._serverListJson(currentRoomJoinPolicy: currentRoomJoinPolicy),
           ],
         });
       }
@@ -4483,7 +4533,8 @@ GangApi _roomsApi({
               liveParticipantCount: 1,
               description: body['description'] as String? ?? '',
               visibility: body['visibility'] as String? ?? 'private',
-              joinPolicy: body['join_policy'] as String? ?? 'approval_required',
+              joinPolicy:
+                  body['join_policy'] as String? ?? currentRoomJoinPolicy,
               aiVoiceAnnouncementsEnabled:
                   body['ai_voice_announcements_enabled'] as bool? ?? true,
             ),
@@ -4496,6 +4547,7 @@ GangApi _roomsApi({
             memberCount: 2,
             onlineMemberCount: 1,
             liveParticipantCount: 1,
+            joinPolicy: currentRoomJoinPolicy,
             role: currentRoomRole,
           ),
         });
@@ -4819,16 +4871,21 @@ http.Response _jsonResponse(Object body) {
   );
 }
 
-final _serverListJson = [
-  _roomCardJson(
-    id: 'server-alpha',
-    name: 'Alpha Room',
-    memberCount: 2,
-    liveParticipantCount: 1,
-    unreadCount: 3,
-  ),
-  _roomCardJson(id: 'server-beta', name: 'Beta Room', memberCount: 5),
-];
+List<Map<String, Object?>> _serverListJson({
+  String currentRoomJoinPolicy = 'approval_required',
+}) {
+  return [
+    _roomCardJson(
+      id: 'server-alpha',
+      name: 'Alpha Room',
+      memberCount: 2,
+      liveParticipantCount: 1,
+      unreadCount: 3,
+      joinPolicy: currentRoomJoinPolicy,
+    ),
+    _roomCardJson(id: 'server-beta', name: 'Beta Room', memberCount: 5),
+  ];
+}
 
 final _currentUserJson = {
   'id': 'user-1',
@@ -4999,6 +5056,7 @@ Map<String, Object?> _userJson({
 Map<String, Object?> _roomCardJson({
   required String id,
   required String name,
+  String joinPolicy = 'approval_required',
   int memberCount = 1,
   int liveParticipantCount = 0,
   int unreadCount = 0,
@@ -5008,6 +5066,7 @@ Map<String, Object?> _roomCardJson({
     'name': name,
     'rid': id,
     'visibility': 'private',
+    'join_policy': joinPolicy,
     'description': '',
     'notification_policy': 'all',
     'avatar_url': null,

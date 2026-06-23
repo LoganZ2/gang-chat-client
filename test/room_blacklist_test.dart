@@ -117,6 +117,25 @@ void main() {
     },
   );
 
+  test('roomBlacklistActionLabel describes candidate actions', () {
+    expect(
+      roomBlacklistActionLabel(member: true, superuser: false, blocked: false),
+      '在房间内',
+    );
+    expect(
+      roomBlacklistActionLabel(member: false, superuser: true, blocked: false),
+      '超级用户',
+    );
+    expect(
+      roomBlacklistActionLabel(member: false, superuser: false, blocked: true),
+      '取消拉黑',
+    );
+    expect(
+      roomBlacklistActionLabel(member: false, superuser: false, blocked: false),
+      '拉黑',
+    );
+  });
+
   test('upsert and remove room blacklist entries keep one row per user', () {
     final oldEntry = _blacklistEntry(_user('blocked', displayName: 'Old'));
     final newEntry = _blacklistEntry(_user('blocked', displayName: 'New'));

@@ -93,12 +93,16 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       )
       .canEditCreatorOnly;
 
-  bool get _canInviteMembers =>
+  bool get _canInviteMembers => _canViewNewMembers;
+
+  bool get _canViewNewMembers =>
       room_invites.roomInvitesEnabled(_room.joinPolicy);
 
   bool get _canManageMembers => room_display
       .roomAccessState(room: _room, currentUser: widget.currentUser)
       .canManageRoom;
+
+  bool get _canViewBlacklist => _canManageMembers;
 
   @override
   void initState() {
@@ -166,6 +170,12 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
   }
 
   void _selectSection(_RoomMembersSection section) {
+    if (section == _RoomMembersSection.newMembers && !_canViewNewMembers) {
+      return;
+    }
+    if (section == _RoomMembersSection.blacklist && !_canViewBlacklist) {
+      return;
+    }
     setState(() => _section = section);
     if (section == _RoomMembersSection.blacklist && !_blacklistLoaded) {
       unawaited(_loadBlacklist());
@@ -255,7 +265,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       final snapshot = await widget.controller.loadRoomMembersSnapshot(
         roomId: _room.id,
         fallbackLive: _live,
-        includeJoinRequests: _canReviewRequests,
+        includeJoinRequests: _canViewNewMembers && _canReviewRequests,
       );
       if (!mounted) return;
       setState(() {
@@ -688,6 +698,33 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       live: _live,
       ownerUserId: _room.createdBy?.id,
     );
+    var activeSection = _section;
+    if (activeSection == _RoomMembersSection.newMembers &&
+        !_canViewNewMembers) {
+      activeSection = _RoomMembersSection.roomMembers;
+    }
+    if (activeSection == _RoomMembersSection.blacklist && !_canViewBlacklist) {
+      activeSection = _RoomMembersSection.roomMembers;
+    }
+    final sections = <Segment<_RoomMembersSection>>[
+      const Segment(
+        value: _RoomMembersSection.roomMembers,
+        label: '房间成员',
+        icon: Icons.groups_outlined,
+      ),
+      if (_canViewNewMembers)
+        const Segment(
+          value: _RoomMembersSection.newMembers,
+          label: '新成员',
+          icon: Icons.person_add_alt_1,
+        ),
+      if (_canViewBlacklist)
+        const Segment(
+          value: _RoomMembersSection.blacklist,
+          label: '黑名单',
+          icon: Icons.block,
+        ),
+    ];
     return _RoomDialogShell(
       title: '成员',
       icon: Icons.group_outlined,
@@ -695,41 +732,28 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       maxHeight: _dialogMaxHeight,
       embedded: widget.embedded,
       onClose: _close,
-      pinned: SegmentedControl<_RoomMembersSection>(
-        expanded: true,
-        value: _section,
-        onChanged: _selectSection,
-        segments: const [
-          Segment(
-            value: _RoomMembersSection.roomMembers,
-            label: '房间成员',
-            icon: Icons.groups_outlined,
-          ),
-          Segment(
-            value: _RoomMembersSection.newMembers,
-            label: '新成员',
-            icon: Icons.person_add_alt_1,
-          ),
-          Segment(
-            value: _RoomMembersSection.blacklist,
-            label: '黑名单',
-            icon: Icons.block,
-          ),
-        ],
-      ),
+      pinned: sections.length > 1
+          ? SegmentedControl<_RoomMembersSection>(
+              expanded: true,
+              value: activeSection,
+              onChanged: _selectSection,
+              segments: sections,
+            )
+          : null,
       headerAction:
           _canReviewRequests ||
-              (_section == _RoomMembersSection.blacklist && _canManageMembers)
+              (activeSection == _RoomMembersSection.blacklist &&
+                  _canManageMembers)
           ? ButtonIcon(
               tooltip: '刷新',
               icon: const Icon(Icons.refresh),
-              onPressed: _section == _RoomMembersSection.blacklist
+              onPressed: activeSection == _RoomMembersSection.blacklist
                   ? _loadBlacklist
                   : _load,
               size: 38,
             )
           : null,
-      child: switch (_section) {
+      child: switch (activeSection) {
         _RoomMembersSection.roomMembers => _buildRoomMembersBody(filterCounts),
         _RoomMembersSection.newMembers => _buildNewMembersBody(
           effectiveMembers,
