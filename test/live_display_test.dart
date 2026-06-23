@@ -190,6 +190,63 @@ void main() {
     );
   });
 
+  test('joined live room summary prefers selected detail then room list', () {
+    final selected = _roomDetail(
+      id: 'room_1',
+      name: 'Alpha',
+      remarkName: 'Project Alpha',
+      defaultAvatarKey: 'green-2',
+    );
+    final rooms = [
+      _roomCard(id: 'room_1', name: 'Old Alpha', defaultAvatarKey: 'blue-3'),
+      _roomCard(
+        id: 'room_2',
+        name: 'Beta',
+        remarkName: 'Room Beta',
+        defaultAvatarKey: 'amber-2',
+      ),
+    ];
+
+    final fromSelected = joinedLiveRoomSummary(
+      joinedLiveRoomId: 'room_1',
+      selectedRoom: selected,
+      rooms: rooms,
+    );
+
+    expect(fromSelected?.roomId, 'room_1');
+    expect(fromSelected?.displayName, 'Project Alpha (Alpha)');
+    expect(fromSelected?.defaultAvatarKey, 'green-2');
+
+    final fromList = joinedLiveRoomSummary(
+      joinedLiveRoomId: 'room_2',
+      selectedRoom: selected,
+      rooms: rooms,
+    );
+
+    expect(fromList?.roomId, 'room_2');
+    expect(fromList?.displayName, 'Room Beta (Beta)');
+    expect(fromList?.defaultAvatarKey, 'amber-2');
+  });
+
+  test('joined live room summary hides when room cannot be resolved', () {
+    expect(
+      joinedLiveRoomSummary(
+        joinedLiveRoomId: null,
+        selectedRoom: null,
+        rooms: const [],
+      ),
+      isNull,
+    );
+    expect(
+      joinedLiveRoomSummary(
+        joinedLiveRoomId: 'missing',
+        selectedRoom: null,
+        rooms: [_roomCard(id: 'room_1', name: 'Alpha')],
+      ),
+      isNull,
+    );
+  });
+
   test(
     'screen source selection keeps existing source or falls back to first',
     () {
@@ -462,4 +519,48 @@ class _Track {
   final String id;
   final bool isScreenShare;
   final bool isLocal;
+}
+
+RoomCard _roomCard({
+  required String id,
+  required String name,
+  String? remarkName,
+  String defaultAvatarKey = 'blue-3',
+}) {
+  return RoomCard(
+    id: id,
+    name: name,
+    remarkName: remarkName,
+    avatarUrl: null,
+    defaultAvatarKey: defaultAvatarKey,
+    memberCount: 2,
+    liveParticipantCount: 0,
+    liveAvatarPreview: const [],
+    lastMessage: null,
+    unreadCount: 0,
+    updatedAt: DateTime.utc(2026, 6, 5),
+  );
+}
+
+RoomDetail _roomDetail({
+  required String id,
+  required String name,
+  String? remarkName,
+  String defaultAvatarKey = 'blue-3',
+}) {
+  return RoomDetail(
+    id: id,
+    name: name,
+    remarkName: remarkName,
+    avatarUrl: null,
+    defaultAvatarKey: defaultAvatarKey,
+    memberCount: 2,
+    myMembership: RoomMembership(
+      joinedAt: DateTime.utc(2026, 6, 5),
+      role: 'member',
+    ),
+    live: _live(const []),
+    createdAt: DateTime.utc(2026, 6, 5),
+    updatedAt: DateTime.utc(2026, 6, 5),
+  );
 }

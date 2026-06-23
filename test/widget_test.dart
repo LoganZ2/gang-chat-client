@@ -423,6 +423,265 @@ void main() {
   });
 
   testWidgets(
+    'authenticated home shell title live room module controls joined voice',
+    (WidgetTester tester) async {
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final requestedPaths = <String>[];
+      final liveSession = _FakeLiveSession();
+      final liveSessionController = _FakeLiveSessionController(
+        session: liveSession,
+      );
+      final app = _homeTestAppContext(requestedPaths: requestedPaths);
+
+      Future<void> pumpHomeAtWidth(double width) async {
+        tester.view.physicalSize = Size(width, 620);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ui.uiTheme(),
+            home: SizedBox(
+              width: width,
+              height: 620,
+              child: HomePage(
+                app: app,
+                audioDeviceStore: const _FakeAudioDeviceStore(),
+                liveSessionController: liveSessionController,
+                realtime: _NoopRealtimeService(),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      await pumpHomeAtWidth(1180);
+      expect(
+        find.byKey(const ValueKey<String>('home-title-live-room')),
+        findsNothing,
+      );
+
+      await tester.tap(find.text('Alpha Room'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('进入语音频道'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ui.Button, '加入'));
+      await tester.pumpAndSettle();
+
+      final dock = find.byKey(const ValueKey<String>('home-title-live-room'));
+      final search = find.byKey(const ValueKey('home-title-search'));
+      expect(dock, findsOneWidget);
+      expect(tester.getSize(dock).width, closeTo(250, 0.01));
+      expect(tester.getSize(dock).height, closeTo(30, 0.01));
+      expect(tester.getRect(dock).right, lessThan(tester.getRect(search).left));
+      expect(
+        find.descendant(of: dock, matching: find.byIcon(Icons.volume_up)),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: dock, matching: find.text('Alpha Room')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: dock, matching: find.byIcon(Icons.mic)),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: dock, matching: find.byIcon(Icons.headphones)),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: dock, matching: find.byIcon(Icons.call_end)),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('home-title-live-room:mic')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(liveSession.inputVolumes.last, 0.0);
+      expect(
+        find.descendant(of: dock, matching: find.byIcon(Icons.mic_off)),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('home-title-live-room:headphones')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(liveSession.outputVolumes.last, 0.0);
+      expect(
+        find.descendant(of: dock, matching: find.byIcon(Icons.headset_off)),
+        findsOneWidget,
+      );
+
+      await pumpHomeAtWidth(900);
+      expect(dock, findsNothing);
+
+      await pumpHomeAtWidth(1180);
+      expect(dock, findsOneWidget);
+      expect(tester.getSize(dock).width, closeTo(250, 0.01));
+      expect(tester.getSize(dock).height, closeTo(30, 0.01));
+
+      await tester.tap(find.text('Beta Room'));
+      await tester.pumpAndSettle();
+      expect(_liveControl('leave'), findsNothing);
+
+      final alphaDetailsBeforeLeave = requestedPaths
+          .where((path) => path == '/api/v1/rooms/server-alpha')
+          .length;
+      await tester.tap(
+        find.byKey(const ValueKey<String>('home-title-live-room:leave')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(liveSession.disconnects, 1);
+      expect(dock, findsNothing);
+      expect(_liveControl('leave'), findsNothing);
+      expect(find.text('Beta Room'), findsWidgets);
+      expect(
+        requestedPaths
+            .where((path) => path == '/api/v1/rooms/server-alpha')
+            .length,
+        alphaDetailsBeforeLeave,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'authenticated home shell title live room module waits for room before switching',
+    (WidgetTester tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1180, 620);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final requestedPaths = <String>[];
+      var holdAlphaDetail = false;
+      final alphaDetailGate = Completer<void>();
+      final liveSession = _FakeLiveSession();
+      final liveSessionController = _FakeLiveSessionController(
+        session: liveSession,
+      );
+      final app = _homeTestAppContext(
+        requestedPaths: requestedPaths,
+        beforeRoomDetailResponse: (roomId) async {
+          if (roomId == 'server-alpha' && holdAlphaDetail) {
+            await alphaDetailGate.future;
+          }
+        },
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: SizedBox(
+            width: 1180,
+            height: 620,
+            child: HomePage(
+              app: app,
+              audioDeviceStore: const _FakeAudioDeviceStore(),
+              liveSessionController: liveSessionController,
+              realtime: _NoopRealtimeService(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Alpha Room'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('进入语音频道'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ui.Button, '加入'));
+      await tester.pumpAndSettle();
+
+      final dock = find.byKey(const ValueKey<String>('home-title-live-room'));
+      expect(dock, findsOneWidget);
+
+      await tester.tap(find.text('Beta Room'));
+      await tester.pumpAndSettle();
+      expect(_liveControl('leave'), findsNothing);
+      expect(find.text('Beta Room'), findsWidgets);
+
+      final alphaDetailsBeforeOpen = requestedPaths
+          .where((path) => path == '/api/v1/rooms/server-alpha')
+          .length;
+      holdAlphaDetail = true;
+      await tester.tap(dock);
+      await tester.pump();
+
+      expect(_liveControl('leave'), findsNothing);
+      expect(find.text('Beta Room'), findsWidgets);
+
+      alphaDetailGate.complete();
+      await tester.pumpAndSettle();
+
+      expect(_liveControl('leave'), findsOneWidget);
+      expect(find.text('Morgan'), findsOneWidget);
+      expect(
+        requestedPaths
+            .where((path) => path == '/api/v1/rooms/server-alpha')
+            .length,
+        greaterThan(alphaDetailsBeforeOpen),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'authenticated home shell title live room module is right on macOS',
+    (WidgetTester tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1180, 620);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final liveSession = _FakeLiveSession();
+      final liveSessionController = _FakeLiveSessionController(
+        session: liveSession,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme().copyWith(platform: TargetPlatform.macOS),
+          home: SizedBox(
+            width: 1180,
+            height: 620,
+            child: HomePage(
+              app: _homeTestAppContext(),
+              audioDeviceStore: const _FakeAudioDeviceStore(),
+              liveSessionController: liveSessionController,
+              realtime: _NoopRealtimeService(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Alpha Room'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('进入语音频道'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ui.Button, '加入'));
+      await tester.pumpAndSettle();
+
+      final dock = find.byKey(const ValueKey<String>('home-title-live-room'));
+      final search = find.byKey(const ValueKey('home-title-search'));
+      expect(dock, findsOneWidget);
+      expect(
+        tester.getRect(dock).left,
+        greaterThan(tester.getRect(search).right),
+      );
+      expect(find.byTooltip('最小化'), findsNothing);
+      expect(find.byTooltip('最大化'), findsNothing);
+      expect(find.byTooltip('关闭'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'authenticated home shell search category filters sidebar rooms',
     (WidgetTester tester) async {
       final requestedPaths = <String>[];
@@ -4068,6 +4327,37 @@ void main() {
     expect(closeCount, 1);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('settings scaffold keeps header title centered', (
+    WidgetTester tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(640, 480);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: ui.SettingsScaffold(
+          icon: Icons.settings,
+          title: '设置',
+          onBack: () {},
+          headerAction: ui.ButtonIcon(
+            tooltip: '刷新',
+            icon: const Icon(Icons.refresh),
+            onPressed: () {},
+          ),
+          body: const SizedBox.expand(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final titleRect = tester.getRect(find.text('设置'));
+    expect(titleRect.center.dx, closeTo(320, 16));
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Color _expectedShadowForBackground(Color background) {
@@ -4183,6 +4473,7 @@ AuthenticatedAppContext _homeTestAppContext({
   bool currentUserIsSuperuser = false,
   String secondaryMemberRole = 'member',
   bool includeActionComparisonMember = false,
+  Future<void> Function(String roomId)? beforeRoomDetailResponse,
 }) {
   final user = CurrentUser(
     id: 'user-1',
@@ -4224,6 +4515,7 @@ AuthenticatedAppContext _homeTestAppContext({
       currentRoomJoinPolicy: currentRoomJoinPolicy,
       secondaryMemberRole: secondaryMemberRole,
       includeActionComparisonMember: includeActionComparisonMember,
+      beforeRoomDetailResponse: beforeRoomDetailResponse,
     ),
   );
 }
@@ -4240,6 +4532,7 @@ GangApi _roomsApi({
   String currentRoomJoinPolicy = 'approval_required',
   String secondaryMemberRole = 'member',
   bool includeActionComparisonMember = false,
+  Future<void> Function(String roomId)? beforeRoomDetailResponse,
 }) {
   return GangApiClient(
     baseUrl: 'http://example.test/api/v1',
@@ -4449,6 +4742,7 @@ GangApi _roomsApi({
         });
       }
       if (request.url.path == '/api/v1/rooms/server-beta') {
+        await beforeRoomDetailResponse?.call('server-beta');
         return _jsonResponse({
           'room': _roomDetailJson(
             id: 'server-beta',
@@ -4556,6 +4850,7 @@ GangApi _roomsApi({
             ),
           });
         }
+        await beforeRoomDetailResponse?.call('server-alpha');
         return _jsonResponse({
           'room': _roomDetailJson(
             id: 'server-alpha',

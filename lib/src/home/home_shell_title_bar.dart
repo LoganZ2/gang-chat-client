@@ -8,10 +8,21 @@ const _homeTitleBarControlsWidth = 134.0;
 const _homeTitleBarControlWidth = 34.0;
 const _homeTitleBarControlHeight = 28.0;
 const _homeTitleBarControlGap = 6.0;
+const _homeTitleBarLiveRoomWidth = 250.0;
+const _homeTitleBarLiveRoomHeight = 30.0;
+const _homeTitleBarLiveRoomHorizontalInset = 10.0;
+const _homeTitleBarLiveRoomSearchGap = 14.0;
+const _homeTitleBarLiveRoomActionSize = 28.0;
 const _homeTitleBarWindowsSearchMinWidth =
     _homeTitleBarSearchWidth +
     _homeTitleBarControlsWidth * 2 +
     _homeTitleBarControlGap * 2;
+const _homeTitleBarLiveRoomMinWidth =
+    _homeTitleBarSearchWidth +
+    (_homeTitleBarLiveRoomWidth +
+            _homeTitleBarLiveRoomHorizontalInset +
+            _homeTitleBarLiveRoomSearchGap) *
+        2;
 
 double _homeTitleBarBrandWidth(BuildContext context, double maxWidth) {
   final nativeMacControls = Theme.of(context).platform == TargetPlatform.macOS;
@@ -39,18 +50,34 @@ class _HomeTitleBar extends StatefulWidget {
     required this.searchController,
     required this.searchTapRegionGroup,
     required this.searchQuery,
+    required this.liveRoom,
+    required this.micMuted,
+    required this.headphonesMuted,
+    required this.voiceBlocked,
     required this.onActivateSearch,
     required this.onSearchTapOutside,
     required this.onClearSearchQuery,
+    required this.onOpenLiveRoom,
+    required this.onToggleMic,
+    required this.onToggleHeadphones,
+    required this.onLeaveLive,
   });
 
   final DesktopWindowController windowController;
   final TextEditingController searchController;
   final Object searchTapRegionGroup;
   final String searchQuery;
+  final live_display.JoinedLiveRoomSummary? liveRoom;
+  final bool micMuted;
+  final bool headphonesMuted;
+  final bool voiceBlocked;
   final VoidCallback onActivateSearch;
   final VoidCallback onSearchTapOutside;
   final VoidCallback onClearSearchQuery;
+  final VoidCallback onOpenLiveRoom;
+  final VoidCallback? onToggleMic;
+  final VoidCallback onToggleHeadphones;
+  final VoidCallback onLeaveLive;
 
   @override
   State<_HomeTitleBar> createState() => _HomeTitleBarState();
@@ -116,6 +143,9 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
               context,
               constraints.maxWidth,
             );
+            final showLiveRoom =
+                widget.liveRoom != null &&
+                constraints.maxWidth >= _homeTitleBarLiveRoomMinWidth;
 
             return Stack(
               children: [
@@ -147,6 +177,27 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
                       ),
                   ],
                 ),
+                if (showLiveRoom)
+                  Positioned(
+                    top:
+                        (_homeTitleBarHeight - _homeTitleBarLiveRoomHeight) / 2,
+                    left: nativeMacControls
+                        ? null
+                        : _homeTitleBarLiveRoomHorizontalInset,
+                    right: nativeMacControls
+                        ? _homeTitleBarLiveRoomHorizontalInset
+                        : null,
+                    child: _TitleLiveRoomDock(
+                      room: widget.liveRoom!,
+                      micMuted: widget.micMuted,
+                      headphonesMuted: widget.headphonesMuted,
+                      voiceBlocked: widget.voiceBlocked,
+                      onOpen: widget.onOpenLiveRoom,
+                      onToggleMic: widget.onToggleMic,
+                      onToggleHeadphones: widget.onToggleHeadphones,
+                      onLeave: widget.onLeaveLive,
+                    ),
+                  ),
                 if (showSearch)
                   Align(
                     alignment: Alignment.center,
@@ -169,6 +220,169 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
               ],
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+class _TitleLiveRoomDock extends StatelessWidget {
+  const _TitleLiveRoomDock({
+    required this.room,
+    required this.micMuted,
+    required this.headphonesMuted,
+    required this.voiceBlocked,
+    required this.onOpen,
+    required this.onToggleMic,
+    required this.onToggleHeadphones,
+    required this.onLeave,
+  });
+
+  final live_display.JoinedLiveRoomSummary room;
+  final bool micMuted;
+  final bool headphonesMuted;
+  final bool voiceBlocked;
+  final VoidCallback onOpen;
+  final VoidCallback? onToggleMic;
+  final VoidCallback onToggleHeadphones;
+  final VoidCallback onLeave;
+
+  @override
+  Widget build(BuildContext context) {
+    final micControl = live_display.liveMicControlState(
+      micMuted: micMuted,
+      voiceBlocked: voiceBlocked,
+    );
+    final resolvedAvatar = AppConfigScope.of(
+      context,
+    ).resolveAssetUrl(room.avatarUrl);
+    return Tooltip(
+      message: '打开语音频道',
+      preferBelow: true,
+      verticalOffset: 22,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          key: const ValueKey<String>('home-title-live-room'),
+          behavior: HitTestBehavior.opaque,
+          onTap: onOpen,
+          child: SizedBox(
+            width: _homeTitleBarLiveRoomWidth,
+            height: _homeTitleBarLiveRoomHeight,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: UiColors.surface,
+                borderRadius: BorderRadius.circular(UiRadii.md),
+                border: Border.all(color: UiColors.border),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.only(left: 8, right: 4),
+                child: Row(
+                  children: [
+                    Icon(Icons.volume_up, size: 16, color: UiColors.accent),
+                    const SizedBox(width: 7),
+                    Avatar(
+                      label: room.displayName,
+                      imageUrl: resolvedAvatar,
+                      defaultAvatarKey: room.defaultAvatarKey,
+                      size: 20,
+                      showBorder: false,
+                    ),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        room.displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: UiTypography.label.copyWith(
+                          color: UiColors.text,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _TitleLiveActionButton(
+                      key: const ValueKey<String>('home-title-live-room:mic'),
+                      tooltip: micControl.mutedForDisplay ? '打开麦克风' : '关闭麦克风',
+                      icon: micControl.mutedForDisplay
+                          ? Icons.mic_off
+                          : Icons.mic,
+                      color: !micControl.enabled
+                          ? UiColors.danger
+                          : micControl.active
+                          ? UiColors.accent
+                          : UiColors.textMuted,
+                      onPressed: micControl.enabled ? onToggleMic : null,
+                    ),
+                    _TitleLiveActionButton(
+                      key: const ValueKey<String>(
+                        'home-title-live-room:headphones',
+                      ),
+                      tooltip: headphonesMuted ? '打开耳机' : '关闭耳机',
+                      icon: headphonesMuted
+                          ? Icons.headset_off
+                          : Icons.headphones,
+                      color: headphonesMuted
+                          ? UiColors.textMuted
+                          : UiColors.accent,
+                      onPressed: onToggleHeadphones,
+                    ),
+                    _TitleLiveActionButton(
+                      key: const ValueKey<String>('home-title-live-room:leave'),
+                      tooltip: '离开语音频道',
+                      icon: Icons.call_end,
+                      color: UiColors.danger,
+                      onPressed: onLeave,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TitleLiveActionButton extends StatelessWidget {
+  const _TitleLiveActionButton({
+    super.key,
+    required this.tooltip,
+    required this.icon,
+    required this.color,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onPressed != null;
+    return Tooltip(
+      message: tooltip,
+      preferBelow: true,
+      verticalOffset: 22,
+      child: MouseRegion(
+        cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            if (enabled) onPressed!();
+          },
+          child: SizedBox.square(
+            dimension: _homeTitleBarLiveRoomActionSize,
+            child: Center(
+              child: Icon(
+                icon,
+                size: 16,
+                color: enabled ? color : color.withValues(alpha: 0.56),
+              ),
+            ),
+          ),
         ),
       ),
     );

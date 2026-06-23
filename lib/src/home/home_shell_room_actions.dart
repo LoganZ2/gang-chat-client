@@ -391,6 +391,71 @@ extension _HomeShellRoomActions on _HomeShellState {
     });
   }
 
+  Future<void> _openJoinedLiveChannel() async {
+    final roomId = _joinedLiveRoomId;
+    if (roomId == null) return;
+    _collapseSearch();
+
+    if (_selectedServerId == roomId && _selectedRoom?.id == roomId) {
+      _openLiveChannel();
+      return;
+    }
+
+    final server = _serverById(roomId);
+    if (server == null) return;
+
+    try {
+      final snapshot = await _roomsController.openRoom(roomId);
+      if (!mounted || _joinedLiveRoomId != roomId) return;
+      _applyJoinedLiveRoomSnapshot(server, snapshot);
+    } catch (error) {
+      if (!mounted || _joinedLiveRoomId != roomId) return;
+      if (_selectedServerId == roomId) {
+        _setHomeState(() => _roomError = error.toString());
+      }
+    }
+  }
+
+  void _applyJoinedLiveRoomSnapshot(
+    RoomCard server,
+    RoomOpenSnapshot snapshot,
+  ) {
+    for (final entry in _stagedAttachments) {
+      entry.uploadController.cancel();
+    }
+
+    _setHomeState(() {
+      _selectedServerId = server.id;
+      _settingsOpen = false;
+      _contentMode = _ContentMode.live;
+      _narrowContentOpen = true;
+      _selectedRoom = snapshot.detail;
+      _live = snapshot.live;
+      _messages = snapshot.messages;
+      _fileTransfers = const {};
+      _fileDownloads = const {};
+      _membersInitialSearchQuery = '';
+      _selectedRoomHasPendingJoinRequests = false;
+      _stagedAttachments.clear();
+      _roomError = null;
+      _sendError = null;
+      _loadingRoom = false;
+      _resetMusicBox();
+      _stickerPanelState = sticker_display.stickerPanelReset(
+        source: _stickerPanelState.source,
+      );
+    });
+    unawaited(_refreshSelectedJoinRequestBadge(snapshot.detail));
+    unawaited(_loadMusicBox(server.id));
+  }
+
+  RoomCard? _serverById(String roomId) {
+    for (final server in _servers) {
+      if (server.id == roomId) return server;
+    }
+    return null;
+  }
+
   void _openChat() {
     _setHomeState(() => _contentMode = _ContentMode.chat);
   }

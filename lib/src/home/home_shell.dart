@@ -406,6 +406,11 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     final fullScreenTrack = _resolveFullScreenLiveTrack();
+    final joinedLiveRoom = live_display.joinedLiveRoomSummary(
+      joinedLiveRoomId: _joinedLiveRoomId,
+      selectedRoom: _selectedRoom,
+      rooms: _servers,
+    );
     return Scaffold(
       backgroundColor: UiColors.background,
       body: DecoratedBox(
@@ -428,9 +433,18 @@ class _HomeShellState extends State<HomeShell> {
                         searchController: _titleSearchController,
                         searchTapRegionGroup: _searchTapRegionGroup,
                         searchQuery: _searchQuery,
+                        liveRoom: joinedLiveRoom,
+                        micMuted: _micMuted,
+                        headphonesMuted: _headphonesMuted,
+                        voiceBlocked: _voiceBlocked,
                         onActivateSearch: _activateSearch,
                         onSearchTapOutside: _collapseSearch,
                         onClearSearchQuery: _clearSearchQuery,
+                        onOpenLiveRoom: () =>
+                            unawaited(_openJoinedLiveChannel()),
+                        onToggleMic: _voiceBlocked ? null : _toggleMicMute,
+                        onToggleHeadphones: _toggleHeadphonesMute,
+                        onLeaveLive: () => unawaited(_leaveLive()),
                       ),
                       Expanded(
                         child: LayoutBuilder(

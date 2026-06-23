@@ -1,5 +1,19 @@
 import '../protocol/models.dart';
 
+class JoinedLiveRoomSummary {
+  const JoinedLiveRoomSummary({
+    required this.roomId,
+    required this.displayName,
+    required this.avatarUrl,
+    required this.defaultAvatarKey,
+  });
+
+  final String roomId;
+  final String displayName;
+  final String? avatarUrl;
+  final String defaultAvatarKey;
+}
+
 class LiveParticipantTileState {
   const LiveParticipantTileState({
     required this.broadcasting,
@@ -142,6 +156,37 @@ bool shouldPatchEndedLocalScreenShare({
       joinedLiveRoomId == selectedRoomId;
 }
 
+JoinedLiveRoomSummary? joinedLiveRoomSummary({
+  required String? joinedLiveRoomId,
+  required RoomDetail? selectedRoom,
+  required Iterable<RoomCard> rooms,
+}) {
+  final roomId = _nonEmpty(joinedLiveRoomId);
+  if (roomId == null) return null;
+
+  final selected = selectedRoom;
+  if (selected != null && selected.id == roomId) {
+    return JoinedLiveRoomSummary(
+      roomId: selected.id,
+      displayName: _roomDetailDisplayName(selected),
+      avatarUrl: selected.avatarUrl,
+      defaultAvatarKey: selected.defaultAvatarKey,
+    );
+  }
+
+  for (final room in rooms) {
+    if (room.id != roomId) continue;
+    return JoinedLiveRoomSummary(
+      roomId: room.id,
+      displayName: room.displayName,
+      avatarUrl: room.avatarUrl,
+      defaultAvatarKey: room.defaultAvatarKey,
+    );
+  }
+
+  return null;
+}
+
 String? reconcileLiveScreenSourceSelection<T>(
   Iterable<T> sources, {
   required String? selectedId,
@@ -282,4 +327,16 @@ String liveCameraOpenFailureMessage(Object error) {
 
 String liveScreenShareFailureMessage(Object error) {
   return '无法共享屏幕: $error';
+}
+
+String _roomDetailDisplayName(RoomDetail room) {
+  final remark = _nonEmpty(room.remarkName);
+  if (remark == null) return room.name;
+  return '$remark (${room.name})';
+}
+
+String? _nonEmpty(String? value) {
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty) return null;
+  return trimmed;
 }
