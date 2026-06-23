@@ -4328,7 +4328,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('settings scaffold keeps header title centered', (
+  testWidgets('settings scaffold keeps main header in the old left layout', (
     WidgetTester tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -4339,23 +4339,49 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: ui.uiTheme(),
-        home: ui.SettingsScaffold(
-          icon: Icons.settings,
-          title: '设置',
-          onBack: () {},
-          headerAction: ui.ButtonIcon(
-            tooltip: '刷新',
-            icon: const Icon(Icons.refresh),
-            onPressed: () {},
-          ),
-          body: const SizedBox.expand(),
-        ),
+        home: SettingsPage(isSubWindow: true, onClose: () {}),
       ),
     );
     await tester.pump();
 
     final titleRect = tester.getRect(find.text('设置'));
-    expect(titleRect.center.dx, closeTo(320, 16));
+    expect(titleRect.left, lessThan(140));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('segmented control centers labels inside each segment', (
+    WidgetTester tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(300, 120);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: Center(
+          child: SizedBox(
+            width: 300,
+            child: ui.SegmentedControl<int>(
+              expanded: true,
+              value: 0,
+              onChanged: (_) {},
+              segments: const [
+                ui.Segment(value: 0, label: 'A'),
+                ui.Segment(value: 1, label: 'B'),
+                ui.Segment(value: 2, label: 'C'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(tester.getRect(find.text('A')).center.dx, closeTo(50, 1));
+    expect(tester.getRect(find.text('B')).center.dx, closeTo(150, 1));
+    expect(tester.getRect(find.text('C')).center.dx, closeTo(250, 1));
     expect(tester.takeException(), isNull);
   });
 }

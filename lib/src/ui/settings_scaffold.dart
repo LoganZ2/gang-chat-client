@@ -55,62 +55,32 @@ class SettingsScaffold extends StatelessWidget {
           Container(
             height: titleBarHeight + 16 + _headerContentHeight,
             padding: const EdgeInsets.fromLTRB(22, titleBarHeight + 16, 22, 0),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final leftReserve = onBack == null ? 0.0 : 54.0;
-                final rightReserve = headerAction == null ? 0.0 : 42.0;
-                var sideReserve = leftReserve;
-                if (rightReserve > sideReserve) {
-                  sideReserve = rightReserve;
-                }
-                final titleMaxWidth = (constraints.maxWidth - sideReserve * 2)
-                    .clamp(0.0, constraints.maxWidth)
-                    .toDouble();
-
-                return Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    if (onBack != null)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: ButtonIcon(
-                          tooltip: '返回',
-                          icon: const Icon(Icons.arrow_back),
-                          onPressed: onBack,
-                          size: 38,
-                        ),
-                      ),
-                    Center(
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(maxWidth: titleMaxWidth),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(icon, color: UiColors.accent, size: 19),
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                title,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: UiColors.text,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+            child: Row(
+              children: [
+                if (onBack != null) ...[
+                  ButtonIcon(
+                    tooltip: '返回',
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: onBack,
+                    size: 38,
+                  ),
+                  const SizedBox(width: 16),
+                ],
+                Icon(icon, color: UiColors.accent, size: 19),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: UiColors.text,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
                     ),
-                    if (headerAction != null)
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: headerAction!,
-                      ),
-                  ],
-                );
-              },
+                  ),
+                ),
+                ?headerAction,
+              ],
             ),
           ),
           if (pinned != null) ...[

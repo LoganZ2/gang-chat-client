@@ -293,6 +293,7 @@ class _SegmentHitTarget<T> extends StatelessWidget {
               duration: const Duration(milliseconds: 140),
               curve: Curves.easeOutCubic,
               transform: Matrix4.translationValues(0, capTop, 0),
+              alignment: Alignment.center,
               height: height,
               padding: const EdgeInsets.symmetric(
                 horizontal: _SegmentedControlState._segmentPadding,
