@@ -528,6 +528,7 @@ void main() {
       await tester.tap(find.text('Beta Room'));
       await tester.pumpAndSettle();
       expect(_liveControl('leave'), findsNothing);
+      expect(find.byType(live_pane.LiveChannelPane), findsNothing);
 
       final alphaDetailsBeforeLeave = requestedPaths
           .where((path) => path == '/api/v1/rooms/server-alpha')
@@ -540,6 +541,7 @@ void main() {
       expect(liveSession.disconnects, 1);
       expect(dock, findsNothing);
       expect(_liveControl('leave'), findsNothing);
+      expect(find.byType(live_pane.LiveChannelPane), findsNothing);
       expect(find.text('Beta Room'), findsWidgets);
       expect(
         requestedPaths

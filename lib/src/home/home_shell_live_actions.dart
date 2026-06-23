@@ -681,6 +681,7 @@ extension _HomeShellLiveActions on _HomeShellState {
   Future<void> _leaveLive() async {
     final roomId = _joinedLiveRoomId;
     if (roomId == null) return;
+    final shouldKeepLivePanelOpen = _contentMode == _ContentMode.live;
     final patch = _liveController.patchLocalDeparture(
       live: _live,
       rooms: _servers,
@@ -700,7 +701,7 @@ extension _HomeShellLiveActions on _HomeShellState {
           () => _applyLiveJoinStatePatch(
             _liveController.patchJoinFinished(
               joinedLiveRoomId: _joinedLiveRoomId,
-              livePanelOpen: true,
+              livePanelOpen: shouldKeepLivePanelOpen,
               error: _roomError,
             ),
           ),
