@@ -20,6 +20,7 @@ export 'live_controller.dart';
 export 'live_display.dart';
 export 'live_session_controller.dart';
 export 'language_preference.dart';
+export 'login_account_history.dart';
 export 'message_display.dart';
 export 'messages_controller.dart';
 export 'realtime_controller.dart';

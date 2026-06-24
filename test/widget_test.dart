@@ -15,6 +15,7 @@ import 'package:client/src/app/audio_device_info.dart';
 import 'package:client/src/app/audio_device_store.dart';
 import 'package:client/src/app/authenticated_app_context.dart';
 import 'package:client/src/app/close_behavior.dart';
+import 'package:client/src/app/login_account_history.dart';
 import 'package:client/src/app/live_session_controller.dart';
 import 'package:client/src/app/realtime_controller.dart';
 import 'package:client/src/auth/auth_client.dart';
@@ -196,7 +197,7 @@ void main() {
       MaterialApp(
         theme: ui.uiTheme(),
         home: LoginPage(
-          sizeForMode: (_, {showingError = false}) => const Size(416, 250),
+          sizeForMode: (_, {showingError = false}) => const Size(416, 284),
           consumeInitialWindowLock: () => true,
           lockAuthWindow:
               ({
@@ -205,7 +206,7 @@ void main() {
                 bool centerWindow = false,
                 Size? size,
               }) async {},
-          onSubmit: (_) async {
+          onSubmit: (_, {required rememberPassword}) async {
             attempts += 1;
             throw Exception('登录失败');
           },
@@ -238,7 +239,7 @@ void main() {
       MaterialApp(
         theme: ui.uiTheme().copyWith(platform: TargetPlatform.windows),
         home: LoginPage(
-          sizeForMode: (_, {showingError = false}) => const Size(430, 257),
+          sizeForMode: (_, {showingError = false}) => const Size(430, 291),
           consumeInitialWindowLock: () => true,
           lockAuthWindow:
               ({
@@ -248,7 +249,7 @@ void main() {
                 Size? size,
               }) async {},
           windowController: DesktopWindowController(),
-          onSubmit: (_) async {},
+          onSubmit: (_, {required rememberPassword}) async {},
         ),
       ),
     );
@@ -260,13 +261,214 @@ void main() {
     expect(find.byTooltip('关闭'), findsOneWidget);
   });
 
+  testWidgets('auth account history expands, selects and deletes records', (
+    WidgetTester tester,
+  ) async {
+    final store = _MemoryLoginAccountHistoryStore([
+      LoginAccountRecord(
+        login: 'kai',
+        password: 'secret123',
+        defaultAvatarKey: 'green-2',
+        useCount: 3,
+        updatedAt: DateTime.utc(2026, 1, 1),
+      ),
+      LoginAccountRecord(
+        login: 'morgan',
+        useCount: 1,
+        updatedAt: DateTime.utc(2026, 1, 2),
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: LoginPage(
+          sizeForMode: (_, {showingError = false}) => const Size(430, 291),
+          consumeInitialWindowLock: () => true,
+          lockAuthWindow:
+              ({
+                bool registering = false,
+                bool moveWindow = false,
+                bool centerWindow = false,
+                Size? size,
+              }) async {},
+          accountHistoryStore: store,
+          onSubmit: (_, {required rememberPassword}) async {},
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(_textFieldWithHint('用户名或邮箱地址'), findsOneWidget);
+    expect(
+      tester.widget<TextField>(_textFieldWithHint('用户名或邮箱地址')).controller!.text,
+      'morgan',
+    );
+    expect(
+      tester.widget<TextField>(_textFieldWithHint('密码')).controller!.text,
+      isEmpty,
+    );
+    expect(tester.widget<ui.UiSwitch>(find.byType(ui.UiSwitch)).value, isFalse);
+    expect(find.byTooltip('清除账号'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('展开账号记录'));
+    await tester.pump();
+
+    expect(find.text('kai'), findsOneWidget);
+    expect(find.text('morgan'), findsWidgets);
+    expect(find.byType(ui.Avatar), findsNWidgets(2));
+    expect(
+      tester.widget<ui.Avatar>(find.byType(ui.Avatar).first).defaultAvatarKey,
+      'green-2',
+    );
+    expect(
+      tester.getTopLeft(find.text('kai')).dy,
+      lessThan(tester.getTopLeft(find.text('morgan').last).dy),
+    );
+    expect(find.byTooltip('删除账号记录'), findsNWidgets(2));
+
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pump();
+
+    expect(find.byTooltip('收起账号记录'), findsNothing);
+    expect(find.byTooltip('展开账号记录'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('清除账号'));
+    await tester.pump();
+
+    expect(
+      tester.widget<TextField>(_textFieldWithHint('用户名或邮箱地址')).controller!.text,
+      isEmpty,
+    );
+    expect(
+      tester.widget<TextField>(_textFieldWithHint('密码')).controller!.text,
+      isEmpty,
+    );
+    expect(tester.widget<ui.UiSwitch>(find.byType(ui.UiSwitch)).value, isFalse);
+    expect(find.byTooltip('清除账号'), findsNothing);
+
+    await tester.tap(find.byTooltip('展开账号记录'));
+    await tester.pump();
+
+    await tester.tap(find.text('kai'));
+    await tester.pump();
+
+    expect(
+      tester.widget<TextField>(_textFieldWithHint('用户名或邮箱地址')).controller!.text,
+      'kai',
+    );
+    expect(
+      tester.widget<TextField>(_textFieldWithHint('密码')).controller!.text,
+      'secret123',
+    );
+    expect(find.byTooltip('收起账号记录'), findsNothing);
+
+    await tester.tap(find.byTooltip('展开账号记录'));
+    await tester.pump();
+    await tester.tap(find.byTooltip('删除账号记录').last);
+    await tester.pump();
+
+    expect(find.text('morgan'), findsNothing);
+    expect(store.records.map((record) => record.login), ['kai']);
+  });
+
+  testWidgets('auth fills remembered password for latest login', (
+    WidgetTester tester,
+  ) async {
+    final store = _MemoryLoginAccountHistoryStore([
+      LoginAccountRecord(
+        login: 'kai',
+        useCount: 4,
+        updatedAt: DateTime.utc(2026, 1, 1),
+      ),
+      LoginAccountRecord(
+        login: 'morgan',
+        password: 'moonbase',
+        useCount: 1,
+        updatedAt: DateTime.utc(2026, 1, 2),
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: LoginPage(
+          sizeForMode: (_, {showingError = false}) => const Size(430, 291),
+          consumeInitialWindowLock: () => true,
+          lockAuthWindow:
+              ({
+                bool registering = false,
+                bool moveWindow = false,
+                bool centerWindow = false,
+                Size? size,
+              }) async {},
+          accountHistoryStore: store,
+          onSubmit: (_, {required rememberPassword}) async {},
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      tester.widget<TextField>(_textFieldWithHint('用户名或邮箱地址')).controller!.text,
+      'morgan',
+    );
+    expect(
+      tester.widget<TextField>(_textFieldWithHint('密码')).controller!.text,
+      'moonbase',
+    );
+    expect(tester.widget<ui.UiSwitch>(find.byType(ui.UiSwitch)).value, isTrue);
+  });
+
+  testWidgets('remember password stores successful login locally', (
+    WidgetTester tester,
+  ) async {
+    final store = _MemoryLoginAccountHistoryStore();
+    bool? submittedRememberPassword;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: LoginPage(
+          sizeForMode: (_, {showingError = false}) => const Size(430, 291),
+          consumeInitialWindowLock: () => true,
+          lockAuthWindow:
+              ({
+                bool registering = false,
+                bool moveWindow = false,
+                bool centerWindow = false,
+                Size? size,
+              }) async {},
+          accountHistoryStore: store,
+          onSubmit: (_, {required rememberPassword}) async {
+            submittedRememberPassword = rememberPassword;
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.enterText(_textFieldWithHint('用户名或邮箱地址'), 'kai');
+    await tester.enterText(_textFieldWithHint('密码'), 'secret123');
+    await tester.tap(find.byTooltip('记住密码'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(ui.Button, '登录'));
+    await tester.pumpAndSettle();
+
+    expect(submittedRememberPassword, isTrue);
+    expect(store.records, hasLength(1));
+    expect(store.records.single.login, 'kai');
+    expect(store.records.single.password, 'secret123');
+  });
+
   testWidgets('register mode exposes full auth form', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(GangApp(tokenStore: _MemoryTokenStore()));
     await tester.pump();
 
-    final loginGap = _authActionGap(tester, submitLabel: '登录');
     final loginBottomGap = _submitBottomGap(tester, submitLabel: '登录');
 
     await tester.tap(find.text('注册'));
@@ -278,10 +480,6 @@ void main() {
     expect(find.text('确认密码'), findsOneWidget);
     expect(find.byTooltip('显示密码'), findsNWidgets(2));
     expect(find.widgetWithText(ui.Button, '创建账号'), findsOneWidget);
-    expect(
-      _authActionGap(tester, submitLabel: '创建账号'),
-      closeTo(loginGap, 0.01),
-    );
     expect(
       _submitBottomGap(tester, submitLabel: '创建账号'),
       closeTo(loginBottomGap, 0.01),
@@ -4518,14 +4716,6 @@ void _expectRectCloseTo(Rect actual, Rect expected) {
   expect(actual.bottom, closeTo(expected.bottom, 0.01));
 }
 
-double _authActionGap(WidgetTester tester, {required String submitLabel}) {
-  final lastInputRect = tester.getRect(find.byType(ui.Input).last);
-  final submitRect = tester.getRect(
-    find.widgetWithText(ui.Button, submitLabel),
-  );
-  return submitRect.top - lastInputRect.bottom;
-}
-
 double _submitBottomGap(WidgetTester tester, {required String submitLabel}) {
   final surfaceRect = tester.getRect(
     find.byKey(const ValueKey('auth-surface')),
@@ -5905,5 +6095,20 @@ class _MemoryTokenStore extends TokenStore {
   @override
   Future<void> writeApiBaseUrl(String baseUrl) async {
     _apiBaseUrl = baseUrl;
+  }
+}
+
+class _MemoryLoginAccountHistoryStore extends LoginAccountHistoryStore {
+  _MemoryLoginAccountHistoryStore([List<LoginAccountRecord> records = const []])
+    : records = List<LoginAccountRecord>.unmodifiable(records);
+
+  List<LoginAccountRecord> records;
+
+  @override
+  Future<List<LoginAccountRecord>> read() async => records;
+
+  @override
+  Future<void> write(List<LoginAccountRecord> records) async {
+    this.records = List<LoginAccountRecord>.unmodifiable(records);
   }
 }

@@ -10,7 +10,9 @@ import '../home/home_page.dart';
 import '../app/auth_session_controller.dart';
 import '../app/authenticated_app_context.dart';
 import '../app/language_preference.dart';
+import '../app/login_account_history.dart';
 import 'desktop_window_controller.dart';
+import 'local_login_account_history_store.dart';
 import 'local_language_preference_store.dart';
 import 'login_page.dart';
 
@@ -21,6 +23,7 @@ class GangApp extends StatelessWidget {
     this.config = const AppConfig.defaults(),
     this.startsAuthenticated = false,
     this.languageStore = const LocalLanguagePreferenceStore(),
+    this.loginAccountHistoryStore = const LocalLoginAccountHistoryStore(),
     DesktopWindowController? windowController,
   }) : windowController = windowController ?? DesktopWindowController();
 
@@ -28,6 +31,7 @@ class GangApp extends StatelessWidget {
   final AppConfig config;
   final bool startsAuthenticated;
   final LanguagePreferenceStore languageStore;
+  final LoginAccountHistoryStore loginAccountHistoryStore;
   final DesktopWindowController windowController;
 
   @override
@@ -43,6 +47,7 @@ class GangApp extends StatelessWidget {
             config: config,
             startsAuthenticated: startsAuthenticated,
             languageStore: languageStore,
+            loginAccountHistoryStore: loginAccountHistoryStore,
             windowController: windowController,
           ),
         ),
@@ -57,6 +62,7 @@ class _AuthGate extends StatefulWidget {
     required this.config,
     required this.startsAuthenticated,
     required this.languageStore,
+    required this.loginAccountHistoryStore,
     required this.windowController,
   });
 
@@ -64,6 +70,7 @@ class _AuthGate extends StatefulWidget {
   final AppConfig config;
   final bool startsAuthenticated;
   final LanguagePreferenceStore languageStore;
+  final LoginAccountHistoryStore loginAccountHistoryStore;
   final DesktopWindowController windowController;
 
   @override
@@ -211,8 +218,19 @@ class _AuthGateState extends State<_AuthGate> {
     );
   }
 
-  Future<void> _submitAuthRequest(AuthRequest request) async {
+  Future<void> _submitAuthRequest(
+    AuthRequest request, {
+    required bool rememberPassword,
+  }) async {
     final session = await _auth.authenticate(request);
+    if (!request.registering) {
+      await _rememberLoginAccount(
+        request,
+        rememberPassword: rememberPassword,
+        avatarUrl: session.user.avatarUrl,
+        defaultAvatarKey: session.user.defaultAvatarKey,
+      );
+    }
     await _rememberAuthLanguage(session.user.language);
     if (!mounted) return;
     await _window.runWithHiddenWindow(() async {
@@ -220,6 +238,30 @@ class _AuthGateState extends State<_AuthGate> {
       await _auth.acceptSession(session);
       await _window.restoreAppWindow();
     });
+  }
+
+  Future<void> _rememberLoginAccount(
+    AuthRequest request, {
+    required bool rememberPassword,
+    required String? avatarUrl,
+    required String defaultAvatarKey,
+  }) async {
+    try {
+      final records = await widget.loginAccountHistoryStore.read();
+      await widget.loginAccountHistoryStore.write(
+        rememberLoginAccount(
+          records: records,
+          login: request.login,
+          password: request.password,
+          rememberPassword: rememberPassword,
+          avatarUrl: avatarUrl,
+          defaultAvatarKey: defaultAvatarKey,
+          updateAvatarMetadata: true,
+        ),
+      );
+    } catch (_) {
+      // Successful authentication should not be blocked by local history IO.
+    }
   }
 
   @override
@@ -249,6 +291,7 @@ class _AuthGateState extends State<_AuthGate> {
           consumeInitialWindowLock: _window.consumeSkipNextAuthWindowLock,
           lockAuthWindow: _window.lockAuthWindow,
           windowController: _window,
+          accountHistoryStore: widget.loginAccountHistoryStore,
         ),
       );
     }
