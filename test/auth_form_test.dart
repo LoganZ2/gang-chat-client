@@ -12,7 +12,25 @@ void main() {
     );
 
     expect(result.request, isNull);
-    expect(result.error, '请输入账号和密码后继续。');
+    expect(result.error, '请输入账号和密码后继续');
+  });
+
+  test('authRequestFromForm localizes validation errors', () {
+    final english = authRequestFromForm(
+      registering: false,
+      login: ' ',
+      password: '',
+      language: 'en',
+    );
+    final traditional = authRequestFromForm(
+      registering: true,
+      login: 'a@example.test',
+      password: 'secret',
+      language: 'zh-Hant',
+    );
+
+    expect(english.error, 'Enter your account and password to continue');
+    expect(traditional.error, '使用者名稱不能為空');
   });
 
   test('authRequestFromForm builds trimmed login request', () {
@@ -35,7 +53,7 @@ void main() {
         login: 'a@example.test',
         password: 'secret',
       ).error,
-      '用户名不能为空。',
+      '用户名不能为空',
     );
     expect(
       authRequestFromForm(
@@ -45,7 +63,7 @@ void main() {
         password: 'secret',
         confirmPassword: 'different',
       ).error,
-      '两次输入的密码不一致。',
+      '两次输入的密码不一致',
     );
   });
 
@@ -81,7 +99,7 @@ void main() {
     expect(failed.error, '无法连接服务器：Bad state: offline');
   });
 
-  test('auth submit failure uses auth exception messages directly', () {
+  test('auth submit failure localizes auth exception codes', () {
     final failed = authSubmitFailed(
       AuthException(
         'Invalid credentials',
@@ -89,8 +107,26 @@ void main() {
         code: 'invalid_credentials',
       ),
     );
+    final english = authSubmitFailed(
+      AuthException(
+        'invalid credentials',
+        statusCode: 401,
+        code: 'unauthorized',
+      ),
+      language: 'en',
+    );
+    final traditional = authSubmitFailed(
+      AuthException(
+        'too many failed login attempts',
+        statusCode: 429,
+        code: 'rate_limited',
+      ),
+      language: 'zh-Hant',
+    );
 
     expect(failed.busy, isFalse);
-    expect(failed.error, 'Invalid credentials');
+    expect(failed.error, '账号或密码不正确');
+    expect(english.error, 'Incorrect account or password');
+    expect(traditional.error, '登入嘗試次數過多，請稍後再試');
   });
 }

@@ -9,7 +9,9 @@ import '../ui/ui.dart';
 import '../home/home_page.dart';
 import '../app/auth_session_controller.dart';
 import '../app/authenticated_app_context.dart';
+import '../app/language_preference.dart';
 import 'desktop_window_controller.dart';
+import 'local_language_preference_store.dart';
 import 'login_page.dart';
 
 class GangApp extends StatelessWidget {
@@ -18,12 +20,14 @@ class GangApp extends StatelessWidget {
     this.tokenStore = const TokenStore(),
     this.config = const AppConfig.defaults(),
     this.startsAuthenticated = false,
+    this.languageStore = const LocalLanguagePreferenceStore(),
     DesktopWindowController? windowController,
   }) : windowController = windowController ?? DesktopWindowController();
 
   final TokenStore tokenStore;
   final AppConfig config;
   final bool startsAuthenticated;
+  final LanguagePreferenceStore languageStore;
   final DesktopWindowController windowController;
 
   @override
@@ -38,6 +42,7 @@ class GangApp extends StatelessWidget {
             tokenStore: tokenStore,
             config: config,
             startsAuthenticated: startsAuthenticated,
+            languageStore: languageStore,
             windowController: windowController,
           ),
         ),
@@ -51,12 +56,14 @@ class _AuthGate extends StatefulWidget {
     required this.tokenStore,
     required this.config,
     required this.startsAuthenticated,
+    required this.languageStore,
     required this.windowController,
   });
 
   final TokenStore tokenStore;
   final AppConfig config;
   final bool startsAuthenticated;
+  final LanguagePreferenceStore languageStore;
   final DesktopWindowController windowController;
 
   @override
@@ -74,6 +81,7 @@ class _AuthGateState extends State<_AuthGate> {
   // The window starts hidden and is revealed once we know which screen to show.
   bool _windowRevealed = false;
   bool _exitingSessionForAppExit = false;
+  String _authLanguage = defaultLanguagePreference;
   Timer? _revealFallbackTimer;
 
   DesktopWindowController get _window => widget.windowController;
@@ -89,10 +97,14 @@ class _AuthGateState extends State<_AuthGate> {
         unawaited(_ensureWindowVisible());
       });
     }
+    unawaited(_loadAuthLanguage());
     _restoreSession();
   }
 
   void _onAuthChanged() {
+    if (_auth.session == null) {
+      unawaited(_loadAuthLanguage());
+    }
     if (mounted) setState(() {});
   }
 
@@ -112,6 +124,10 @@ class _AuthGateState extends State<_AuthGate> {
     }
 
     if (result.hasSession) {
+      final session = _auth.session;
+      if (session != null) {
+        unawaited(_rememberAuthLanguage(session.user.language));
+      }
       if (widget.startsAuthenticated) {
         setState(() => _initialRestoreDone = true);
         await WidgetsBinding.instance.endOfFrame;
@@ -146,7 +162,30 @@ class _AuthGateState extends State<_AuthGate> {
     await _window.showInitialWindow();
   }
 
+  Future<void> _loadAuthLanguage() async {
+    try {
+      final language = await widget.languageStore.read();
+      if (!mounted) return;
+      setState(() => _authLanguage = normalizeLanguagePreference(language));
+    } catch (_) {
+      // A missing/unavailable preference store should keep the default language.
+    }
+  }
+
+  Future<void> _rememberAuthLanguage(String language) async {
+    final normalized = normalizeLanguagePreference(language);
+    if (mounted && _authLanguage != normalized) {
+      setState(() => _authLanguage = normalized);
+    }
+    try {
+      await widget.languageStore.write(normalized);
+    } catch (_) {
+      // Login should not fail because a non-sensitive local preference failed.
+    }
+  }
+
   Future<void> _logout() async {
+    await _loadAuthLanguage();
     AuthSession? session;
     await _window.runWithHiddenWindow(() async {
       if (!mounted) return;
@@ -174,6 +213,7 @@ class _AuthGateState extends State<_AuthGate> {
 
   Future<void> _submitAuthRequest(AuthRequest request) async {
     final session = await _auth.authenticate(request);
+    await _rememberAuthLanguage(session.user.language);
     if (!mounted) return;
     await _window.runWithHiddenWindow(() async {
       if (!mounted) return;
@@ -203,10 +243,12 @@ class _AuthGateState extends State<_AuthGate> {
       return Theme(
         data: uiTheme(),
         child: LoginPage(
+          language: _authLanguage,
           onSubmit: _submitAuthRequest,
           sizeForMode: _window.authWidgetSize,
           consumeInitialWindowLock: _window.consumeSkipNextAuthWindowLock,
           lockAuthWindow: _window.lockAuthWindow,
+          windowController: _window,
         ),
       );
     }
@@ -220,7 +262,11 @@ class _AuthGateState extends State<_AuthGate> {
     );
 
     return SelectionContainer.disabled(
-      child: HomePage(app: app, windowController: widget.windowController),
+      child: HomePage(
+        app: app,
+        languageStore: widget.languageStore,
+        windowController: widget.windowController,
+      ),
     );
   }
 }

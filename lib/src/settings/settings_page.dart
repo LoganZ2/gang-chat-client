@@ -14,6 +14,7 @@ import '../app/audio_device_store.dart';
 import '../app/audio_levels.dart';
 import '../app/close_behavior.dart';
 import '../app/confirmation.dart';
+import '../app/language_preference.dart';
 import '../app/settings_controller.dart';
 import '../app/settings_shell_state.dart';
 import '../app/sticker_management.dart';
@@ -31,6 +32,7 @@ import '../shell/clipboard_service.dart';
 import '../shell/file_selection_service.dart';
 import '../shell/local_close_behavior_store.dart';
 import '../shell/local_audio_device_store.dart';
+import '../shell/local_language_preference_store.dart';
 import '../ui/avatar_crop_dialog.dart';
 import '../ui/sticker_upload_adapter.dart';
 import '../ui/ui.dart';
@@ -63,6 +65,7 @@ class SettingsPage extends StatefulWidget {
     this.clipboardService = const ClipboardService(),
     this.fileSelectionService = const FileSelectionService(),
     this.closeBehaviorStore = const LocalCloseBehaviorStore(),
+    this.languageStore = const LocalLanguagePreferenceStore(),
     this.currentUser,
     this.onUserUpdated,
     this.onDeviceSelected,
@@ -85,6 +88,7 @@ class SettingsPage extends StatefulWidget {
   final ClipboardService clipboardService;
   final FileSelectionService fileSelectionService;
   final CloseBehaviorStore closeBehaviorStore;
+  final LanguagePreferenceStore languageStore;
   final CurrentUser? currentUser;
   final ValueChanged<CurrentUser>? onUserUpdated;
   final void Function(String kind, String deviceId)? onDeviceSelected;
@@ -269,6 +273,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _syncUserFields(user);
       });
       widget.onUserUpdated?.call(user);
+      unawaited(_rememberLanguagePreference(user.language));
     } catch (e) {
       if (!mounted) return;
       setState(
@@ -335,6 +340,14 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Future<void> _rememberLanguagePreference(String language) async {
+    try {
+      await widget.languageStore.write(language);
+    } catch (_) {
+      // A local language-cache failure should not block server-backed settings.
+    }
+  }
+
   void _setCloseBehavior(String value) {
     setState(() {
       _closeBehavior = closeBehaviorFromStorageValue(value);
@@ -374,6 +387,7 @@ class _SettingsPageState extends State<SettingsPage> {
       language: _language,
     );
     if (draft.error == null && draft.noChanges) {
+      await _rememberLanguagePreference(_language);
       if (!mounted) return;
       setState(() => _notice = '偏好设置已保存');
       return;
@@ -658,6 +672,10 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
     if (draft.noChanges) {
+      if (target == AccountFormSaveTarget.preferences) {
+        await _rememberLanguagePreference(_language);
+        if (!mounted) return;
+      }
       setState(
         () => _applyAccountFormSaveStatePatch(
           accountFormSaveNoChanges(
@@ -703,6 +721,10 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         );
         return;
+      }
+      if (target == AccountFormSaveTarget.preferences) {
+        await _rememberLanguagePreference(updated.language);
+        if (!mounted) return;
       }
       setState(() {
         _user = updated;

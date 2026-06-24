@@ -1,5 +1,6 @@
 import '../protocol/models.dart';
 import 'account_display.dart';
+import 'language_preference.dart';
 
 enum AccountFormSaveTarget { account, profile, preferences }
 
@@ -640,12 +641,7 @@ AccountUpdateDraft preferencesUpdateDraftFromForm({
 }
 
 String normalizeAccountLanguage(String language) {
-  return switch (language.trim()) {
-    'zh-Hans' => 'zh-Hans',
-    'zh-Hant' => 'zh-Hant',
-    'en' => 'en',
-    _ => defaultUserLanguage,
-  };
+  return normalizeLanguagePreference(language);
 }
 
 ProfileUpdateDraft profileUpdateDraftFromForm({

@@ -23,6 +23,7 @@ import '../app/global_search_controller.dart';
 import '../app/live_controller.dart';
 import '../app/live_display.dart' as live_display;
 import '../app/live_session_controller.dart';
+import '../app/language_preference.dart';
 import '../app/message_display.dart' as message_display;
 import '../app/messages_controller.dart';
 import '../app/music_box_controller.dart';
@@ -50,6 +51,7 @@ import '../shell/desktop_window_controller.dart';
 import '../shell/file_drop_service.dart';
 import '../shell/file_selection_service.dart';
 import '../shell/voice_playback_service.dart';
+import '../shell/window_controls.dart';
 import '../ui/ui.dart';
 import 'chat_pane.dart';
 import 'home_content.dart';
@@ -96,6 +98,7 @@ class HomeShell extends StatefulWidget {
     required this.app,
     required this.audioDeviceStore,
     required this.closeBehaviorStore,
+    required this.languageStore,
     required this.windowController,
     this.liveSessionController,
     this.realtime,
@@ -104,6 +107,7 @@ class HomeShell extends StatefulWidget {
   final AuthenticatedAppContext app;
   final AudioDeviceStore audioDeviceStore;
   final CloseBehaviorStore closeBehaviorStore;
+  final LanguagePreferenceStore languageStore;
   final DesktopWindowController windowController;
   final LiveSessionController? liveSessionController;
   final RealtimeService? realtime;

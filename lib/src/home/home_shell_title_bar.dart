@@ -4,10 +4,7 @@ const _homeTitleBarHeight = 44.0;
 const _homeTitleBarSearchWidth = 520.0;
 const _homeTitleBarSearchHeight = 30.0;
 const _homeTitleBarMinSearchWidth = 122.0;
-const _homeTitleBarControlsWidth = 134.0;
-const _homeTitleBarControlWidth = 34.0;
-const _homeTitleBarControlHeight = 28.0;
-const _homeTitleBarControlGap = 6.0;
+const _homeTitleBarControlsWidth = appWindowControlsWidth;
 const _homeTitleBarLiveRoomWidth = 250.0;
 const _homeTitleBarLiveRoomHeight = 30.0;
 const _homeTitleBarLiveRoomHorizontalInset = 10.0;
@@ -16,7 +13,7 @@ const _homeTitleBarLiveRoomActionSize = 28.0;
 const _homeTitleBarWindowsSearchMinWidth =
     _homeTitleBarSearchWidth +
     _homeTitleBarControlsWidth * 2 +
-    _homeTitleBarControlGap * 2;
+    appWindowControlGap * 2;
 const _homeTitleBarLiveRoomMinWidth =
     _homeTitleBarSearchWidth +
     (_homeTitleBarLiveRoomWidth +
@@ -153,14 +150,14 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
                   children: [
                     SizedBox(
                       width: brandWidth,
-                      child: _WindowDragRegion(
+                      child: AppWindowDragRegion(
                         windowController: widget.windowController,
                         onDoubleTap: _toggleMaximize,
                         child: const SizedBox.expand(),
                       ),
                     ),
                     Expanded(
-                      child: _WindowDragRegion(
+                      child: AppWindowDragRegion(
                         windowController: widget.windowController,
                         onDoubleTap: _toggleMaximize,
                         child: const SizedBox.expand(),
@@ -168,7 +165,7 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
                     ),
                     if (!nativeMacControls)
                       SelectionContainer.disabled(
-                        child: _WindowControls(
+                        child: AppWindowControls(
                           maximized: _maximized,
                           onMinimize: _minimize,
                           onToggleMaximize: _toggleMaximize,
@@ -1230,156 +1227,4 @@ PublicRoom _publicRoomFromRoomCard(RoomCard room) {
       role: 'member',
     ),
   );
-}
-
-class _WindowDragRegion extends StatelessWidget {
-  const _WindowDragRegion({
-    required this.windowController,
-    required this.child,
-    required this.onDoubleTap,
-  });
-
-  final DesktopWindowController windowController;
-  final Widget child;
-  final VoidCallback onDoubleTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onPanStart: (_) => unawaited(windowController.startDragging()),
-      onDoubleTap: onDoubleTap,
-      child: child,
-    );
-  }
-}
-
-class _WindowControls extends StatelessWidget {
-  const _WindowControls({
-    required this.maximized,
-    required this.onMinimize,
-    required this.onToggleMaximize,
-    required this.onClose,
-  });
-
-  final bool maximized;
-  final VoidCallback onMinimize;
-  final VoidCallback onToggleMaximize;
-  final VoidCallback onClose;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: _homeTitleBarControlsWidth,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            _WindowControlButton(
-              tooltip: '最小化',
-              icon: Icons.remove,
-              onPressed: onMinimize,
-            ),
-            const SizedBox(width: _homeTitleBarControlGap),
-            _WindowControlButton(
-              tooltip: maximized ? '还原' : '最大化',
-              icon: maximized ? Icons.filter_none : Icons.crop_square,
-              onPressed: onToggleMaximize,
-            ),
-            const SizedBox(width: _homeTitleBarControlGap),
-            _WindowControlButton(
-              tooltip: '关闭',
-              icon: Icons.close,
-              danger: true,
-              onPressed: onClose,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _WindowControlButton extends StatefulWidget {
-  const _WindowControlButton({
-    required this.tooltip,
-    required this.icon,
-    required this.onPressed,
-    this.danger = false,
-  });
-
-  final String tooltip;
-  final IconData icon;
-  final VoidCallback onPressed;
-  final bool danger;
-
-  @override
-  State<_WindowControlButton> createState() => _WindowControlButtonState();
-}
-
-class _WindowControlButtonState extends State<_WindowControlButton> {
-  bool _hovered = false;
-  bool _pressed = false;
-
-  void _setHovered(bool hovered) {
-    if (_hovered == hovered) return;
-    setState(() => _hovered = hovered);
-  }
-
-  void _setPressed(bool pressed) {
-    if (_pressed == pressed) return;
-    setState(() => _pressed = pressed);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final active = _hovered || _pressed;
-    final background = active
-        ? widget.danger
-              ? const Color(0xFF332126)
-              : UiColors.surface
-        : Colors.transparent;
-    final border = active
-        ? widget.danger
-              ? UiColors.dangerBorder
-              : UiColors.border
-        : Colors.transparent;
-    final foreground = active && widget.danger
-        ? UiColors.danger
-        : UiColors.textSecondary;
-
-    return Tooltip(
-      message: widget.tooltip,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => _setHovered(true),
-        onExit: (_) {
-          _setHovered(false);
-          _setPressed(false);
-        },
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: (_) => _setPressed(true),
-          onTapCancel: () => _setPressed(false),
-          onTapUp: (_) => _setPressed(false),
-          onTap: widget.onPressed,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 90),
-            curve: Curves.easeOutCubic,
-            width: _homeTitleBarControlWidth,
-            height: _homeTitleBarControlHeight,
-            decoration: BoxDecoration(
-              color: background,
-              borderRadius: BorderRadius.circular(UiRadii.sm),
-              border: Border.all(color: border),
-            ),
-            child: Center(
-              child: Icon(widget.icon, size: 16, color: foreground),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }

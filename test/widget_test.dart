@@ -166,7 +166,7 @@ void main() {
     );
     expect(modeSwitchRect.top - authSurfaceRect.top, closeTo(36, 0.01));
     _expectSubmitButtonFullWidth(tester, submitLabel: '登录');
-    expect(find.text('请输入账号和密码后继续。'), findsNothing);
+    expect(find.text('请输入账号和密码后继续'), findsNothing);
     final normalSurfaceHeight = tester
         .getSize(find.byKey(const ValueKey('auth-surface')))
         .height;
@@ -175,7 +175,7 @@ void main() {
     await tester.tap(find.widgetWithText(ui.Button, '登录'));
     await tester.pump();
 
-    expect(find.text('请输入账号和密码后继续。'), findsOneWidget);
+    expect(find.text('请输入账号和密码后继续'), findsOneWidget);
     expect(
       tester.getSize(find.byKey(const ValueKey('auth-surface'))).height,
       closeTo(normalSurfaceHeight + 20, 0.01),
@@ -231,6 +231,35 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('windows auth page shows compact custom window controls', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme().copyWith(platform: TargetPlatform.windows),
+        home: LoginPage(
+          sizeForMode: (_, {showingError = false}) => const Size(430, 257),
+          consumeInitialWindowLock: () => true,
+          lockAuthWindow:
+              ({
+                bool registering = false,
+                bool moveWindow = false,
+                bool centerWindow = false,
+                Size? size,
+              }) async {},
+          windowController: DesktopWindowController(),
+          onSubmit: (_) async {},
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byTooltip('最小化'), findsOneWidget);
+    expect(find.byTooltip('最大化'), findsNothing);
+    expect(find.byTooltip('还原'), findsNothing);
+    expect(find.byTooltip('关闭'), findsOneWidget);
+  });
+
   testWidgets('register mode exposes full auth form', (
     WidgetTester tester,
   ) async {
@@ -258,7 +287,7 @@ void main() {
       closeTo(loginBottomGap, 0.01),
     );
     _expectSubmitButtonFullWidth(tester, submitLabel: '创建账号');
-    expect(find.text('请输入账号和密码后继续。'), findsNothing);
+    expect(find.text('请输入账号和密码后继续'), findsNothing);
     final normalSurfaceHeight = tester
         .getSize(find.byKey(const ValueKey('auth-surface')))
         .height;
@@ -272,7 +301,7 @@ void main() {
     await tester.tap(find.widgetWithText(ui.Button, '创建账号'));
     await tester.pump();
 
-    expect(find.text('请输入账号和密码后继续。'), findsOneWidget);
+    expect(find.text('请输入账号和密码后继续'), findsOneWidget);
     expect(
       tester.getSize(find.byKey(const ValueKey('auth-surface'))).height,
       closeTo(normalSurfaceHeight + 20, 0.01),
@@ -2952,7 +2981,7 @@ void main() {
     await tester.tap(find.widgetWithText(ui.Button, '登录'));
     await tester.pump();
 
-    expect(find.text('请输入账号和密码后继续。'), findsOneWidget);
+    expect(find.text('请输入账号和密码后继续'), findsOneWidget);
   });
 
   testWidgets('button lays out with automatic width in a row', (

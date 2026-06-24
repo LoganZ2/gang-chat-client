@@ -282,7 +282,7 @@ class DesktopWindowController {
         backgroundColor: appWindowBackground,
         title: 'Gang Chat',
         titleBarStyle: TitleBarStyle.hidden,
-        windowButtonVisibility: true,
+        windowButtonVisibility: false,
         center: true,
       );
     }
@@ -293,7 +293,7 @@ class DesktopWindowController {
       backgroundColor: appWindowBackground,
       title: 'Gang Chat',
       titleBarStyle: TitleBarStyle.hidden,
-      windowButtonVisibility: true,
+      windowButtonVisibility: false,
       center: true,
     );
   }
@@ -358,7 +358,7 @@ class DesktopWindowController {
   }
 
   Future<void> _setAuthTitleBar() {
-    return _setTitleBar(windowButtonVisibility: true);
+    return _setTitleBar(windowButtonVisibility: Platform.isMacOS);
   }
 
   Future<void> _setAppTitleBar() {
