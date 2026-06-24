@@ -136,6 +136,7 @@ class _HomeShellState extends State<HomeShell> {
   RoomDetail? _selectedRoom;
   LiveState? _live;
   List<Message> _messages = const [];
+  int _selectedRoomNewMessageCount = 0;
   Map<String, FileTransferState> _fileTransfers = const {};
   // Active file downloads, keyed by [file_display.fileDownloadKey]. Kept apart
   // from [_fileTransfers] (outgoing uploads) so the two never collide on a
@@ -184,6 +185,7 @@ class _HomeShellState extends State<HomeShell> {
   String? _busyNotificationInviteId;
   String? _busyNotificationApplicationId;
   bool _hasPendingRoomInvites = false;
+  int _pendingRoomNotificationCount = 0;
   bool _selectedRoomHasPendingJoinRequests = false;
   String? _joinedLiveRoomId;
   bool _joiningLive = false;
@@ -196,6 +198,7 @@ class _HomeShellState extends State<HomeShell> {
   bool _voiceBlocked = false;
   final Set<String> _busyLiveMemberRemovalIds = <String>{};
   final Set<String> _busyLiveMemberModerationIds = <String>{};
+  final Map<String, String> _lastMarkedReadMessageIds = <String, String>{};
   // The selected room's music box snapshot, or null when not loaded / disabled.
   // Overwritten wholesale from state fetches, write responses, and the
   // `music_box_changed` SSE event; never merged field by field.
@@ -288,6 +291,7 @@ class _HomeShellState extends State<HomeShell> {
       _selectedRoom = null;
       _live = null;
       _messages = const [];
+      _selectedRoomNewMessageCount = 0;
       _fileTransfers = const {};
       _fileDownloads = const {};
       _liveStageSelections.clear();
@@ -310,6 +314,7 @@ class _HomeShellState extends State<HomeShell> {
       _busyNotificationInviteId = null;
       _busyNotificationApplicationId = null;
       _hasPendingRoomInvites = false;
+      _pendingRoomNotificationCount = 0;
       _selectedRoomHasPendingJoinRequests = false;
       _joinedLiveRoomId = null;
       _joiningLive = false;
@@ -329,6 +334,7 @@ class _HomeShellState extends State<HomeShell> {
       _busySearchPublicRoomId = null;
       _searchPendingPublicRoomIds = const {};
       _voicePlayback = const VoicePlaybackSnapshot();
+      _lastMarkedReadMessageIds.clear();
     });
     unawaited(_voicePlaybackService.stop());
     unawaited(_loadServers());

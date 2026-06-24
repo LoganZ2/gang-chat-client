@@ -91,6 +91,7 @@ class _MessageStage extends StatefulWidget {
     required this.loading,
     required this.error,
     required this.messages,
+    required this.newMessageCount,
     required this.fileTransfers,
     required this.fileDownloads,
     required this.live,
@@ -98,6 +99,7 @@ class _MessageStage extends StatefulWidget {
     required this.voicePlaybackActions,
     required this.imagePreviewActions,
     required this.onRetry,
+    required this.onViewedNewMessages,
     required this.bottomInset,
     this.onResolveSenderProfile,
     this.onResolveRoomProfile,
@@ -112,6 +114,7 @@ class _MessageStage extends StatefulWidget {
   final bool loading;
   final String? error;
   final List<Message> messages;
+  final int newMessageCount;
   final Map<String, FileTransferState> fileTransfers;
   final Map<String, FileTransferState> fileDownloads;
   final LiveState? live;
@@ -119,6 +122,7 @@ class _MessageStage extends StatefulWidget {
   final ChatVoicePlaybackActions voicePlaybackActions;
   final ChatImagePreviewActions imagePreviewActions;
   final VoidCallback onRetry;
+  final VoidCallback onViewedNewMessages;
   // Breathing room at the bottom of the list, between the last message and the
   // composer row that now sits below it.
   final double bottomInset;
@@ -139,9 +143,11 @@ class _MessageStageState extends State<_MessageStage> {
 
   bool _showDetailedTimestamps = false;
   bool _showLatestButton = false;
+  bool _newMessageJumpDismissed = false;
   late final ScrollController _scrollController;
   final GlobalKey _messageListKey = GlobalKey();
   final GlobalKey _oldestMessageKey = GlobalKey();
+  final GlobalKey _firstNewMessageKey = GlobalKey();
   double _underflowBottomSpacer = 0;
   bool _underflowAlignmentScheduled = false;
   bool _messageListReady = false;
@@ -174,6 +180,7 @@ class _MessageStageState extends State<_MessageStage> {
     if (oldWidget.roomId != widget.roomId) {
       _showDetailedTimestamps = false;
       _showLatestButton = false;
+      _newMessageJumpDismissed = false;
       _underflowBottomSpacer = 0;
       _messageListReady = false;
       // New room: restore its remembered position, or snap to latest.
@@ -184,6 +191,9 @@ class _MessageStageState extends State<_MessageStage> {
         _scrollToBottom(animated: false);
       }
       return;
+    }
+    if (oldWidget.newMessageCount != widget.newMessageCount) {
+      _newMessageJumpDismissed = false;
     }
     if (oldWidget.messages.length != widget.messages.length ||
         (oldWidget.messages.isNotEmpty &&
@@ -355,6 +365,52 @@ class _MessageStageState extends State<_MessageStage> {
     });
   }
 
+  int get _effectiveNewMessageCount {
+    if (widget.messages.isEmpty || widget.newMessageCount <= 0) return 0;
+    return widget.newMessageCount.clamp(0, widget.messages.length).toInt();
+  }
+
+  int get _newMessageLabelCount {
+    return widget.newMessageCount < 0 ? 0 : widget.newMessageCount;
+  }
+
+  int? get _firstNewMessageIndex {
+    final count = _effectiveNewMessageCount;
+    if (count <= 0) return null;
+    return widget.messages.length - count;
+  }
+
+  void _scrollToFirstNewMessage() {
+    setState(() => _newMessageJumpDismissed = true);
+    widget.onViewedNewMessages();
+    final context = _firstNewMessageKey.currentContext;
+    if (context != null) {
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+        alignment: 0.12,
+      );
+      return;
+    }
+    if (!_scrollController.hasClients) return;
+    final count = _effectiveNewMessageCount;
+    final position = _scrollController.position;
+    final averageExtent = widget.messages.length <= 1
+        ? position.maxScrollExtent
+        : position.maxScrollExtent / (widget.messages.length - 1);
+    final target = (position.minScrollExtent + averageExtent * (count - 1))
+        .clamp(position.minScrollExtent, position.maxScrollExtent)
+        .toDouble();
+    unawaited(
+      _scrollController.animateTo(
+        target,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+      ),
+    );
+  }
+
   void _toggleDetailedTimestamps() {
     setState(() {
       _showDetailedTimestamps = !_showDetailedTimestamps;
@@ -400,6 +456,9 @@ class _MessageStageState extends State<_MessageStage> {
     _scheduleUnderflowAlignment();
 
     final now = DateTime.now();
+    final firstNewMessageIndex = _firstNewMessageIndex;
+    final showNewMessageJump =
+        firstNewMessageIndex != null && !_newMessageJumpDismissed;
     final list = ListView.separated(
       key: _messageListKey,
       controller: _scrollController,
@@ -473,10 +532,14 @@ class _MessageStageState extends State<_MessageStage> {
               ),
           ],
         );
-        if (chronologicalIndex == 0) {
-          return KeyedSubtree(key: _oldestMessageKey, child: row);
+        Widget keyedRow = row;
+        if (chronologicalIndex == firstNewMessageIndex) {
+          keyedRow = KeyedSubtree(key: _firstNewMessageKey, child: keyedRow);
         }
-        return row;
+        if (chronologicalIndex == 0) {
+          return KeyedSubtree(key: _oldestMessageKey, child: keyedRow);
+        }
+        return keyedRow;
       },
     );
 
@@ -522,6 +585,55 @@ class _MessageStageState extends State<_MessageStage> {
                   )
                 : const SizedBox.shrink(
                     key: ValueKey('chat-jump-to-latest-hidden'),
+                  ),
+          ),
+        ),
+        Positioned(
+          top: 12,
+          right: _chatFloatingEdgeInset,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 120),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            child: showNewMessageJump
+                ? PressableSurface(
+                    key: const ValueKey('chat-jump-to-first-new'),
+                    height: 34,
+                    hoverLift: 0,
+                    baseDepth: 0,
+                    backgroundColor: UiColors.selected,
+                    selectedBackgroundColor: UiColors.selected,
+                    pressedBackgroundColor: const Color(0xFF14211B),
+                    borderColor: UiColors.selectedBorder,
+                    selectedBorderColor: UiColors.selectedBorder,
+                    tooltip: '查看 $_newMessageLabelCount 条新消息',
+                    onPressed: _scrollToFirstNewMessage,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.keyboard_arrow_up_rounded,
+                            color: UiColors.accent,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '查看 $_newMessageLabelCount 条新消息',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: UiTypography.label.copyWith(
+                              color: UiColors.accent,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : const SizedBox.shrink(
+                    key: ValueKey('chat-jump-to-first-new-hidden'),
                   ),
           ),
         ),

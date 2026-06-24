@@ -43,7 +43,17 @@ extension _HomeShellRoomActions on _HomeShellState {
       final servers = await _roomsController.loadRooms();
       if (!mounted) return;
       _setHomeState(() {
-        _servers = servers;
+        var nextServers = servers;
+        final selectedRoomId = _selectedServerId;
+        if (selectedRoomId != null) {
+          nextServers = _roomsController
+              .patchRoomUnreadCleared(
+                rooms: nextServers,
+                roomId: selectedRoomId,
+              )
+              .rooms;
+        }
+        _servers = nextServers;
         _loadingServers = false;
         if (_selectedServerId != null &&
             !_servers.any((server) => server.id == _selectedServerId)) {
@@ -52,6 +62,7 @@ extension _HomeShellRoomActions on _HomeShellState {
           _selectedRoom = null;
           _live = null;
           _messages = const [];
+          _selectedRoomNewMessageCount = 0;
           _fileTransfers = const {};
           _fileDownloads = const {};
           _selectedRoomHasPendingJoinRequests = false;
@@ -85,6 +96,8 @@ extension _HomeShellRoomActions on _HomeShellState {
     }
     _setHomeState(() {
       _selectedServerId = server.id;
+      _selectedRoomNewMessageCount = server.unreadCount;
+      _clearRoomUnreadCount(server.id);
       _settingsOpen = false;
       _contentMode = _ContentMode.chat;
       if (openContent) _narrowContentOpen = true;
@@ -115,6 +128,7 @@ extension _HomeShellRoomActions on _HomeShellState {
         _loadingRoom = false;
         _roomError = null;
       });
+      unawaited(_markRoomReadFromMessages(server.id, snapshot.messages));
       unawaited(_refreshSelectedJoinRequestBadge(snapshot.detail));
       unawaited(_loadMusicBox(server.id));
     } catch (error) {
@@ -426,6 +440,8 @@ extension _HomeShellRoomActions on _HomeShellState {
 
     _setHomeState(() {
       _selectedServerId = server.id;
+      _selectedRoomNewMessageCount = server.unreadCount;
+      _clearRoomUnreadCount(server.id);
       _settingsOpen = false;
       _contentMode = _ContentMode.live;
       _narrowContentOpen = true;
@@ -445,6 +461,7 @@ extension _HomeShellRoomActions on _HomeShellState {
         source: _stickerPanelState.source,
       );
     });
+    unawaited(_markRoomReadFromMessages(server.id, snapshot.messages));
     unawaited(_refreshSelectedJoinRequestBadge(snapshot.detail));
     unawaited(_loadMusicBox(server.id));
   }
@@ -457,7 +474,11 @@ extension _HomeShellRoomActions on _HomeShellState {
   }
 
   void _openChat() {
+    final roomId = _selectedServerId;
     _setHomeState(() => _contentMode = _ContentMode.chat);
+    if (roomId != null) {
+      unawaited(_refreshSelectedMessagesSilently(roomId));
+    }
   }
 
   Future<void> _openRoomMembers({String initialSearchQuery = ''}) async {
@@ -536,6 +557,7 @@ extension _HomeShellRoomActions on _HomeShellState {
       _servers = patch.rooms;
       _live = room.live;
       _messages = const [];
+      _selectedRoomNewMessageCount = 0;
       _fileTransfers = const {};
       _fileDownloads = const {};
       _settingsOpen = false;
@@ -561,6 +583,7 @@ extension _HomeShellRoomActions on _HomeShellState {
       _live = room.live;
       _roomError = null;
     });
+    unawaited(_refreshSelectedMessagesSilently(room.id));
     unawaited(_refreshSelectedJoinRequestBadge(room));
   }
 
@@ -572,6 +595,7 @@ extension _HomeShellRoomActions on _HomeShellState {
         _selectedRoom = null;
         _live = null;
         _messages = const [];
+        _selectedRoomNewMessageCount = 0;
         _fileTransfers = const {};
         _fileDownloads = const {};
         _contentMode = _ContentMode.chat;

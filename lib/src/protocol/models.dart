@@ -1287,6 +1287,7 @@ class RoomEventNotification {
     this.actorExists = true,
     this.fromRole,
     this.toRole,
+    this.readAt,
   });
 
   final String id;
@@ -1298,6 +1299,9 @@ class RoomEventNotification {
   final bool actorExists;
   final String? fromRole;
   final String? toRole;
+  final DateTime? readAt;
+
+  bool get isUnread => readAt == null;
 
   factory RoomEventNotification.fromJson(Map<String, Object?> json) {
     final actorJson = _nullableMap(json['actor']);
@@ -1314,6 +1318,7 @@ class RoomEventNotification {
       actorExists: json['actor_exists'] as bool? ?? actor != null,
       fromRole: _stringFromJson(json, const ['from_role']),
       toRole: _stringFromJson(json, const ['to_role']),
+      readAt: _parseDateTime(json['read_at']),
     );
   }
 }

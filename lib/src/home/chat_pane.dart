@@ -52,6 +52,7 @@ class ChatPane extends StatelessWidget {
     required this.room,
     required this.live,
     required this.messages,
+    required this.newMessageCount,
     required this.fileTransfers,
     required this.fileDownloads,
     required this.downloadActions,
@@ -84,6 +85,7 @@ class ChatPane extends StatelessWidget {
     required this.onOpenLiveChannel,
     required this.onOpenRoomMembers,
     required this.onOpenRoomSettings,
+    required this.onViewedNewMessages,
     this.onResolveSenderProfile,
     this.onResolveRoomProfile,
     this.onEnterProfileRoom,
@@ -96,6 +98,7 @@ class ChatPane extends StatelessWidget {
   final RoomDetail? room;
   final LiveState? live;
   final List<Message> messages;
+  final int newMessageCount;
   final Map<String, FileTransferState> fileTransfers;
   final Map<String, FileTransferState> fileDownloads;
   final ChatFileDownloadActions downloadActions;
@@ -128,6 +131,7 @@ class ChatPane extends StatelessWidget {
   final VoidCallback onOpenLiveChannel;
   final VoidCallback onOpenRoomMembers;
   final VoidCallback onOpenRoomSettings;
+  final VoidCallback onViewedNewMessages;
 
   /// Resolves a richer profile for a message sender on demand (gender, common
   /// rooms). The hover card calls this lazily; when null it shows just the
@@ -183,6 +187,7 @@ class ChatPane extends StatelessWidget {
               loading: loading,
               error: error,
               messages: messages,
+              newMessageCount: newMessageCount,
               fileTransfers: fileTransfers,
               fileDownloads: fileDownloads,
               live: live,
@@ -190,6 +195,7 @@ class ChatPane extends StatelessWidget {
               voicePlaybackActions: voicePlaybackActions,
               imagePreviewActions: imagePreviewActions,
               onRetry: onRetry,
+              onViewedNewMessages: onViewedNewMessages,
               bottomInset: _messageListBottomInset,
               onResolveSenderProfile: onResolveSenderProfile,
               onResolveRoomProfile: onResolveRoomProfile,

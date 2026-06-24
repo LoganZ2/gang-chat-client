@@ -220,6 +220,16 @@ class MessagesController {
     return page.messages;
   }
 
+  Future<int> markRead({
+    required String roomId,
+    required String lastReadMessageId,
+  }) {
+    return _client.markRead(
+      roomId: roomId,
+      lastReadMessageId: lastReadMessageId,
+    );
+  }
+
   Future<Message> sendMessage({
     required String roomId,
     required String clientMessageId,

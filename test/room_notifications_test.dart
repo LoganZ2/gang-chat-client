@@ -343,8 +343,12 @@ void main() {
       pendingRoomNotificationCount(
         invites: [pendingInvite],
         applications: [pendingApplication, approvedApplication],
+        roomEvents: [
+          _roomEvent('unread_room_event'),
+          _roomEvent('read_room_event', readAt: DateTime.utc(2026, 6, 8, 9)),
+        ],
       ),
-      2,
+      3,
     );
   });
 
@@ -379,6 +383,7 @@ void main() {
     ]);
     expect(roomEventsOnly.every((item) => item.invite == null), isTrue);
     expect(roomEventsOnly.every((item) => item.application == null), isTrue);
+    expect(roomEventsOnly.first.newItem, isTrue);
 
     expect(
       roomNotificationsForView(
@@ -409,6 +414,18 @@ void main() {
         filter: RoomNotificationFilter.all,
       ),
       isEmpty,
+    );
+
+    final readEvent = _roomEvent('read', readAt: DateTime.utc(2026, 6, 8, 9));
+    expect(
+      roomNotificationsForView(
+        invites: const [],
+        applications: const [],
+        roomEvents: [readEvent],
+        query: '',
+        filter: RoomNotificationFilter.all,
+      ).single.newItem,
+      isFalse,
     );
   });
 
@@ -634,6 +651,7 @@ RoomEventNotification _roomEvent(
   bool roomExists = true,
   String fromRole = 'owner',
   String toRole = 'admin',
+  DateTime? readAt,
 }) {
   return RoomEventNotification(
     id: id,
@@ -658,6 +676,7 @@ RoomEventNotification _roomEvent(
     roomExists: roomExists,
     fromRole: fromRole,
     toRole: toRole,
+    readAt: readAt,
   );
 }
 

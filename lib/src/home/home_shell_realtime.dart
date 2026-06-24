@@ -38,9 +38,19 @@ extension _HomeShellRealtime on _HomeShellState {
       final servers = await _roomsController.loadRooms();
       if (!mounted) return;
       _setHomeState(() {
-        _servers = _roomsController
+        var nextServers = _roomsController
             .patchRoomCardsRefreshed(rooms: servers)
             .rooms;
+        final selectedRoomId = _selectedServerId;
+        if (selectedRoomId != null) {
+          nextServers = _roomsController
+              .patchRoomUnreadCleared(
+                rooms: nextServers,
+                roomId: selectedRoomId,
+              )
+              .rooms;
+        }
+        _servers = nextServers;
       });
     } catch (_) {}
   }
@@ -155,10 +165,7 @@ extension _HomeShellRealtime on _HomeShellState {
   }
 
   String? _latestLoadedServerMessageId() {
-    for (final message in _messages.reversed) {
-      if (!message.pending) return message.id;
-    }
-    return null;
+    return _latestServerMessageId(_messages);
   }
 
   Future<void> _refreshSelectedMessagesSilently(String roomId) async {
@@ -174,7 +181,9 @@ extension _HomeShellRealtime on _HomeShellState {
               !serverClientIds.contains(message.clientMessageId))
             message,
       ];
-      _setHomeState(() => _messages = [...messages, ...pending]);
+      final nextMessages = [...messages, ...pending];
+      _setHomeState(() => _messages = nextMessages);
+      unawaited(_markRoomReadFromMessages(roomId, messages));
     } catch (_) {}
   }
 
@@ -206,6 +215,7 @@ extension _HomeShellRealtime on _HomeShellState {
           : _ContentMode.chat;
       _joinedLiveRoomId = patch.joinedLiveRoomId;
       if (patch.wasSelected) {
+        _selectedRoomNewMessageCount = 0;
         _fileTransfers = const {};
         _roomError = null;
         _sendError = null;

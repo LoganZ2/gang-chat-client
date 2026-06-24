@@ -390,6 +390,48 @@ void main() {
     expect(patch.rooms[1].liveParticipantCount, 3);
   });
 
+  test('patchJoinResult can show the joined mic unmuted when allowed', () {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        fail('Reducer test should not call the API: ${request.url}');
+      }),
+    );
+    addTearDown(api.close);
+    final controller = LiveController(api: api);
+    final alice = _user('alice');
+    final participant = _participant(alice, micMuted: true);
+    final live = _live('room_1', [participant]);
+
+    final patch = controller.patchJoinResult(
+      rooms: [_roomCard('room_1', liveCount: 0)],
+      result: _liveJoinResult(participant: participant, live: live),
+      showMicUnmutedWhenAllowed: true,
+    );
+
+    expect(patch.micMuted, isFalse);
+    expect(patch.live.participants.single.micMuted, isFalse);
+
+    final blocked = _participant(
+      alice,
+      micMuted: true,
+      micBlocked: true,
+      voiceBlocked: true,
+    );
+    final blockedPatch = controller.patchJoinResult(
+      rooms: [_roomCard('room_1', liveCount: 0)],
+      result: _liveJoinResult(
+        participant: blocked,
+        live: _live('room_1', [blocked]),
+      ),
+      showMicUnmutedWhenAllowed: true,
+    );
+
+    expect(blockedPatch.micMuted, isTrue);
+    expect(blockedPatch.live.participants.single.micMuted, isTrue);
+  });
+
   test('patchStateUpdate mirrors participant flags and merges live roster', () {
     final api = GangApiClient(
       baseUrl: 'http://example.test/api/v1',
@@ -543,6 +585,7 @@ UserSummary _user(String id) {
 LiveParticipant _participant(
   UserSummary user, {
   bool micMuted = false,
+  bool micBlocked = false,
   bool voiceBlocked = false,
   bool cameraOn = false,
   bool screenSharing = false,
@@ -552,6 +595,7 @@ LiveParticipant _participant(
     user: user,
     joinedAt: DateTime.utc(2026, 6, 5),
     micMuted: micMuted,
+    micBlocked: micBlocked,
     headphonesMuted: false,
     voiceBlocked: voiceBlocked,
     cameraOn: cameraOn,

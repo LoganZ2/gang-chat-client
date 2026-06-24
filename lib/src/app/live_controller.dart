@@ -322,18 +322,59 @@ class LiveController {
   LiveJoinResultPatch patchJoinResult({
     required List<RoomCard> rooms,
     required LiveJoinResult result,
+    bool showMicUnmutedWhenAllowed = false,
   }) {
+    final participant = _joinResultParticipantForDisplay(
+      result.participant,
+      showMicUnmutedWhenAllowed: showMicUnmutedWhenAllowed,
+    );
+    final live = _replaceParticipantInLive(result.live, participant);
     return LiveJoinResultPatch(
-      micMuted: result.participant.micMuted,
-      cameraOn: result.participant.cameraOn,
-      screenSharing: result.participant.screenSharing,
-      voiceBlocked: result.participant.voiceBlocked,
-      live: result.live,
+      micMuted: participant.micMuted,
+      cameraOn: participant.cameraOn,
+      screenSharing: participant.screenSharing,
+      voiceBlocked: participant.voiceBlocked,
+      live: live,
       rooms: room_live_state.patchRoomLiveCount(
         rooms: rooms,
-        roomId: result.live.roomId,
-        live: result.live,
+        roomId: live.roomId,
+        live: live,
       ),
+    );
+  }
+
+  LiveParticipant _joinResultParticipantForDisplay(
+    LiveParticipant participant, {
+    required bool showMicUnmutedWhenAllowed,
+  }) {
+    if (!showMicUnmutedWhenAllowed ||
+        participant.voiceBlocked ||
+        participant.micBlocked ||
+        !participant.micMuted) {
+      return participant;
+    }
+    return participant.copyWith(micMuted: false);
+  }
+
+  LiveState _replaceParticipantInLive(
+    LiveState live,
+    LiveParticipant participant,
+  ) {
+    var replaced = false;
+    var changed = false;
+    final participants = live.participants.map((item) {
+      if (item.liveSessionId != participant.liveSessionId) return item;
+      replaced = true;
+      if (identical(item, participant)) return item;
+      changed = true;
+      return participant;
+    }).toList();
+    if (!replaced || !changed) return live;
+    return LiveState(
+      roomId: live.roomId,
+      participantCount: live.participantCount,
+      participants: participants,
+      updatedAt: live.updatedAt,
     );
   }
 

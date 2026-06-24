@@ -599,8 +599,11 @@ void main() {
     expect(requestedPaths, contains('/api/v1/rooms/server-alpha'));
     expect(requestedPaths, contains('/api/v1/rooms/server-alpha/messages'));
     expect(requestedPaths, contains('/api/v1/rooms/server-alpha/live'));
+    expect(requestedPaths, contains('/api/v1/rooms/server-alpha/read'));
     expect(find.text('Hello from Morgan'), findsOneWidget);
     expect(find.text('Reply from Kai'), findsOneWidget);
+    expect(find.text('查看 3 条新消息'), findsOneWidget);
+    expect(find.text('3'), findsNothing);
     expect(find.byType(ui.ChatComposer), findsOneWidget);
     expect(
       tester
@@ -1306,7 +1309,7 @@ void main() {
       expect(find.text('全部'), findsOneWidget);
       expect(find.text('邀请'), findsOneWidget);
       expect(find.text('申请'), findsOneWidget);
-      expect(find.text('房间通知'), findsOneWidget);
+      expect(find.text('房间'), findsOneWidget);
       expect(
         find.ancestor(
           of: _textFieldWithHint('搜索通知'),
@@ -5020,6 +5023,14 @@ GangApi _roomsApi({
             'files': null,
           },
         });
+      }
+      if (request.url.path.startsWith('/api/v1/rooms/') &&
+          request.url.path.endsWith('/read')) {
+        expect(request.method, 'POST');
+        final body =
+            jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>;
+        expect(body['last_read_message_id'], isA<String>());
+        return _jsonResponse({'ok': true, 'unread_count': 0});
       }
       if (request.url.path == '/api/v1/rooms/server-beta') {
         await beforeRoomDetailResponse?.call('server-beta');

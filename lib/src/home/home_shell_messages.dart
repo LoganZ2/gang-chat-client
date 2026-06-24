@@ -1,6 +1,54 @@
 part of 'home_shell.dart';
 
 extension _HomeShellMessages on _HomeShellState {
+  String? _latestServerMessageId(List<Message> messages) {
+    for (final message in messages.reversed) {
+      if (!message.pending) return message.id;
+    }
+    return null;
+  }
+
+  void _clearRoomUnreadCount(String roomId) {
+    _servers = _roomsController
+        .patchRoomUnreadCleared(rooms: _servers, roomId: roomId)
+        .rooms;
+  }
+
+  Future<void> _markRoomReadFromMessages(
+    String roomId,
+    List<Message> messages,
+  ) async {
+    if (_selectedServerId != roomId) return;
+    final lastReadMessageId = _latestServerMessageId(messages);
+    if (lastReadMessageId == null) return;
+
+    if (_lastMarkedReadMessageIds[roomId] == lastReadMessageId) {
+      if (mounted) _setHomeState(() => _clearRoomUnreadCount(roomId));
+      return;
+    }
+    _lastMarkedReadMessageIds[roomId] = lastReadMessageId;
+    if (mounted) _setHomeState(() => _clearRoomUnreadCount(roomId));
+
+    try {
+      await _messagesController.markRead(
+        roomId: roomId,
+        lastReadMessageId: lastReadMessageId,
+      );
+    } catch (_) {
+      if (_lastMarkedReadMessageIds[roomId] == lastReadMessageId) {
+        _lastMarkedReadMessageIds.remove(roomId);
+      }
+      // Reading a room is best-effort on the client. Keep the local room clear
+      // while the selected chat is open; a later successful mark/read or list
+      // refresh will reconcile the server state.
+    }
+  }
+
+  void _clearSelectedRoomNewMessagePrompt() {
+    if (_selectedRoomNewMessageCount == 0) return;
+    _setHomeState(() => _selectedRoomNewMessageCount = 0);
+  }
+
   Future<void> _sendText(String value) async {
     final body = value.trimRight();
     // When files are staged, the message goes out as a file message carrying

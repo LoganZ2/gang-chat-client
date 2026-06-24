@@ -186,6 +186,7 @@ void main() {
               clientMessageId: 'client_2',
             ),
           ],
+          newMessageCount: 0,
           fileTransfers: const {},
           fileDownloads: const {},
           downloadActions: _downloadActions(),
@@ -218,6 +219,7 @@ void main() {
           onOpenLiveChannel: () {},
           onOpenRoomMembers: () {},
           onOpenRoomSettings: () {},
+          onViewedNewMessages: () {},
         ),
       ),
     );
@@ -279,6 +281,35 @@ void main() {
 
     expect(latestRect.bottom, lessThanOrEqualTo(composerRect.top));
     expect(find.byKey(const ValueKey('chat-jump-to-latest')), findsNothing);
+  });
+
+  testWidgets('chat pane can jump to the first new message', (tester) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    final messages = _textMessages(12);
+    var viewed = 0;
+
+    await tester.pumpWidget(
+      _host(
+        _chatPane(
+          controller: controller,
+          room: _roomDetail,
+          messages: messages,
+          newMessageCount: 3,
+          onViewedNewMessages: () => viewed += 1,
+        ),
+        height: 420,
+      ),
+    );
+
+    expect(find.text('查看 3 条新消息'), findsOneWidget);
+    expect(find.byIcon(Icons.keyboard_arrow_up_rounded), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('chat-jump-to-first-new')));
+    await tester.pumpAndSettle();
+
+    expect(viewed, 1);
+    expect(find.text('查看 3 条新消息'), findsNothing);
   });
 
   testWidgets('short chats start at the top of the message area', (
@@ -993,9 +1024,11 @@ Widget _chatPane({
   RoomDetail? room,
   LiveState? live,
   bool loading = false,
+  int newMessageCount = 0,
   Future<UserSummary> Function(UserSummary sender)? onResolveSenderProfile,
   ValueChanged<PublicRoom>? onEnterProfileRoom,
   UserProfileActionBuilder? senderProfileActionBuilder,
+  VoidCallback? onViewedNewMessages,
 }) {
   return ChatPane(
     currentUser: _currentUser,
@@ -1003,6 +1036,7 @@ Widget _chatPane({
     room: room,
     live: live,
     messages: messages,
+    newMessageCount: newMessageCount,
     fileTransfers: const {},
     fileDownloads: const {},
     downloadActions: _downloadActions(),
@@ -1034,6 +1068,7 @@ Widget _chatPane({
     onOpenLiveChannel: () {},
     onOpenRoomMembers: () {},
     onOpenRoomSettings: () {},
+    onViewedNewMessages: onViewedNewMessages ?? () {},
     onResolveSenderProfile: onResolveSenderProfile,
     onEnterProfileRoom: onEnterProfileRoom,
     senderProfileActionBuilder: senderProfileActionBuilder,

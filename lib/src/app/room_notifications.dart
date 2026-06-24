@@ -27,6 +27,7 @@ class RoomNotificationItem {
     required this.id,
     required this.time,
     required this.pending,
+    required this.newItem,
     this.invite,
     this.application,
     this.roomEvent,
@@ -38,6 +39,7 @@ class RoomNotificationItem {
       id: 'invite:${invite.id}',
       time: invite.createdAt,
       pending: isActionablePendingRoomInvite(invite),
+      newItem: isActionablePendingRoomInvite(invite),
       invite: invite,
     );
   }
@@ -50,6 +52,7 @@ class RoomNotificationItem {
       id: 'application-requested:${application.id}',
       time: application.createdAt,
       pending: isPendingRoomApplication(application),
+      newItem: isPendingRoomApplication(application),
       application: application,
     );
   }
@@ -62,6 +65,7 @@ class RoomNotificationItem {
       id: 'application-reviewed:${application.id}',
       time: application.reviewedAt ?? application.updatedAt,
       pending: false,
+      newItem: false,
       application: application,
     );
   }
@@ -72,6 +76,7 @@ class RoomNotificationItem {
       id: 'room-event:${notification.id}',
       time: notification.createdAt,
       pending: false,
+      newItem: notification.isUnread,
       roomEvent: notification,
     );
   }
@@ -80,6 +85,7 @@ class RoomNotificationItem {
   final String id;
   final DateTime time;
   final bool pending;
+  final bool newItem;
   final RoomInvite? invite;
   final RoomApplication? application;
   final RoomEventNotification? roomEvent;
@@ -180,9 +186,17 @@ int pendingRoomInviteCount(Iterable<RoomInvite> invites) {
 int pendingRoomNotificationCount({
   required Iterable<RoomInvite> invites,
   required Iterable<RoomApplication> applications,
+  Iterable<RoomEventNotification> roomEvents = const [],
 }) {
   return pendingRoomInviteCount(invites) +
-      applications.where(isPendingRoomApplication).length;
+      applications.where(isPendingRoomApplication).length +
+      unreadRoomEventNotificationCount(roomEvents);
+}
+
+int unreadRoomEventNotificationCount(
+  Iterable<RoomEventNotification> notifications,
+) {
+  return notifications.where((notification) => notification.isUnread).length;
 }
 
 String roomInviteDecisionLabel(RoomInvite invite) {

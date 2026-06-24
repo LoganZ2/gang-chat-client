@@ -129,7 +129,7 @@ class _HomeNotificationsPaneState extends State<HomeNotificationsPane> {
               ),
               Segment(
                 value: RoomNotificationFilter.roomNotifications,
-                label: '房间通知',
+                label: '房间',
                 icon: Icons.meeting_room_outlined,
               ),
             ],
@@ -350,110 +350,113 @@ class _RoomInviteNotificationRow extends StatelessWidget {
             child: inviterAvatar,
           )
         : inviterAvatar;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: UiColors.surface,
-        borderRadius: BorderRadius.circular(UiRadii.lg),
-        border: Border.all(
-          color: isPendingRoomInvite(invite) && !invalid
-              ? UiColors.accentBorder
-              : UiColors.border,
+    return _NotificationNewMarker(
+      show: isActionablePendingRoomInvite(invite),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: UiColors.surface,
+          borderRadius: BorderRadius.circular(UiRadii.lg),
+          border: Border.all(
+            color: isPendingRoomInvite(invite) && !invalid
+                ? UiColors.accentBorder
+                : UiColors.border,
+          ),
         ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 116,
-              child: HighlightedText(
-                text: time,
-                query: query,
-                key: ValueKey('notification-time-${invite.id}'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: UiTypography.label.copyWith(color: UiColors.textMuted),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 116,
+                child: HighlightedText(
+                  text: time,
+                  query: query,
+                  key: ValueKey('notification-time-${invite.id}'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: UiTypography.label.copyWith(color: UiColors.textMuted),
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            inviterAvatarTarget,
-            const SizedBox(width: 8),
-            Expanded(
-              child: Row(
-                children: [
-                  Flexible(
-                    flex: 3,
-                    child: HighlightedText(
-                      text: inviterName,
-                      query: query,
-                      key: ValueKey('notification-inviter-name-${invite.id}'),
+              const SizedBox(width: 10),
+              inviterAvatarTarget,
+              const SizedBox(width: 8),
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(
+                      flex: 3,
+                      child: HighlightedText(
+                        text: inviterName,
+                        query: query,
+                        key: ValueKey('notification-inviter-name-${invite.id}'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: UiColors.text,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                    Flexible(
+                      flex: 2,
+                      child: _InviteRoleBadge(
+                        key: ValueKey('notification-inviter-role-${invite.id}'),
+                        label: role,
+                        query: query,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '邀请您加入',
+                      key: ValueKey('notification-invite-action-${invite.id}'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: UiColors.text,
-                        fontSize: 14,
+                      style: UiTypography.label.copyWith(
+                        color: UiColors.textSecondary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 7),
-                  Flexible(
-                    flex: 2,
-                    child: _InviteRoleBadge(
-                      key: ValueKey('notification-inviter-role-${invite.id}'),
-                      label: role,
-                      query: query,
+                    const SizedBox(width: 8),
+                    Flexible(
+                      flex: 4,
+                      child: _InlineRoomTarget(
+                        room: room,
+                        inviteId: invite.id,
+                        query: query,
+                        roomExists: invite.roomExists,
+                        currentUser: currentUser,
+                        onResolveRoomProfile: onResolveRoomProfile,
+                        onResolveRoomUserProfile: onResolveRoomUserProfile,
+                        onOpenRoom: onOpenRoom,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '邀请您加入',
-                    key: ValueKey('notification-invite-action-${invite.id}'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: UiTypography.label.copyWith(
-                      color: UiColors.textSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    flex: 4,
-                    child: _InlineRoomTarget(
-                      room: room,
-                      inviteId: invite.id,
-                      query: query,
-                      roomExists: invite.roomExists,
-                      currentUser: currentUser,
-                      onResolveRoomProfile: onResolveRoomProfile,
-                      onResolveRoomUserProfile: onResolveRoomUserProfile,
-                      onOpenRoom: onOpenRoom,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            SizedBox(
-              width: 88,
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: invalid
-                    ? _InvalidInviteLabel(invite: invite, query: query)
-                    : isPendingRoomInvite(invite)
-                    ? _InviteDecisionActions(
-                        invite: invite,
-                        busy: busy,
-                        enabled: canReviewNotificationInvite(
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 88,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: invalid
+                      ? _InvalidInviteLabel(invite: invite, query: query)
+                      : isPendingRoomInvite(invite)
+                      ? _InviteDecisionActions(
                           invite: invite,
-                          busyInviteId: busyInviteId,
-                        ),
-                        onReviewInvite: onReviewInvite,
-                      )
-                    : _ProcessedInviteLabel(invite: invite, query: query),
+                          busy: busy,
+                          enabled: canReviewNotificationInvite(
+                            invite: invite,
+                            busyInviteId: busyInviteId,
+                          ),
+                          onReviewInvite: onReviewInvite,
+                        )
+                      : _ProcessedInviteLabel(invite: invite, query: query),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -488,81 +491,84 @@ class _RoomApplicationRequestNotificationRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final room = application.room;
     final time = roomInviteTimestampLabel(application.createdAt);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: UiColors.surface,
-        borderRadius: BorderRadius.circular(UiRadii.lg),
-        border: Border.all(
-          color: isPendingRoomApplication(application)
-              ? UiColors.accentBorder
-              : UiColors.border,
+    return _NotificationNewMarker(
+      show: isPendingRoomApplication(application),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: UiColors.surface,
+          borderRadius: BorderRadius.circular(UiRadii.lg),
+          border: Border.all(
+            color: isPendingRoomApplication(application)
+                ? UiColors.accentBorder
+                : UiColors.border,
+          ),
         ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 116,
-              child: HighlightedText(
-                text: time,
-                query: query,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 116,
+                child: HighlightedText(
+                  text: time,
+                  query: query,
+                  key: ValueKey(
+                    'notification-application-time-${application.id}',
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: UiTypography.label.copyWith(color: UiColors.textMuted),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                '您已申请加入',
                 key: ValueKey(
-                  'notification-application-time-${application.id}',
+                  'notification-application-request-action-${application.id}',
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: UiTypography.label.copyWith(color: UiColors.textMuted),
+                style: UiTypography.label.copyWith(
+                  color: UiColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              '您已申请加入',
-              key: ValueKey(
-                'notification-application-request-action-${application.id}',
+              const SizedBox(width: 8),
+              Expanded(
+                child: _InlineRoomTarget(
+                  room: room,
+                  inviteId: 'application-${application.id}',
+                  query: query,
+                  roomExists: true,
+                  currentUser: currentUser,
+                  onResolveRoomProfile: onResolveRoomProfile,
+                  onResolveRoomUserProfile: onResolveRoomUserProfile,
+                  onOpenRoom: onOpenRoom,
+                ),
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: UiTypography.label.copyWith(
-                color: UiColors.textSecondary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _InlineRoomTarget(
-                room: room,
-                inviteId: 'application-${application.id}',
-                query: query,
-                roomExists: true,
-                currentUser: currentUser,
-                onResolveRoomProfile: onResolveRoomProfile,
-                onResolveRoomUserProfile: onResolveRoomUserProfile,
-                onOpenRoom: onOpenRoom,
-              ),
-            ),
-            const SizedBox(width: 12),
-            SizedBox(
-              width: 88,
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: isPendingRoomApplication(application)
-                    ? _ApplicationWithdrawAction(
-                        application: application,
-                        busy: busy,
-                        enabled: canWithdrawNotificationApplication(
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 88,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: isPendingRoomApplication(application)
+                      ? _ApplicationWithdrawAction(
                           application: application,
-                          busyApplicationId: busyApplicationId,
+                          busy: busy,
+                          enabled: canWithdrawNotificationApplication(
+                            application: application,
+                            busyApplicationId: busyApplicationId,
+                          ),
+                          onWithdrawApplication: onWithdrawApplication,
+                        )
+                      : _ProcessedApplicationLabel(
+                          application: application,
+                          query: query,
                         ),
-                        onWithdrawApplication: onWithdrawApplication,
-                      )
-                    : _ProcessedApplicationLabel(
-                        application: application,
-                        query: query,
-                      ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -751,34 +757,37 @@ class _RoomEventNotificationRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final time = roomInviteTimestampLabel(notification.createdAt);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: UiColors.surface,
-        borderRadius: BorderRadius.circular(UiRadii.lg),
-        border: Border.all(color: UiColors.border),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 116,
-              child: HighlightedText(
-                text: time,
-                query: query,
-                key: ValueKey(
-                  'notification-room-event-time-${notification.id}',
+    return _NotificationNewMarker(
+      show: notification.isUnread,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: UiColors.surface,
+          borderRadius: BorderRadius.circular(UiRadii.lg),
+          border: Border.all(color: UiColors.border),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 116,
+                child: HighlightedText(
+                  text: time,
+                  query: query,
+                  key: ValueKey(
+                    'notification-room-event-time-${notification.id}',
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: UiTypography.label.copyWith(color: UiColors.textMuted),
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: UiTypography.label.copyWith(color: UiColors.textMuted),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(child: _buildContent()),
-            const SizedBox(width: 12),
-            const SizedBox(width: 88),
-          ],
+              const SizedBox(width: 10),
+              Expanded(child: _buildContent()),
+              const SizedBox(width: 12),
+              const SizedBox(width: 88),
+            ],
+          ),
         ),
       ),
     );
@@ -913,6 +922,24 @@ class _NotificationText extends StatelessWidget {
         color: UiColors.textSecondary,
         fontWeight: FontWeight.w600,
       ),
+    );
+  }
+}
+
+class _NotificationNewMarker extends StatelessWidget {
+  const _NotificationNewMarker({required this.show, required this.child});
+
+  final bool show;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        child,
+        if (show) const Positioned(top: 8, right: 8, child: BadgeDot(size: 8)),
+      ],
     );
   }
 }
@@ -1407,6 +1434,6 @@ String _emptyTitle({
     RoomNotificationFilter.all => '暂无通知',
     RoomNotificationFilter.invites => '暂无邀请',
     RoomNotificationFilter.applications => '暂无申请',
-    RoomNotificationFilter.roomNotifications => '暂无房间通知',
+    RoomNotificationFilter.roomNotifications => '暂无房间',
   };
 }

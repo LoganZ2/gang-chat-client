@@ -34,6 +34,7 @@ class HomeSidebar extends StatelessWidget {
     required this.notificationsActive,
     required this.logoutActive,
     required this.hasPendingNotifications,
+    required this.pendingNotificationCount,
     required this.onServerSelected,
     required this.onCreateRoom,
     required this.onOpenNotifications,
@@ -56,6 +57,7 @@ class HomeSidebar extends StatelessWidget {
   final bool notificationsActive;
   final bool logoutActive;
   final bool hasPendingNotifications;
+  final int pendingNotificationCount;
   final bool includeWindowChromeOffset;
   final ValueChanged<RoomCard> onServerSelected;
   final VoidCallback onCreateRoom;
@@ -109,6 +111,7 @@ class HomeSidebar extends StatelessWidget {
                       createRoomActive: createRoomActive,
                       notificationsActive: notificationsActive,
                       hasPendingNotifications: hasPendingNotifications,
+                      pendingNotificationCount: pendingNotificationCount,
                       onCreateRoom: onCreateRoom,
                       onOpenNotifications: onOpenNotifications,
                       onOpenSettings: onOpenSettings,
@@ -167,6 +170,7 @@ class _SidebarFooter extends StatelessWidget {
     required this.createRoomActive,
     required this.notificationsActive,
     required this.hasPendingNotifications,
+    required this.pendingNotificationCount,
     required this.onCreateRoom,
     required this.onOpenNotifications,
     required this.onOpenSettings,
@@ -176,6 +180,7 @@ class _SidebarFooter extends StatelessWidget {
   final bool createRoomActive;
   final bool notificationsActive;
   final bool hasPendingNotifications;
+  final int pendingNotificationCount;
   final VoidCallback onCreateRoom;
   final VoidCallback onOpenNotifications;
   final VoidCallback onOpenSettings;
@@ -198,6 +203,7 @@ class _SidebarFooter extends StatelessWidget {
           _NotificationFooterButton(
             selected: notificationsActive,
             hasPending: hasPendingNotifications,
+            count: pendingNotificationCount,
             onPressed: onOpenNotifications,
           ),
           const Spacer(),
@@ -218,11 +224,13 @@ class _NotificationFooterButton extends StatelessWidget {
   const _NotificationFooterButton({
     required this.selected,
     required this.hasPending,
+    required this.count,
     required this.onPressed,
   });
 
   final bool selected;
   final bool hasPending;
+  final int count;
   final VoidCallback onPressed;
 
   @override
@@ -243,16 +251,9 @@ class _NotificationFooterButton extends StatelessWidget {
           ),
           if (hasPending)
             Positioned(
-              right: 2,
-              top: 2,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: UiColors.danger,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: UiColors.surfaceLow, width: 1.4),
-                ),
-                child: const SizedBox.square(dimension: 9),
-              ),
+              right: -4,
+              top: -4,
+              child: _UnreadBadge(count: count <= 0 ? 1 : count),
             ),
         ],
       ),

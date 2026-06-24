@@ -311,6 +311,7 @@ extension _HomeShellSearch on _HomeShellState {
       _selectedRoom = patch.selectedRoom;
       _live = room.live;
       _messages = const [];
+      _selectedRoomNewMessageCount = 0;
       _fileTransfers = const {};
       _settingsOpen = false;
       _contentMode = _ContentMode.chat;

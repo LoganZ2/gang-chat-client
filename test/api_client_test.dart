@@ -1031,9 +1031,27 @@ void main() {
       expect(notification.room.description, 'Invite room bio');
       expect(notification.actor?.roomDisplayName, 'Alice in Invite Room');
       expect(notification.actor?.roomRole, 'owner');
+      expect(notification.isUnread, isTrue);
       api.close();
     },
   );
+
+  test('markRoomNotificationsRead posts the read receipt endpoint', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/v1/room-notifications/read');
+        expect(request.headers['authorization'], 'Bearer token');
+
+        return http.Response(jsonEncode({'ok': true}), 200);
+      }),
+    );
+
+    await api.markRoomNotificationsRead();
+    api.close();
+  });
 
   test(
     'withdrawRoomApplication sends withdraw decision and parses result',
@@ -2556,11 +2574,12 @@ Map<String, Object?> _roomApplicationJson({
   };
 }
 
-Map<String, Object?> _roomEventNotificationJson() {
+Map<String, Object?> _roomEventNotificationJson({String? readAt}) {
   return {
     'id': 'rnot_1',
     'type': 'role_promoted',
     'created_at': '2026-06-01T13:00:00Z',
+    'read_at': readAt,
     'room_exists': true,
     'actor_exists': true,
     'from_role': 'member',

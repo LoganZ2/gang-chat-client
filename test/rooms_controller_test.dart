@@ -963,12 +963,63 @@ void main() {
       selectedRoom: _roomDetail('room_1', onlineMemberCount: 1),
     );
 
-    expect(patch.rooms.single.unreadCount, 5);
+    expect(patch.rooms.single.unreadCount, 0);
     expect(patch.rooms.single.onlineMemberCount, 2);
     expect(patch.selectedRoom?.name, 'Renamed');
     expect(patch.selectedRoom?.memberCount, 4);
     expect(patch.selectedRoom?.onlineMemberCount, 2);
     expect(patch.shouldReloadMembers, isTrue);
+  });
+
+  test('patchRoomUpdated increments unread for fresh messages off-room', () {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        fail('Patch test should not call the API: ${request.url}');
+      }),
+    );
+    addTearDown(api.close);
+    final controller = RoomsController(api: api);
+
+    final patch = controller.patchRoomUpdated(
+      rooms: [_roomCard('room_1', unreadCount: 5, lastMessageId: 'msg_1')],
+      incoming: _roomCard('room_1', lastMessageId: 'msg_2'),
+      selectedRoom: _roomDetail('room_2'),
+    );
+
+    expect(patch.rooms.single.unreadCount, 6);
+
+    final sameLastMessage = controller.patchRoomUpdated(
+      rooms: patch.rooms,
+      incoming: _roomCard('room_1', lastMessageId: 'msg_2'),
+      selectedRoom: _roomDetail('room_2'),
+    );
+
+    expect(sameLastMessage.rooms.single.unreadCount, 6);
+  });
+
+  test('patchRoomUnreadCleared clears a single room count', () {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        fail('Patch test should not call the API: ${request.url}');
+      }),
+    );
+    addTearDown(api.close);
+    final controller = RoomsController(api: api);
+
+    final patch = controller.patchRoomUnreadCleared(
+      rooms: [
+        _roomCard('room_1', unreadCount: 5),
+        _roomCard('room_2', unreadCount: 2),
+      ],
+      roomId: 'room_1',
+    );
+
+    expect(patch.rooms[0].unreadCount, 0);
+    expect(patch.rooms[1].unreadCount, 2);
   });
 }
 
@@ -978,6 +1029,7 @@ RoomCard _roomCard(
   int unreadCount = 0,
   int memberCount = 3,
   int onlineMemberCount = 0,
+  String? lastMessageId,
 }) {
   return RoomCard(
     id: id,
@@ -988,7 +1040,15 @@ RoomCard _roomCard(
     onlineMemberCount: onlineMemberCount,
     liveParticipantCount: 0,
     liveAvatarPreview: const [],
-    lastMessage: null,
+    lastMessage: lastMessageId == null
+        ? null
+        : LastMessagePreview(
+            id: lastMessageId,
+            type: 'text',
+            senderDisplayName: 'Alice',
+            bodyPreview: 'hello',
+            createdAt: DateTime.utc(2026, 6, 4),
+          ),
     unreadCount: unreadCount,
     updatedAt: DateTime.utc(2026, 6, 4),
   );

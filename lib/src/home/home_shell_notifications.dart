@@ -16,6 +16,9 @@ extension _HomeShellNotifications on _HomeShellState {
     if (patch == null || !mounted) return;
     _setHomeState(() {
       _hasPendingRoomInvites = patch.hasPendingRoomInvites;
+      if (patch.pendingRoomNotificationCount != null) {
+        _pendingRoomNotificationCount = patch.pendingRoomNotificationCount!;
+      }
       _selectedRoomHasPendingJoinRequests =
           patch.selectedRoomHasPendingJoinRequests;
     });
@@ -120,13 +123,17 @@ extension _HomeShellNotifications on _HomeShellState {
         _notificationRoomEvents = roomEvents;
         _loadingNotifications = false;
         _notificationError = null;
-        _hasPendingRoomInvites =
-            room_notifications.pendingRoomNotificationCount(
+        _pendingRoomNotificationCount = room_notifications
+            .pendingRoomNotificationCount(
               invites: invites,
               applications: applications,
-            ) >
-            0;
+              roomEvents: roomEvents,
+            );
+        _hasPendingRoomInvites = _pendingRoomNotificationCount > 0;
       });
+      if (_contentMode == _ContentMode.notifications) {
+        unawaited(_markLoadedRoomNotificationsRead(roomEvents));
+      }
     } catch (error) {
       if (!mounted) return;
       _setHomeState(() {
@@ -138,22 +145,49 @@ extension _HomeShellNotifications on _HomeShellState {
 
   Future<void> _refreshPendingRoomInviteBadge() async {
     try {
-      final (invites, applications) = await (
+      final (invites, applications, roomEvents) = await (
         _roomsController.listRoomInvites(),
         _roomsController.listRoomApplications(),
+        _roomsController.listRoomNotifications(),
       ).wait;
       if (!mounted) return;
       _setHomeState(() {
+        final pendingCount = room_notifications.pendingRoomNotificationCount(
+          invites: invites,
+          applications: applications,
+          roomEvents: roomEvents,
+        );
         final patch = room_badges.roomInviteBadgeUpdated(
           currentHasPendingRoomInvites: _hasPendingRoomInvites,
+          currentPendingRoomNotificationCount: _pendingRoomNotificationCount,
           currentSelectedRoomHasPendingJoinRequests:
               _selectedRoomHasPendingJoinRequests,
-          hasPending: invites.isNotEmpty || applications.isNotEmpty,
+          hasPending: pendingCount > 0,
+          pendingRoomNotificationCount: pendingCount,
         );
         if (patch == null) return;
         _hasPendingRoomInvites = patch.hasPendingRoomInvites;
+        _pendingRoomNotificationCount = pendingCount;
         _selectedRoomHasPendingJoinRequests =
             patch.selectedRoomHasPendingJoinRequests;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _markLoadedRoomNotificationsRead(
+    List<RoomEventNotification> roomEvents,
+  ) async {
+    if (!roomEvents.any((notification) => notification.isUnread)) return;
+    try {
+      await _roomsController.markRoomNotificationsRead();
+      if (!mounted) return;
+      _setHomeState(() {
+        final pendingCount = room_notifications.pendingRoomNotificationCount(
+          invites: _notificationInvites,
+          applications: _notificationApplications,
+        );
+        _pendingRoomNotificationCount = pendingCount;
+        _hasPendingRoomInvites = pendingCount > 0;
       });
     } catch (_) {}
   }
@@ -268,6 +302,7 @@ extension _HomeShellNotifications on _HomeShellState {
   }
 
   void _applyRoomNotificationsUpdated() {
+    unawaited(_refreshPendingRoomInviteBadge());
     if (_contentMode == _ContentMode.notifications) {
       unawaited(_loadNotifications(silent: true));
     }

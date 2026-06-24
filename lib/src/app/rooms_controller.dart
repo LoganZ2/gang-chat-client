@@ -823,6 +823,10 @@ class RoomsController {
     return api.listRoomNotifications();
   }
 
+  Future<void> markRoomNotificationsRead() {
+    return api.markRoomNotificationsRead();
+  }
+
   Future<RoomMemberPage> listRoomMembers(
     String roomId, {
     int limit = 100,
@@ -1013,8 +1017,11 @@ class RoomsController {
   RoomCardsPatch patchRoomCardUpdated({
     required List<RoomCard> rooms,
     required RoomCard incoming,
+    bool clearUnread = false,
   }) {
-    return RoomCardsPatch(rooms: mergeRoomUpdated(rooms, incoming));
+    return RoomCardsPatch(
+      rooms: mergeRoomUpdated(rooms, incoming, clearUnread: clearUnread),
+    );
   }
 
   RoomUpdatedPatch patchRoomUpdated({
@@ -1022,9 +1029,11 @@ class RoomsController {
     required RoomCard incoming,
     required RoomDetail? selectedRoom,
   }) {
+    final isSelected = selectedRoom?.id == incoming.id;
     final nextRooms = patchRoomCardUpdated(
       rooms: rooms,
       incoming: incoming,
+      clearUnread: isSelected,
     ).rooms;
     final current = selectedRoom;
     if (current == null || current.id != incoming.id) {
@@ -1051,6 +1060,19 @@ class RoomsController {
       selectedRoom: detail,
       rooms: upsertRoomCard(rooms, detail.toCard()),
     );
+  }
+
+  RoomCardsPatch patchRoomUnreadCleared({
+    required List<RoomCard> rooms,
+    required String roomId,
+  }) {
+    final idx = rooms.indexWhere((room) => room.id == roomId);
+    if (idx < 0 || rooms[idx].unreadCount == 0) {
+      return RoomCardsPatch(rooms: rooms);
+    }
+    final next = [...rooms];
+    next[idx] = next[idx].copyWith(unreadCount: 0);
+    return RoomCardsPatch(rooms: next);
   }
 
   RoomSelectedDetailPatch? patchSelectedRoomDetailRefreshed({
@@ -1137,16 +1159,36 @@ class RoomsController {
     return requests.where((request) => request.id != requestId).toList();
   }
 
-  List<RoomCard> mergeRoomUpdated(List<RoomCard> rooms, RoomCard incoming) {
+  List<RoomCard> mergeRoomUpdated(
+    List<RoomCard> rooms,
+    RoomCard incoming, {
+    bool clearUnread = false,
+  }) {
     final idx = rooms.indexWhere((room) => room.id == incoming.id);
     if (idx < 0) return upsertRoomCard(rooms, incoming);
 
     final existing = rooms[idx];
     final next = [...rooms];
     // Public room snapshots do not carry local per-user fields, so keep the
-    // local unread count until read-state is modeled explicitly.
-    next[idx] = incoming.copyWith(unreadCount: existing.unreadCount);
+    // local unread count, but bump it when a fresh last_message arrives for a
+    // room the user is not currently reading.
+    final unreadCount = clearUnread
+        ? 0
+        : _mergedUnreadCount(existing: existing, incoming: incoming);
+    next[idx] = incoming.copyWith(unreadCount: unreadCount);
     return next;
+  }
+
+  int _mergedUnreadCount({
+    required RoomCard existing,
+    required RoomCard incoming,
+  }) {
+    final incomingLastMessage = incoming.lastMessage;
+    if (incomingLastMessage == null) return existing.unreadCount;
+    if (existing.lastMessage?.id == incomingLastMessage.id) {
+      return existing.unreadCount;
+    }
+    return existing.unreadCount + 1;
   }
 
   RoomDetail _mergeSelectedRoomSnapshot(RoomDetail room, RoomCard incoming) {

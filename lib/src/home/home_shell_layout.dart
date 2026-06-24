@@ -174,6 +174,7 @@ extension _HomeShellLayout on _HomeShellState {
       room: _selectedRoom,
       live: _live,
       messages: _messages,
+      newMessageCount: _selectedRoomNewMessageCount,
       fileTransfers: _fileTransfers,
       fileDownloads: _fileDownloads,
       downloadActions: ChatFileDownloadActions(
@@ -229,6 +230,7 @@ extension _HomeShellLayout on _HomeShellState {
       onOpenLiveChannel: _openLiveChannel,
       onOpenRoomMembers: () => unawaited(_openRoomMembers()),
       onOpenRoomSettings: () => unawaited(_openRoomSettings()),
+      onViewedNewMessages: _clearSelectedRoomNewMessagePrompt,
       onResolveSenderProfile: _resolveSenderProfile,
       onResolveRoomProfile: _resolveRoomProfile,
       onEnterProfileRoom: _openNotificationRoom,
@@ -259,6 +261,7 @@ extension _HomeShellLayout on _HomeShellState {
           !_settingsOpen && _contentMode == _ContentMode.notifications,
       logoutActive: _logoutConfirming,
       hasPendingNotifications: _hasPendingRoomInvites,
+      pendingNotificationCount: _pendingRoomNotificationCount,
       includeWindowChromeOffset: false,
       onServerSelected: (server) =>
           _selectServer(server, openContent: openContentOnSelect),

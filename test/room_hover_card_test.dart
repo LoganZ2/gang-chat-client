@@ -358,6 +358,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.byType(BadgeDot), findsOneWidget);
+
     final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await gesture.addPointer(location: Offset.zero);
     addTearDown(gesture.removePointer);
