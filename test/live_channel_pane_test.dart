@@ -151,6 +151,46 @@ void main() {
     },
   );
 
+  testWidgets('joining live channel hides local card until ready', (
+    tester,
+  ) async {
+    final searchController = TextEditingController();
+    addTearDown(searchController.dispose);
+    final user = _currentUser.toSummary().copyWith(
+      roomDisplayName: 'Room Me',
+      roomRole: 'member',
+    );
+    final remoteUser = _user('phabe', 'Phabe', roomRole: 'member');
+    final live = _liveState([
+      _participant(id: 'live_self', user: user, micMuted: true),
+      _participant(id: 'live_phabe', user: remoteUser),
+    ]);
+
+    await tester.pumpWidget(
+      _host(
+        searchController: searchController,
+        live: live,
+        joined: false,
+        joining: true,
+      ),
+    );
+
+    expect(find.text('Room Me'), findsNothing);
+    expect(find.text('Phabe'), findsOneWidget);
+
+    await tester.pumpWidget(
+      _host(
+        searchController: searchController,
+        live: live,
+        joined: true,
+        joining: false,
+      ),
+    );
+
+    expect(find.text('Room Me'), findsOneWidget);
+    expect(find.text('Phabe'), findsOneWidget);
+  });
+
   testWidgets('remote live member cards use participant avatar preset', (
     tester,
   ) async {
@@ -626,6 +666,8 @@ Widget _host({
   Set<String> speakingUserIds = const {},
   double width = 720,
   double height = 520,
+  bool joined = true,
+  bool joining = false,
   VoidCallback? onToggleMic,
   VoidCallback? onToggleHeadphones,
   VoidCallback? onToggleCamera,
@@ -659,8 +701,8 @@ Widget _host({
             live: live,
             currentUser: _currentUser,
             loading: false,
-            joined: true,
-            joining: false,
+            joined: joined,
+            joining: joining,
             micMuted: false,
             headphonesMuted: false,
             voiceBlocked: false,

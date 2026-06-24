@@ -23,6 +23,35 @@ void main() {
     );
   });
 
+  test('visible live participants hide local user until join is ready', () {
+    final live = _live(['alice', 'bob']);
+
+    expect(
+      visibleLiveParticipantsForStage(
+        live.participants,
+        currentUserId: 'alice',
+        localParticipantReady: false,
+      ).map((participant) => participant.user.id),
+      ['bob'],
+    );
+    expect(
+      visibleLiveParticipantsForStage(
+        live.participants,
+        currentUserId: 'alice',
+        localParticipantReady: true,
+      ).map((participant) => participant.user.id),
+      ['alice', 'bob'],
+    );
+    expect(
+      visibleLiveParticipantsForStage(
+        live.participants,
+        currentUserId: 'missing',
+        localParticipantReady: false,
+      ).map((participant) => participant.user.id),
+      ['alice', 'bob'],
+    );
+  });
+
   test(
     'pickLiveStageShare prefers remote screen share then local fallback',
     () {

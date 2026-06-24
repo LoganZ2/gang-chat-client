@@ -219,10 +219,14 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
 
   @override
   Widget build(BuildContext context) {
-    final participants =
-        (widget.live?.participants ?? const <LiveParticipant>[])
-            .where((p) => p.user.id != musicBoxBotIdentity)
-            .toList();
+    final participants = live_display
+        .visibleLiveParticipantsForStage(
+          widget.live?.participants ?? const <LiveParticipant>[],
+          currentUserId: widget.currentUser.id,
+          localParticipantReady: widget.joined && !widget.joining,
+        )
+        .where((p) => p.user.id != musicBoxBotIdentity)
+        .toList();
     final stageTrack = _resolveStageTrack();
     final musicBox = widget.musicBox;
     final musicBoxEnabled = musicBox?.enabled ?? false;

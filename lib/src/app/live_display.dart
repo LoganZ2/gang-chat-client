@@ -93,6 +93,18 @@ String liveParticipantDisplayName(
   return liveParticipantByUserId(live, userId)?.user.displayName ?? fallback;
 }
 
+List<LiveParticipant> visibleLiveParticipantsForStage(
+  Iterable<LiveParticipant> participants, {
+  required String currentUserId,
+  required bool localParticipantReady,
+}) {
+  return [
+    for (final participant in participants)
+      if (localParticipantReady || participant.user.id != currentUserId)
+        participant,
+  ];
+}
+
 LiveParticipantTileState liveParticipantTileState(
   LiveParticipant participant, {
   required bool speaking,
