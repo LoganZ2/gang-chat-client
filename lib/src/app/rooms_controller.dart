@@ -819,6 +819,10 @@ class RoomsController {
     return api.listRoomApplications(status: status);
   }
 
+  Future<List<RoomEventNotification>> listRoomNotifications() {
+    return api.listRoomNotifications();
+  }
+
   Future<RoomMemberPage> listRoomMembers(
     String roomId, {
     int limit = 100,

@@ -80,7 +80,8 @@ extension _HomeShellNotifications on _HomeShellState {
       _loadNotifications(
         silent:
             _notificationInvites.isNotEmpty ||
-            _notificationApplications.isNotEmpty,
+            _notificationApplications.isNotEmpty ||
+            _notificationRoomEvents.isNotEmpty,
       ),
     );
   }
@@ -107,14 +108,16 @@ extension _HomeShellNotifications on _HomeShellState {
     }
 
     try {
-      final (invites, applications) = await (
+      final (invites, applications, roomEvents) = await (
         _roomsController.listRoomInvites(status: 'all'),
         _roomsController.listRoomApplications(status: 'all'),
+        _roomsController.listRoomNotifications(),
       ).wait;
       if (!mounted) return;
       _setHomeState(() {
         _notificationInvites = invites;
         _notificationApplications = applications;
+        _notificationRoomEvents = roomEvents;
         _loadingNotifications = false;
         _notificationError = null;
         _hasPendingRoomInvites =
@@ -259,6 +262,12 @@ extension _HomeShellNotifications on _HomeShellState {
 
   void _applyRoomApplicationsUpdated() {
     unawaited(_refreshPendingRoomInviteBadge());
+    if (_contentMode == _ContentMode.notifications) {
+      unawaited(_loadNotifications(silent: true));
+    }
+  }
+
+  void _applyRoomNotificationsUpdated() {
     if (_contentMode == _ContentMode.notifications) {
       unawaited(_loadNotifications(silent: true));
     }

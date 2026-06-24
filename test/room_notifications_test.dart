@@ -348,6 +348,70 @@ void main() {
     );
   });
 
+  test('room event notifications filter and search room events', () {
+    final promoted = _roomEvent(
+      'promoted',
+      type: kRoomEventNotificationRolePromoted,
+      roomName: 'Launch Room',
+      actor: _user(
+        'actor_promoted',
+        displayName: 'Morgan Admin',
+        roomRole: 'owner',
+      ),
+      toRole: 'admin',
+    );
+    final removed = _roomEvent(
+      'removed',
+      type: kRoomEventNotificationMemberRemoved,
+      createdAt: DateTime.utc(2026, 6, 8, 8),
+    );
+
+    final roomEventsOnly = roomNotificationsForView(
+      invites: [_invite('invite_1')],
+      applications: [_application('application_1')],
+      roomEvents: [promoted, removed],
+      query: '',
+      filter: RoomNotificationFilter.roomNotifications,
+    );
+    expect(roomEventsOnly.map((item) => item.id), [
+      'room-event:removed',
+      'room-event:promoted',
+    ]);
+    expect(roomEventsOnly.every((item) => item.invite == null), isTrue);
+    expect(roomEventsOnly.every((item) => item.application == null), isTrue);
+
+    expect(
+      roomNotificationsForView(
+        invites: const [],
+        applications: const [],
+        roomEvents: [promoted],
+        query: 'Morgan Admin',
+        filter: RoomNotificationFilter.all,
+      ).single.roomEvent,
+      promoted,
+    );
+    expect(
+      roomNotificationsForView(
+        invites: const [],
+        applications: const [],
+        roomEvents: [promoted],
+        query: '管理员',
+        filter: RoomNotificationFilter.all,
+      ).single.roomEvent,
+      promoted,
+    );
+    expect(
+      roomNotificationsForView(
+        invites: const [],
+        applications: const [],
+        roomEvents: [promoted],
+        query: 'missing',
+        filter: RoomNotificationFilter.all,
+      ),
+      isEmpty,
+    );
+  });
+
   test('room application notifications filter and search reviewer fields', () {
     final application = _application(
       'application_1',
@@ -556,6 +620,44 @@ RoomApplication _application(
     reviewedAt: reviewedAt,
     reviewer: reviewer,
     reviewerExists: reviewerExists,
+  );
+}
+
+RoomEventNotification _roomEvent(
+  String id, {
+  String type = kRoomEventNotificationRoleDemoted,
+  DateTime? createdAt,
+  String roomName = 'Event Room',
+  String roomRid = 'E-1',
+  UserSummary? actor,
+  bool actorExists = true,
+  bool roomExists = true,
+  String fromRole = 'owner',
+  String toRole = 'admin',
+}) {
+  return RoomEventNotification(
+    id: id,
+    type: type,
+    room: PublicRoom(
+      id: 'room_event_$id',
+      rid: roomRid,
+      name: roomName,
+      avatarUrl: null,
+      defaultAvatarKey: 'room-1',
+      visibility: 'private',
+      joinPolicy: 'approval_required',
+      memberCount: 3,
+      onlineMemberCount: 1,
+      liveParticipantCount: 0,
+      joined: false,
+      joinState: 'none',
+    ),
+    actor: actor ?? _user('actor_$id', roomRole: 'owner'),
+    createdAt: createdAt ?? DateTime.utc(2026, 6, 5, 12),
+    actorExists: actorExists,
+    roomExists: roomExists,
+    fromRole: fromRole,
+    toRole: toRole,
   );
 }
 

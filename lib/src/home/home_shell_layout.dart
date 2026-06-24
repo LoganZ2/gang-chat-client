@@ -52,6 +52,7 @@ extension _HomeShellLayout on _HomeShellState {
       return HomeNotificationsPane(
         invites: _notificationInvites,
         applications: _notificationApplications,
+        roomNotifications: _notificationRoomEvents,
         currentUser: _currentUser,
         loading: _loadingNotifications,
         error: _notificationError,

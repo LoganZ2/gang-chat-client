@@ -6,7 +6,13 @@ enum RoomNotificationItemType {
   invite,
   applicationRequested,
   applicationReviewed,
+  roomEvent,
 }
+
+const kRoomEventNotificationMemberRemoved = 'member_removed';
+const kRoomEventNotificationRolePromoted = 'role_promoted';
+const kRoomEventNotificationRoleDemoted = 'role_demoted';
+const kRoomEventNotificationCreatorTransferDemoted = 'creator_transfer_demoted';
 
 const missingRoomNotificationRoomLabel = '房间不存在';
 const missingRoomNotificationRoomAvatarLabel = '';
@@ -23,6 +29,7 @@ class RoomNotificationItem {
     required this.pending,
     this.invite,
     this.application,
+    this.roomEvent,
   });
 
   factory RoomNotificationItem.invite(RoomInvite invite) {
@@ -59,12 +66,23 @@ class RoomNotificationItem {
     );
   }
 
+  factory RoomNotificationItem.roomEvent(RoomEventNotification notification) {
+    return RoomNotificationItem._(
+      type: RoomNotificationItemType.roomEvent,
+      id: 'room-event:${notification.id}',
+      time: notification.createdAt,
+      pending: false,
+      roomEvent: notification,
+    );
+  }
+
   final RoomNotificationItemType type;
   final String id;
   final DateTime time;
   final bool pending;
   final RoomInvite? invite;
   final RoomApplication? application;
+  final RoomEventNotification? roomEvent;
 }
 
 bool isPendingRoomInvite(RoomInvite invite) {
@@ -200,6 +218,27 @@ String roomInviteRoleLabel(UserSummary inviter) {
   };
 }
 
+String roomNotificationRoleLabel(String? role) {
+  return switch (role?.trim().toLowerCase()) {
+    'owner' || 'creator' => '创建者',
+    'admin' || 'administrator' => '管理员',
+    'member' => '成员',
+    'superuser' => '超级用户',
+    'left' || 'left_room' || 'departed' => '已离开',
+    null || '' => '成员',
+    _ => role!.trim(),
+  };
+}
+
+String roomEventNotificationRoleActionLabel(
+  RoomEventNotification notification,
+) {
+  return switch (notification.type) {
+    kRoomEventNotificationRolePromoted => '晋升为',
+    _ => '降职为',
+  };
+}
+
 String roomInviteTimestampLabel(DateTime value) {
   final local = value.toLocal();
   return '${local.year.toString().padLeft(4, '0')}/'
@@ -277,13 +316,10 @@ String roomNotificationUserAvatarKey(
 List<RoomNotificationItem> roomNotificationsForView({
   required Iterable<RoomInvite> invites,
   required Iterable<RoomApplication> applications,
+  Iterable<RoomEventNotification> roomEvents = const [],
   required String query,
   required RoomNotificationFilter filter,
 }) {
-  if (filter == RoomNotificationFilter.roomNotifications) {
-    return const [];
-  }
-
   final normalizedQuery = query.trim().toLowerCase();
   final items = <RoomNotificationItem>[];
 
@@ -307,6 +343,15 @@ List<RoomNotificationItem> roomNotificationsForView({
           application.reviewedAt != null &&
           application.reviewer != null) {
         items.add(RoomNotificationItem.applicationReviewed(application));
+      }
+    }
+  }
+
+  if (filter == RoomNotificationFilter.all ||
+      filter == RoomNotificationFilter.roomNotifications) {
+    for (final notification in roomEvents) {
+      if (_matchesRoomEventNotification(notification, normalizedQuery)) {
+        items.add(RoomNotificationItem.roomEvent(notification));
       }
     }
   }
@@ -364,6 +409,16 @@ bool _matchesRoomApplication(
 ) {
   if (normalizedQuery.isEmpty) return true;
   return _roomApplicationSearchText(application).contains(normalizedQuery);
+}
+
+bool _matchesRoomEventNotification(
+  RoomEventNotification notification,
+  String normalizedQuery,
+) {
+  if (normalizedQuery.isEmpty) return true;
+  return _roomEventNotificationSearchText(
+    notification,
+  ).contains(normalizedQuery);
 }
 
 int _itemPendingRank(RoomNotificationItem item) {
@@ -435,6 +490,48 @@ String _roomApplicationSearchText(RoomApplication application) {
           ? null
           : '$missingRoomNotificationUserLabel 不存在 用户已不存在 user missing',
     );
+  }
+  return values.join('\n');
+}
+
+String _roomEventNotificationSearchText(RoomEventNotification notification) {
+  final values = <String>[];
+  _addRoomSearchValues(values, notification.room);
+  _addSearchValue(values, notification.id);
+  _addSearchValue(values, notification.type);
+  _addSearchValue(values, roomNotificationRoleLabel(notification.fromRole));
+  _addSearchValue(values, roomNotificationRoleLabel(notification.toRole));
+  _addSearchValue(values, roomInviteTimestampLabel(notification.createdAt));
+  _addSearchValue(
+    values,
+    notification.roomExists
+        ? null
+        : '$missingRoomNotificationRoomLabel 不存在 房间已不存在 room missing',
+  );
+  final actor = notification.actor;
+  if (actor != null) {
+    _addUserSearchValues(values, actor);
+    _addSearchValue(values, roomInviteRoleLabel(actor));
+    _addSearchValue(
+      values,
+      notification.actorExists
+          ? null
+          : '$missingRoomNotificationUserLabel 不存在 用户已不存在 user missing',
+    );
+  }
+  switch (notification.type) {
+    case kRoomEventNotificationMemberRemoved:
+      _addSearchValue(values, '踢出了 踢出房间 removed kicked');
+      break;
+    case kRoomEventNotificationRolePromoted:
+      _addSearchValue(values, '晋升为 promotion promoted');
+      break;
+    case kRoomEventNotificationRoleDemoted:
+      _addSearchValue(values, '降职为 demotion demoted');
+      break;
+    case kRoomEventNotificationCreatorTransferDemoted:
+      _addSearchValue(values, '转让创建者 降职为 creator transferred');
+      break;
   }
   return values.join('\n');
 }

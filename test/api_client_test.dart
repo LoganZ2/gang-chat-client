@@ -1001,6 +1001,41 @@ void main() {
   });
 
   test(
+    'listRoomNotifications requests and parses room event notifications',
+    () async {
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          expect(request.method, 'GET');
+          expect(request.url.path, '/api/v1/room-notifications');
+          expect(request.headers['authorization'], 'Bearer token');
+
+          return http.Response(
+            jsonEncode({
+              'notifications': [_roomEventNotificationJson()],
+              'next_cursor': null,
+            }),
+            200,
+          );
+        }),
+      );
+
+      final notifications = await api.listRoomNotifications();
+      final notification = notifications.single;
+
+      expect(notification.id, 'rnot_1');
+      expect(notification.type, 'role_promoted');
+      expect(notification.toRole, 'admin');
+      expect(notification.room.name, 'Invite Room');
+      expect(notification.room.description, 'Invite room bio');
+      expect(notification.actor?.roomDisplayName, 'Alice in Invite Room');
+      expect(notification.actor?.roomRole, 'owner');
+      api.close();
+    },
+  );
+
+  test(
     'withdrawRoomApplication sends withdraw decision and parses result',
     () async {
       final api = GangApiClient(
@@ -2518,6 +2553,29 @@ Map<String, Object?> _roomApplicationJson({
             'room_role': 'owner',
           }
         : null,
+  };
+}
+
+Map<String, Object?> _roomEventNotificationJson() {
+  return {
+    'id': 'rnot_1',
+    'type': 'role_promoted',
+    'created_at': '2026-06-01T13:00:00Z',
+    'room_exists': true,
+    'actor_exists': true,
+    'from_role': 'member',
+    'to_role': 'admin',
+    'room': _roomInviteJson(roomJoined: true)['room'],
+    'actor': {
+      'id': 'user_1',
+      'uid': '1000001',
+      'username': 'alice',
+      'display_name': 'Alice',
+      'avatar_url': null,
+      'default_avatar_key': 'blue-3',
+      'room_display_name': 'Alice in Invite Room',
+      'room_role': 'owner',
+    },
   };
 }
 

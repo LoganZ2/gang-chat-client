@@ -1276,6 +1276,48 @@ class RoomApplication {
   }
 }
 
+class RoomEventNotification {
+  const RoomEventNotification({
+    required this.id,
+    required this.type,
+    required this.room,
+    required this.createdAt,
+    this.roomExists = true,
+    this.actor,
+    this.actorExists = true,
+    this.fromRole,
+    this.toRole,
+  });
+
+  final String id;
+  final String type;
+  final PublicRoom room;
+  final DateTime createdAt;
+  final bool roomExists;
+  final UserSummary? actor;
+  final bool actorExists;
+  final String? fromRole;
+  final String? toRole;
+
+  factory RoomEventNotification.fromJson(Map<String, Object?> json) {
+    final actorJson = _nullableMap(json['actor']);
+    final actor = actorJson == null ? null : UserSummary.fromJson(actorJson);
+    return RoomEventNotification(
+      id: json['id']! as String,
+      type: json['type'] as String? ?? '',
+      room: PublicRoom.fromJson(json['room']! as Map<String, Object?>),
+      createdAt:
+          _parseDateTime(json['created_at']) ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      roomExists: json['room_exists'] as bool? ?? true,
+      actor: actor,
+      actorExists: json['actor_exists'] as bool? ?? actor != null,
+      fromRole: _stringFromJson(json, const ['from_role']),
+      toRole: _stringFromJson(json, const ['to_role']),
+    );
+  }
+}
+
 class RoomDetail {
   const RoomDetail({
     required this.id,

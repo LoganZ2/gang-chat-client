@@ -172,12 +172,11 @@ class _SegmentContent<T> extends StatelessWidget {
     final foreground = selected
         ? UiColors.controlAccent
         : UiColors.textSecondary;
-    return Stack(
-      fit: StackFit.expand,
-      clipBehavior: Clip.none,
-      children: [
-        Center(
-          child: Row(
+    return Center(
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (segment.icon != null) ...[
@@ -202,15 +201,15 @@ class _SegmentContent<T> extends StatelessWidget {
               ),
             ],
           ),
-        ),
-        if (segment.showBadge)
-          Positioned(
-            key: segment.badgeKey,
-            top: 3,
-            right: -2,
-            child: const BadgeDot(size: 7),
-          ),
-      ],
+          if (segment.showBadge)
+            Positioned(
+              key: segment.badgeKey,
+              top: -3,
+              right: -6,
+              child: const BadgeDot(size: 7),
+            ),
+        ],
+      ),
     );
   }
 }

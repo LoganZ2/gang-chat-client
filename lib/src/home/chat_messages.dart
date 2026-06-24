@@ -682,7 +682,7 @@ class _SystemMessageParts {
           event,
         );
         return [
-          _userChip(subject),
+          _userChip(subject, roleOverride: event.toRole),
           if (!omitActor && actor != null) ...[_text('被'), _userChip(actor)],
           _text(verb),
           RoleBadge(
@@ -698,9 +698,10 @@ class _SystemMessageParts {
     }
   }
 
-  Widget _userChip(UserSummary user) {
+  Widget _userChip(UserSummary user, {String? roleOverride}) {
     return _SystemUserChip(
       user: user,
+      roleOverride: roleOverride,
       currentUser: currentUser,
       ownerUserId: ownerUserId,
       onResolveProfile: onResolveSenderProfile,
@@ -727,6 +728,7 @@ class _SystemMessageParts {
 class _SystemUserChip extends StatelessWidget {
   const _SystemUserChip({
     required this.user,
+    this.roleOverride,
     required this.currentUser,
     required this.ownerUserId,
     required this.inLive,
@@ -737,6 +739,7 @@ class _SystemUserChip extends StatelessWidget {
   });
 
   final UserSummary user;
+  final String? roleOverride;
   final CurrentUser currentUser;
   final String? ownerUserId;
   final bool inLive;
@@ -748,6 +751,9 @@ class _SystemUserChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final name = _senderName(user);
+    final colorUser = roleOverride == null
+        ? user
+        : user.copyWith(roomRole: roleOverride);
     final avatar = Avatar(
       label: name,
       imageUrl: AppConfigScope.of(context).resolveAssetUrl(user.avatarUrl),
@@ -777,7 +783,7 @@ class _SystemUserChip extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: UiTypography.label.copyWith(
               color: _roomUsernameColor(
-                user: user,
+                user: colorUser,
                 currentUser: currentUser,
                 ownerUserId: ownerUserId,
               ),

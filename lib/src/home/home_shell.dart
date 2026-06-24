@@ -178,6 +178,7 @@ class _HomeShellState extends State<HomeShell> {
   String _membersInitialSearchQuery = '';
   List<RoomInvite> _notificationInvites = const [];
   List<RoomApplication> _notificationApplications = const [];
+  List<RoomEventNotification> _notificationRoomEvents = const [];
   bool _loadingNotifications = false;
   String? _notificationError;
   String? _busyNotificationInviteId;
@@ -303,6 +304,7 @@ class _HomeShellState extends State<HomeShell> {
       _membersInitialSearchQuery = '';
       _notificationInvites = const [];
       _notificationApplications = const [];
+      _notificationRoomEvents = const [];
       _loadingNotifications = false;
       _notificationError = null;
       _busyNotificationInviteId = null;

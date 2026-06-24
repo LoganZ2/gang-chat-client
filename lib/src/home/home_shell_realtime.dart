@@ -82,6 +82,9 @@ extension _HomeShellRealtime on _HomeShellState {
       case 'room_applications_updated':
         _applyRoomApplicationsUpdated();
         break;
+      case 'room_notifications_updated':
+        _applyRoomNotificationsUpdated();
+        break;
       case 'room_role_changed':
         _applyRoomRoleChanged(event.data);
         break;

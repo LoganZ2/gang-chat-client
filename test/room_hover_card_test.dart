@@ -1,3 +1,4 @@
+import 'package:client/src/app/room_notifications.dart';
 import 'package:client/src/home/room_profile_card.dart';
 import 'package:client/src/home/home_notifications.dart';
 import 'package:client/src/protocol/models.dart';
@@ -282,6 +283,7 @@ void main() {
         HomeNotificationsPane(
           invites: [invite],
           applications: const [],
+          roomNotifications: const [],
           loading: false,
           error: null,
           busyInviteId: null,
@@ -307,6 +309,79 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('@creator'), findsOneWidget);
+  });
+
+  testWidgets('room event notification avatars open profile cards', (
+    tester,
+  ) async {
+    final notification = RoomEventNotification(
+      id: 'event_user_card',
+      type: kRoomEventNotificationRolePromoted,
+      room: PublicRoom(
+        id: 'room_event',
+        rid: 'R200',
+        name: 'Event Room',
+        avatarUrl: null,
+        defaultAvatarKey: 'room-2',
+        visibility: 'private',
+        joinPolicy: 'closed',
+        memberCount: 2,
+        onlineMemberCount: 0,
+        liveParticipantCount: 0,
+        joined: true,
+        joinState: 'joined',
+      ),
+      actor: _creator,
+      createdAt: DateTime.utc(2026, 6, 1),
+      fromRole: 'member',
+      toRole: 'admin',
+    );
+
+    await tester.pumpWidget(
+      _host(
+        HomeNotificationsPane(
+          invites: const [],
+          applications: const [],
+          roomNotifications: [notification],
+          loading: false,
+          error: null,
+          busyInviteId: null,
+          busyApplicationId: null,
+          currentUser: _currentUser,
+          onClose: () {},
+          onRefresh: () {},
+          onReviewInvite: (_, _) async {},
+          onWithdrawApplication: (_) async {},
+          onOpenRoom: (_) {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await gesture.moveTo(
+      tester.getCenter(
+        find.byKey(
+          const ValueKey(
+            'notification-room-event-actor-avatar-event_user_card',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('@creator'), findsOneWidget);
+
+    await gesture.moveTo(
+      tester.getCenter(
+        find.byKey(
+          const ValueKey('notification-room-avatar-room-event-event_user_card'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('RID: R200'), findsOneWidget);
   });
 
   testWidgets('deleted notification rooms do not open room profile cards', (
@@ -342,6 +417,7 @@ void main() {
         HomeNotificationsPane(
           invites: [invite],
           applications: const [],
+          roomNotifications: const [],
           loading: false,
           error: null,
           busyInviteId: null,
@@ -419,6 +495,7 @@ void main() {
         HomeNotificationsPane(
           invites: [invite],
           applications: const [],
+          roomNotifications: const [],
           loading: false,
           error: null,
           busyInviteId: null,

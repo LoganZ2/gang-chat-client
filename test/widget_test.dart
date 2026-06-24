@@ -5315,6 +5315,9 @@ GangApi _roomsApi({
           'next_cursor': null,
         });
       }
+      if (request.url.path == '/api/v1/room-notifications') {
+        return _jsonResponse({'notifications': [], 'next_cursor': null});
+      }
       if (request.url.path == '/api/v1/room-applications/application-alpha') {
         return _jsonResponse({
           'ok': true,

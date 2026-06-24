@@ -421,6 +421,8 @@ void main() {
 
     expect(find.text(brief), findsOneWidget);
     expect(find.text('Logan'), findsOneWidget);
+    final loganText = tester.widget<Text>(find.text('Logan').first);
+    expect(loganText.style?.color, ui.roleBadgeForegroundColorForLabel('管理员'));
     expect(find.text('Owner'), findsNothing);
     expect(find.text('降职为'), findsOneWidget);
     expect(find.text('管理员'), findsOneWidget);

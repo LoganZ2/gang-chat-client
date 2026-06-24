@@ -17,6 +17,7 @@ class HomeNotificationsPane extends StatefulWidget {
     super.key,
     required this.invites,
     required this.applications,
+    required this.roomNotifications,
     required this.loading,
     required this.error,
     required this.busyInviteId,
@@ -33,6 +34,7 @@ class HomeNotificationsPane extends StatefulWidget {
 
   final List<RoomInvite> invites;
   final List<RoomApplication> applications;
+  final List<RoomEventNotification> roomNotifications;
   final CurrentUser currentUser;
   final bool loading;
   final String? error;
@@ -78,11 +80,14 @@ class _HomeNotificationsPaneState extends State<HomeNotificationsPane> {
     final visibleItems = roomNotificationsForView(
       invites: widget.invites,
       applications: widget.applications,
+      roomEvents: widget.roomNotifications,
       query: _query,
       filter: _filter,
     );
     final rawNotificationCount =
-        widget.invites.length + widget.applications.length;
+        widget.invites.length +
+        widget.applications.length +
+        widget.roomNotifications.length;
     return SettingsScaffold(
       icon: Icons.notifications_none,
       title: '通知',
@@ -264,6 +269,14 @@ class _NotificationsBody extends StatelessWidget {
               onResolveRoomProfile: onResolveRoomProfile,
               onResolveRoomUserProfile: onResolveRoomUserProfile,
             ),
+          RoomNotificationItemType.roomEvent => _RoomEventNotificationRow(
+            notification: item.roomEvent!,
+            query: query,
+            currentUser: currentUser,
+            onOpenRoom: onOpenRoom,
+            onResolveRoomProfile: onResolveRoomProfile,
+            onResolveRoomUserProfile: onResolveRoomUserProfile,
+          ),
         };
       },
     );
@@ -717,6 +730,193 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
   }
 }
 
+class _RoomEventNotificationRow extends StatelessWidget {
+  const _RoomEventNotificationRow({
+    required this.notification,
+    required this.query,
+    required this.currentUser,
+    required this.onOpenRoom,
+    required this.onResolveRoomProfile,
+    required this.onResolveRoomUserProfile,
+  });
+
+  final RoomEventNotification notification;
+  final String query;
+  final CurrentUser currentUser;
+  final ValueChanged<PublicRoom> onOpenRoom;
+  final RoomProfileResolver? onResolveRoomProfile;
+  final Future<UserSummary> Function(String roomId, UserSummary user)?
+  onResolveRoomUserProfile;
+
+  @override
+  Widget build(BuildContext context) {
+    final time = roomInviteTimestampLabel(notification.createdAt);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: UiColors.surface,
+        borderRadius: BorderRadius.circular(UiRadii.lg),
+        border: Border.all(color: UiColors.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 116,
+              child: HighlightedText(
+                text: time,
+                query: query,
+                key: ValueKey(
+                  'notification-room-event-time-${notification.id}',
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: UiTypography.label.copyWith(color: UiColors.textMuted),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: _buildContent()),
+            const SizedBox(width: 12),
+            const SizedBox(width: 88),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent() {
+    final actor = notification.actor;
+    final roleLabel = roomNotificationRoleLabel(notification.toRole);
+    switch (notification.type) {
+      case kRoomEventNotificationMemberRemoved:
+        return Row(
+          children: [
+            _NotificationText(text: '您被', query: query),
+            if (actor != null) ...[
+              const SizedBox(width: 8),
+              Flexible(
+                flex: 4,
+                child: _InlineUserTarget(
+                  user: actor,
+                  roomId: notification.room.id,
+                  targetId: notification.id,
+                  query: query,
+                  userExists: notification.actorExists,
+                  currentUser: currentUser,
+                  onResolveRoomProfile: onResolveRoomProfile,
+                  onResolveRoomUserProfile: onResolveRoomUserProfile,
+                  onOpenRoom: onOpenRoom,
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            _NotificationText(text: '踢出了', query: query),
+            const SizedBox(width: 8),
+            Flexible(flex: 4, child: _roomTarget()),
+          ],
+        );
+      case kRoomEventNotificationRolePromoted:
+      case kRoomEventNotificationRoleDemoted:
+        return Row(
+          children: [
+            _NotificationText(text: '您在', query: query),
+            const SizedBox(width: 8),
+            Flexible(flex: 4, child: _roomTarget()),
+            const SizedBox(width: 8),
+            if (actor != null) ...[
+              _NotificationText(text: '中被', query: query),
+              const SizedBox(width: 8),
+              Flexible(
+                flex: 4,
+                child: _InlineUserTarget(
+                  user: actor,
+                  roomId: notification.room.id,
+                  targetId: notification.id,
+                  query: query,
+                  userExists: notification.actorExists,
+                  currentUser: currentUser,
+                  onResolveRoomProfile: onResolveRoomProfile,
+                  onResolveRoomUserProfile: onResolveRoomUserProfile,
+                  onOpenRoom: onOpenRoom,
+                ),
+              ),
+              const SizedBox(width: 8),
+            ] else ...[
+              _NotificationText(text: '中', query: query),
+              const SizedBox(width: 8),
+            ],
+            _NotificationText(
+              text: roomEventNotificationRoleActionLabel(notification),
+              query: query,
+            ),
+            const SizedBox(width: 7),
+            Flexible(
+              child: _InviteRoleBadge(label: roleLabel, query: query),
+            ),
+          ],
+        );
+      case kRoomEventNotificationCreatorTransferDemoted:
+        return Row(
+          children: [
+            _NotificationText(text: '您在', query: query),
+            const SizedBox(width: 8),
+            Flexible(flex: 4, child: _roomTarget()),
+            const SizedBox(width: 8),
+            _NotificationText(text: '中降职为', query: query),
+            const SizedBox(width: 7),
+            Flexible(
+              child: _InviteRoleBadge(label: roleLabel, query: query),
+            ),
+          ],
+        );
+      default:
+        return Row(
+          children: [
+            _NotificationText(text: '您在', query: query),
+            const SizedBox(width: 8),
+            Flexible(flex: 4, child: _roomTarget()),
+            const SizedBox(width: 8),
+            _NotificationText(text: '收到了房间通知', query: query),
+          ],
+        );
+    }
+  }
+
+  Widget _roomTarget() {
+    return _InlineRoomTarget(
+      room: notification.room,
+      inviteId: 'room-event-${notification.id}',
+      query: query,
+      roomExists: notification.roomExists,
+      currentUser: currentUser,
+      onResolveRoomProfile: onResolveRoomProfile,
+      onResolveRoomUserProfile: onResolveRoomUserProfile,
+      onOpenRoom: onOpenRoom,
+    );
+  }
+}
+
+class _NotificationText extends StatelessWidget {
+  const _NotificationText({required this.text, required this.query});
+
+  final String text;
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    return HighlightedText(
+      text: text,
+      query: query,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: UiTypography.label.copyWith(
+        color: UiColors.textSecondary,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+}
+
 class _InviteRoleBadge extends StatelessWidget {
   const _InviteRoleBadge({super.key, required this.label, required this.query});
 
@@ -731,6 +931,96 @@ class _InviteRoleBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       borderRadius: UiRadii.sm,
       fontSize: 11,
+    );
+  }
+}
+
+class _InlineUserTarget extends StatelessWidget {
+  const _InlineUserTarget({
+    required this.user,
+    required this.roomId,
+    required this.targetId,
+    required this.query,
+    required this.userExists,
+    required this.currentUser,
+    required this.onOpenRoom,
+    required this.onResolveRoomProfile,
+    required this.onResolveRoomUserProfile,
+  });
+
+  final UserSummary user;
+  final String roomId;
+  final String targetId;
+  final String query;
+  final bool userExists;
+  final CurrentUser currentUser;
+  final ValueChanged<PublicRoom> onOpenRoom;
+  final RoomProfileResolver? onResolveRoomProfile;
+  final Future<UserSummary> Function(String roomId, UserSummary user)?
+  onResolveRoomUserProfile;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = roomNotificationUserLabel(user, userExists: userExists);
+    final avatarLabel = roomNotificationUserAvatarLabel(
+      user,
+      userExists: userExists,
+    );
+    final avatar = Avatar(
+      key: ValueKey('notification-room-event-actor-avatar-$targetId'),
+      label: avatarLabel,
+      imageUrl: AppConfigScope.of(context).resolveAssetUrl(
+        roomNotificationUserAvatarUrl(user, userExists: userExists),
+      ),
+      defaultAvatarKey: roomNotificationUserAvatarKey(
+        user,
+        userExists: userExists,
+      ),
+      size: 34,
+      showFallbackText: userExists,
+    );
+    final avatarTarget = userExists
+        ? UserHoverCard(
+            user: user,
+            currentUser: currentUser,
+            onResolveProfile: onResolveRoomUserProfile == null
+                ? null
+                : (target) => onResolveRoomUserProfile!(roomId, target),
+            onResolveRoomProfile: onResolveRoomProfile,
+            onEnterCommonRoom: onOpenRoom,
+            child: avatar,
+          )
+        : avatar;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        avatarTarget,
+        const SizedBox(width: 8),
+        Flexible(
+          flex: 3,
+          child: HighlightedText(
+            text: name,
+            query: query,
+            key: ValueKey('notification-room-event-actor-name-$targetId'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: UiColors.text,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        const SizedBox(width: 7),
+        Flexible(
+          flex: 2,
+          child: _InviteRoleBadge(
+            key: ValueKey('notification-room-event-actor-role-$targetId'),
+            label: roomInviteRoleLabel(user),
+            query: query,
+          ),
+        ),
+      ],
     );
   }
 }
