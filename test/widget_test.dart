@@ -1349,13 +1349,32 @@ void main() {
 
     expect(find.text('创建房间'), findsOneWidget);
     expect(find.text('房间信息'), findsOneWidget);
+    expect(find.byKey(const ValueKey('room-settings-rid')), findsNothing);
     expect(find.widgetWithText(ui.Button, '确定'), findsOneWidget);
     expect(find.text('保存房间设置'), findsNothing);
     expect(find.text('离开房间'), findsNothing);
     expect(find.text('删除房间'), findsNothing);
 
-    await tester.enterText(_textFieldWithHint('房间名称'), 'Project Nest');
-    await tester.enterText(_textFieldWithHint('简介'), 'A focused room');
+    expect(
+      tester
+          .widget<TextField>(_roomSettingsTextField('name'))
+          .decoration
+          ?.hintText,
+      isEmpty,
+    );
+    expect(
+      tester
+          .widget<TextField>(_roomSettingsTextField('description'))
+          .decoration
+          ?.hintText,
+      isEmpty,
+    );
+
+    await tester.enterText(_roomSettingsTextField('name'), 'Project Nest');
+    await tester.enterText(
+      _roomSettingsTextField('description'),
+      'A focused room',
+    );
     final confirmButton = find.widgetWithText(ui.Button, '确定');
     await tester.ensureVisible(confirmButton);
     await tester.pumpAndSettle();
@@ -1374,6 +1393,56 @@ void main() {
     expect(find.text('创建房间'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'authenticated home shell opens empty create room form from room settings',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: HomePage(
+            app: _homeTestAppContext(),
+            realtime: _NoopRealtimeService(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Alpha Room'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('房间设置'));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<TextField>(_roomSettingsTextField('name'))
+            .controller
+            ?.text,
+        'Alpha Room',
+      );
+
+      await tester.tap(find.byTooltip('创建房间'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('创建房间'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextField>(_roomSettingsTextField('name'))
+            .controller
+            ?.text,
+        isEmpty,
+      );
+      expect(
+        tester
+            .widget<TextField>(_roomSettingsTextField('description'))
+            .controller
+            ?.text,
+        isEmpty,
+      );
+      expect(find.byKey(const ValueKey('room-settings-rid')), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'authenticated home shell opens notifications and reviews invite',
@@ -2431,12 +2500,16 @@ void main() {
     WidgetTester tester,
   ) async {
     final requestedPaths = <String>[];
+    final myRoomSettingsUpdates = <Map<String, Object?>>[];
 
     await tester.pumpWidget(
       MaterialApp(
         theme: ui.uiTheme(),
         home: HomePage(
-          app: _homeTestAppContext(requestedPaths: requestedPaths),
+          app: _homeTestAppContext(
+            requestedPaths: requestedPaths,
+            myRoomSettingsUpdates: myRoomSettingsUpdates,
+          ),
           realtime: _NoopRealtimeService(),
         ),
       ),
@@ -2586,10 +2659,34 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('房间设置'), findsOneWidget);
-    expect(find.text('房间信息'), findsOneWidget);
+    expect(find.text('房间信息'), findsAtLeastNWidgets(1));
+    expect(find.text('个人偏好'), findsOneWidget);
+    expect(find.text('设置'), findsNothing);
+    expect(find.byIcon(Icons.info_outline), findsOneWidget);
     expect(find.byType(ui.UiSwitch), findsOneWidget);
     expect(find.byType(Switch), findsNothing);
-    expect(tester.widget<TextField>(_textFieldWithHint('简介')).maxLines, isNull);
+    final descriptionField = _roomSettingsTextField('description');
+    expect(tester.widget<TextField>(descriptionField).maxLines, isNull);
+    expect(
+      tester
+          .widget<TextField>(_roomSettingsTextField('name'))
+          .decoration
+          ?.hintText,
+      isEmpty,
+    );
+    expect(
+      tester.widget<TextField>(descriptionField).decoration?.hintText,
+      isEmpty,
+    );
+    expect(find.text('房间 RID'), findsOneWidget);
+    final ridText = tester.widget<SelectableText>(
+      find.byKey(const ValueKey('room-settings-rid')),
+    );
+    expect(ridText.data, 'server-alpha');
+    expect(
+      tester.getRect(find.byKey(const ValueKey('room-settings-rid'))).top,
+      greaterThan(tester.getRect(descriptionField).bottom),
+    );
     final roomInfoSectionDecorations = tester
         .widgetList<DecoratedBox>(
           find.ancestor(
@@ -2606,26 +2703,34 @@ void main() {
       isTrue,
     );
 
-    await tester.enterText(_textFieldWithHint('房间名称'), 'Alpha Renamed');
+    await tester.enterText(_roomSettingsTextField('name'), 'Alpha Renamed');
     final saveButton = find.widgetWithText(ui.Button, '保存房间设置');
-    await tester.ensureVisible(saveButton);
-    await tester.pumpAndSettle();
-    await tester.tap(saveButton);
+    tester.widget<ui.Button>(saveButton).onPressed?.call();
     await tester.pumpAndSettle();
 
     expect(requestedPaths, contains('/api/v1/rooms/server-alpha'));
-    // The success notice renders at the top of the scrollable dialog body;
-    // scroll back up so the lazily-built strip is in the tree before asserting.
-    await tester.scrollUntilVisible(
-      find.text('房间信息已保存'),
-      -200,
-      scrollable: find
-          .ancestor(of: saveButton, matching: find.byType(Scrollable))
-          .first,
-    );
-    await tester.pumpAndSettle();
     expect(find.text('房间信息已保存'), findsOneWidget);
     expect(find.textContaining('Alpha Renamed'), findsAtLeastNWidgets(1));
+
+    await tester.tap(find.text('个人偏好').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('通知'), findsOneWidget);
+    expect(find.text('全部'), findsOneWidget);
+    expect(find.text('提及'), findsOneWidget);
+    expect(find.text('静音'), findsOneWidget);
+    await tester.tap(find.text('静音'));
+    await tester.pumpAndSettle();
+    final savePreferencesButton = find.widgetWithText(ui.Button, '保存个人偏好');
+    await tester.ensureVisible(savePreferencesButton);
+    await tester.pumpAndSettle();
+    await tester.tap(savePreferencesButton);
+    await tester.pumpAndSettle();
+
+    expect(requestedPaths, contains('/api/v1/rooms/server-alpha/me'));
+    expect(myRoomSettingsUpdates, hasLength(1));
+    expect(myRoomSettingsUpdates.single['notification_policy'], 'muted');
+    expect(find.text('个人偏好已保存'), findsOneWidget);
 
     await tester.tap(find.byTooltip('返回').last);
     await tester.pumpAndSettle();
@@ -5189,6 +5294,13 @@ Finder _textFieldWithHint(String hintText) {
   );
 }
 
+Finder _roomSettingsTextField(String field) {
+  return find.descendant(
+    of: find.byKey(ValueKey('room-settings-$field-input')),
+    matching: find.byType(TextField),
+  );
+}
+
 Finder _highlightedSearchText(String text) {
   return find.byWidgetPredicate(
     (widget) => widget is ui.HighlightedText && widget.text.contains(text),
@@ -5263,6 +5375,7 @@ AuthenticatedAppContext _homeTestAppContext({
   List<Uri>? requestedUris,
   List<Map<String, Object?>>? accountUpdates,
   List<Map<String, Object?>>? roomCreations,
+  List<Map<String, Object?>>? myRoomSettingsUpdates,
   List<Map<String, Object?>>? liveJoinRequests,
   List<Map<String, Object?>>? liveStateUpdates,
   List<String>? liveModerationActions,
@@ -5308,6 +5421,7 @@ AuthenticatedAppContext _homeTestAppContext({
       requestedUris: requestedUris,
       accountUpdates: accountUpdates,
       roomCreations: roomCreations,
+      myRoomSettingsUpdates: myRoomSettingsUpdates,
       liveJoinRequests: liveJoinRequests,
       liveStateUpdates: liveStateUpdates,
       liveModerationActions: liveModerationActions,
@@ -5328,6 +5442,7 @@ GangApi _roomsApi({
   List<Uri>? requestedUris,
   List<Map<String, Object?>>? accountUpdates,
   List<Map<String, Object?>>? roomCreations,
+  List<Map<String, Object?>>? myRoomSettingsUpdates,
   List<Map<String, Object?>>? liveJoinRequests,
   List<Map<String, Object?>>? liveStateUpdates,
   List<String>? liveModerationActions,
@@ -5341,6 +5456,12 @@ GangApi _roomsApi({
 }) {
   var roomNotificationsMarkedRead = false;
   var actionComparisonMemberRole = 'member';
+  var alphaRoomName = 'Alpha Room';
+  var alphaRoomDescription = '';
+  var alphaRoomVisibility = 'private';
+  var alphaRoomJoinPolicy = currentRoomJoinPolicy;
+  var alphaRoomAiVoiceAnnouncementsEnabled = true;
+  var alphaRoomNotificationPolicy = 'all';
   return GangApiClient(
     baseUrl: 'http://example.test/api/v1',
     accessTokenProvider: ({bool forceRefresh = false}) async => 'access-token',
@@ -5644,38 +5765,82 @@ GangApi _roomsApi({
           'user': {..._currentUserJson, ...body},
         });
       }
+      if (request.url.path == '/api/v1/rooms/server-alpha/me') {
+        expect(request.method, 'PATCH');
+        final body =
+            jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>;
+        alphaRoomNotificationPolicy =
+            body['notification_policy'] as String? ??
+            alphaRoomNotificationPolicy;
+        myRoomSettingsUpdates?.add(body);
+        return _jsonResponse({
+          'room': {
+            ..._roomDetailJson(
+              id: 'server-alpha',
+              name: alphaRoomName,
+              memberCount: 2,
+              onlineMemberCount: 1,
+              liveParticipantCount: 1,
+              description: alphaRoomDescription,
+              visibility: alphaRoomVisibility,
+              joinPolicy: alphaRoomJoinPolicy,
+              aiVoiceAnnouncementsEnabled: alphaRoomAiVoiceAnnouncementsEnabled,
+              role: currentRoomRole,
+            ),
+            'notification_policy': alphaRoomNotificationPolicy,
+          },
+        });
+      }
       if (request.url.path == '/api/v1/rooms/server-alpha') {
         if (request.method == 'PATCH') {
           final body =
               jsonDecode(utf8.decode(request.bodyBytes))
                   as Map<String, Object?>;
+          alphaRoomName = body['name'] as String? ?? alphaRoomName;
+          alphaRoomDescription =
+              body['description'] as String? ?? alphaRoomDescription;
+          alphaRoomVisibility =
+              body['visibility'] as String? ?? alphaRoomVisibility;
+          alphaRoomJoinPolicy =
+              body['join_policy'] as String? ?? alphaRoomJoinPolicy;
+          alphaRoomAiVoiceAnnouncementsEnabled =
+              body['ai_voice_announcements_enabled'] as bool? ??
+              alphaRoomAiVoiceAnnouncementsEnabled;
           return _jsonResponse({
-            'room': _roomDetailJson(
-              id: 'server-alpha',
-              name: body['name']! as String,
-              memberCount: 2,
-              onlineMemberCount: 1,
-              liveParticipantCount: 1,
-              description: body['description'] as String? ?? '',
-              visibility: body['visibility'] as String? ?? 'private',
-              joinPolicy:
-                  body['join_policy'] as String? ?? currentRoomJoinPolicy,
-              aiVoiceAnnouncementsEnabled:
-                  body['ai_voice_announcements_enabled'] as bool? ?? true,
-            ),
+            'room': {
+              ..._roomDetailJson(
+                id: 'server-alpha',
+                name: alphaRoomName,
+                memberCount: 2,
+                onlineMemberCount: 1,
+                liveParticipantCount: 1,
+                description: alphaRoomDescription,
+                visibility: alphaRoomVisibility,
+                joinPolicy: alphaRoomJoinPolicy,
+                aiVoiceAnnouncementsEnabled:
+                    alphaRoomAiVoiceAnnouncementsEnabled,
+              ),
+              'notification_policy': alphaRoomNotificationPolicy,
+            },
           });
         }
         await beforeRoomDetailResponse?.call('server-alpha');
         return _jsonResponse({
-          'room': _roomDetailJson(
-            id: 'server-alpha',
-            name: 'Alpha Room',
-            memberCount: 2,
-            onlineMemberCount: 1,
-            liveParticipantCount: 1,
-            joinPolicy: currentRoomJoinPolicy,
-            role: currentRoomRole,
-          ),
+          'room': {
+            ..._roomDetailJson(
+              id: 'server-alpha',
+              name: alphaRoomName,
+              memberCount: 2,
+              onlineMemberCount: 1,
+              liveParticipantCount: 1,
+              description: alphaRoomDescription,
+              visibility: alphaRoomVisibility,
+              joinPolicy: alphaRoomJoinPolicy,
+              aiVoiceAnnouncementsEnabled: alphaRoomAiVoiceAnnouncementsEnabled,
+              role: currentRoomRole,
+            ),
+            'notification_policy': alphaRoomNotificationPolicy,
+          },
         });
       }
       if (request.url.path == '/api/v1/rooms/server-alpha/members') {

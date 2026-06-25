@@ -40,6 +40,7 @@ extension _HomeShellLayout on _HomeShellState {
 
     if (_contentMode == _ContentMode.createRoom) {
       return RoomSettingsDialog.create(
+        key: const ValueKey('home-create-room-settings-dialog'),
         controller: _roomsController,
         currentUser: _currentUser,
         embedded: true,
@@ -89,6 +90,7 @@ extension _HomeShellLayout on _HomeShellState {
     if (_contentMode == _ContentMode.roomSettings && _selectedRoom != null) {
       final room = _selectedRoom!;
       return RoomSettingsDialog(
+        key: ValueKey('home-room-settings-${room.id}'),
         controller: _roomsController,
         room: room,
         currentUser: _currentUser,

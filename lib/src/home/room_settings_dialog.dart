@@ -2,8 +2,8 @@ part of 'room_management.dart';
 
 enum _RoomSettingsDialogMode { create, edit }
 
-/// 房间设置的分段:基础设置与房间表情包管理。
-enum _RoomSettingsSection { settings, stickers }
+/// 房间设置的分段:房间信息、个人偏好与房间表情包管理。
+enum _RoomSettingsSection { info, preferences, stickers }
 
 class RoomSettingsDialog extends StatefulWidget {
   const RoomSettingsDialog({
@@ -67,6 +67,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
   late String _visibility;
   late String _joinPolicy;
   late bool _aiVoiceAnnouncementsEnabled;
+  late String _notificationPolicy;
 
   late String _defaultAvatarKey;
   late bool _usingPresetAvatar;
@@ -75,6 +76,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
   bool _uploadingAvatar = false;
 
   bool _saving = false;
+  bool _savingPreferences = false;
   bool _leaving = false;
   bool _deleting = false;
   bool _changed = false;
@@ -83,7 +85,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
 
   bool get _creating => widget._mode == _RoomSettingsDialogMode.create;
 
-  _RoomSettingsSection _section = _RoomSettingsSection.settings;
+  _RoomSettingsSection _section = _RoomSettingsSection.info;
 
   bool get _canManageRoom =>
       _creating ||
@@ -109,14 +111,45 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
   @override
   void initState() {
     super.initState();
+    _nameController = TextEditingController();
+    _descriptionController = TextEditingController();
+    _resetFromWidgetRoom(clearTransientFeedback: false);
+  }
+
+  @override
+  void didUpdateWidget(RoomSettingsDialog oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget._mode != widget._mode ||
+        oldWidget.room.id != widget.room.id) {
+      _resetFromWidgetRoom();
+    }
+  }
+
+  void _resetFromWidgetRoom({bool clearTransientFeedback = true}) {
     _room = widget.room;
-    _nameController = TextEditingController(text: _room.name);
-    _descriptionController = TextEditingController(text: _room.description);
+    _nameController.text = _room.name;
+    _descriptionController.text = _room.description;
     _visibility = room_display.normalizeRoomVisibility(_room.visibility);
     _joinPolicy = room_display.normalizeRoomJoinPolicy(_room.joinPolicy);
     _aiVoiceAnnouncementsEnabled = _room.aiVoiceAnnouncementsEnabled;
+    _notificationPolicy = room_display.normalizeRoomNotificationPolicy(
+      _room.notificationPolicy,
+    );
     _defaultAvatarKey = _room.defaultAvatarKey;
     _usingPresetAvatar = _room.avatarUrl == null;
+    _pendingAvatarAssetId = null;
+    _pendingAvatarUrl = null;
+    _uploadingAvatar = false;
+    _saving = false;
+    _savingPreferences = false;
+    _leaving = false;
+    _deleting = false;
+    _changed = false;
+    _section = _RoomSettingsSection.info;
+    if (clearTransientFeedback) {
+      _error = null;
+      _notice = null;
+    }
   }
 
   @override
@@ -149,7 +182,13 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
   }
 
   Future<void> _save() async {
-    if (_saving || _leaving || _deleting || !_canManageRoom) return;
+    if (_saving ||
+        _savingPreferences ||
+        _leaving ||
+        _deleting ||
+        !_canManageRoom) {
+      return;
+    }
     final draft = room_forms.roomInfoUpdateDraftFromForm(
       name: _nameController.text,
       description: _descriptionController.text,
@@ -200,6 +239,9 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
       }
       setState(() {
         _room = updated;
+        _notificationPolicy = room_display.normalizeRoomNotificationPolicy(
+          updated.notificationPolicy,
+        );
         _defaultAvatarKey = updated.defaultAvatarKey;
         _usingPresetAvatar = updated.avatarUrl == null;
         _pendingAvatarAssetId = null;
@@ -213,6 +255,48 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
       if (!mounted) return;
       setState(() {
         _saving = false;
+        _error = error.toString();
+      });
+    }
+  }
+
+  Future<void> _savePersonalPreferences() async {
+    if (_creating || _saving || _savingPreferences || _leaving || _deleting) {
+      return;
+    }
+    setState(() {
+      _savingPreferences = true;
+      _error = null;
+      _notice = null;
+    });
+    try {
+      final draft = room_forms.roomProfileUpdateDraftFromForm(
+        remarkName: _room.remarkName ?? '',
+        notificationPolicy: _notificationPolicy,
+        usingGlobalProfile: true,
+        roomDisplayName: '',
+        usingProfilePresetAvatar: true,
+        defaultAvatarKey: '',
+      );
+      final updated = await widget.controller.updateMyRoomSettings(
+        roomId: _room.id,
+        notificationPolicy: draft.notificationPolicy,
+      );
+      if (!mounted) return;
+      setState(() {
+        _room = updated;
+        _notificationPolicy = room_display.normalizeRoomNotificationPolicy(
+          updated.notificationPolicy,
+        );
+        _savingPreferences = false;
+        _changed = true;
+        _notice = room_display.roomPersonalPreferencesSavedNotice();
+      });
+      widget.onRoomUpdated(updated);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _savingPreferences = false;
         _error = error.toString();
       });
     }
@@ -280,7 +364,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
   }
 
   Future<void> _leaveRoom() async {
-    if (_saving || _leaving || _deleting) return;
+    if (_saving || _savingPreferences || _leaving || _deleting) return;
     final confirmation = room_display.roomLeaveConfirmationSpec(
       room: _room,
       isInLive: widget.isInLive,
@@ -328,7 +412,13 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
   }
 
   Future<void> _deleteRoom() async {
-    if (!_canDeleteRoom || _saving || _leaving || _deleting) return;
+    if (!_canDeleteRoom ||
+        _saving ||
+        _savingPreferences ||
+        _leaving ||
+        _deleting) {
+      return;
+    }
     final confirmation = room_display.roomDeletionConfirmationSpec(_room);
     final confirmed = await showDialog<bool>(
       context: context,
@@ -379,9 +469,14 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
               onChanged: (section) => setState(() => _section = section),
               segments: const [
                 Segment(
-                  value: _RoomSettingsSection.settings,
-                  label: '设置',
-                  icon: Icons.tune,
+                  value: _RoomSettingsSection.info,
+                  label: '房间信息',
+                  icon: Icons.info_outline,
+                ),
+                Segment(
+                  value: _RoomSettingsSection.preferences,
+                  label: '个人偏好',
+                  icon: Icons.tune_outlined,
                 ),
                 Segment(
                   value: _RoomSettingsSection.stickers,
@@ -393,7 +488,8 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
       child: _creating
           ? _buildSettingsBody(context)
           : switch (_section) {
-              _RoomSettingsSection.settings => _buildSettingsBody(context),
+              _RoomSettingsSection.info => _buildSettingsBody(context),
+              _RoomSettingsSection.preferences => _buildPreferencesBody(),
               _RoomSettingsSection.stickers => StickerManagerPanel(
                 backend: _RoomStickerBackend(
                   controller: widget.controller,
@@ -416,6 +512,19 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
         SettingsCard(
           title: '房间信息',
           children: [
+            _LabeledRoomInput(
+              fieldKey: const ValueKey('room-settings-name-input'),
+              label: '房间名称',
+              controller: _nameController,
+              enabled: _canManageRoom && !_saving,
+            ),
+            _LabeledRoomInput(
+              fieldKey: const ValueKey('room-settings-description-input'),
+              label: '简介',
+              controller: _descriptionController,
+              enabled: _canManageRoom && !_saving,
+              maxLines: null,
+            ),
             AvatarPicker(
               label: '房间图标',
               displayName: _avatarDisplayName,
@@ -428,19 +537,8 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
               onPresetSelected: _selectPreset,
               uploadLabel: '上传图标',
             ),
-            Input(
-              controller: _nameController,
-              hintText: '房间名称',
-              enabled: _canManageRoom && !_saving,
-              prefixIcon: Icons.tag_outlined,
-            ),
-            Input(
-              controller: _descriptionController,
-              hintText: '简介',
-              enabled: _canManageRoom && !_saving,
-              prefixIcon: Icons.notes_outlined,
-              maxLines: null,
-            ),
+            if (!_creating)
+              _ReadOnlyRoomRid(value: room_display.roomIdentifier(_room)),
             _LabeledSegmented<String>(
               label: '可见性',
               value: _visibility,
@@ -510,6 +608,116 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
               ),
             ],
           ),
+      ],
+    );
+  }
+
+  Widget _buildPreferencesBody() {
+    return SettingsList(
+      children: [
+        if (_notice != null)
+          _NoticeStrip(message: _notice!, icon: Icons.check_circle_outline),
+        if (_error != null) _NoticeStrip(message: _error!, danger: true),
+        SettingsCard(
+          title: '个人偏好',
+          children: [
+            _LabeledSegmented<String>(
+              label: '通知',
+              value: _notificationPolicy,
+              enabled: !_savingPreferences,
+              segments: const [
+                Segment(value: 'all', label: '全部'),
+                Segment(value: 'mentions', label: '提及'),
+                Segment(value: 'muted', label: '静音'),
+              ],
+              onChanged: (value) {
+                setState(() {
+                  _notificationPolicy = room_display
+                      .normalizeRoomNotificationPolicy(value);
+                });
+              },
+            ),
+            Button(
+              width: double.infinity,
+              tone: ButtonTone.primary,
+              loading: _savingPreferences,
+              onPressed: _savePersonalPreferences,
+              icon: const Icon(Icons.save_outlined),
+              child: const Text('保存个人偏好'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ReadOnlyRoomRid extends StatelessWidget {
+  const _ReadOnlyRoomRid({required this.value});
+
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _RoomFieldLabel('房间 RID'),
+        const SizedBox(height: 8),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: UiColors.surfaceLow,
+            border: Border.all(color: UiColors.border),
+            borderRadius: BorderRadius.circular(UiRadii.md),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(13, 11, 13, 11),
+            child: SelectableText(
+              value,
+              key: const ValueKey('room-settings-rid'),
+              maxLines: 1,
+              style: UiTypography.body.copyWith(
+                color: UiColors.text,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LabeledRoomInput extends StatelessWidget {
+  const _LabeledRoomInput({
+    required this.fieldKey,
+    required this.label,
+    required this.controller,
+    this.enabled = true,
+    this.maxLines = 1,
+  });
+
+  final Key fieldKey;
+  final String label;
+  final TextEditingController controller;
+  final bool enabled;
+  final int? maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _RoomFieldLabel(label),
+        const SizedBox(height: 8),
+        Input(
+          key: fieldKey,
+          controller: controller,
+          hintText: '',
+          enabled: enabled,
+          minLines: 1,
+          maxLines: maxLines,
+        ),
       ],
     );
   }

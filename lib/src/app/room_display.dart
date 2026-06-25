@@ -147,6 +147,10 @@ String roomInfoSavedNotice() {
   return '房间信息已保存';
 }
 
+String roomPersonalPreferencesSavedNotice() {
+  return '个人偏好已保存';
+}
+
 RoomLeaveConfirmationSpec roomLeaveConfirmationSpec({
   required RoomDetail room,
   required bool isInLive,

@@ -114,6 +114,20 @@ class _RowSurface extends StatelessWidget {
   }
 }
 
+class _RoomFieldLabel extends StatelessWidget {
+  const _RoomFieldLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: UiTypography.label.copyWith(color: UiColors.textMuted),
+    );
+  }
+}
+
 class _NoticeStrip extends StatelessWidget {
   const _NoticeStrip({required this.message, this.icon, this.danger = false});
 
@@ -197,26 +211,20 @@ class _LabeledSegmented<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SizedBox(
-          width: 110,
-          child: Text(
-            label,
-            style: UiTypography.label.copyWith(color: UiColors.textMuted),
-          ),
-        ),
-        Expanded(
-          child: IgnorePointer(
-            ignoring: !enabled,
-            child: Opacity(
-              opacity: enabled ? 1 : 0.5,
-              child: SegmentedControl<T>(
-                expanded: true,
-                value: value,
-                segments: segments,
-                onChanged: onChanged,
-              ),
+        _RoomFieldLabel(label),
+        const SizedBox(height: 8),
+        IgnorePointer(
+          ignoring: !enabled,
+          child: Opacity(
+            opacity: enabled ? 1 : 0.5,
+            child: SegmentedControl<T>(
+              expanded: true,
+              value: value,
+              segments: segments,
+              onChanged: onChanged,
             ),
           ),
         ),
@@ -242,12 +250,7 @@ class _ToggleRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(
-          child: Text(
-            label,
-            style: UiTypography.label.copyWith(color: UiColors.textMuted),
-          ),
-        ),
+        Expanded(child: _RoomFieldLabel(label)),
         UiSwitch(
           value: value,
           onChanged: enabled ? onChanged : null,
