@@ -226,8 +226,6 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
     }
     setState(() {
       _saving = true;
-      _error = null;
-      _notice = null;
     });
     try {
       final updated = _creating
@@ -266,6 +264,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
         _pendingAvatarUrl = null;
         _saving = false;
         _changed = true;
+        _error = null;
         _notice = room_display.roomInfoSavedNotice();
       });
       widget.onRoomUpdated(updated);
@@ -274,6 +273,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
       setState(() {
         _saving = false;
         _error = error.toString();
+        _notice = null;
       });
     }
   }
@@ -284,8 +284,6 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
     }
     setState(() {
       _savingPreferences = true;
-      _error = null;
-      _notice = null;
     });
     try {
       final draft = room_forms.roomProfileUpdateDraftFromForm(
@@ -315,6 +313,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
             updated.personalProfile.displayName ?? '';
         _savingPreferences = false;
         _changed = true;
+        _error = null;
         _notice = room_display.roomPersonalPreferencesSavedNotice();
       });
       widget.onRoomUpdated(updated);
@@ -323,6 +322,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
       setState(() {
         _savingPreferences = false;
         _error = error.toString();
+        _notice = null;
       });
     }
   }
@@ -579,6 +579,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
 
   Widget _buildSettingsBody(BuildContext context) {
     return SettingsList(
+      physics: const ClampingScrollPhysics(),
       children: [
         if (_notice != null)
           _NoticeStrip(message: _notice!, icon: Icons.check_circle_outline),
@@ -688,6 +689,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
 
   Widget _buildPreferencesBody() {
     return SettingsList(
+      physics: const ClampingScrollPhysics(),
       children: [
         if (_notice != null)
           _NoticeStrip(message: _notice!, icon: Icons.check_circle_outline),

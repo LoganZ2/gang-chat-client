@@ -105,6 +105,7 @@ class SettingsList extends StatelessWidget {
     required this.children,
     this.padding = const EdgeInsets.fromLTRB(22, 0, 22, 22),
     this.spacing = 14,
+    this.physics,
   });
 
   /// 列表项。相邻项之间会自动插入 [spacing] 的间距。
@@ -116,13 +117,17 @@ class SettingsList extends StatelessWidget {
   /// 相邻项之间的固定间距。
   final double spacing;
 
+  /// Optional scroll physics for surfaces that need stricter edge behavior.
+  final ScrollPhysics? physics;
+
   @override
   Widget build(BuildContext context) {
     if (children.isEmpty) {
-      return ListView(padding: padding);
+      return ListView(padding: padding, physics: physics);
     }
     return ListView.separated(
       padding: padding,
+      physics: physics,
       itemCount: children.length,
       separatorBuilder: (_, _) => SizedBox(height: spacing),
       itemBuilder: (_, index) => children[index],

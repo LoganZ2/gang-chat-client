@@ -2665,6 +2665,13 @@ void main() {
     expect(find.byIcon(Icons.info_outline), findsOneWidget);
     expect(find.byType(ui.UiSwitch), findsOneWidget);
     expect(find.byType(Switch), findsNothing);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is ListView && widget.physics is ClampingScrollPhysics,
+      ),
+      findsAtLeastNWidgets(1),
+    );
     final descriptionField = _roomSettingsTextField('description');
     expect(tester.widget<TextField>(descriptionField).maxLines, isNull);
     expect(
