@@ -580,9 +580,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
   Widget _buildSettingsBody(BuildContext context) {
     return SettingsList(
       children: [
-        if (_notice != null)
-          _NoticeStrip(message: _notice!, icon: Icons.check_circle_outline),
-        if (_error != null) _NoticeStrip(message: _error!, danger: true),
+        _buildFeedbackSlot(),
         SettingsCard(
           title: '房间信息',
           children: [
@@ -689,9 +687,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
   Widget _buildPreferencesBody() {
     return SettingsList(
       children: [
-        if (_notice != null)
-          _NoticeStrip(message: _notice!, icon: Icons.check_circle_outline),
-        if (_error != null) _NoticeStrip(message: _error!, danger: true),
+        _buildFeedbackSlot(),
         SettingsCard(
           title: '个人偏好',
           children: [
@@ -742,6 +738,23 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildFeedbackSlot() {
+    final error = _error;
+    final notice = _notice;
+    final visible = error != null || notice != null;
+    return Visibility(
+      visible: visible,
+      maintainState: true,
+      maintainAnimation: true,
+      maintainSize: true,
+      child: _NoticeStrip(
+        message: error ?? notice ?? ' ',
+        icon: error == null ? Icons.check_circle_outline : null,
+        danger: error != null,
+      ),
     );
   }
 }

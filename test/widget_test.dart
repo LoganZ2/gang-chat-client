@@ -2705,11 +2705,13 @@ void main() {
 
     await tester.enterText(_roomSettingsTextField('name'), 'Alpha Renamed');
     final saveButton = find.widgetWithText(ui.Button, '保存房间设置');
+    final saveButtonTopBeforeSave = tester.getRect(saveButton).top;
     tester.widget<ui.Button>(saveButton).onPressed?.call();
     await tester.pumpAndSettle();
 
     expect(requestedPaths, contains('/api/v1/rooms/server-alpha'));
     expect(find.text('房间信息已保存'), findsOneWidget);
+    expect(tester.getRect(saveButton).top, closeTo(saveButtonTopBeforeSave, 1));
     expect(find.textContaining('Alpha Renamed'), findsAtLeastNWidgets(1));
 
     await tester.tap(find.text('个人偏好').first);
