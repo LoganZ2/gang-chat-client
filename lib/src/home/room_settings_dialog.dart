@@ -689,6 +689,9 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
   Widget _buildPreferencesBody() {
     return SettingsList(
       children: [
+        if (_notice != null)
+          _NoticeStrip(message: _notice!, icon: Icons.check_circle_outline),
+        if (_error != null) _NoticeStrip(message: _error!, danger: true),
         SettingsCard(
           title: '个人偏好',
           children: [
@@ -728,9 +731,6 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
               enabled: !_savingPreferences,
               onChanged: (value) => setState(() => _isPinned = value),
             ),
-            if (_notice != null)
-              _NoticeStrip(message: _notice!, icon: Icons.check_circle_outline),
-            if (_error != null) _NoticeStrip(message: _error!, danger: true),
             Button(
               width: double.infinity,
               tone: ButtonTone.primary,

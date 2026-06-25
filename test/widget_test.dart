@@ -2731,7 +2731,19 @@ void main() {
     expect(myRoomSettingsUpdates, hasLength(1));
     expect(myRoomSettingsUpdates.single['notification_policy'], 'silent');
     expect(myRoomSettingsUpdates.single['is_pinned'], isFalse);
+    await tester.drag(find.byType(ListView).last, const Offset(0, 600));
+    await tester.pumpAndSettle();
     expect(find.text('个人偏好已保存'), findsOneWidget);
+    expect(
+      tester.getRect(find.text('个人偏好已保存')).top,
+      lessThan(
+        tester
+            .getRect(
+              find.byKey(const ValueKey('room-settings-remark-name-input')),
+            )
+            .top,
+      ),
+    );
 
     await tester.tap(find.byTooltip('返回').last);
     await tester.pumpAndSettle();
