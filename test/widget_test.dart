@@ -801,8 +801,7 @@ void main() {
 
       await tester.tap(find.text('Alpha Room'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('进入语音频道'));
-      await tester.pumpAndSettle();
+      await _openLiveChannelFromHeader(tester);
       await tester.tap(find.widgetWithText(ui.Button, '加入'));
       await tester.pumpAndSettle();
 
@@ -933,8 +932,7 @@ void main() {
 
       await tester.tap(find.text('Alpha Room'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('进入语音频道'));
-      await tester.pumpAndSettle();
+      await _openLiveChannelFromHeader(tester);
       await tester.tap(find.widgetWithText(ui.Button, '加入'));
       await tester.pumpAndSettle();
 
@@ -1002,8 +1000,7 @@ void main() {
 
       await tester.tap(find.text('Alpha Room'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('进入语音频道'));
-      await tester.pumpAndSettle();
+      await _openLiveChannelFromHeader(tester);
       await tester.tap(find.widgetWithText(ui.Button, '加入'));
       await tester.pumpAndSettle();
 
@@ -1681,8 +1678,7 @@ void main() {
     await tester.tap(find.text('Alpha Room'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('进入语音频道'));
-    await tester.pumpAndSettle();
+    await _openLiveChannelFromHeader(tester);
 
     expect(find.text('Morgan'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '加入'), findsOneWidget);
@@ -2089,11 +2085,7 @@ void main() {
       expect(requestedPaths, contains('/api/v1/rooms/server-alpha'));
       expect(requestedPaths, contains('/api/v1/rooms/server-alpha/live'));
 
-      final enterLiveChannel = find.text('进入语音频道');
-      if (enterLiveChannel.evaluate().isNotEmpty) {
-        await tester.tap(enterLiveChannel);
-        await tester.pumpAndSettle();
-      }
+      await _openLiveChannelFromHeader(tester);
 
       await tester.tap(find.widgetWithText(ui.Button, '加入'));
       await tester.pumpAndSettle();
@@ -2139,8 +2131,7 @@ void main() {
 
     await tester.tap(find.text('Alpha Room'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('进入语音频道'));
-    await tester.pumpAndSettle();
+    await _openLiveChannelFromHeader(tester);
     await tester.tap(find.widgetWithText(ui.Button, '加入'));
     await tester.pumpAndSettle();
 
@@ -2161,8 +2152,7 @@ void main() {
 
     await tester.tap(find.byTooltip('设置'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('进入语音频道'));
-    await tester.pumpAndSettle();
+    await _openLiveChannelFromHeader(tester);
 
     final hover = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await hover.addPointer(location: tester.getCenter(_liveControl('mic')));
@@ -2264,8 +2254,7 @@ void main() {
 
     await tester.tap(find.text('Alpha Room'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('进入语音频道'));
-    await tester.pumpAndSettle();
+    await _openLiveChannelFromHeader(tester);
     await tester.tap(find.widgetWithText(ui.Button, '加入'));
     await tester.pumpAndSettle();
 
@@ -2307,8 +2296,7 @@ void main() {
 
     await tester.tap(find.byTooltip('设置'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('进入语音频道'));
-    await tester.pumpAndSettle();
+    await _openLiveChannelFromHeader(tester);
 
     expect(
       find.descendant(
@@ -2351,8 +2339,7 @@ void main() {
 
     await tester.tap(find.text('Alpha Room'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('进入语音频道'));
-    await tester.pumpAndSettle();
+    await _openLiveChannelFromHeader(tester);
     await tester.tap(find.widgetWithText(ui.Button, '加入'));
     await tester.pumpAndSettle();
 
@@ -2951,18 +2938,12 @@ void main() {
           .data,
       '2 名成员 · 1 人在线',
     );
-    final enterLiveChannel = find.descendant(
-      of: chatLiveButton,
-      matching: find.text('进入语音频道'),
-    );
-    expect(enterLiveChannel, findsOneWidget);
     expect(
-      tester.widget<Text>(enterLiveChannel).style?.color,
-      ui.UiColors.accent,
+      find.descendant(of: chatLiveButton, matching: find.text('进入语音频道')),
+      findsNothing,
     );
 
-    await tester.tap(find.text('进入语音频道'));
-    await tester.pumpAndSettle();
+    await _openLiveChannelFromHeader(tester);
 
     expect(find.text('Riley'), findsNothing);
     expect(find.text('2 名成员 · 1 人语音'), findsOneWidget);
@@ -3080,22 +3061,27 @@ void main() {
     final chatLiveButton = find.byKey(
       const ValueKey('chat-header-live-button'),
     );
-    final liveEntry = find.byKey(const ValueKey('chat-header-live-entry'));
     final livePreview = find.byKey(const ValueKey('chat-header-live-preview'));
+    final livePreviewIcon = find.byKey(
+      const ValueKey('chat-header-live-preview-icon'),
+    );
     expect(chatLiveButton, findsOneWidget);
-    expect(liveEntry, findsOneWidget);
     expect(livePreview, findsOneWidget);
-    final liveButtonCenterX = tester.getRect(chatLiveButton).center.dx;
-    final entryCenterX = tester.getRect(liveEntry).center.dx;
-    expect(entryCenterX, closeTo(liveButtonCenterX, 1));
+    expect(livePreviewIcon, findsOneWidget);
     expect(
       tester.getRect(chatLiveButton).right - tester.getRect(livePreview).right,
       closeTo(10, 1),
     );
-    expect(
-      find.descendant(of: livePreview, matching: find.byType(ui.Avatar)),
-      findsOneWidget,
+    final initialPreviewAvatars = find.descendant(
+      of: livePreview,
+      matching: find.byType(ui.Avatar),
     );
+    expect(initialPreviewAvatars, findsOneWidget);
+    expect(
+      tester.getRect(livePreviewIcon).right,
+      lessThan(tester.getRect(initialPreviewAvatars.first).left),
+    );
+    expect(tester.widget<Icon>(livePreviewIcon).color, ui.UiColors.accent);
     expect(
       find.descendant(of: livePreview, matching: find.text('共 1 人')),
       findsOneWidget,
@@ -3136,7 +3122,6 @@ void main() {
       find.descendant(of: livePreview, matching: find.byType(ui.Avatar)),
       findsNWidgets(2),
     );
-    expect(tester.getRect(liveEntry).center.dx, closeTo(entryCenterX, 1));
     expect(
       tester.getRect(chatLiveButton).right - tester.getRect(livePreview).right,
       closeTo(10, 1),
@@ -3205,7 +3190,6 @@ void main() {
       find.descendant(of: livePreview, matching: find.byType(ui.Avatar)),
       findsNWidgets(5),
     );
-    expect(tester.getRect(liveEntry).center.dx, closeTo(entryCenterX, 1));
     expect(
       tester.getRect(chatLiveButton).right - tester.getRect(livePreview).right,
       closeTo(10, 1),
@@ -3304,8 +3288,7 @@ void main() {
 
       await tester.tap(find.text('Alpha Room'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('进入语音频道'));
-      await tester.pumpAndSettle();
+      await _openLiveChannelFromHeader(tester);
       await tester.tap(find.widgetWithText(ui.Button, '加入'));
       await tester.pumpAndSettle();
 
@@ -3582,7 +3565,11 @@ void main() {
 
       expect(find.text('Beta Room'), findsNothing);
       expect(find.byTooltip('Show servers'), findsNothing);
-      expect(find.text('进入语音频道'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('chat-header-live-button')),
+        findsOneWidget,
+      );
+      expect(find.text('进入语音频道'), findsNothing);
       expect(find.text('Hello from Morgan'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
@@ -5199,6 +5186,13 @@ Finder _buttonIconWithTooltip(String tooltip) {
 
 Finder _liveControl(String id) {
   return find.byKey(ValueKey<String>('live-control:$id'));
+}
+
+Future<void> _openLiveChannelFromHeader(WidgetTester tester) async {
+  final header = find.byKey(const ValueKey('chat-header-live-button'));
+  expect(header, findsOneWidget);
+  await tester.tap(header);
+  await tester.pumpAndSettle();
 }
 
 void _expectLiveVolumeFill(WidgetTester tester, String label, double volume) {

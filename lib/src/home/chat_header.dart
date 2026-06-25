@@ -108,21 +108,23 @@ class _LiveChannelHeaderCard extends StatelessWidget {
       onPressed: onPressed,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final joinSlotWidth = math.min(
-            _liveHeaderJoinSlotWidth,
-            constraints.maxWidth,
-          );
-          final sideMaxWidth = math.max(
+          final previewMaxWidth = liveActive
+              ? math.min(_liveHeaderPreviewMaxWidth, constraints.maxWidth)
+              : 0.0;
+          final roomInfoWidth = math.max(
             0.0,
-            (constraints.maxWidth - joinSlotWidth) / 2 - _liveHeaderSideGap,
+            constraints.maxWidth -
+                (previewMaxWidth > 0
+                    ? previewMaxWidth + _liveHeaderSideGap
+                    : 0),
           );
           return Stack(
             children: [
-              if (sideMaxWidth >= _liveHeaderRoomInfoMinWidth)
+              if (roomInfoWidth >= _liveHeaderRoomInfoMinWidth)
                 Align(
                   alignment: Alignment.centerLeft,
                   child: SizedBox(
-                    width: sideMaxWidth,
+                    width: roomInfoWidth,
                     child: _LiveHeaderRoomInfo(
                       title: title,
                       avatarUrl: avatarUrl,
@@ -133,18 +135,11 @@ class _LiveChannelHeaderCard extends StatelessWidget {
                     ),
                   ),
                 ),
-              Center(
-                child: SizedBox(
-                  key: const ValueKey('chat-header-live-entry'),
-                  width: joinSlotWidth,
-                  child: _LiveHeaderJoinLabel(liveActive: liveActive),
-                ),
-              ),
-              if (liveActive && sideMaxWidth >= _liveHeaderPreviewMinWidth)
+              if (liveActive && previewMaxWidth >= _liveHeaderPreviewMinWidth)
                 Align(
                   alignment: Alignment.centerRight,
                   child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: sideMaxWidth),
+                    constraints: BoxConstraints(maxWidth: previewMaxWidth),
                     child: _LiveHeaderAvatarPreview(
                       users: liveAvatarPreview,
                       participantCount: liveParticipantCount ?? 0,
@@ -159,7 +154,7 @@ class _LiveChannelHeaderCard extends StatelessWidget {
   }
 }
 
-const _liveHeaderJoinSlotWidth = 190.0;
+const _liveHeaderPreviewMaxWidth = 190.0;
 const _liveHeaderSideGap = 10.0;
 const _liveHeaderRoomInfoMinWidth = 44.0;
 const _liveHeaderPreviewMinWidth = 60.0;
@@ -228,44 +223,6 @@ class _LiveHeaderRoomInfo extends StatelessWidget {
   }
 }
 
-class _LiveHeaderJoinLabel extends StatelessWidget {
-  const _LiveHeaderJoinLabel({required this.liveActive});
-
-  final bool liveActive;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = liveActive ? UiColors.accent : Colors.white;
-    return Center(
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            liveActive ? Icons.volume_up : Icons.volume_up_outlined,
-            color: color,
-            size: 20,
-          ),
-          const SizedBox(width: 7),
-          Flexible(
-            child: Text(
-              '进入语音频道',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: UiTypography.label.copyWith(
-                color: color,
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _LiveHeaderAvatarPreview extends StatelessWidget {
   const _LiveHeaderAvatarPreview({
     required this.users,
@@ -289,6 +246,7 @@ class _LiveHeaderAvatarPreview extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         const avatarSize = 24.0;
+        const iconSize = 18.0;
         const overlap = 8.0;
         const gap = 7.0;
         final textDirection = Directionality.of(context);
@@ -310,7 +268,11 @@ class _LiveHeaderAvatarPreview extends StatelessWidget {
               ? overflowCountLabel
               : exactCountLabel;
           final neededWidth =
-              avatarWidth + gap + measureLabelWidth(candidateLabel);
+              iconSize +
+              gap +
+              avatarWidth +
+              gap +
+              measureLabelWidth(candidateLabel);
           if (neededWidth <= constraints.maxWidth) {
             visibleCount = count;
             countLabel = candidateLabel;
@@ -325,6 +287,13 @@ class _LiveHeaderAvatarPreview extends StatelessWidget {
           key: const ValueKey('chat-header-live-preview'),
           mainAxisSize: MainAxisSize.min,
           children: [
+            const Icon(
+              Icons.volume_up,
+              key: ValueKey('chat-header-live-preview-icon'),
+              color: UiColors.accent,
+              size: iconSize,
+            ),
+            const SizedBox(width: gap),
             SizedBox(
               width: avatarWidth,
               height: avatarSize,
