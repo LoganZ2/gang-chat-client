@@ -155,6 +155,17 @@ class ChatPane extends StatelessWidget {
         live?.participantCount ??
         room?.live.participantCount ??
         roomCard?.liveParticipantCount;
+    final liveAvatarPreview =
+        live?.participants
+            .map((participant) => participant.user)
+            .take(5)
+            .toList() ??
+        room?.live.participants
+            .map((participant) => participant.user)
+            .take(5)
+            .toList() ??
+        roomCard?.liveAvatarPreview ??
+        const <UserSummary>[];
     final roomReady = room != null;
     final stageKey = ValueKey(
       'message-stage-${room?.id ?? roomCard?.id ?? 'none'}',
@@ -172,6 +183,7 @@ class ChatPane extends StatelessWidget {
             onlineMemberCount:
                 room?.onlineMemberCount ?? roomCard?.onlineMemberCount,
             liveParticipantCount: liveParticipantCount,
+            liveAvatarPreview: liveAvatarPreview,
             hasPendingJoinRequests: hasPendingJoinRequests,
             onLivePressed: onOpenLiveChannel,
             onMembersPressed: onOpenRoomMembers,

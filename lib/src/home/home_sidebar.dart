@@ -436,6 +436,7 @@ class _ServerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final lastMessageTime = room_display.roomSidebarLastMessageTime(server);
     return PressableSurface(
+      key: ValueKey('home-sidebar-room-${server.id}'),
       width: double.infinity,
       height: _serverCardHeight,
       hoverLift: _serverCardHoverLift,

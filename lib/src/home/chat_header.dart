@@ -8,6 +8,7 @@ class _RoomHeader extends StatelessWidget {
     required this.memberCount,
     required this.onlineMemberCount,
     required this.liveParticipantCount,
+    required this.liveAvatarPreview,
     required this.hasPendingJoinRequests,
     required this.onLivePressed,
     required this.onMembersPressed,
@@ -20,6 +21,7 @@ class _RoomHeader extends StatelessWidget {
   final int? memberCount;
   final int? onlineMemberCount;
   final int? liveParticipantCount;
+  final List<UserSummary> liveAvatarPreview;
   final bool hasPendingJoinRequests;
   final VoidCallback onLivePressed;
   final VoidCallback onMembersPressed;
@@ -48,6 +50,7 @@ class _RoomHeader extends StatelessWidget {
                 memberCount: memberCount,
                 onlineMemberCount: onlineMemberCount,
                 liveParticipantCount: liveParticipantCount,
+                liveAvatarPreview: liveAvatarPreview,
                 onPressed: onLivePressed,
               ),
             ),
@@ -72,6 +75,7 @@ class _LiveChannelHeaderCard extends StatelessWidget {
     required this.memberCount,
     required this.onlineMemberCount,
     required this.liveParticipantCount,
+    required this.liveAvatarPreview,
     required this.onPressed,
   });
 
@@ -81,12 +85,14 @@ class _LiveChannelHeaderCard extends StatelessWidget {
   final int? memberCount;
   final int? onlineMemberCount;
   final int? liveParticipantCount;
+  final List<UserSummary> liveAvatarPreview;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     final liveActive = (liveParticipantCount ?? 0) > 0;
     return PressableSurface(
+      key: const ValueKey('chat-header-live-button'),
       width: double.infinity,
       height: _liveHeaderCardHeight,
       hoverLift: _headerSurfaceHoverLift,
@@ -100,55 +106,258 @@ class _LiveChannelHeaderCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10),
       tooltip: '进入语音频道',
       onPressed: onPressed,
-      child: Row(
-        children: [
-          Avatar(
-            label: title,
-            imageUrl: AppConfigScope.of(context).resolveAssetUrl(avatarUrl),
-            defaultAvatarKey: defaultAvatarKey,
-            size: 34,
-            active: liveActive,
-            activeBorderWidth: 1.1,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final joinSlotWidth = math.min(
+            _liveHeaderJoinSlotWidth,
+            constraints.maxWidth,
+          );
+          final sideMaxWidth = math.max(
+            0.0,
+            (constraints.maxWidth - joinSlotWidth) / 2 - _liveHeaderSideGap,
+          );
+          return Stack(
+            children: [
+              if (sideMaxWidth >= _liveHeaderRoomInfoMinWidth)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: SizedBox(
+                    width: sideMaxWidth,
+                    child: _LiveHeaderRoomInfo(
+                      title: title,
+                      avatarUrl: avatarUrl,
+                      defaultAvatarKey: defaultAvatarKey,
+                      memberCount: memberCount,
+                      onlineMemberCount: onlineMemberCount,
+                      liveActive: liveActive,
+                    ),
+                  ),
+                ),
+              Center(
+                child: SizedBox(
+                  key: const ValueKey('chat-header-live-entry'),
+                  width: joinSlotWidth,
+                  child: _LiveHeaderJoinLabel(liveActive: liveActive),
+                ),
+              ),
+              if (liveActive && sideMaxWidth >= _liveHeaderPreviewMinWidth)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: sideMaxWidth),
+                    child: _LiveHeaderAvatarPreview(
+                      users: liveAvatarPreview,
+                      participantCount: liveParticipantCount ?? 0,
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+const _liveHeaderJoinSlotWidth = 190.0;
+const _liveHeaderSideGap = 10.0;
+const _liveHeaderRoomInfoMinWidth = 44.0;
+const _liveHeaderPreviewMinWidth = 60.0;
+
+class _LiveHeaderRoomInfo extends StatelessWidget {
+  const _LiveHeaderRoomInfo({
+    required this.title,
+    required this.avatarUrl,
+    required this.defaultAvatarKey,
+    required this.memberCount,
+    required this.onlineMemberCount,
+    required this.liveActive,
+  });
+
+  final String title;
+  final String? avatarUrl;
+  final String defaultAvatarKey;
+  final int? memberCount;
+  final int? onlineMemberCount;
+  final bool liveActive;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Avatar(
+          label: title,
+          imageUrl: AppConfigScope.of(context).resolveAssetUrl(avatarUrl),
+          defaultAvatarKey: defaultAvatarKey,
+          size: 34,
+          active: liveActive,
+          activeBorderWidth: 1.1,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                key: const ValueKey('chat-header-room-title'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: UiTypography.label.copyWith(
+                  color: UiColors.text,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _roomMeta(
+                  memberCount: memberCount,
+                  onlineMemberCount: onlineMemberCount,
+                ),
+                key: const ValueKey('chat-header-room-meta'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: UiTypography.label.copyWith(color: UiColors.textMuted),
+              ),
+            ],
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      liveActive ? Icons.volume_up : Icons.volume_up_outlined,
-                      color: liveActive ? UiColors.accent : UiColors.text,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        '进入语音频道',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: UiTypography.label.copyWith(
-                          color: liveActive ? UiColors.accent : UiColors.text,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '$title - ${_roomMeta(memberCount: memberCount, onlineMemberCount: onlineMemberCount, liveParticipantCount: liveParticipantCount)}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: UiTypography.label.copyWith(color: UiColors.textMuted),
-                ),
-              ],
+        ),
+      ],
+    );
+  }
+}
+
+class _LiveHeaderJoinLabel extends StatelessWidget {
+  const _LiveHeaderJoinLabel({required this.liveActive});
+
+  final bool liveActive;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = liveActive ? UiColors.accent : Colors.white;
+    return Center(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            liveActive ? Icons.volume_up : Icons.volume_up_outlined,
+            color: color,
+            size: 20,
+          ),
+          const SizedBox(width: 7),
+          Flexible(
+            child: Text(
+              '进入语音频道',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: UiTypography.label.copyWith(
+                color: color,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _LiveHeaderAvatarPreview extends StatelessWidget {
+  const _LiveHeaderAvatarPreview({
+    required this.users,
+    required this.participantCount,
+  });
+
+  final List<UserSummary> users;
+  final int participantCount;
+
+  @override
+  Widget build(BuildContext context) {
+    if (participantCount <= 0 || users.isEmpty) return const SizedBox.shrink();
+    final config = AppConfigScope.of(context);
+    final exactCountLabel = '共 $participantCount 人';
+    final overflowCountLabel = '等共 $participantCount 人';
+    final labelStyle = UiTypography.label.copyWith(
+      color: Colors.white,
+      fontWeight: FontWeight.w600,
+      fontSize: 11,
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const avatarSize = 24.0;
+        const overlap = 8.0;
+        const gap = 7.0;
+        final textDirection = Directionality.of(context);
+        double measureLabelWidth(String label) {
+          final painter = TextPainter(
+            text: TextSpan(text: label, style: labelStyle),
+            textDirection: textDirection,
+            maxLines: 1,
+          )..layout();
+          return painter.width;
+        }
+
+        final maxVisible = math.min(5, users.length);
+        var visibleCount = 0;
+        var countLabel = '';
+        for (var count = maxVisible; count >= 1; count -= 1) {
+          final avatarWidth = avatarSize + (count - 1) * (avatarSize - overlap);
+          final candidateLabel = participantCount > count
+              ? overflowCountLabel
+              : exactCountLabel;
+          final neededWidth =
+              avatarWidth + gap + measureLabelWidth(candidateLabel);
+          if (neededWidth <= constraints.maxWidth) {
+            visibleCount = count;
+            countLabel = candidateLabel;
+            break;
+          }
+        }
+        if (visibleCount == 0) return const SizedBox.shrink();
+        final visibleUsers = users.take(visibleCount).toList();
+        final avatarWidth =
+            avatarSize + (visibleUsers.length - 1) * (avatarSize - overlap);
+        return Row(
+          key: const ValueKey('chat-header-live-preview'),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: avatarWidth,
+              height: avatarSize,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  for (var index = 0; index < visibleUsers.length; index += 1)
+                    Positioned(
+                      left: index * (avatarSize - overlap),
+                      child: Avatar(
+                        label: _livePreviewUserName(visibleUsers[index]),
+                        imageUrl: config.resolveAssetUrl(
+                          visibleUsers[index].avatarUrl,
+                        ),
+                        defaultAvatarKey: visibleUsers[index].defaultAvatarKey,
+                        size: avatarSize,
+                        active: true,
+                        activeBorderWidth: 1,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: gap),
+            Text(
+              countLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: labelStyle,
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -237,17 +446,19 @@ class _HeaderIconButton extends StatelessWidget {
   }
 }
 
-String _roomMeta({
-  required int? memberCount,
-  required int? onlineMemberCount,
-  required int? liveParticipantCount,
-}) {
+String _roomMeta({required int? memberCount, required int? onlineMemberCount}) {
   final parts = <String>[];
   final members = memberCount ?? 0;
   if (members > 0) parts.add('$members 名成员');
   final online = onlineMemberCount ?? 0;
   if (online > 0) parts.add('$online 人在线');
-  final live = liveParticipantCount ?? 0;
-  if (live > 0) parts.add('$live 人语音');
   return parts.isEmpty ? '就绪' : parts.join(' · ');
+}
+
+String _livePreviewUserName(UserSummary user) {
+  final displayName = user.displayName.trim();
+  if (displayName.isNotEmpty) return displayName;
+  final username = user.username.trim();
+  if (username.isNotEmpty) return username;
+  return user.id;
 }

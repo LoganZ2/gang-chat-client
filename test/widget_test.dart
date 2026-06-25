@@ -719,10 +719,7 @@ void main() {
     expect(
       tester
           .widget<ui.PressableSurface>(
-            find.ancestor(
-              of: find.text('Alpha Room'),
-              matching: find.byType(ui.PressableSurface),
-            ),
+            find.byKey(const ValueKey('home-sidebar-room-server-alpha')),
           )
           .selected,
       isTrue,
@@ -2890,8 +2887,11 @@ void main() {
     await gesture.addPointer(location: Offset.zero);
     addTearDown(gesture.removePointer);
 
-    final messageAvatar = find.byWidgetPredicate(
-      (widget) => widget is ui.Avatar && widget.label == 'Morgan',
+    final messageAvatar = find.descendant(
+      of: find.byKey(const ValueKey('message-stage-server-alpha')),
+      matching: find.byWidgetPredicate(
+        (widget) => widget is ui.Avatar && widget.label == 'Morgan',
+      ),
     );
     expect(messageAvatar, findsOneWidget);
 
@@ -2929,6 +2929,38 @@ void main() {
 
     await tester.tap(find.text('Alpha Room'));
     await tester.pumpAndSettle();
+    final chatLiveButton = find.byKey(
+      const ValueKey('chat-header-live-button'),
+    );
+    expect(chatLiveButton, findsOneWidget);
+    expect(
+      find.descendant(
+        of: chatLiveButton,
+        matching: find.byKey(const ValueKey('chat-header-room-title')),
+      ),
+      findsOneWidget,
+    );
+    final roomTitle = tester.widget<Text>(
+      find.byKey(const ValueKey('chat-header-room-title')),
+    );
+    expect(roomTitle.data, 'Alpha Room');
+    expect(roomTitle.style?.color, ui.UiColors.text);
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('chat-header-room-meta')))
+          .data,
+      '2 名成员 · 1 人在线',
+    );
+    final enterLiveChannel = find.descendant(
+      of: chatLiveButton,
+      matching: find.text('进入语音频道'),
+    );
+    expect(enterLiveChannel, findsOneWidget);
+    expect(
+      tester.widget<Text>(enterLiveChannel).style?.color,
+      ui.UiColors.accent,
+    );
+
     await tester.tap(find.text('进入语音频道'));
     await tester.pumpAndSettle();
 
@@ -2990,6 +3022,213 @@ void main() {
 
     expect(find.text('Riley'), findsOneWidget);
     expect(find.text('2 名成员 · 2 人语音'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('chat header live preview follows realtime live snapshots', (
+    WidgetTester tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1180, 620);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final realtime = _FakeRealtimeService();
+
+    Map<String, Object?> participant({
+      required String id,
+      required String username,
+      required String displayName,
+      required String liveSessionId,
+    }) {
+      return _liveParticipantJson(
+        user: _userJson(id: id, username: username, displayName: displayName),
+        liveSessionId: liveSessionId,
+      );
+    }
+
+    RealtimeEvent liveSnapshotEvent(List<Object?> participants) {
+      return RealtimeEvent(
+        type: 'live_participant_joined',
+        data: {
+          'room_id': 'server-alpha',
+          'participant_count': participants.length,
+          'preview': <Object?>[],
+          'live': _liveStateJson(
+            roomId: 'server-alpha',
+            participantCount: participants.length,
+            participants: participants,
+          ),
+        },
+      );
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: SizedBox(
+          width: 1180,
+          height: 620,
+          child: HomePage(app: _homeTestAppContext(), realtime: realtime),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+
+    final chatLiveButton = find.byKey(
+      const ValueKey('chat-header-live-button'),
+    );
+    final liveEntry = find.byKey(const ValueKey('chat-header-live-entry'));
+    final livePreview = find.byKey(const ValueKey('chat-header-live-preview'));
+    expect(chatLiveButton, findsOneWidget);
+    expect(liveEntry, findsOneWidget);
+    expect(livePreview, findsOneWidget);
+    final liveButtonCenterX = tester.getRect(chatLiveButton).center.dx;
+    final entryCenterX = tester.getRect(liveEntry).center.dx;
+    expect(entryCenterX, closeTo(liveButtonCenterX, 1));
+    expect(
+      tester.getRect(chatLiveButton).right - tester.getRect(livePreview).right,
+      closeTo(10, 1),
+    );
+    expect(
+      find.descendant(of: livePreview, matching: find.byType(ui.Avatar)),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: livePreview, matching: find.text('共 1 人')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<Text>(
+            find.descendant(of: livePreview, matching: find.text('共 1 人')),
+          )
+          .style
+          ?.color,
+      Colors.white,
+    );
+    expect(
+      find.descendant(of: livePreview, matching: find.text('等共 1 人')),
+      findsNothing,
+    );
+
+    realtime.add(
+      liveSnapshotEvent([
+        participant(
+          id: 'user-2',
+          username: 'morgan',
+          displayName: 'Morgan',
+          liveSessionId: 'live-session-morgan',
+        ),
+        participant(
+          id: 'user-3',
+          username: 'riley',
+          displayName: 'Riley',
+          liveSessionId: 'live-session-riley',
+        ),
+      ]),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(of: livePreview, matching: find.byType(ui.Avatar)),
+      findsNWidgets(2),
+    );
+    expect(tester.getRect(liveEntry).center.dx, closeTo(entryCenterX, 1));
+    expect(
+      tester.getRect(chatLiveButton).right - tester.getRect(livePreview).right,
+      closeTo(10, 1),
+    );
+    expect(
+      find.descendant(of: livePreview, matching: find.text('共 2 人')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<Text>(
+            find.descendant(of: livePreview, matching: find.text('共 2 人')),
+          )
+          .style
+          ?.color,
+      Colors.white,
+    );
+    expect(
+      find.descendant(of: livePreview, matching: find.text('等共 2 人')),
+      findsNothing,
+    );
+
+    realtime.add(
+      liveSnapshotEvent([
+        participant(
+          id: 'user-2',
+          username: 'morgan',
+          displayName: 'Morgan',
+          liveSessionId: 'live-session-morgan',
+        ),
+        participant(
+          id: 'user-3',
+          username: 'riley',
+          displayName: 'Riley',
+          liveSessionId: 'live-session-riley',
+        ),
+        participant(
+          id: 'user-4',
+          username: 'ivy',
+          displayName: 'Ivy',
+          liveSessionId: 'live-session-ivy',
+        ),
+        participant(
+          id: 'user-5',
+          username: 'taylor',
+          displayName: 'Taylor',
+          liveSessionId: 'live-session-taylor',
+        ),
+        participant(
+          id: 'user-6',
+          username: 'noah',
+          displayName: 'Noah',
+          liveSessionId: 'live-session-noah',
+        ),
+        participant(
+          id: 'user-7',
+          username: 'mina',
+          displayName: 'Mina',
+          liveSessionId: 'live-session-mina',
+        ),
+      ]),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(of: livePreview, matching: find.byType(ui.Avatar)),
+      findsNWidgets(5),
+    );
+    expect(tester.getRect(liveEntry).center.dx, closeTo(entryCenterX, 1));
+    expect(
+      tester.getRect(chatLiveButton).right - tester.getRect(livePreview).right,
+      closeTo(10, 1),
+    );
+    expect(
+      find.descendant(of: livePreview, matching: find.text('等共 6 人')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<Text>(
+            find.descendant(of: livePreview, matching: find.text('等共 6 人')),
+          )
+          .style
+          ?.color,
+      Colors.white,
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('chat-header-room-meta')))
+          .data,
+      '2 名成员 · 1 人在线',
+    );
     expect(tester.takeException(), isNull);
   });
 
