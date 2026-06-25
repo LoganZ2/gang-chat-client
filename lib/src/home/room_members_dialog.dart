@@ -58,6 +58,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
   late RoomDetail _room;
   late LiveState _live;
   List<RoomMember> _members = const [];
+  List<String> _memberDisplayOrder = const [];
   List<JoinRequest> _requests = const [];
   List<UserSummary> _inviteResults = const [];
   List<UserSummary> _blockResults = const [];
@@ -140,6 +141,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
     if (widget.initialSearchQuery != oldWidget.initialSearchQuery) {
       setState(() {
         _applyMemberSearchQuery(widget.initialSearchQuery);
+        _refreshMemberDisplayOrder();
         _section = _RoomMembersSection.roomMembers;
       });
     }
@@ -153,11 +155,12 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       _room = widget.room;
       if (roomChanged) {
         _resetBlacklistState();
+        _memberDisplayOrder = const [];
       }
       if (liveChanged && liveBelongsToRoom) {
         _live = widget.initialLive;
       }
-      unawaited(_load());
+      unawaited(_load(refreshDisplayOrder: roomChanged));
       if (_section == _RoomMembersSection.blacklist) {
         unawaited(_loadBlacklist());
       }
@@ -202,7 +205,10 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
 
   void _onMemberSearchChanged() {
     if (_syncingMemberSearch) return;
-    setState(() => _memberQuery = _memberSearchController.text);
+    setState(() {
+      _memberQuery = _memberSearchController.text;
+      _refreshMemberDisplayOrder();
+    });
   }
 
   void _applyMemberSearchQuery(String query) {
@@ -261,7 +267,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
     });
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool refreshDisplayOrder = true}) async {
     setState(() {
       _loading = true;
       _error = null;
@@ -277,6 +283,9 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       setState(() {
         _members = snapshot.members;
         _live = snapshot.live;
+        if (refreshDisplayOrder || _memberDisplayOrder.isEmpty) {
+          _refreshMemberDisplayOrder();
+        }
         _requests = snapshot.joinRequests;
         _requestError = snapshot.joinRequestsError;
         _loading = false;
@@ -488,7 +497,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
         _notice = approve ? '申请已通过' : '申请已拒绝';
       });
       _notifyPendingJoinRequestsChanged(_requests, _requestError);
-      if (approve) unawaited(_load());
+      if (approve) unawaited(_load(refreshDisplayOrder: false));
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -586,6 +595,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       _notice = null;
     });
     try {
+      final previousOwnerId = _room.createdBy?.id;
       final updated = await widget.controller.transferRoomCreator(
         roomId: _room.id,
         userId: member.user.id,
@@ -594,10 +604,13 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       setState(() {
         _busyMemberIds.remove(member.user.id);
         _room = updated;
+        _members = _membersAfterCreatorTransfer(
+          previousOwnerId: previousOwnerId,
+          newOwnerId: member.user.id,
+        );
         _changed = true;
         _notice = member_filter.transferCreatorSuccessNotice();
       });
-      unawaited(_load());
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -693,13 +706,17 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
   }
 
   List<RoomMember> _visibleMembers() {
-    return member_filter.visibleRoomMembers(
+    final visible = member_filter.filteredRoomMembers(
       members: _effectiveMembers,
       live: _live,
       presenceFilter: _presenceFilter,
       roleFilter: _roleFilter,
       query: _memberQuery,
       ownerUserId: _room.createdBy?.id,
+    );
+    return member_filter.orderRoomMembersByUserIds(
+      members: visible,
+      orderedUserIds: _memberDisplayOrder,
     );
   }
 
@@ -708,6 +725,37 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
         _members,
         currentUserId: widget.currentUser.id,
       );
+
+  void _refreshMemberDisplayOrder() {
+    _memberDisplayOrder = member_filter
+        .visibleRoomMembers(
+          members: _effectiveMembers,
+          live: _live,
+          presenceFilter: _presenceFilter,
+          roleFilter: _roleFilter,
+          query: _memberQuery,
+          ownerUserId: _room.createdBy?.id,
+        )
+        .map((member) => member.user.id)
+        .toList();
+  }
+
+  List<RoomMember> _membersAfterCreatorTransfer({
+    required String? previousOwnerId,
+    required String newOwnerId,
+  }) {
+    return [
+      for (final member in _members)
+        if (member.user.id == newOwnerId)
+          member_filter.roomMemberWithRole(member, 'owner')
+        else if (previousOwnerId != null &&
+            previousOwnerId != newOwnerId &&
+            member.user.id == previousOwnerId)
+          member_filter.roomMemberWithRole(member, 'admin')
+        else
+          member,
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -808,9 +856,18 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
             filterCounts: filterCounts,
             presenceFilter: _presenceFilter,
             roleFilter: _roleFilter,
-            onPresenceChanged: (value) =>
-                setState(() => _presenceFilter = value),
-            onRoleChanged: (value) => setState(() => _roleFilter = value),
+            onPresenceChanged: (value) {
+              setState(() {
+                _presenceFilter = value;
+                _refreshMemberDisplayOrder();
+              });
+            },
+            onRoleChanged: (value) {
+              setState(() {
+                _roleFilter = value;
+                _refreshMemberDisplayOrder();
+              });
+            },
           ),
           const SizedBox(height: 14),
           Expanded(

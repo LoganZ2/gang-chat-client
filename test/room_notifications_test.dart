@@ -352,6 +352,40 @@ void main() {
     );
   });
 
+  test('room event notifications can be marked read locally', () {
+    final alreadyReadAt = DateTime.utc(2026, 6, 8, 9);
+    final readAt = DateTime.utc(2026, 6, 8, 10);
+    final updated = markUnreadRoomEventNotificationsRead(
+      notifications: [
+        _roomEvent('unread_room_event'),
+        _roomEvent('read_room_event', readAt: alreadyReadAt),
+      ],
+      readAt: readAt,
+    );
+
+    expect(updated.first.isUnread, isFalse);
+    expect(updated.first.readAt, readAt);
+    expect(updated.last.isUnread, isFalse);
+    expect(updated.last.readAt, alreadyReadAt);
+  });
+
+  test('room event notification visual read can be limited to known ids', () {
+    final readAt = DateTime.utc(2026, 6, 8, 10);
+    final updated = markUnreadRoomEventNotificationsRead(
+      notifications: [
+        _roomEvent('old_room_event'),
+        _roomEvent('fresh_room_event'),
+      ],
+      readAt: readAt,
+      notificationIds: const {'old_room_event'},
+    );
+
+    expect(updated.first.isUnread, isFalse);
+    expect(updated.first.readAt, readAt);
+    expect(updated.last.isUnread, isTrue);
+    expect(updated.last.readAt, isNull);
+  });
+
   test('room event notifications filter and search room events', () {
     final promoted = _roomEvent(
       'promoted',

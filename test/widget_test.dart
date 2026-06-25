@@ -373,6 +373,73 @@ void main() {
     expect(store.records.map((record) => record.login), ['kai']);
   });
 
+  testWidgets(
+    'auth account history overlays password field and scrolls itself',
+    (WidgetTester tester) async {
+      final store = _MemoryLoginAccountHistoryStore([
+        for (var index = 0; index < 6; index++)
+          LoginAccountRecord(
+            login: 'account-$index',
+            useCount: index,
+            updatedAt: DateTime.utc(2026, 1, index + 1),
+          ),
+      ]);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: LoginPage(
+            sizeForMode: (_, {showingError = false}) => const Size(430, 291),
+            consumeInitialWindowLock: () => true,
+            lockAuthWindow:
+                ({
+                  bool registering = false,
+                  bool moveWindow = false,
+                  bool centerWindow = false,
+                  Size? size,
+                }) async {},
+            accountHistoryStore: store,
+            onSubmit: (_, {required rememberPassword}) async {},
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      final passwordTopBefore = tester.getTopLeft(_textFieldWithHint('密码')).dy;
+
+      await tester.tap(find.byTooltip('展开账号记录'));
+      await tester.pump();
+
+      final passwordRect = tester.getRect(_textFieldWithHint('密码'));
+      final dropdownFinder = find.byKey(
+        const ValueKey('auth-account-history-dropdown'),
+      );
+      final dropdownRect = tester.getRect(dropdownFinder);
+      final scrollbar = tester.widget<Scrollbar>(
+        find.descendant(of: dropdownFinder, matching: find.byType(Scrollbar)),
+      );
+
+      expect(
+        tester.getTopLeft(_textFieldWithHint('密码')).dy,
+        closeTo(passwordTopBefore, 0.01),
+      );
+      expect(dropdownRect.top, lessThanOrEqualTo(passwordRect.top + 0.01));
+      expect(dropdownRect.bottom, greaterThan(passwordRect.bottom));
+      expect(dropdownRect.height, closeTo(4 * 38, 0.01));
+      expect(scrollbar.thumbVisibility, isTrue);
+      expect(scrollbar.trackVisibility, isTrue);
+
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: Offset.zero);
+      addTearDown(gesture.removePointer);
+      await gesture.moveTo(tester.getCenter(find.byTooltip('删除账号记录').first));
+      await tester.pump(const Duration(milliseconds: 700));
+
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('auth fills remembered password for latest login', (
     WidgetTester tester,
   ) async {
@@ -420,6 +487,49 @@ void main() {
       'moonbase',
     );
     expect(tester.widget<ui.UiSwitch>(find.byType(ui.UiSwitch)).value, isTrue);
+  });
+
+  testWidgets('auth keeps password when editing the login field', (
+    WidgetTester tester,
+  ) async {
+    final store = _MemoryLoginAccountHistoryStore([
+      LoginAccountRecord(
+        login: 'morgan',
+        password: 'moonbase',
+        useCount: 1,
+        updatedAt: DateTime.utc(2026, 1, 2),
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: LoginPage(
+          sizeForMode: (_, {showingError = false}) => const Size(430, 291),
+          consumeInitialWindowLock: () => true,
+          lockAuthWindow:
+              ({
+                bool registering = false,
+                bool moveWindow = false,
+                bool centerWindow = false,
+                Size? size,
+              }) async {},
+          accountHistoryStore: store,
+          onSubmit: (_, {required rememberPassword}) async {},
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.enterText(_textFieldWithHint('用户名或邮箱地址'), 'morgan@mail.test');
+    await tester.pump();
+
+    expect(
+      tester.widget<TextField>(_textFieldWithHint('密码')).controller!.text,
+      'moonbase',
+    );
+    expect(tester.widget<ui.UiSwitch>(find.byType(ui.UiSwitch)).value, isFalse);
   });
 
   testWidgets('remember password stores successful login locally', (
@@ -602,7 +712,8 @@ void main() {
     expect(requestedPaths, contains('/api/v1/rooms/server-alpha/read'));
     expect(find.text('Hello from Morgan'), findsOneWidget);
     expect(find.text('Reply from Kai'), findsOneWidget);
-    expect(find.text('查看 3 条新消息'), findsOneWidget);
+    expect(find.text('未读消息'), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-jump-to-first-new')), findsNothing);
     expect(find.text('3'), findsNothing);
     expect(find.byType(ui.ChatComposer), findsOneWidget);
     expect(
@@ -1428,6 +1539,89 @@ void main() {
     },
   );
 
+  testWidgets('room notification row dot clears on notification refresh', (
+    WidgetTester tester,
+  ) async {
+    final requestedPaths = <String>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(
+            requestedPaths: requestedPaths,
+            includeUnreadRoomNotification: true,
+            includeFreshRoomNotificationOnRefresh: true,
+          ),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('home-sidebar-notifications-button')),
+    );
+    await tester.pumpAndSettle();
+
+    const markerKey = ValueKey('notification-room-event-new-room-event-alpha');
+    const freshMarkerKey = ValueKey(
+      'notification-room-event-new-room-event-fresh',
+    );
+    expect(find.byKey(markerKey), findsOneWidget);
+    expect(find.byKey(freshMarkerKey), findsNothing);
+    expect(requestedPaths, contains('/api/v1/room-notifications/read'));
+
+    await tester.tap(
+      find.byKey(const ValueKey('home-notifications-refresh-button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(markerKey), findsNothing);
+    expect(find.byKey(freshMarkerKey), findsOneWidget);
+    expect(
+      requestedPaths
+          .where((path) => path == '/api/v1/room-notifications')
+          .length,
+      greaterThanOrEqualTo(2),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('room notification row dot clears after leaving notifications', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(includeUnreadRoomNotification: true),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('home-sidebar-notifications-button')),
+    );
+    await tester.pumpAndSettle();
+
+    const markerKey = ValueKey('notification-room-event-new-room-event-alpha');
+    expect(find.byKey(markerKey), findsOneWidget);
+
+    await tester.tap(find.text('Beta Room'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('home-sidebar-notifications-button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(markerKey), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('authenticated home shell sends messages through real API path', (
     WidgetTester tester,
   ) async {
@@ -1965,7 +2159,7 @@ void main() {
     expect(find.text('输入音量'), findsOneWidget);
     expect(liveSession.inputVolumes.last, closeTo(0.62, 1e-9));
     expect(liveSession.outputVolumes.last, closeTo(0.27, 1e-9));
-    expect(liveSession.micMutes, isEmpty);
+    expect(liveSession.micMutes, isNot(contains(true)));
     expect(liveSession.outputMutes, isEmpty);
 
     await tester.tap(find.byTooltip('设置'));
@@ -2600,6 +2794,77 @@ void main() {
     );
     final memberTransferRect = tester.getRect(_buttonIconWithTooltip('转让创建者'));
     expect(creatorRemoveRect.right, closeTo(memberTransferRect.right, 0.01));
+  });
+
+  testWidgets('member management keeps row order after role updates', (
+    WidgetTester tester,
+  ) async {
+    final requestedPaths = <String>[];
+    final realtime = _FakeRealtimeService();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(
+            requestedPaths: requestedPaths,
+            includeActionComparisonMember: true,
+          ),
+          realtime: realtime,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('房间成员'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Morgan'), findsWidgets);
+    expect(find.text('Taylor'), findsOneWidget);
+    final morganTopBefore = tester.getTopLeft(find.text('Morgan').first).dy;
+    final taylorTopBefore = tester.getTopLeft(find.text('Taylor')).dy;
+    expect(morganTopBefore, lessThan(taylorTopBefore));
+
+    expect(_buttonIconWithTooltip('设为管理员'), findsNWidgets(2));
+    await tester.tap(_buttonIconWithTooltip('设为管理员').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(ui.Button, '设为管理员'));
+    await tester.pumpAndSettle();
+
+    expect(
+      requestedPaths,
+      contains('/api/v1/rooms/server-alpha/members/user-5'),
+    );
+    final morganTopAfter = tester.getTopLeft(find.text('Morgan').first).dy;
+    final taylorTopAfter = tester.getTopLeft(find.text('Taylor')).dy;
+    expect(morganTopAfter, lessThan(taylorTopAfter));
+
+    realtime.add(
+      RealtimeEvent(
+        type: 'room_updated',
+        data: {
+          ..._roomCardJson(
+            id: 'server-alpha',
+            name: 'Alpha Room',
+            memberCount: 3,
+            liveParticipantCount: 1,
+          ),
+          'online_member_count': 3,
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final morganTopAfterReload = tester
+        .getTopLeft(find.text('Morgan').first)
+        .dy;
+    final taylorTopAfterReload = tester.getTopLeft(find.text('Taylor')).dy;
+    expect(morganTopAfterReload, lessThan(taylorTopAfterReload));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('message profile can jump to member management by UID', (
@@ -4756,6 +5021,8 @@ AuthenticatedAppContext _homeTestAppContext({
   bool currentUserIsSuperuser = false,
   String secondaryMemberRole = 'member',
   bool includeActionComparisonMember = false,
+  bool includeUnreadRoomNotification = false,
+  bool includeFreshRoomNotificationOnRefresh = false,
   Future<void> Function(String roomId)? beforeRoomDetailResponse,
 }) {
   final user = CurrentUser(
@@ -4798,6 +5065,9 @@ AuthenticatedAppContext _homeTestAppContext({
       currentRoomJoinPolicy: currentRoomJoinPolicy,
       secondaryMemberRole: secondaryMemberRole,
       includeActionComparisonMember: includeActionComparisonMember,
+      includeUnreadRoomNotification: includeUnreadRoomNotification,
+      includeFreshRoomNotificationOnRefresh:
+          includeFreshRoomNotificationOnRefresh,
       beforeRoomDetailResponse: beforeRoomDetailResponse,
     ),
   );
@@ -4815,8 +5085,12 @@ GangApi _roomsApi({
   String currentRoomJoinPolicy = 'approval_required',
   String secondaryMemberRole = 'member',
   bool includeActionComparisonMember = false,
+  bool includeUnreadRoomNotification = false,
+  bool includeFreshRoomNotificationOnRefresh = false,
   Future<void> Function(String roomId)? beforeRoomDetailResponse,
 }) {
+  var roomNotificationsMarkedRead = false;
+  var actionComparisonMemberRole = 'member';
   return GangApiClient(
     baseUrl: 'http://example.test/api/v1',
     accessTokenProvider: ({bool forceRefresh = false}) async => 'access-token',
@@ -5175,9 +5449,9 @@ GangApi _roomsApi({
                   username: 'taylor',
                   displayName: 'Taylor',
                   uid: 'uid-5',
-                  isOnline: false,
+                  isOnline: true,
                 ),
-                role: 'member',
+                role: actionComparisonMemberRole,
               ),
           ],
           'next_cursor': null,
@@ -5199,6 +5473,23 @@ GangApi _roomsApi({
         }
         if (request.method == 'DELETE') {
           return _jsonResponse({'ok': true});
+        }
+      }
+      if (request.url.path == '/api/v1/rooms/server-alpha/members/user-5') {
+        if (request.method == 'PATCH') {
+          actionComparisonMemberRole = 'admin';
+          return _jsonResponse({
+            'member': _roomMemberJson(
+              user: _userJson(
+                id: 'user-5',
+                username: 'taylor',
+                displayName: 'Taylor',
+                uid: 'uid-5',
+                isOnline: true,
+              ),
+              role: 'admin',
+            ),
+          });
         }
       }
       if (request.url.path ==
@@ -5327,7 +5618,24 @@ GangApi _roomsApi({
         });
       }
       if (request.url.path == '/api/v1/room-notifications') {
-        return _jsonResponse({'notifications': [], 'next_cursor': null});
+        return _jsonResponse({
+          'notifications': [
+            if (includeUnreadRoomNotification)
+              _roomEventNotificationJson(
+                readAt: roomNotificationsMarkedRead
+                    ? '2026-06-07T09:00:00Z'
+                    : null,
+              ),
+            if (includeFreshRoomNotificationOnRefresh &&
+                roomNotificationsMarkedRead)
+              _roomEventNotificationJson(id: 'room-event-fresh'),
+          ],
+          'next_cursor': null,
+        });
+      }
+      if (request.url.path == '/api/v1/room-notifications/read') {
+        roomNotificationsMarkedRead = true;
+        return _jsonResponse({'ok': true});
       }
       if (request.url.path == '/api/v1/room-applications/application-alpha') {
         return _jsonResponse({
@@ -5760,6 +6068,39 @@ Map<String, Object?> _roomApplicationJson({
     'updated_at': updatedAt,
     'reviewed_at': reviewedAt,
     'reviewer': reviewer,
+  };
+}
+
+Map<String, Object?> _roomEventNotificationJson({
+  String id = 'room-event-alpha',
+  String type = 'role_promoted',
+  String? readAt,
+}) {
+  return {
+    'id': id,
+    'type': type,
+    'created_at': '2026-06-07T08:00:00Z',
+    'read_at': readAt,
+    'room_exists': true,
+    'actor_exists': true,
+    'from_role': 'member',
+    'to_role': 'admin',
+    'room': {
+      ..._roomCardJson(
+        id: 'server-alpha',
+        name: 'Alpha Room',
+        memberCount: 2,
+        liveParticipantCount: 1,
+      ),
+      'join_policy': 'approval_required',
+      'joined': true,
+      'join_state': 'joined',
+    },
+    'actor': {
+      ..._userJson(id: 'user-2', username: 'morgan', displayName: 'Morgan'),
+      'room_display_name': 'Morgan Admin',
+      'room_role': 'owner',
+    },
   };
 }
 

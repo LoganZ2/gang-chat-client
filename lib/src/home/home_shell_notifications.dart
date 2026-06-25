@@ -91,6 +91,7 @@ extension _HomeShellNotifications on _HomeShellState {
 
   void _closeNotifications() {
     _setHomeState(() {
+      _clearDeferredRoomNotificationVisualMarkersInState();
       _contentMode = _ContentMode.chat;
       if (_selectedServerId == null) _narrowContentOpen = false;
     });
@@ -98,11 +99,15 @@ extension _HomeShellNotifications on _HomeShellState {
 
   void _openNotificationRoom(PublicRoom room) {
     if (!room.joined) return;
+    _setHomeState(_clearDeferredRoomNotificationVisualMarkersInState);
     final narrow = MediaQuery.sizeOf(context).width < narrowBreakpoint;
     _selectServer(_roomCardForPublicRoom(room), openContent: narrow);
   }
 
-  Future<void> _loadNotifications({bool silent = false}) async {
+  Future<void> _loadNotifications({
+    bool silent = false,
+    bool clearVisualReadMarkers = false,
+  }) async {
     if (!silent) {
       _setHomeState(() {
         _loadingNotifications = true;
@@ -118,9 +123,25 @@ extension _HomeShellNotifications on _HomeShellState {
       ).wait;
       if (!mounted) return;
       _setHomeState(() {
+        final visualReadAt = clearVisualReadMarkers
+            ? _deferredRoomNotificationVisualReadAt
+            : null;
+        final visualReadIds = clearVisualReadMarkers
+            ? _deferredRoomNotificationVisualReadIds
+            : const <String>{};
         _notificationInvites = invites;
         _notificationApplications = applications;
-        _notificationRoomEvents = roomEvents;
+        _notificationRoomEvents = visualReadAt == null || visualReadIds.isEmpty
+            ? roomEvents
+            : room_notifications.markUnreadRoomEventNotificationsRead(
+                notifications: roomEvents,
+                readAt: visualReadAt,
+                notificationIds: visualReadIds,
+              );
+        if (clearVisualReadMarkers) {
+          _deferredRoomNotificationVisualReadAt = null;
+          _deferredRoomNotificationVisualReadIds = const {};
+        }
         _loadingNotifications = false;
         _notificationError = null;
         _pendingRoomNotificationCount = room_notifications
@@ -177,11 +198,20 @@ extension _HomeShellNotifications on _HomeShellState {
   Future<void> _markLoadedRoomNotificationsRead(
     List<RoomEventNotification> roomEvents,
   ) async {
-    if (!roomEvents.any((notification) => notification.isUnread)) return;
+    final unreadIds = roomEvents
+        .where((notification) => notification.isUnread)
+        .map((notification) => notification.id)
+        .toSet();
+    if (unreadIds.isEmpty) return;
     try {
       await _roomsController.markRoomNotificationsRead();
       if (!mounted) return;
       _setHomeState(() {
+        _deferredRoomNotificationVisualReadAt = DateTime.now().toUtc();
+        _deferredRoomNotificationVisualReadIds = {
+          ..._deferredRoomNotificationVisualReadIds,
+          ...unreadIds,
+        };
         final pendingCount = room_notifications.pendingRoomNotificationCount(
           invites: _notificationInvites,
           applications: _notificationApplications,
@@ -190,6 +220,20 @@ extension _HomeShellNotifications on _HomeShellState {
         _hasPendingRoomInvites = pendingCount > 0;
       });
     } catch (_) {}
+  }
+
+  void _clearDeferredRoomNotificationVisualMarkersInState() {
+    final readAt = _deferredRoomNotificationVisualReadAt;
+    final readIds = _deferredRoomNotificationVisualReadIds;
+    if (readAt == null || readIds.isEmpty) return;
+    _notificationRoomEvents = room_notifications
+        .markUnreadRoomEventNotificationsRead(
+          notifications: _notificationRoomEvents,
+          readAt: readAt,
+          notificationIds: readIds,
+        );
+    _deferredRoomNotificationVisualReadAt = null;
+    _deferredRoomNotificationVisualReadIds = const {};
   }
 
   Future<void> _reviewNotificationInvite(RoomInvite invite, bool accept) async {

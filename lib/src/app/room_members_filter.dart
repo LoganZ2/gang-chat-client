@@ -510,18 +510,15 @@ List<RoomMember> visibleRoomMembers({
   required String query,
   String? ownerUserId,
 }) {
+  final visible = filteredRoomMembers(
+    members: members,
+    live: live,
+    presenceFilter: presenceFilter,
+    roleFilter: roleFilter,
+    query: query,
+    ownerUserId: ownerUserId,
+  );
   final normalizedQuery = query.trim().toLowerCase();
-  final visible = members.where((member) {
-    final presence = roomMemberPresence(member, live: live);
-    if (!_matchesPresenceFilter(presence, presenceFilter)) {
-      return false;
-    }
-    if (!_matchesRoleFilter(member, roleFilter, ownerUserId: ownerUserId)) {
-      return false;
-    }
-    if (normalizedQuery.isEmpty) return true;
-    return roomMemberSearchRank(member, normalizedQuery) < 99;
-  }).toList();
   visible.sort(
     (a, b) => compareRoomMembers(
       a,
@@ -532,6 +529,42 @@ List<RoomMember> visibleRoomMembers({
     ),
   );
   return visible;
+}
+
+List<RoomMember> filteredRoomMembers({
+  required Iterable<RoomMember> members,
+  required LiveState live,
+  required RoomMemberPresenceFilter presenceFilter,
+  required RoomMemberRoleFilter roleFilter,
+  required String query,
+  String? ownerUserId,
+}) {
+  final normalizedQuery = query.trim().toLowerCase();
+  return members.where((member) {
+    final presence = roomMemberPresence(member, live: live);
+    if (!_matchesPresenceFilter(presence, presenceFilter)) {
+      return false;
+    }
+    if (!_matchesRoleFilter(member, roleFilter, ownerUserId: ownerUserId)) {
+      return false;
+    }
+    if (normalizedQuery.isEmpty) return true;
+    return roomMemberSearchRank(member, normalizedQuery) < 99;
+  }).toList();
+}
+
+List<RoomMember> orderRoomMembersByUserIds({
+  required Iterable<RoomMember> members,
+  required Iterable<String> orderedUserIds,
+}) {
+  final remaining = {for (final member in members) member.user.id: member};
+  final ordered = <RoomMember>[];
+  for (final userId in orderedUserIds) {
+    final member = remaining.remove(userId);
+    if (member != null) ordered.add(member);
+  }
+  ordered.addAll(remaining.values);
+  return ordered;
 }
 
 List<RoomMemberPresenceGroup> roomMemberPresenceGroups({
@@ -730,6 +763,18 @@ List<RoomMember> replaceRoomMember(
     for (final member in members)
       if (member.user.id == updated.user.id) updated else member,
   ];
+}
+
+RoomMember roomMemberWithRole(RoomMember member, String role) {
+  return RoomMember(
+    user: member.user.copyWith(roomRole: role),
+    role: role,
+    joinedAt: member.joinedAt,
+    roomDisplayName: member.roomDisplayName,
+    remarkName: member.remarkName,
+    textMutedUntil: member.textMutedUntil,
+    isOnline: member.isOnline,
+  );
 }
 
 bool _matchesRoleFilter(

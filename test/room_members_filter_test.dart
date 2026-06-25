@@ -143,6 +143,54 @@ void main() {
     ]);
   });
 
+  test('ordered visible members keep their prior order after role patches', () {
+    final members = [
+      _member('admin_a', role: 'admin', displayName: 'Admin A'),
+      _member('member_b', displayName: 'Member B'),
+      _member('target_c', displayName: 'Target C'),
+    ];
+
+    final initialOrder = visibleRoomMembers(
+      members: members,
+      live: _live(),
+      presenceFilter: RoomMemberPresenceFilter.all,
+      roleFilter: RoomMemberRoleFilter.all,
+      query: '',
+    ).map((member) => member.user.id).toList();
+    expect(initialOrder, ['admin_a', 'member_b', 'target_c']);
+
+    final updatedMembers = [
+      members[0],
+      members[1],
+      roomMemberWithRole(members[2], 'admin'),
+    ];
+    expect(
+      visibleRoomMembers(
+        members: updatedMembers,
+        live: _live(),
+        presenceFilter: RoomMemberPresenceFilter.all,
+        roleFilter: RoomMemberRoleFilter.all,
+        query: '',
+      ).map((member) => member.user.id),
+      ['admin_a', 'target_c', 'member_b'],
+    );
+
+    final filtered = filteredRoomMembers(
+      members: updatedMembers,
+      live: _live(),
+      presenceFilter: RoomMemberPresenceFilter.all,
+      roleFilter: RoomMemberRoleFilter.all,
+      query: '',
+    );
+    expect(
+      orderRoomMembersByUserIds(
+        members: filtered,
+        orderedUserIds: initialOrder,
+      ).map((member) => member.user.id),
+      ['admin_a', 'member_b', 'target_c'],
+    );
+  });
+
   test('roomMemberPresenceGroups buckets members in display order', () {
     final members = [
       _member('offline', isOnline: false),
@@ -336,6 +384,23 @@ void main() {
     expect(next[1].role, 'admin');
     expect(next[0], same(members[0]));
     expect(next[2], same(members[2]));
+  });
+
+  test('roomMemberWithRole updates member and embedded user role', () {
+    final member = _member(
+      'target',
+      roomDisplayName: 'Room Target',
+      remarkName: 'Pinned',
+      isOnline: false,
+    );
+
+    final updated = roomMemberWithRole(member, 'admin');
+
+    expect(updated.role, 'admin');
+    expect(updated.user.roomRole, 'admin');
+    expect(updated.roomDisplayName, 'Room Target');
+    expect(updated.remarkName, 'Pinned');
+    expect(updated.isOnline, isFalse);
   });
 
   test('room member action helpers guard busy members', () {

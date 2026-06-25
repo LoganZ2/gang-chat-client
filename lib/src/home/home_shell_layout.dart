@@ -59,7 +59,8 @@ extension _HomeShellLayout on _HomeShellState {
         busyInviteId: _busyNotificationInviteId,
         busyApplicationId: _busyNotificationApplicationId,
         onClose: _closeNotifications,
-        onRefresh: () => unawaited(_loadNotifications()),
+        onRefresh: () =>
+            unawaited(_loadNotifications(clearVisualReadMarkers: true)),
         onReviewInvite: _reviewNotificationInvite,
         onWithdrawApplication: _withdrawNotificationApplication,
         onResolveRoomProfile: _resolveRoomProfile,

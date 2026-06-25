@@ -286,31 +286,132 @@ void main() {
   testWidgets('chat pane can jump to the first new message', (tester) async {
     final controller = TextEditingController();
     addTearDown(controller.dispose);
-    final messages = _textMessages(12);
+    final messages = _textMessages(80);
     var viewed = 0;
+    var newMessageCount = 50;
 
     await tester.pumpWidget(
       _host(
-        _chatPane(
-          controller: controller,
-          room: _roomDetail,
-          messages: messages,
-          newMessageCount: 3,
-          onViewedNewMessages: () => viewed += 1,
+        StatefulBuilder(
+          builder: (context, setState) {
+            return _chatPane(
+              controller: controller,
+              room: _roomDetailFor('room_jump_to_unread'),
+              messages: messages,
+              newMessageCount: newMessageCount,
+              onViewedNewMessages: () {
+                viewed += 1;
+                setState(() => newMessageCount = 0);
+              },
+            );
+          },
         ),
-        height: 420,
+        height: 360,
       ),
     );
+    await tester.pump();
 
-    expect(find.text('查看 3 条新消息'), findsOneWidget);
+    expect(find.byTooltip('查看 50 条未读消息'), findsOneWidget);
+    expect(find.text('查看 50 条未读消息'), findsNothing);
     expect(find.byIcon(Icons.keyboard_arrow_up_rounded), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(const ValueKey('chat-jump-to-first-new'))),
+      const Size(34, 34),
+    );
 
     await tester.tap(find.byKey(const ValueKey('chat-jump-to-first-new')));
     await tester.pumpAndSettle();
 
     expect(viewed, 1);
-    expect(find.text('查看 3 条新消息'), findsNothing);
+    expect(find.byTooltip('查看 50 条未读消息'), findsNothing);
+    expect(find.text('未读消息'), findsOneWidget);
   });
+
+  testWidgets(
+    'chat pane shows unread divider without jump when unread messages are visible',
+    (tester) async {
+      final controller = TextEditingController();
+      addTearDown(controller.dispose);
+      final messages = _textMessages(5);
+
+      await tester.pumpWidget(
+        _host(
+          _chatPane(
+            controller: controller,
+            room: _roomDetailFor('room_visible_unread'),
+            messages: messages,
+            newMessageCount: 2,
+          ),
+          height: 620,
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('未读消息'), findsOneWidget);
+      expect(find.byTooltip('查看 2 条未读消息'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('chat-jump-to-first-new')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'chat pane marks unread viewed when divider is scrolled into view',
+    (tester) async {
+      final controller = TextEditingController();
+      addTearDown(controller.dispose);
+      final messages = _textMessages(80);
+      var viewed = 0;
+      var newMessageCount = 50;
+
+      await tester.pumpWidget(
+        _host(
+          StatefulBuilder(
+            builder: (context, setState) {
+              return _chatPane(
+                controller: controller,
+                room: _roomDetailFor('room_scroll_to_unread'),
+                messages: messages,
+                newMessageCount: newMessageCount,
+                onViewedNewMessages: () {
+                  viewed += 1;
+                  setState(() => newMessageCount = 0);
+                },
+              );
+            },
+          ),
+          height: 360,
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byTooltip('查看 50 条未读消息'), findsOneWidget);
+
+      final scrollable = tester.state<ScrollableState>(
+        find
+            .descendant(
+              of: find.byKey(const ValueKey('chat-message-list')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      var dividerVisible = false;
+      for (final fraction in [0.45, 0.55, 0.62, 0.7]) {
+        scrollable.position.jumpTo(
+          scrollable.position.maxScrollExtent * fraction,
+        );
+        await tester.pump();
+        await tester.pump();
+        dividerVisible = find.text('未读消息').evaluate().isNotEmpty;
+        if (dividerVisible) break;
+      }
+
+      expect(dividerVisible, isTrue);
+      expect(viewed, 1);
+      expect(find.byTooltip('查看 50 条未读消息'), findsNothing);
+    },
+  );
 
   testWidgets('short chats start at the top of the message area', (
     tester,
@@ -1204,6 +1305,28 @@ final _roomDetail = RoomDetail(
   createdAt: DateTime.utc(2026, 6, 4),
   updatedAt: DateTime.utc(2026, 6, 4),
 );
+
+RoomDetail _roomDetailFor(String id) {
+  return RoomDetail(
+    id: id,
+    name: 'Test room',
+    avatarUrl: null,
+    defaultAvatarKey: 'room-1',
+    memberCount: 2,
+    myMembership: RoomMembership(
+      joinedAt: DateTime.utc(2026, 6, 4),
+      role: 'member',
+    ),
+    live: LiveState(
+      roomId: id,
+      participantCount: 0,
+      participants: const [],
+      updatedAt: DateTime.utc(2026, 6, 4),
+    ),
+    createdAt: DateTime.utc(2026, 6, 4),
+    updatedAt: DateTime.utc(2026, 6, 4),
+  );
+}
 
 ChatFileDownloadActions _downloadActions() {
   return ChatFileDownloadActions(

@@ -1303,6 +1303,21 @@ class RoomEventNotification {
 
   bool get isUnread => readAt == null;
 
+  RoomEventNotification markRead(DateTime readAt) {
+    return RoomEventNotification(
+      id: id,
+      type: type,
+      room: room,
+      createdAt: createdAt,
+      roomExists: roomExists,
+      actor: actor,
+      actorExists: actorExists,
+      fromRole: fromRole,
+      toRole: toRole,
+      readAt: readAt,
+    );
+  }
+
   factory RoomEventNotification.fromJson(Map<String, Object?> json) {
     final actorJson = _nullableMap(json['actor']);
     final actor = actorJson == null ? null : UserSummary.fromJson(actorJson);

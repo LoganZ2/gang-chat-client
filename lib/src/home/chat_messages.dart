@@ -143,13 +143,17 @@ class _MessageStageState extends State<_MessageStage> {
 
   bool _showDetailedTimestamps = false;
   bool _showLatestButton = false;
+  bool _showNewMessageJumpButton = false;
   bool _newMessageJumpDismissed = false;
+  String? _retainedNewMessageClientId;
+  int _retainedNewMessageLabelCount = 0;
   late final ScrollController _scrollController;
   final GlobalKey _messageListKey = GlobalKey();
   final GlobalKey _oldestMessageKey = GlobalKey();
   final GlobalKey _firstNewMessageKey = GlobalKey();
   double _underflowBottomSpacer = 0;
   bool _underflowAlignmentScheduled = false;
+  bool _newMessageJumpVisibilityScheduled = false;
   bool _messageListReady = false;
   // Guards queued scroll requests so overlapping requests don't stack up; the newest
   // request wins by bumping this token.
@@ -158,6 +162,7 @@ class _MessageStageState extends State<_MessageStage> {
   @override
   void initState() {
     super.initState();
+    _captureNewMessageAnchorFromWidget();
     // Seed the controller with the remembered offset so the very first layout
     // lands in place — restoring via a post-frame jump would render one frame
     // pinned to the latest message first, which reads as a flash.
@@ -180,7 +185,10 @@ class _MessageStageState extends State<_MessageStage> {
     if (oldWidget.roomId != widget.roomId) {
       _showDetailedTimestamps = false;
       _showLatestButton = false;
+      _showNewMessageJumpButton = false;
       _newMessageJumpDismissed = false;
+      _clearRetainedNewMessageAnchor();
+      _captureNewMessageAnchorFromWidget();
       _underflowBottomSpacer = 0;
       _messageListReady = false;
       // New room: restore its remembered position, or snap to latest.
@@ -193,7 +201,11 @@ class _MessageStageState extends State<_MessageStage> {
       return;
     }
     if (oldWidget.newMessageCount != widget.newMessageCount) {
-      _newMessageJumpDismissed = false;
+      _showNewMessageJumpButton = false;
+      if (widget.newMessageCount > 0) {
+        _newMessageJumpDismissed = false;
+        _captureNewMessageAnchorFromWidget();
+      }
     }
     if (oldWidget.messages.length != widget.messages.length ||
         (oldWidget.messages.isNotEmpty &&
@@ -201,6 +213,11 @@ class _MessageStageState extends State<_MessageStage> {
             oldWidget.messages.last.clientMessageId !=
                 widget.messages.last.clientMessageId)) {
       _underflowBottomSpacer = 0;
+      _showNewMessageJumpButton = false;
+      if (widget.newMessageCount > 0) {
+        _newMessageJumpDismissed = false;
+        _captureNewMessageAnchorFromWidget();
+      }
     }
     if (_shouldFollowToBottom(oldWidget)) {
       _scrollToBottom(animated: true);
@@ -285,6 +302,7 @@ class _MessageStageState extends State<_MessageStage> {
   void _handleScrollChanged() {
     _rememberScrollPosition();
     _syncLatestButtonVisibility();
+    _scheduleNewMessageJumpVisibilitySync();
   }
 
   void _syncLatestButtonVisibility() {
@@ -292,6 +310,20 @@ class _MessageStageState extends State<_MessageStage> {
     final next = !_isNearBottom();
     if (next == _showLatestButton) return;
     setState(() => _showLatestButton = next);
+  }
+
+  void _captureNewMessageAnchorFromWidget() {
+    final count = _effectiveWidgetNewMessageCount;
+    if (count <= 0) return;
+    final index = widget.messages.length - count;
+    if (index < 0 || index >= widget.messages.length) return;
+    _retainedNewMessageClientId = widget.messages[index].clientMessageId;
+    _retainedNewMessageLabelCount = _newMessageLabelCountFromWidget;
+  }
+
+  void _clearRetainedNewMessageAnchor() {
+    _retainedNewMessageClientId = null;
+    _retainedNewMessageLabelCount = 0;
   }
 
   void _scheduleUnderflowAlignment() {
@@ -327,6 +359,61 @@ class _MessageStageState extends State<_MessageStage> {
         _messageListReady = true;
       });
     });
+  }
+
+  void _scheduleNewMessageJumpVisibilitySync() {
+    if (_newMessageJumpVisibilityScheduled) return;
+    _newMessageJumpVisibilityScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _newMessageJumpVisibilityScheduled = false;
+      if (!mounted) return;
+      if (_firstNewMessageAnchorIsVisible() && !_newMessageJumpDismissed) {
+        _markNewMessagesViewed();
+        return;
+      }
+      final next = _shouldShowNewMessageJumpButton();
+      if (next == _showNewMessageJumpButton) return;
+      setState(() => _showNewMessageJumpButton = next);
+    });
+  }
+
+  bool _shouldShowNewMessageJumpButton() {
+    if (_firstNewMessageIndex == null || _newMessageJumpDismissed) {
+      return false;
+    }
+    if (!_messageListReady || !_scrollController.hasClients) return false;
+    final listBox =
+        _messageListKey.currentContext?.findRenderObject() as RenderBox?;
+    if (listBox == null || !listBox.hasSize) return false;
+    final anchorBox =
+        _firstNewMessageKey.currentContext?.findRenderObject() as RenderBox?;
+    if (anchorBox == null || !anchorBox.hasSize) {
+      // If the first-new anchor is not in the sliver cache, it is above the
+      // visible window and needs the one-shot jump affordance.
+      return true;
+    }
+    final listTop = listBox.localToGlobal(Offset.zero).dy;
+    final anchorTop = anchorBox.localToGlobal(Offset.zero).dy;
+    return anchorTop < listTop + 1;
+  }
+
+  bool _firstNewMessageAnchorIsVisible() {
+    if (_firstNewMessageIndex == null) return false;
+    final listBox =
+        _messageListKey.currentContext?.findRenderObject() as RenderBox?;
+    final anchorBox =
+        _firstNewMessageKey.currentContext?.findRenderObject() as RenderBox?;
+    if (listBox == null ||
+        anchorBox == null ||
+        !listBox.hasSize ||
+        !anchorBox.hasSize) {
+      return false;
+    }
+    final listTop = listBox.localToGlobal(Offset.zero).dy;
+    final listBottom = listTop + listBox.size.height;
+    final anchorTop = anchorBox.localToGlobal(Offset.zero).dy;
+    final anchorBottom = anchorTop + anchorBox.size.height;
+    return anchorBottom >= listTop && anchorTop <= listBottom;
   }
 
   // The list is reversed, so the latest message lives at the minimum scroll
@@ -365,50 +452,97 @@ class _MessageStageState extends State<_MessageStage> {
     });
   }
 
-  int get _effectiveNewMessageCount {
+  int get _effectiveWidgetNewMessageCount {
     if (widget.messages.isEmpty || widget.newMessageCount <= 0) return 0;
     return widget.newMessageCount.clamp(0, widget.messages.length).toInt();
   }
 
-  int get _newMessageLabelCount {
+  int get _newMessageLabelCountFromWidget {
     return widget.newMessageCount < 0 ? 0 : widget.newMessageCount;
   }
 
+  int get _activeNewMessageCount {
+    final widgetCount = _effectiveWidgetNewMessageCount;
+    if (widgetCount > 0) return widgetCount;
+    if (_retainedNewMessageIndex == null) return 0;
+    return _retainedNewMessageLabelCount
+        .clamp(0, widget.messages.length)
+        .toInt();
+  }
+
+  int get _newMessageLabelCount {
+    final widgetCount = _effectiveWidgetNewMessageCount;
+    if (widgetCount > 0) return _newMessageLabelCountFromWidget;
+    return _retainedNewMessageLabelCount;
+  }
+
+  int? get _retainedNewMessageIndex {
+    final retainedId = _retainedNewMessageClientId;
+    if (retainedId == null) return null;
+    final index = widget.messages.indexWhere(
+      (message) => message.clientMessageId == retainedId,
+    );
+    return index == -1 ? null : index;
+  }
+
   int? get _firstNewMessageIndex {
-    final count = _effectiveNewMessageCount;
-    if (count <= 0) return null;
-    return widget.messages.length - count;
+    final widgetCount = _effectiveWidgetNewMessageCount;
+    if (widgetCount > 0) return widget.messages.length - widgetCount;
+    return _retainedNewMessageIndex;
+  }
+
+  void _markNewMessagesViewed() {
+    if (_newMessageJumpDismissed) return;
+    setState(() {
+      _newMessageJumpDismissed = true;
+      _showNewMessageJumpButton = false;
+    });
+    widget.onViewedNewMessages();
   }
 
   void _scrollToFirstNewMessage() {
-    setState(() => _newMessageJumpDismissed = true);
-    widget.onViewedNewMessages();
-    final context = _firstNewMessageKey.currentContext;
-    if (context != null) {
-      Scrollable.ensureVisible(
-        context,
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOutCubic,
-        alignment: 0.12,
-      );
+    _markNewMessagesViewed();
+    if (_ensureFirstNewMessageVisible()) {
       return;
     }
     if (!_scrollController.hasClients) return;
-    final count = _effectiveNewMessageCount;
+    final count = _activeNewMessageCount;
+    if (count <= 0) return;
     final position = _scrollController.position;
     final averageExtent = widget.messages.length <= 1
         ? position.maxScrollExtent
         : position.maxScrollExtent / (widget.messages.length - 1);
-    final target = (position.minScrollExtent + averageExtent * (count - 1))
-        .clamp(position.minScrollExtent, position.maxScrollExtent)
-        .toDouble();
+    final firstIndex = _firstNewMessageIndex;
+    final distanceFromBottom = firstIndex == null
+        ? count - 1
+        : widget.messages.length - 1 - firstIndex;
+    final target =
+        (position.minScrollExtent + averageExtent * distanceFromBottom)
+            .clamp(position.minScrollExtent, position.maxScrollExtent)
+            .toDouble();
     unawaited(
-      _scrollController.animateTo(
-        target,
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOutCubic,
-      ),
+      _scrollController
+          .animateTo(
+            target,
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+          )
+          .whenComplete(() {
+            if (mounted) _ensureFirstNewMessageVisible();
+          }),
     );
+  }
+
+  bool _ensureFirstNewMessageVisible() {
+    final context = _firstNewMessageKey.currentContext;
+    if (context == null) return false;
+    Scrollable.ensureVisible(
+      context,
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      alignment: 0.12,
+    );
+    return true;
   }
 
   void _toggleDetailedTimestamps() {
@@ -458,7 +592,10 @@ class _MessageStageState extends State<_MessageStage> {
     final now = DateTime.now();
     final firstNewMessageIndex = _firstNewMessageIndex;
     final showNewMessageJump =
-        firstNewMessageIndex != null && !_newMessageJumpDismissed;
+        firstNewMessageIndex != null &&
+        !_newMessageJumpDismissed &&
+        _showNewMessageJumpButton;
+    _scheduleNewMessageJumpVisibilitySync();
     final list = ListView.separated(
       key: _messageListKey,
       controller: _scrollController,
@@ -492,9 +629,18 @@ class _MessageStageState extends State<_MessageStage> {
         final timestamp = _showDetailedTimestamps
             ? message_display.formatDetailedChatTimestamp(message.createdAt)
             : message_display.formatChatTimestamp(message.createdAt, now: now);
+        final showNewMessageDivider =
+            chronologicalIndex == firstNewMessageIndex;
         final row = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (showNewMessageDivider) ...[
+              KeyedSubtree(
+                key: _firstNewMessageKey,
+                child: const _NewMessagesDivider(),
+              ),
+              const SizedBox(height: 10),
+            ],
             if (showTimestamp) ...[
               _MessageTimeDivider(
                 label: timestamp,
@@ -532,10 +678,7 @@ class _MessageStageState extends State<_MessageStage> {
               ),
           ],
         );
-        Widget keyedRow = row;
-        if (chronologicalIndex == firstNewMessageIndex) {
-          keyedRow = KeyedSubtree(key: _firstNewMessageKey, child: keyedRow);
-        }
+        final keyedRow = row;
         if (chronologicalIndex == 0) {
           return KeyedSubtree(key: _oldestMessageKey, child: keyedRow);
         }
@@ -598,6 +741,7 @@ class _MessageStageState extends State<_MessageStage> {
             child: showNewMessageJump
                 ? PressableSurface(
                     key: const ValueKey('chat-jump-to-first-new'),
+                    width: 34,
                     height: 34,
                     hoverLift: 0,
                     baseDepth: 0,
@@ -606,29 +750,13 @@ class _MessageStageState extends State<_MessageStage> {
                     pressedBackgroundColor: const Color(0xFF14211B),
                     borderColor: UiColors.selectedBorder,
                     selectedBorderColor: UiColors.selectedBorder,
-                    tooltip: '查看 $_newMessageLabelCount 条新消息',
+                    tooltip: '查看 $_newMessageLabelCount 条未读消息',
                     onPressed: _scrollToFirstNewMessage,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.keyboard_arrow_up_rounded,
-                            color: UiColors.accent,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '查看 $_newMessageLabelCount 条新消息',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: UiTypography.label.copyWith(
-                              color: UiColors.accent,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
+                    child: const Center(
+                      child: Icon(
+                        Icons.keyboard_arrow_up_rounded,
+                        color: UiColors.accent,
+                        size: 18,
                       ),
                     ),
                   )
@@ -637,6 +765,34 @@ class _MessageStageState extends State<_MessageStage> {
                   ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _NewMessagesDivider extends StatelessWidget {
+  const _NewMessagesDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    final lineColor = UiColors.accent.withValues(alpha: 0.58);
+    return Row(
+      children: [
+        Expanded(child: Divider(height: 1, thickness: 1, color: lineColor)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Text(
+            '未读消息',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: UiTypography.label.copyWith(
+              color: UiColors.accent,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        Expanded(child: Divider(height: 1, thickness: 1, color: lineColor)),
       ],
     );
   }

@@ -93,6 +93,7 @@ class _HomeNotificationsPaneState extends State<HomeNotificationsPane> {
       title: '通知',
       onBack: widget.onClose,
       headerAction: ButtonIcon(
+        key: const ValueKey('home-notifications-refresh-button'),
         tooltip: '刷新通知',
         icon: const Icon(Icons.refresh),
         onPressed: widget.loading ? null : widget.onRefresh,
@@ -759,6 +760,7 @@ class _RoomEventNotificationRow extends StatelessWidget {
     final time = roomInviteTimestampLabel(notification.createdAt);
     return _NotificationNewMarker(
       show: notification.isUnread,
+      markerKey: ValueKey('notification-room-event-new-${notification.id}'),
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: UiColors.surface,
@@ -927,10 +929,15 @@ class _NotificationText extends StatelessWidget {
 }
 
 class _NotificationNewMarker extends StatelessWidget {
-  const _NotificationNewMarker({required this.show, required this.child});
+  const _NotificationNewMarker({
+    required this.show,
+    required this.child,
+    this.markerKey,
+  });
 
   final bool show;
   final Widget child;
+  final Key? markerKey;
 
   @override
   Widget build(BuildContext context) {
@@ -938,7 +945,12 @@ class _NotificationNewMarker extends StatelessWidget {
       clipBehavior: Clip.none,
       children: [
         child,
-        if (show) const Positioned(top: 8, right: 8, child: BadgeDot(size: 8)),
+        if (show)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: BadgeDot(key: markerKey, size: 8),
+          ),
       ],
     );
   }

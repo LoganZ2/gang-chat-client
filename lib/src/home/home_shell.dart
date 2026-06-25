@@ -180,6 +180,8 @@ class _HomeShellState extends State<HomeShell> {
   List<RoomInvite> _notificationInvites = const [];
   List<RoomApplication> _notificationApplications = const [];
   List<RoomEventNotification> _notificationRoomEvents = const [];
+  DateTime? _deferredRoomNotificationVisualReadAt;
+  Set<String> _deferredRoomNotificationVisualReadIds = const {};
   bool _loadingNotifications = false;
   String? _notificationError;
   String? _busyNotificationInviteId;

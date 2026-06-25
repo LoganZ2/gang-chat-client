@@ -95,6 +95,7 @@ extension _HomeShellRoomActions on _HomeShellState {
       entry.uploadController.cancel();
     }
     _setHomeState(() {
+      _clearDeferredRoomNotificationVisualMarkersInState();
       _selectedServerId = server.id;
       _selectedRoomNewMessageCount = server.unreadCount;
       _clearRoomUnreadCount(server.id);
@@ -142,6 +143,7 @@ extension _HomeShellRoomActions on _HomeShellState {
 
   void _toggleSettings({required bool openContent}) {
     _setHomeState(() {
+      _clearDeferredRoomNotificationVisualMarkersInState();
       final opening = !_settingsOpen;
       _settingsOpen = opening;
       if (opening) _contentMode = _ContentMode.chat;
@@ -157,6 +159,7 @@ extension _HomeShellRoomActions on _HomeShellState {
       return;
     }
     _setHomeState(() {
+      _clearDeferredRoomNotificationVisualMarkersInState();
       _settingsOpen = false;
       _contentMode = _ContentMode.createRoom;
       if (openContent) _narrowContentOpen = true;
@@ -475,7 +478,10 @@ extension _HomeShellRoomActions on _HomeShellState {
 
   void _openChat() {
     final roomId = _selectedServerId;
-    _setHomeState(() => _contentMode = _ContentMode.chat);
+    _setHomeState(() {
+      _clearDeferredRoomNotificationVisualMarkersInState();
+      _contentMode = _ContentMode.chat;
+    });
     if (roomId != null) {
       unawaited(_refreshSelectedMessagesSilently(roomId));
     }

@@ -267,19 +267,14 @@ const _hoverVolumePercentHeight = 18.0;
 const _hoverVolumePercentGap = 6.0;
 
 class _HoverInfo extends StatelessWidget {
-  const _HoverInfo({
-    required this.message,
-    required this.child,
-    this.enabled = true,
-  });
+  const _HoverInfo({required this.message, required this.child});
 
   final String message;
   final Widget child;
-  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
-    if (!enabled || message.isEmpty) return child;
+    if (message.isEmpty) return child;
     return Tooltip(
       message: message,
       preferBelow: true,

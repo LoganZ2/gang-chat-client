@@ -199,6 +199,20 @@ int unreadRoomEventNotificationCount(
   return notifications.where((notification) => notification.isUnread).length;
 }
 
+List<RoomEventNotification> markUnreadRoomEventNotificationsRead({
+  required Iterable<RoomEventNotification> notifications,
+  required DateTime readAt,
+  Iterable<String>? notificationIds,
+}) {
+  final ids = notificationIds?.toSet();
+  return [
+    for (final notification in notifications)
+      notification.isUnread && (ids == null || ids.contains(notification.id))
+          ? notification.markRead(readAt)
+          : notification,
+  ];
+}
+
 String roomInviteDecisionLabel(RoomInvite invite) {
   if (isInvalidPendingRoomInvite(invite)) return '已失效';
   if (isAcceptedRoomInvite(invite)) return '已接受';
