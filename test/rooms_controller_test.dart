@@ -167,7 +167,7 @@ void main() {
           )
           .rooms
           .map((room) => room.name),
-      ['updated room', 'room_1'],
+      ['room_1', 'updated room'],
     );
     expect(
       controller
@@ -495,7 +495,7 @@ void main() {
     expect(started.error, isNull);
 
     final succeeded = controller.patchRoomListLoadSucceeded(rooms: loadedRooms);
-    expect(succeeded.rooms, same(loadedRooms));
+    expect(succeeded.rooms.map((room) => room.id), ['room_2']);
     expect(succeeded.loading, isFalse);
     expect(succeeded.error, isNull);
 
@@ -1018,8 +1018,34 @@ void main() {
       roomId: 'room_1',
     );
 
-    expect(patch.rooms[0].unreadCount, 0);
-    expect(patch.rooms[1].unreadCount, 2);
+    expect(patch.rooms.map((room) => room.id), ['room_2', 'room_1']);
+    expect(patch.rooms[0].unreadCount, 2);
+    expect(patch.rooms[1].unreadCount, 0);
+  });
+
+  test('room ordering puts pinned first and red unread before gray unread', () {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        fail('Ordering test should not call the API: ${request.url}');
+      }),
+    );
+    addTearDown(api.close);
+    final controller = RoomsController(api: api);
+
+    final ordered = controller
+        .patchRoomCardsRefreshed(
+          rooms: [
+            _roomCard('normal'),
+            _roomCard('gray', unreadCount: 2, notificationPolicy: 'silent'),
+            _roomCard('red', unreadCount: 1),
+            _roomCard('pinned', isPinned: true),
+          ],
+        )
+        .rooms;
+
+    expect(ordered.map((room) => room.id), ['pinned', 'red', 'gray', 'normal']);
   });
 }
 
@@ -1030,12 +1056,16 @@ RoomCard _roomCard(
   int memberCount = 3,
   int onlineMemberCount = 0,
   String? lastMessageId,
+  String notificationPolicy = 'all',
+  bool isPinned = false,
 }) {
   return RoomCard(
     id: id,
     name: name ?? id,
     avatarUrl: null,
     defaultAvatarKey: 'room-1',
+    notificationPolicy: notificationPolicy,
+    isPinned: isPinned,
     memberCount: memberCount,
     onlineMemberCount: onlineMemberCount,
     liveParticipantCount: 0,

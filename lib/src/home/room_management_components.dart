@@ -394,7 +394,7 @@ Future<_CroppedRoomAvatar?> _pickAndCropRoomAvatar(BuildContext context) async {
   final cropped = await showDialog<Uint8List>(
     context: context,
     barrierDismissible: false,
-    builder: (context) => AvatarCropDialog(bytes: bytes, title: '裁剪房间图标'),
+    builder: (context) => AvatarCropDialog(bytes: bytes, title: '裁剪图标'),
   );
   if (cropped == null) return null;
   return _CroppedRoomAvatar(

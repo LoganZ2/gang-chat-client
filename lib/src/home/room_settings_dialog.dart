@@ -64,10 +64,13 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
   late RoomDetail _room;
   late final TextEditingController _nameController;
   late final TextEditingController _descriptionController;
+  late final TextEditingController _remarkNameController;
+  late final TextEditingController _roomDisplayNameController;
   late String _visibility;
   late String _joinPolicy;
   late bool _aiVoiceAnnouncementsEnabled;
   late String _notificationPolicy;
+  late bool _isPinned;
 
   late String _defaultAvatarKey;
   late bool _usingPresetAvatar;
@@ -77,6 +80,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
 
   bool _saving = false;
   bool _savingPreferences = false;
+  bool _refreshing = false;
   bool _leaving = false;
   bool _deleting = false;
   bool _changed = false;
@@ -108,11 +112,19 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
     return _creating ? '房间' : room_display.roomDisplayName(_room);
   }
 
+  String get _currentUserDefaultDisplayName {
+    final displayName = widget.currentUser.displayName.trim();
+    if (displayName.isNotEmpty) return displayName;
+    return widget.currentUser.username;
+  }
+
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController();
     _descriptionController = TextEditingController();
+    _remarkNameController = TextEditingController();
+    _roomDisplayNameController = TextEditingController();
     _resetFromWidgetRoom(clearTransientFeedback: false);
   }
 
@@ -135,6 +147,9 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
     _notificationPolicy = room_display.normalizeRoomNotificationPolicy(
       _room.notificationPolicy,
     );
+    _isPinned = _room.isPinned;
+    _remarkNameController.text = _room.remarkName ?? '';
+    _roomDisplayNameController.text = _room.personalProfile.displayName ?? '';
     _defaultAvatarKey = _room.defaultAvatarKey;
     _usingPresetAvatar = _room.avatarUrl == null;
     _pendingAvatarAssetId = null;
@@ -142,6 +157,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
     _uploadingAvatar = false;
     _saving = false;
     _savingPreferences = false;
+    _refreshing = false;
     _leaving = false;
     _deleting = false;
     _changed = false;
@@ -156,6 +172,8 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
   void dispose() {
     _nameController.dispose();
     _descriptionController.dispose();
+    _remarkNameController.dispose();
+    _roomDisplayNameController.dispose();
     super.dispose();
   }
 
@@ -271,16 +289,19 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
     });
     try {
       final draft = room_forms.roomProfileUpdateDraftFromForm(
-        remarkName: _room.remarkName ?? '',
+        remarkName: _remarkNameController.text,
         notificationPolicy: _notificationPolicy,
-        usingGlobalProfile: true,
-        roomDisplayName: '',
+        usingGlobalProfile: false,
+        roomDisplayName: _roomDisplayNameController.text,
         usingProfilePresetAvatar: true,
         defaultAvatarKey: '',
       );
       final updated = await widget.controller.updateMyRoomSettings(
         roomId: _room.id,
+        remarkName: draft.remarkName,
         notificationPolicy: draft.notificationPolicy,
+        roomDisplayName: draft.roomDisplayName,
+        isPinned: _isPinned,
       );
       if (!mounted) return;
       setState(() {
@@ -288,6 +309,10 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
         _notificationPolicy = room_display.normalizeRoomNotificationPolicy(
           updated.notificationPolicy,
         );
+        _isPinned = updated.isPinned;
+        _remarkNameController.text = updated.remarkName ?? '';
+        _roomDisplayNameController.text =
+            updated.personalProfile.displayName ?? '';
         _savingPreferences = false;
         _changed = true;
         _notice = room_display.roomPersonalPreferencesSavedNotice();
@@ -297,6 +322,46 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
       if (!mounted) return;
       setState(() {
         _savingPreferences = false;
+        _error = error.toString();
+      });
+    }
+  }
+
+  Future<void> _refreshRoom() async {
+    if (_creating || _refreshing) return;
+    setState(() {
+      _refreshing = true;
+      _error = null;
+      _notice = null;
+    });
+    try {
+      final updated = await widget.controller.getRoom(_room.id);
+      if (!mounted) return;
+      setState(() {
+        _room = updated;
+        _nameController.text = updated.name;
+        _descriptionController.text = updated.description;
+        _visibility = room_display.normalizeRoomVisibility(updated.visibility);
+        _joinPolicy = room_display.normalizeRoomJoinPolicy(updated.joinPolicy);
+        _aiVoiceAnnouncementsEnabled = updated.aiVoiceAnnouncementsEnabled;
+        _notificationPolicy = room_display.normalizeRoomNotificationPolicy(
+          updated.notificationPolicy,
+        );
+        _isPinned = updated.isPinned;
+        _remarkNameController.text = updated.remarkName ?? '';
+        _roomDisplayNameController.text =
+            updated.personalProfile.displayName ?? '';
+        _defaultAvatarKey = updated.defaultAvatarKey;
+        _usingPresetAvatar = updated.avatarUrl == null;
+        _pendingAvatarAssetId = null;
+        _pendingAvatarUrl = null;
+        _refreshing = false;
+      });
+      widget.onRoomUpdated(updated);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _refreshing = false;
         _error = error.toString();
       });
     }
@@ -461,6 +526,15 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
       maxHeight: _dialogMaxHeight,
       embedded: widget.embedded,
       onClose: _close,
+      headerAction: _creating
+          ? null
+          : ButtonIcon(
+              tooltip: '刷新设置',
+              onPressed: _refreshing ? null : _refreshRoom,
+              icon: const Icon(Icons.refresh),
+              size: 38,
+              loading: _refreshing,
+            ),
       pinned: _creating
           ? null
           : SegmentedControl<_RoomSettingsSection>(
@@ -514,7 +588,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
           children: [
             _LabeledRoomInput(
               fieldKey: const ValueKey('room-settings-name-input'),
-              label: '房间名称',
+              label: '名称',
               controller: _nameController,
               enabled: _canManageRoom && !_saving,
             ),
@@ -526,7 +600,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
               maxLines: null,
             ),
             AvatarPicker(
-              label: '房间图标',
+              label: '图标',
               displayName: _avatarDisplayName,
               imageUrl: _avatarPreviewUrl(AppConfigScope.of(context)),
               defaultAvatarKey: _defaultAvatarKey,
@@ -615,20 +689,31 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
   Widget _buildPreferencesBody() {
     return SettingsList(
       children: [
-        if (_notice != null)
-          _NoticeStrip(message: _notice!, icon: Icons.check_circle_outline),
-        if (_error != null) _NoticeStrip(message: _error!, danger: true),
         SettingsCard(
           title: '个人偏好',
           children: [
+            _LabeledRoomInput(
+              fieldKey: const ValueKey('room-settings-remark-name-input'),
+              label: '房间备注名',
+              controller: _remarkNameController,
+              hintText: _room.name,
+              enabled: !_savingPreferences,
+            ),
+            _LabeledRoomInput(
+              fieldKey: const ValueKey('room-settings-room-display-name-input'),
+              label: '房间内用户名',
+              controller: _roomDisplayNameController,
+              hintText: _currentUserDefaultDisplayName,
+              enabled: !_savingPreferences,
+            ),
             _LabeledSegmented<String>(
-              label: '通知',
+              label: '房间消息',
               value: _notificationPolicy,
               enabled: !_savingPreferences,
               segments: const [
                 Segment(value: 'all', label: '全部'),
-                Segment(value: 'mentions', label: '提及'),
-                Segment(value: 'muted', label: '静音'),
+                Segment(value: 'silent', label: '接收但不提醒'),
+                Segment(value: 'blocked', label: '屏蔽'),
               ],
               onChanged: (value) {
                 setState(() {
@@ -637,6 +722,15 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
                 });
               },
             ),
+            _ToggleRow(
+              label: '置顶房间',
+              value: _isPinned,
+              enabled: !_savingPreferences,
+              onChanged: (value) => setState(() => _isPinned = value),
+            ),
+            if (_notice != null)
+              _NoticeStrip(message: _notice!, icon: Icons.check_circle_outline),
+            if (_error != null) _NoticeStrip(message: _error!, danger: true),
             Button(
               width: double.infinity,
               tone: ButtonTone.primary,
@@ -693,6 +787,7 @@ class _LabeledRoomInput extends StatelessWidget {
     required this.fieldKey,
     required this.label,
     required this.controller,
+    this.hintText = '',
     this.enabled = true,
     this.maxLines = 1,
   });
@@ -700,6 +795,7 @@ class _LabeledRoomInput extends StatelessWidget {
   final Key fieldKey;
   final String label;
   final TextEditingController controller;
+  final String hintText;
   final bool enabled;
   final int? maxLines;
 
@@ -713,7 +809,7 @@ class _LabeledRoomInput extends StatelessWidget {
         Input(
           key: fieldKey,
           controller: controller,
-          hintText: '',
+          hintText: hintText,
           enabled: enabled,
           minLines: 1,
           maxLines: maxLines,

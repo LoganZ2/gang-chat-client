@@ -2715,11 +2715,11 @@ void main() {
     await tester.tap(find.text('个人偏好').first);
     await tester.pumpAndSettle();
 
-    expect(find.text('通知'), findsOneWidget);
+    expect(find.text('房间消息'), findsOneWidget);
     expect(find.text('全部'), findsOneWidget);
-    expect(find.text('提及'), findsOneWidget);
-    expect(find.text('静音'), findsOneWidget);
-    await tester.tap(find.text('静音'));
+    expect(find.text('接收但不提醒'), findsOneWidget);
+    expect(find.text('屏蔽'), findsOneWidget);
+    await tester.tap(find.text('接收但不提醒'));
     await tester.pumpAndSettle();
     final savePreferencesButton = find.widgetWithText(ui.Button, '保存个人偏好');
     await tester.ensureVisible(savePreferencesButton);
@@ -2729,7 +2729,8 @@ void main() {
 
     expect(requestedPaths, contains('/api/v1/rooms/server-alpha/me'));
     expect(myRoomSettingsUpdates, hasLength(1));
-    expect(myRoomSettingsUpdates.single['notification_policy'], 'muted');
+    expect(myRoomSettingsUpdates.single['notification_policy'], 'silent');
+    expect(myRoomSettingsUpdates.single['is_pinned'], isFalse);
     expect(find.text('个人偏好已保存'), findsOneWidget);
 
     await tester.tap(find.byTooltip('返回').last);

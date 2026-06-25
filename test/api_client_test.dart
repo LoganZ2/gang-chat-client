@@ -2058,6 +2058,7 @@ void main() {
       'join_policy': 'open',
       'remark_name': 'Launch',
       'notification_policy': 'mentions',
+      'is_pinned': true,
       'personal_profile': {
         'display_name': 'Alice Ops',
         'avatar_url': '/assets/asset_2/room-avatar.png',
@@ -2077,6 +2078,7 @@ void main() {
     expect(room.joinPolicy, 'open');
     expect(room.remarkName, 'Launch');
     expect(room.notificationPolicy, 'mentions');
+    expect(room.isPinned, isTrue);
     expect(room.personalProfile.displayName, 'Alice Ops');
     expect(room.personalProfile.avatarUrl, '/assets/asset_2/room-avatar.png');
     expect(room.personalProfile.defaultAvatarKey, 'mint-2');
@@ -2086,7 +2088,8 @@ void main() {
     expect(room.isAdmin, isTrue);
     expect(room.isSuperuser, isTrue);
     expect(room.canDelete, isTrue);
-    expect(room.toCard().displayName, 'Launch (Invite Room)');
+    expect(room.toCard().displayName, 'Launch');
+    expect(room.toCard().isPinned, isTrue);
   });
 
   test('room management endpoints use server room routes', () async {
@@ -2130,8 +2133,9 @@ void main() {
             expect(request.url.path, '/api/v1/rooms/room_1/me');
             expect(jsonDecode(utf8.decode(request.bodyBytes)), {
               'remark_name': 'Ops',
-              'notification_policy': 'muted',
+              'notification_policy': 'silent',
               'room_display_name': 'Alice Ops',
+              'is_pinned': true,
               'avatar_asset_id': 'asset_2',
               'default_avatar_key': 'mint-2',
             });
@@ -2140,7 +2144,8 @@ void main() {
                 'room': {
                   ..._roomDetailJson(),
                   'remark_name': 'Ops',
-                  'notification_policy': 'muted',
+                  'notification_policy': 'silent',
+                  'is_pinned': true,
                   'personal_profile': {
                     'display_name': 'Alice Ops',
                     'avatar_url': '/assets/asset_2/avatar.png',
@@ -2226,8 +2231,9 @@ void main() {
     final myRoom = await api.updateMyRoomSettings(
       roomId: 'room_1',
       remarkName: 'Ops',
-      notificationPolicy: 'muted',
+      notificationPolicy: 'silent',
       roomDisplayName: 'Alice Ops',
+      isPinned: true,
       avatarAssetId: 'asset_2',
       defaultAvatarKey: 'mint-2',
     );
@@ -2246,6 +2252,7 @@ void main() {
 
     expect(updatedRoom.name, 'New Room');
     expect(myRoom.remarkName, 'Ops');
+    expect(myRoom.isPinned, isTrue);
     expect(member.role, 'admin');
     expect(transferred.createdBy?.id, 'user_2');
     expect(requests, 7);

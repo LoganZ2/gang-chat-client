@@ -545,11 +545,36 @@ class _ServerAvatar extends StatelessWidget {
               activeBorderWidth: 1.2,
             ),
           ),
+          if (server.isPinned)
+            Positioned(
+              top: -1,
+              left: -1,
+              child: Icon(
+                Icons.push_pin,
+                key: ValueKey('home-sidebar-room-pinned-${server.id}'),
+                color: UiColors.text,
+                size: 14,
+                shadows: const [
+                  Shadow(
+                    color: Color(0xAA0F1115),
+                    blurRadius: 3,
+                    offset: Offset(0, 1),
+                  ),
+                ],
+              ),
+            ),
           if (server.unreadCount > 0)
             Positioned(
               top: 0,
               right: 0,
-              child: _UnreadBadge(count: server.unreadCount),
+              child: _UnreadBadge(
+                count: server.unreadCount,
+                muted:
+                    room_display.normalizeRoomNotificationPolicy(
+                      server.notificationPolicy,
+                    ) ==
+                    'silent',
+              ),
             ),
           if (hasLiveParticipants)
             Positioned(
@@ -576,18 +601,22 @@ class _ServerAvatar extends StatelessWidget {
 }
 
 class _UnreadBadge extends StatelessWidget {
-  const _UnreadBadge({required this.count});
+  const _UnreadBadge({required this.count, this.muted = false});
 
   final int count;
+  final bool muted;
 
   @override
   Widget build(BuildContext context) {
     final label = count > 99 ? '99+' : '$count';
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: const Color(0xFFE14747),
+        color: muted ? const Color(0xFF737985) : const Color(0xFFE14747),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFF35191D), width: 1.2),
+        border: Border.all(
+          color: muted ? const Color(0xFF282D35) : const Color(0xFF35191D),
+          width: 1.2,
+        ),
       ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minWidth: 18, minHeight: 18),

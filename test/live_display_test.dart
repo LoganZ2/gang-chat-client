@@ -243,7 +243,7 @@ void main() {
     );
 
     expect(fromSelected?.roomId, 'room_1');
-    expect(fromSelected?.displayName, 'Project Alpha (Alpha)');
+    expect(fromSelected?.displayName, 'Project Alpha');
     expect(fromSelected?.defaultAvatarKey, 'green-2');
 
     final fromList = joinedLiveRoomSummary(
@@ -253,7 +253,7 @@ void main() {
     );
 
     expect(fromList?.roomId, 'room_2');
-    expect(fromList?.displayName, 'Room Beta (Beta)');
+    expect(fromList?.displayName, 'Room Beta');
     expect(fromList?.defaultAvatarKey, 'amber-2');
   });
 

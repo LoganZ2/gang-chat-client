@@ -199,6 +199,7 @@ abstract interface class GangApi {
     String? remarkName,
     String? notificationPolicy,
     String? roomDisplayName,
+    bool? isPinned,
     String? avatarAssetId,
     String? defaultAvatarKey,
   });
@@ -996,6 +997,7 @@ class GangApiClient implements GangApi {
     String? remarkName,
     String? notificationPolicy,
     String? roomDisplayName,
+    bool? isPinned,
     String? avatarAssetId,
     String? defaultAvatarKey,
   }) async {
@@ -1005,6 +1007,7 @@ class GangApiClient implements GangApi {
       body['notification_policy'] = notificationPolicy;
     }
     if (roomDisplayName != null) body['room_display_name'] = roomDisplayName;
+    if (isPinned != null) body['is_pinned'] = isPinned;
     if (avatarAssetId != null) body['avatar_asset_id'] = avatarAssetId;
     if (defaultAvatarKey != null) body['default_avatar_key'] = defaultAvatarKey;
     final decoded = await _sendJson((token) {

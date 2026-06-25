@@ -206,6 +206,7 @@ RoomCard roomCardFromSearchContext(
     id: room.id,
     name: room.name,
     rid: room.rid,
+    remarkName: room.remarkName,
     avatarUrl: room.avatarUrl,
     defaultAvatarKey: room.defaultAvatarKey,
     memberCount: 0,
@@ -218,7 +219,7 @@ RoomCard roomCardFromSearchContext(
 }
 
 String globalSearchMessageTitle(MessageSearchResult result) {
-  final roomName = result.room.name.trim();
+  final roomName = result.room.displayName.trim();
   return roomName.isNotEmpty ? roomName : '房间';
 }
 

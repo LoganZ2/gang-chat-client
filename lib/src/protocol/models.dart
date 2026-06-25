@@ -594,6 +594,7 @@ class RoomCard {
     this.remarkName,
     this.description = '',
     this.notificationPolicy = 'all',
+    this.isPinned = false,
     this.onlineMemberCount = 0,
   });
 
@@ -604,6 +605,7 @@ class RoomCard {
   final String? remarkName;
   final String description;
   final String notificationPolicy;
+  final bool isPinned;
   final String? avatarUrl;
   final String defaultAvatarKey;
   final int memberCount;
@@ -624,7 +626,12 @@ class RoomCard {
       description:
           _stringFromJson(json, const ['description', 'intro', 'bio']) ?? '',
       notificationPolicy:
-          _stringFromJson(json, const ['notification_policy']) ?? 'all',
+          _stringFromJson(json, const [
+            'notification_policy',
+            'notification_level',
+          ]) ??
+          'all',
+      isPinned: _boolFromJson(json, const ['is_pinned', 'pinned']) ?? false,
       avatarUrl: json['avatar_url'] as String?,
       defaultAvatarKey: json['default_avatar_key'] as String? ?? 'blue-3',
       memberCount: json['member_count']! as int,
@@ -646,14 +653,14 @@ class RoomCard {
   String get displayName {
     final remark = _nonEmptyString(remarkName);
     if (remark == null) return name;
-    return '$remark ($name)';
+    return remark;
   }
 
   /// Returns a copy with selected fields overridden. Used when merging a
   /// server-pushed public snapshot (room_updated) over an existing card: the
   /// snapshot carries no per-user fields, so the caller re-supplies the local
   /// [unreadCount] to keep it from being reset to 0.
-  RoomCard copyWith({int? unreadCount}) {
+  RoomCard copyWith({int? unreadCount, bool? isPinned}) {
     return RoomCard(
       id: id,
       name: name,
@@ -662,6 +669,7 @@ class RoomCard {
       remarkName: remarkName,
       description: description,
       notificationPolicy: notificationPolicy,
+      isPinned: isPinned ?? this.isPinned,
       avatarUrl: avatarUrl,
       defaultAvatarKey: defaultAvatarKey,
       memberCount: memberCount,
@@ -782,11 +790,13 @@ class SearchRoomContext {
     required this.name,
     required this.avatarUrl,
     required this.defaultAvatarKey,
+    this.remarkName,
   });
 
   final String id;
   final String rid;
   final String name;
+  final String? remarkName;
   final String? avatarUrl;
   final String defaultAvatarKey;
 
@@ -795,9 +805,16 @@ class SearchRoomContext {
       id: json['id']! as String,
       rid: json['rid'] as String? ?? '',
       name: json['name']! as String,
+      remarkName: _stringFromJson(json, const ['remark_name', 'room_remark']),
       avatarUrl: json['avatar_url'] as String?,
       defaultAvatarKey: json['default_avatar_key'] as String? ?? 'blue-3',
     );
+  }
+
+  String get displayName {
+    final remark = _nonEmptyString(remarkName);
+    if (remark == null) return name;
+    return remark;
   }
 }
 
@@ -1356,6 +1373,7 @@ class RoomDetail {
     this.joinPolicy = 'approval_required',
     this.remarkName,
     this.notificationPolicy = 'all',
+    this.isPinned = false,
     this.personalProfile = const RoomPersonalProfile(),
     this.aiVoiceAnnouncementsEnabled = true,
     this.messageRecallPolicy = 'sender_only',
@@ -1372,6 +1390,7 @@ class RoomDetail {
   final String joinPolicy;
   final String? remarkName;
   final String notificationPolicy;
+  final bool isPinned;
   final RoomPersonalProfile personalProfile;
   final bool aiVoiceAnnouncementsEnabled;
 
@@ -1404,7 +1423,18 @@ class RoomDetail {
       joinPolicy: json['join_policy'] as String? ?? 'approval_required',
       remarkName: _stringFromJson(json, const ['remark_name', 'room_remark']),
       notificationPolicy:
-          _stringFromJson(json, const ['notification_policy']) ?? 'all',
+          _stringFromJson(json, const [
+            'notification_policy',
+            'notification_level',
+          ]) ??
+          'all',
+      isPinned:
+          _boolFromJson(json, const ['is_pinned', 'pinned']) ??
+          _boolFromJson(_nullableMap(json['my_membership']), const [
+            'is_pinned',
+            'pinned',
+          ]) ??
+          false,
       personalProfile: RoomPersonalProfile.fromJson(
         _nullableMap(json['personal_profile']) ??
             _nullableMap(json['my_room_profile']) ??
@@ -1477,6 +1507,7 @@ class RoomDetail {
       joinPolicy: joinPolicy,
       remarkName: remarkName,
       notificationPolicy: notificationPolicy,
+      isPinned: isPinned,
       personalProfile: personalProfile,
       aiVoiceAnnouncementsEnabled: aiVoiceAnnouncementsEnabled,
       messageRecallPolicy: messageRecallPolicy,
@@ -1503,6 +1534,7 @@ class RoomDetail {
       remarkName: remarkName,
       description: description,
       notificationPolicy: notificationPolicy,
+      isPinned: isPinned,
       avatarUrl: avatarUrl,
       defaultAvatarKey: defaultAvatarKey,
       memberCount: memberCount,

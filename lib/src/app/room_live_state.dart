@@ -20,6 +20,7 @@ RoomCard roomCardWithLive(RoomCard room, LiveState live) {
     remarkName: room.remarkName,
     description: room.description,
     notificationPolicy: room.notificationPolicy,
+    isPinned: room.isPinned,
     avatarUrl: room.avatarUrl,
     defaultAvatarKey: room.defaultAvatarKey,
     memberCount: room.memberCount,

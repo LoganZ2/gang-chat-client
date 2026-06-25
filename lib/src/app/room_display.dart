@@ -199,7 +199,7 @@ String roomDescriptionText(RoomDetail room) {
 String roomDisplayName(RoomDetail room) {
   final remark = _nonEmpty(room.remarkName);
   if (remark == null) return room.name;
-  return '$remark (${room.name})';
+  return remark;
 }
 
 PublicRoom publicRoomFromRoomDetail(RoomDetail room) {
@@ -281,11 +281,11 @@ String commonRoomTitle(UserCommonRoom room) {
 String commonRoomDisplayName(UserCommonRoom room) {
   final remark = _nonEmpty(room.remarkName);
   if (remark == null) return room.name;
-  return '$remark (${room.name})';
+  return remark;
 }
 
 String commonRoomAvatarLabel(UserCommonRoom room) {
-  return _nonEmpty(room.name) ?? commonRoomDisplayName(room);
+  return commonRoomDisplayName(room);
 }
 
 String visibilityLabel(String value) {
@@ -497,8 +497,20 @@ bool roomManagementUploadedAvatarSelected({required bool usingPresetAvatar}) {
 
 String normalizeRoomNotificationPolicy(String value) {
   return switch (value.trim().toLowerCase()) {
-    'mention' || 'mentions' || 'only_mentions' || 'mention_only' => 'mentions',
-    'mute' || 'muted' || 'do_not_disturb' || 'dnd' => 'muted',
+    'silent' ||
+    'quiet' ||
+    'no_alert' ||
+    'no_alerts' ||
+    'receive_silent' ||
+    'mention' ||
+    'mentions' ||
+    'only_mentions' ||
+    'mention_only' ||
+    'mute' ||
+    'muted' ||
+    'do_not_disturb' ||
+    'dnd' => 'silent',
+    'block' || 'blocked' || 'ignore' || 'ignored' => 'blocked',
     _ => 'all',
   };
 }

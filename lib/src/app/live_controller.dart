@@ -513,6 +513,7 @@ class LiveController {
       remarkName: existing.remarkName,
       description: existing.description,
       notificationPolicy: existing.notificationPolicy,
+      isPinned: existing.isPinned,
       avatarUrl: existing.avatarUrl,
       defaultAvatarKey: existing.defaultAvatarKey,
       memberCount: existing.memberCount,

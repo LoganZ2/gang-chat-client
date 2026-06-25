@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import '../protocol/api_client.dart';
 import '../protocol/models.dart';
+import 'room_display.dart' as room_display;
 import 'room_join_requests.dart' as room_join_requests;
 import 'room_live_state.dart' as room_live_state;
 
@@ -256,7 +257,7 @@ class RoomsController {
 
   Future<List<RoomCard>> loadRooms() async {
     final page = await api.listRooms();
-    return page.rooms;
+    return orderedRoomCards(page.rooms);
   }
 
   RoomListLoadPatch patchRoomListLoadStarted({required List<RoomCard> rooms}) {
@@ -266,7 +267,11 @@ class RoomsController {
   RoomListLoadPatch patchRoomListLoadSucceeded({
     required List<RoomCard> rooms,
   }) {
-    return RoomListLoadPatch(rooms: rooms, loading: false, error: null);
+    return RoomListLoadPatch(
+      rooms: orderedRoomCards(rooms),
+      loading: false,
+      error: null,
+    );
   }
 
   RoomListLoadPatch patchRoomListLoadFailed({
@@ -655,6 +660,7 @@ class RoomsController {
     String? remarkName,
     String? notificationPolicy,
     String? roomDisplayName,
+    bool? isPinned,
     String? avatarAssetId,
     String? defaultAvatarKey,
   }) {
@@ -663,6 +669,7 @@ class RoomsController {
       remarkName: remarkName,
       notificationPolicy: notificationPolicy,
       roomDisplayName: roomDisplayName,
+      isPinned: isPinned,
       avatarAssetId: avatarAssetId,
       defaultAvatarKey: defaultAvatarKey,
     );
@@ -999,12 +1006,45 @@ class RoomsController {
   }
 
   List<RoomCard> upsertRoomCard(List<RoomCard> rooms, RoomCard room) {
-    final next = rooms.where((item) => item.id != room.id).toList();
-    return [room, ...next];
+    final idx = rooms.indexWhere((item) => item.id == room.id);
+    if (idx < 0) return orderedRoomCards([room, ...rooms]);
+    final next = [...rooms];
+    next[idx] = room;
+    return orderedRoomCards(next);
+  }
+
+  List<RoomCard> orderedRoomCards(List<RoomCard> rooms) {
+    final indexed = [
+      for (var i = 0; i < rooms.length; i++) (index: i, room: rooms[i]),
+    ];
+    indexed.sort((a, b) {
+      final pinned = _roomPinnedRank(a.room).compareTo(_roomPinnedRank(b.room));
+      if (pinned != 0) return pinned;
+
+      final unread = _roomUnreadRank(a.room).compareTo(_roomUnreadRank(b.room));
+      if (unread != 0) return unread;
+
+      return a.index.compareTo(b.index);
+    });
+    return [for (final item in indexed) item.room];
+  }
+
+  int _roomPinnedRank(RoomCard room) {
+    return room.isPinned ? 0 : 1;
+  }
+
+  int _roomUnreadRank(RoomCard room) {
+    if (room.unreadCount <= 0) return 2;
+    final policy = room_display.normalizeRoomNotificationPolicy(
+      room.notificationPolicy,
+    );
+    if (policy == 'silent') return 1;
+    if (policy == 'blocked') return 2;
+    return 0;
   }
 
   RoomCardsPatch patchRoomCardsRefreshed({required List<RoomCard> rooms}) {
-    return RoomCardsPatch(rooms: rooms);
+    return RoomCardsPatch(rooms: orderedRoomCards(rooms));
   }
 
   RoomCardsPatch patchRoomCardUpserted({
@@ -1056,9 +1096,35 @@ class RoomsController {
     required List<RoomCard> rooms,
     required RoomDetail detail,
   }) {
+    final existingIndex = rooms.indexWhere((room) => room.id == detail.id);
+    final existing = existingIndex < 0 ? null : rooms[existingIndex];
+    final card = detail.toCard();
     return RoomSelectedDetailPatch(
       selectedRoom: detail,
-      rooms: upsertRoomCard(rooms, detail.toCard()),
+      rooms: upsertRoomCard(
+        rooms,
+        existing == null
+            ? card
+            : RoomCard(
+                id: card.id,
+                name: card.name,
+                rid: card.rid,
+                visibility: card.visibility,
+                remarkName: card.remarkName,
+                description: card.description,
+                notificationPolicy: card.notificationPolicy,
+                isPinned: card.isPinned,
+                avatarUrl: card.avatarUrl,
+                defaultAvatarKey: card.defaultAvatarKey,
+                memberCount: card.memberCount,
+                onlineMemberCount: card.onlineMemberCount,
+                liveParticipantCount: card.liveParticipantCount,
+                liveAvatarPreview: card.liveAvatarPreview,
+                lastMessage: existing.lastMessage,
+                unreadCount: existing.unreadCount,
+                updatedAt: card.updatedAt,
+              ),
+      ),
     );
   }
 
@@ -1072,7 +1138,7 @@ class RoomsController {
     }
     final next = [...rooms];
     next[idx] = next[idx].copyWith(unreadCount: 0);
-    return RoomCardsPatch(rooms: next);
+    return RoomCardsPatch(rooms: orderedRoomCards(next));
   }
 
   RoomSelectedDetailPatch? patchSelectedRoomDetailRefreshed({
@@ -1175,8 +1241,8 @@ class RoomsController {
     final unreadCount = clearUnread
         ? 0
         : _mergedUnreadCount(existing: existing, incoming: incoming);
-    next[idx] = incoming.copyWith(unreadCount: unreadCount);
-    return next;
+    next[idx] = _mergeRoomCard(existing, incoming, unreadCount: unreadCount);
+    return orderedRoomCards(next);
   }
 
   int _mergedUnreadCount({
@@ -1185,10 +1251,42 @@ class RoomsController {
   }) {
     final incomingLastMessage = incoming.lastMessage;
     if (incomingLastMessage == null) return existing.unreadCount;
+    if (room_display.normalizeRoomNotificationPolicy(
+          existing.notificationPolicy,
+        ) ==
+        'blocked') {
+      return 0;
+    }
     if (existing.lastMessage?.id == incomingLastMessage.id) {
       return existing.unreadCount;
     }
     return existing.unreadCount + 1;
+  }
+
+  RoomCard _mergeRoomCard(
+    RoomCard existing,
+    RoomCard incoming, {
+    required int unreadCount,
+  }) {
+    return RoomCard(
+      id: incoming.id,
+      name: incoming.name,
+      rid: incoming.rid,
+      visibility: incoming.visibility,
+      remarkName: existing.remarkName,
+      description: incoming.description,
+      notificationPolicy: existing.notificationPolicy,
+      isPinned: existing.isPinned,
+      avatarUrl: incoming.avatarUrl,
+      defaultAvatarKey: incoming.defaultAvatarKey,
+      memberCount: incoming.memberCount,
+      onlineMemberCount: incoming.onlineMemberCount,
+      liveParticipantCount: incoming.liveParticipantCount,
+      liveAvatarPreview: incoming.liveAvatarPreview,
+      lastMessage: incoming.lastMessage,
+      unreadCount: unreadCount,
+      updatedAt: incoming.updatedAt,
+    );
   }
 
   RoomDetail _mergeSelectedRoomSnapshot(RoomDetail room, RoomCard incoming) {
@@ -1199,8 +1297,9 @@ class RoomsController {
       visibility: incoming.visibility,
       description: incoming.description,
       joinPolicy: room.joinPolicy,
-      remarkName: incoming.remarkName,
-      notificationPolicy: incoming.notificationPolicy,
+      remarkName: room.remarkName,
+      notificationPolicy: room.notificationPolicy,
+      isPinned: room.isPinned,
       personalProfile: room.personalProfile,
       aiVoiceAnnouncementsEnabled: room.aiVoiceAnnouncementsEnabled,
       messageRecallPolicy: room.messageRecallPolicy,
@@ -1250,6 +1349,7 @@ class RoomsController {
         remarkName: existing.remarkName,
         description: existing.description,
         notificationPolicy: existing.notificationPolicy,
+        isPinned: existing.isPinned,
         avatarUrl: existing.avatarUrl,
         defaultAvatarKey: existing.defaultAvatarKey,
         memberCount: existing.memberCount,
@@ -1260,6 +1360,7 @@ class RoomsController {
         unreadCount: existing.unreadCount,
         updatedAt: existing.updatedAt,
       );
+      nextRooms = orderedRoomCards(nextRooms);
     }
 
     var selectedLive = selectedRoomId == roomId && liveJson != null

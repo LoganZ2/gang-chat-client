@@ -342,9 +342,7 @@ String liveScreenShareFailureMessage(Object error) {
 }
 
 String _roomDetailDisplayName(RoomDetail room) {
-  final remark = _nonEmpty(room.remarkName);
-  if (remark == null) return room.name;
-  return '$remark (${room.name})';
+  return _nonEmpty(room.remarkName) ?? room.name;
 }
 
 String? _nonEmpty(String? value) {

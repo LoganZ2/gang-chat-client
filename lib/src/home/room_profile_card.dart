@@ -712,7 +712,7 @@ PublicRoom _publicRoomFromCommonRoom(UserCommonRoom room) {
   return PublicRoom(
     id: room.id,
     rid: room.rid,
-    name: room.name,
+    name: room_display.commonRoomDisplayName(room),
     avatarUrl: room.avatarUrl,
     defaultAvatarKey: room.defaultAvatarKey,
     visibility: room.visibility,

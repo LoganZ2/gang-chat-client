@@ -232,8 +232,8 @@ void main() {
       roomRole: 'admin',
     );
 
-    expect(commonRoomTitle(room), 'Ops (General) · 1001');
-    expect(commonRoomAvatarLabel(room), 'General');
+    expect(commonRoomTitle(room), 'Ops · 1001');
+    expect(commonRoomAvatarLabel(room), 'Ops');
     expect(visibilityLabel(room.visibility), '公开');
     expect(commonRoomMeta(room), 'Room Logan · 管理员');
     expect(
@@ -367,8 +367,9 @@ void main() {
   });
 
   test('room setting values are normalized for server payloads', () {
-    expect(normalizeRoomNotificationPolicy('mention_only'), 'mentions');
-    expect(normalizeRoomNotificationPolicy('dnd'), 'muted');
+    expect(normalizeRoomNotificationPolicy('mention_only'), 'silent');
+    expect(normalizeRoomNotificationPolicy('dnd'), 'silent');
+    expect(normalizeRoomNotificationPolicy('blocked'), 'blocked');
     expect(normalizeRoomNotificationPolicy('unknown'), 'all');
 
     expect(normalizeRoomVisibility('private'), 'private');

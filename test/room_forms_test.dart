@@ -42,7 +42,7 @@ void main() {
     );
 
     expect(draft.remarkName, 'Ops');
-    expect(draft.notificationPolicy, 'mentions');
+    expect(draft.notificationPolicy, 'silent');
     expect(draft.roomDisplayName, 'Room Logan');
     expect(draft.avatarAssetId, 'asset_1');
     expect(draft.defaultAvatarKey, 'green-2');
@@ -248,7 +248,7 @@ void main() {
       notificationPolicy: 'unexpected',
     );
 
-    expect(mentions.notificationPolicy, 'mentions');
+    expect(mentions.notificationPolicy, 'silent');
     expect(fallback.notificationPolicy, 'all');
   });
 

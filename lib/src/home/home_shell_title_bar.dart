@@ -1019,7 +1019,7 @@ class _MessageSearchResultTile extends StatelessWidget {
     return _SearchResultTile(
       onPressed: onPressed,
       leading: Avatar(
-        label: result.room.name,
+        label: result.room.displayName,
         imageUrl: AppConfigScope.of(
           context,
         ).resolveAssetUrl(result.room.avatarUrl),

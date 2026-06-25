@@ -100,7 +100,9 @@ extension _HomeShellMessages on _HomeShellState {
     try {
       final sent = await _messagesController.sendComposedMessage(
         roomId: room.id,
-        sender: _currentUser.toSummary(),
+        sender: _currentUser.toSummary().copyWith(
+          roomDisplayName: _selectedRoom?.personalProfile.displayName,
+        ),
         body: body,
         type: type,
         attachments: attachments,
@@ -364,7 +366,9 @@ extension _HomeShellMessages on _HomeShellState {
     try {
       final sent = await _messagesController.sendVoiceMessage(
         roomId: room.id,
-        sender: _currentUser.toSummary(),
+        sender: _currentUser.toSummary().copyWith(
+          roomDisplayName: _selectedRoom?.personalProfile.displayName,
+        ),
         filename: filename,
         sizeBytes: bytes.length,
         mimeType: voice_display.kVoiceMessageMimeType,
