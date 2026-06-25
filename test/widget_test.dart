@@ -659,6 +659,15 @@ void main() {
     expect(find.text('2 名成员 · 1 人语音'), findsOneWidget);
     expect(find.text('5 名成员'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
+    final alphaLiveIndicator = find.byKey(
+      const ValueKey('home-sidebar-room-live-server-alpha'),
+    );
+    final betaLiveIndicator = find.byKey(
+      const ValueKey('home-sidebar-room-live-server-beta'),
+    );
+    expect(alphaLiveIndicator, findsOneWidget);
+    expect(betaLiveIndicator, findsNothing);
+    expect(tester.widget<Icon>(alphaLiveIndicator).color, Colors.white);
 
     final searchRect = tester.getRect(
       find.byKey(const ValueKey('home-title-search')),
@@ -1712,7 +1721,15 @@ void main() {
     expect(find.byTooltip('开启摄像头'), findsOneWidget);
     expect(find.byTooltip('离开'), findsNothing);
     expect(find.byTooltip('离开语音频道'), findsOneWidget);
-    expect(find.byTooltip('已加入语音'), findsOneWidget);
+    expect(find.byTooltip('已加入语音'), findsNothing);
+    expect(
+      tester
+          .widget<Icon>(
+            find.byKey(const ValueKey('home-sidebar-room-live-server-alpha')),
+          )
+          .color,
+      ui.UiColors.accent,
+    );
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('home-sidebar-user-summary')),

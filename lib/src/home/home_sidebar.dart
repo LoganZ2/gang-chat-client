@@ -452,7 +452,11 @@ class _ServerCard extends StatelessWidget {
       onPressed: onPressed,
       child: Row(
         children: [
-          _ServerAvatar(server: server, selected: selected),
+          _ServerAvatar(
+            server: server,
+            selected: selected,
+            voiceJoined: voiceJoined,
+          ),
           const SizedBox(width: 9),
           Expanded(
             child: Column(
@@ -506,13 +510,6 @@ class _ServerCard extends StatelessWidget {
               ],
             ),
           ),
-          if (voiceJoined) ...[
-            const SizedBox(width: 8),
-            Tooltip(
-              message: '已加入语音',
-              child: Icon(Icons.volume_up, color: UiColors.accent, size: 17),
-            ),
-          ],
         ],
       ),
     );
@@ -520,13 +517,19 @@ class _ServerCard extends StatelessWidget {
 }
 
 class _ServerAvatar extends StatelessWidget {
-  const _ServerAvatar({required this.server, required this.selected});
+  const _ServerAvatar({
+    required this.server,
+    required this.selected,
+    required this.voiceJoined,
+  });
 
   final RoomCard server;
   final bool selected;
+  final bool voiceJoined;
 
   @override
   Widget build(BuildContext context) {
+    final hasLiveParticipants = server.liveParticipantCount > 0;
     return SizedBox.square(
       dimension: 44,
       child: Stack(
@@ -547,6 +550,24 @@ class _ServerAvatar extends StatelessWidget {
               top: 0,
               right: 0,
               child: _UnreadBadge(count: server.unreadCount),
+            ),
+          if (hasLiveParticipants)
+            Positioned(
+              right: 0,
+              bottom: 1,
+              child: Icon(
+                Icons.volume_up,
+                key: ValueKey('home-sidebar-room-live-${server.id}'),
+                color: voiceJoined ? UiColors.accent : Colors.white,
+                size: 15,
+                shadows: const [
+                  Shadow(
+                    color: Color(0xAA0F1115),
+                    blurRadius: 3,
+                    offset: Offset(0, 1),
+                  ),
+                ],
+              ),
             ),
         ],
       ),
