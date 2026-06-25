@@ -461,7 +461,7 @@ void main() {
     expect(profile.user.roomDisplayName, 'Room Bob');
     expect(profile.user.roomRole, 'admin');
     expect(profile.user.isOnline, isTrue);
-    expect(profile.user.avatarUrl, '/room-bob.png');
+    expect(profile.user.avatarUrl, '/global.png');
     expect(profile.user.commonRooms.single.remarkName, 'Night Ops');
     expect(profile.user.commonRooms.single.avatarUrl, '/room.png');
     expect(profile.user.commonRooms.single.defaultAvatarKey, 'room-2');
@@ -851,8 +851,6 @@ void main() {
     expect(room.description, 'Invite room bio');
     expect(room.createdBy?.id, 'user_1');
     expect(room.personalProfile.displayName, 'Alice in Room');
-    expect(room.personalProfile.avatarUrl, '/room-alice.png');
-    expect(room.personalProfile.defaultAvatarKey, 'green-2');
     expect(room.myMembership?.role, 'member');
     api.close();
   });
@@ -2080,8 +2078,6 @@ void main() {
     expect(room.notificationPolicy, 'mentions');
     expect(room.isPinned, isTrue);
     expect(room.personalProfile.displayName, 'Alice Ops');
-    expect(room.personalProfile.avatarUrl, '/assets/asset_2/room-avatar.png');
-    expect(room.personalProfile.defaultAvatarKey, 'mint-2');
     expect(room.onlineMemberCount, 1);
     expect(room.toCard().onlineMemberCount, 1);
     expect(room.aiVoiceAnnouncementsEnabled, isFalse);
@@ -2136,8 +2132,6 @@ void main() {
               'notification_policy': 'silent',
               'room_display_name': 'Alice Ops',
               'is_pinned': true,
-              'avatar_asset_id': 'asset_2',
-              'default_avatar_key': 'mint-2',
             });
             return http.Response(
               jsonEncode({
@@ -2234,8 +2228,6 @@ void main() {
       notificationPolicy: 'silent',
       roomDisplayName: 'Alice Ops',
       isPinned: true,
-      avatarAssetId: 'asset_2',
-      defaultAvatarKey: 'mint-2',
     );
     await api.leaveRoom(roomId: 'room_1', confirmDeleteIfEmpty: true);
     await api.deleteRoom(roomId: 'room_1', confirmName: 'New Room');

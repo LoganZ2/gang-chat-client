@@ -1023,7 +1023,7 @@ class _SystemUserChip extends StatelessWidget {
         ? user
         : user.copyWith(roomRole: roleOverride);
     final avatar = Avatar(
-      label: name,
+      label: room_display.userAvatarLabel(user),
       imageUrl: AppConfigScope.of(context).resolveAssetUrl(user.avatarUrl),
       defaultAvatarKey: user.defaultAvatarKey,
       size: 16,
@@ -1149,7 +1149,7 @@ class _MessageRow extends StatelessWidget {
     );
 
     final avatar = Avatar(
-      label: sender,
+      label: room_display.userAvatarLabel(message.sender),
       imageUrl: AppConfigScope.of(
         context,
       ).resolveAssetUrl(message.sender.avatarUrl),

@@ -537,7 +537,7 @@ class _ServerAvatar extends StatelessWidget {
         children: [
           Center(
             child: Avatar(
-              label: server.displayName,
+              label: room_display.roomCardAvatarLabel(server),
               imageUrl: server.avatarUrl,
               defaultAvatarKey: server.defaultAvatarKey,
               size: 40,

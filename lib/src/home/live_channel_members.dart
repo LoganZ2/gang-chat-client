@@ -362,7 +362,7 @@ class _LiveMemberCard extends StatelessWidget {
                       inLive: true,
                       showRoomRole: true,
                       child: Avatar(
-                        label: name,
+                        label: room_display.userAvatarLabel(participant.user),
                         imageUrl: AppConfigScope.of(
                           context,
                         ).resolveAssetUrl(participant.user.avatarUrl),

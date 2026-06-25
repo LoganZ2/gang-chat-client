@@ -202,11 +202,24 @@ String roomDisplayName(RoomDetail room) {
   return remark;
 }
 
+String roomAvatarLabel(RoomDetail room) {
+  return _nonEmpty(room.name) ?? room.rid;
+}
+
+String roomCardAvatarLabel(RoomCard room) {
+  return _nonEmpty(room.name) ?? room.rid;
+}
+
+String publicRoomAvatarLabel(PublicRoom room) {
+  return _nonEmpty(room.avatarLabel) ?? _nonEmpty(room.name) ?? room.rid;
+}
+
 PublicRoom publicRoomFromRoomDetail(RoomDetail room) {
   return PublicRoom(
     id: room.id,
     rid: room.rid,
     name: roomDisplayName(room),
+    avatarLabel: roomAvatarLabel(room),
     avatarUrl: room.avatarUrl,
     defaultAvatarKey: room.defaultAvatarKey,
     visibility: room.visibility,
@@ -231,6 +244,10 @@ String userPrimaryName(UserSummary user) {
   return _nonEmpty(user.roomDisplayName) ??
       _nonEmpty(user.displayName) ??
       user.username;
+}
+
+String userAvatarLabel(UserSummary user) {
+  return _nonEmpty(user.displayName) ?? user.username;
 }
 
 String userUidLabel(UserSummary user) {
@@ -285,7 +302,7 @@ String commonRoomDisplayName(UserCommonRoom room) {
 }
 
 String commonRoomAvatarLabel(UserCommonRoom room) {
-  return commonRoomDisplayName(room);
+  return _nonEmpty(room.name) ?? room.rid;
 }
 
 String visibilityLabel(String value) {

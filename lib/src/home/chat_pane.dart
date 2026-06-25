@@ -146,6 +146,7 @@ class ChatPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = _roomTitle(room, roomCard);
+    final avatarLabel = _roomAvatarLabel(room, roomCard);
     final avatarUrl = room?.avatarUrl ?? roomCard?.avatarUrl;
     final defaultAvatarKey =
         room?.defaultAvatarKey ??
@@ -177,6 +178,7 @@ class ChatPane extends StatelessWidget {
         children: [
           _RoomHeader(
             title: title,
+            avatarLabel: avatarLabel,
             avatarUrl: avatarUrl,
             defaultAvatarKey: defaultAvatarKey,
             memberCount: room?.memberCount ?? roomCard?.memberCount,
@@ -259,5 +261,11 @@ String _roomTitle(RoomDetail? room, RoomCard? card) {
   if (detailTitle != null && detailTitle.isNotEmpty) return detailTitle;
   final cardTitle = card?.displayName.trim();
   if (cardTitle != null && cardTitle.isNotEmpty) return cardTitle;
+  return '聊天';
+}
+
+String _roomAvatarLabel(RoomDetail? room, RoomCard? card) {
+  if (room != null) return room_display.roomAvatarLabel(room);
+  if (card != null) return room_display.roomCardAvatarLabel(card);
   return '聊天';
 }

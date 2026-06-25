@@ -661,8 +661,6 @@ class RoomsController {
     String? notificationPolicy,
     String? roomDisplayName,
     bool? isPinned,
-    String? avatarAssetId,
-    String? defaultAvatarKey,
   }) {
     return api.updateMyRoomSettings(
       roomId: roomId,
@@ -670,8 +668,6 @@ class RoomsController {
       notificationPolicy: notificationPolicy,
       roomDisplayName: roomDisplayName,
       isPinned: isPinned,
-      avatarAssetId: avatarAssetId,
-      defaultAvatarKey: defaultAvatarKey,
     );
   }
 

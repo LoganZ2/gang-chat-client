@@ -51,9 +51,7 @@ void main() {
       final avatar = tester.widget<ui.Avatar>(
         find.byWidgetPredicate(
           (widget) =>
-              widget is ui.Avatar &&
-              widget.label == 'Room Me' &&
-              widget.size == 42,
+              widget is ui.Avatar && widget.label == 'Me' && widget.size == 42,
         ),
       );
       final cardFinder = find.ancestor(

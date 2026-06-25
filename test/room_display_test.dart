@@ -233,7 +233,7 @@ void main() {
     );
 
     expect(commonRoomTitle(room), 'Ops · 1001');
-    expect(commonRoomAvatarLabel(room), 'Ops');
+    expect(commonRoomAvatarLabel(room), 'General');
     expect(visibilityLabel(room.visibility), '公开');
     expect(commonRoomMeta(room), 'Room Logan · 管理员');
     expect(

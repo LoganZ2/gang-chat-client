@@ -4,12 +4,14 @@ class JoinedLiveRoomSummary {
   const JoinedLiveRoomSummary({
     required this.roomId,
     required this.displayName,
+    required this.avatarLabel,
     required this.avatarUrl,
     required this.defaultAvatarKey,
   });
 
   final String roomId;
   final String displayName;
+  final String avatarLabel;
   final String? avatarUrl;
   final String defaultAvatarKey;
 }
@@ -181,6 +183,7 @@ JoinedLiveRoomSummary? joinedLiveRoomSummary({
     return JoinedLiveRoomSummary(
       roomId: selected.id,
       displayName: _roomDetailDisplayName(selected),
+      avatarLabel: _roomDetailAvatarLabel(selected),
       avatarUrl: selected.avatarUrl,
       defaultAvatarKey: selected.defaultAvatarKey,
     );
@@ -191,6 +194,7 @@ JoinedLiveRoomSummary? joinedLiveRoomSummary({
     return JoinedLiveRoomSummary(
       roomId: room.id,
       displayName: room.displayName,
+      avatarLabel: _roomCardAvatarLabel(room),
       avatarUrl: room.avatarUrl,
       defaultAvatarKey: room.defaultAvatarKey,
     );
@@ -343,6 +347,14 @@ String liveScreenShareFailureMessage(Object error) {
 
 String _roomDetailDisplayName(RoomDetail room) {
   return _nonEmpty(room.remarkName) ?? room.name;
+}
+
+String _roomDetailAvatarLabel(RoomDetail room) {
+  return _nonEmpty(room.name) ?? room.rid;
+}
+
+String _roomCardAvatarLabel(RoomCard room) {
+  return _nonEmpty(room.name) ?? room.rid;
 }
 
 String? _nonEmpty(String? value) {

@@ -47,11 +47,7 @@ final _joinedRoom = PublicRoom(
   joined: true,
   joinState: 'joined',
   createdBy: _creator,
-  personalProfile: RoomPersonalProfile(
-    displayName: 'Current In Room',
-    avatarUrl: null,
-    defaultAvatarKey: 'mint-2',
-  ),
+  personalProfile: RoomPersonalProfile(displayName: 'Current In Room'),
   myMembership: RoomMembership(
     joinedAt: DateTime.utc(2026, 6, 1),
     role: 'admin',

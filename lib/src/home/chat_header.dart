@@ -3,6 +3,7 @@ part of 'chat_pane.dart';
 class _RoomHeader extends StatelessWidget {
   const _RoomHeader({
     required this.title,
+    required this.avatarLabel,
     required this.avatarUrl,
     required this.defaultAvatarKey,
     required this.memberCount,
@@ -16,6 +17,7 @@ class _RoomHeader extends StatelessWidget {
   });
 
   final String title;
+  final String avatarLabel;
   final String? avatarUrl;
   final String defaultAvatarKey;
   final int? memberCount;
@@ -45,6 +47,7 @@ class _RoomHeader extends StatelessWidget {
             Expanded(
               child: _LiveChannelHeaderCard(
                 title: title,
+                avatarLabel: avatarLabel,
                 avatarUrl: avatarUrl,
                 defaultAvatarKey: defaultAvatarKey,
                 memberCount: memberCount,
@@ -70,6 +73,7 @@ class _RoomHeader extends StatelessWidget {
 class _LiveChannelHeaderCard extends StatelessWidget {
   const _LiveChannelHeaderCard({
     required this.title,
+    required this.avatarLabel,
     required this.avatarUrl,
     required this.defaultAvatarKey,
     required this.memberCount,
@@ -80,6 +84,7 @@ class _LiveChannelHeaderCard extends StatelessWidget {
   });
 
   final String title;
+  final String avatarLabel;
   final String? avatarUrl;
   final String defaultAvatarKey;
   final int? memberCount;
@@ -127,6 +132,7 @@ class _LiveChannelHeaderCard extends StatelessWidget {
                     width: roomInfoWidth,
                     child: _LiveHeaderRoomInfo(
                       title: title,
+                      avatarLabel: avatarLabel,
                       avatarUrl: avatarUrl,
                       defaultAvatarKey: defaultAvatarKey,
                       memberCount: memberCount,
@@ -162,6 +168,7 @@ const _liveHeaderPreviewMinWidth = 60.0;
 class _LiveHeaderRoomInfo extends StatelessWidget {
   const _LiveHeaderRoomInfo({
     required this.title,
+    required this.avatarLabel,
     required this.avatarUrl,
     required this.defaultAvatarKey,
     required this.memberCount,
@@ -170,6 +177,7 @@ class _LiveHeaderRoomInfo extends StatelessWidget {
   });
 
   final String title;
+  final String avatarLabel;
   final String? avatarUrl;
   final String defaultAvatarKey;
   final int? memberCount;
@@ -181,7 +189,7 @@ class _LiveHeaderRoomInfo extends StatelessWidget {
     return Row(
       children: [
         Avatar(
-          label: title,
+          label: avatarLabel,
           imageUrl: AppConfigScope.of(context).resolveAssetUrl(avatarUrl),
           defaultAvatarKey: defaultAvatarKey,
           size: 34,

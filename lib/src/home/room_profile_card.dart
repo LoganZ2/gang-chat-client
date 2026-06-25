@@ -273,7 +273,7 @@ class _UserProfileCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Avatar(
-                label: name,
+                label: room_display.userAvatarLabel(user),
                 imageUrl: AppConfigScope.of(
                   context,
                 ).resolveAssetUrl(user.avatarUrl),
@@ -496,7 +496,7 @@ class _RoomProfileCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Avatar(
-                label: room.name,
+                label: room_display.publicRoomAvatarLabel(room),
                 imageUrl: config.resolveAssetUrl(room.avatarUrl),
                 defaultAvatarKey: room.defaultAvatarKey,
                 size: 48,
@@ -561,7 +561,7 @@ class _RoomProfileCard extends StatelessWidget {
             ),
             const SizedBox(height: UiSpacing.xs),
             _RoomCardPersonRow(
-              avatarLabel: room_display.userPrimaryName(creator),
+              avatarLabel: room_display.userAvatarLabel(creator),
               avatarUrl: creator.avatarUrl,
               defaultAvatarKey: creator.defaultAvatarKey,
               name: room_display.userPrimaryName(creator),
@@ -580,7 +580,7 @@ class _RoomProfileCard extends StatelessWidget {
             ),
             const SizedBox(height: UiSpacing.xs),
             _RoomCardPersonRow(
-              avatarLabel: myName,
+              avatarLabel: _currentUserAvatarLabel(currentUser),
               avatarUrl: myAvatarUrl,
               defaultAvatarKey: myDefaultAvatarKey,
               name: myName,
@@ -689,12 +689,19 @@ String _myRoomDisplayName(PublicRoom room, CurrentUser currentUser) {
 }
 
 String? _myRoomAvatarUrl(PublicRoom room, CurrentUser currentUser) {
-  return _nonEmpty(room.personalProfile.avatarUrl) ?? currentUser.avatarUrl;
+  return currentUser.avatarUrl;
 }
 
 String _myRoomDefaultAvatarKey(PublicRoom room, CurrentUser currentUser) {
-  return _nonEmpty(room.personalProfile.defaultAvatarKey) ??
-      currentUser.defaultAvatarKey;
+  return currentUser.defaultAvatarKey;
+}
+
+String _currentUserAvatarLabel(CurrentUser currentUser) {
+  final displayName = currentUser.displayName.trim();
+  if (displayName.isNotEmpty) return displayName;
+  final username = currentUser.username.trim();
+  if (username.isNotEmpty) return username;
+  return currentUser.id;
 }
 
 String _myRoomRoleLabel(PublicRoom room, CurrentUser currentUser) {
@@ -713,6 +720,7 @@ PublicRoom _publicRoomFromCommonRoom(UserCommonRoom room) {
     id: room.id,
     rid: room.rid,
     name: room_display.commonRoomDisplayName(room),
+    avatarLabel: room_display.commonRoomAvatarLabel(room),
     avatarUrl: room.avatarUrl,
     defaultAvatarKey: room.defaultAvatarKey,
     visibility: room.visibility,
@@ -750,7 +758,7 @@ class RoomHoverCardForTest extends StatelessWidget {
       onResolveRoom: onResolveRoom,
       onResolveUserProfile: onResolveUserProfile,
       onEnterRoom: onEnterRoom,
-      child: Avatar(label: room.name, size: 34),
+      child: Avatar(label: room_display.publicRoomAvatarLabel(room), size: 34),
     );
   }
 }

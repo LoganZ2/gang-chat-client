@@ -1,4 +1,5 @@
 import '../protocol/models.dart';
+import 'room_display.dart' as room_display;
 
 enum RoomNotificationFilter { all, invites, applications, roomNotifications }
 
@@ -321,7 +322,7 @@ String roomNotificationUserAvatarLabel(
   required bool userExists,
 }) {
   return userExists
-      ? roomNotificationUserLabel(user, userExists: userExists)
+      ? room_display.userAvatarLabel(user)
       : missingRoomNotificationUserAvatarLabel;
 }
 

@@ -200,8 +200,6 @@ abstract interface class GangApi {
     String? notificationPolicy,
     String? roomDisplayName,
     bool? isPinned,
-    String? avatarAssetId,
-    String? defaultAvatarKey,
   });
 
   Future<void> leaveRoom({
@@ -998,8 +996,6 @@ class GangApiClient implements GangApi {
     String? notificationPolicy,
     String? roomDisplayName,
     bool? isPinned,
-    String? avatarAssetId,
-    String? defaultAvatarKey,
   }) async {
     final body = <String, Object?>{};
     if (remarkName != null) body['remark_name'] = remarkName;
@@ -1008,8 +1004,6 @@ class GangApiClient implements GangApi {
     }
     if (roomDisplayName != null) body['room_display_name'] = roomDisplayName;
     if (isPinned != null) body['is_pinned'] = isPinned;
-    if (avatarAssetId != null) body['avatar_asset_id'] = avatarAssetId;
-    if (defaultAvatarKey != null) body['default_avatar_key'] = defaultAvatarKey;
     final decoded = await _sendJson((token) {
       return _httpClient.patch(
         _uri('/rooms/$roomId/me'),

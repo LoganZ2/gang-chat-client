@@ -153,7 +153,7 @@ class _MemberRow extends StatelessWidget {
       ownerUserId: ownerUserId,
     );
     final avatar = Avatar(
-      label: member_filter.roomMemberDisplayName(member),
+      label: room_display.userAvatarLabel(member.user),
       imageUrl: AppConfigScope.of(
         context,
       ).resolveAssetUrl(member.user.avatarUrl),
@@ -384,7 +384,7 @@ class _InviteUserRow extends StatelessWidget {
             onResolveRoomProfile: onResolveRoomProfile,
             onEnterCommonRoom: onOpenRoom,
             child: Avatar(
-              label: room_display.userPrimaryName(user),
+              label: room_display.userAvatarLabel(user),
               imageUrl: AppConfigScope.of(
                 context,
               ).resolveAssetUrl(user.avatarUrl),
@@ -588,7 +588,7 @@ class _BlockUserRow extends StatelessWidget {
             onResolveRoomProfile: onResolveRoomProfile,
             onEnterCommonRoom: onOpenRoom,
             child: Avatar(
-              label: room_display.userPrimaryName(user),
+              label: room_display.userAvatarLabel(user),
               imageUrl: AppConfigScope.of(
                 context,
               ).resolveAssetUrl(user.avatarUrl),
@@ -740,7 +740,7 @@ class _BlacklistUserRow extends StatelessWidget {
             onResolveRoomProfile: onResolveRoomProfile,
             onEnterCommonRoom: onOpenRoom,
             child: Avatar(
-              label: room_display.userPrimaryName(user),
+              label: room_display.userAvatarLabel(user),
               imageUrl: AppConfigScope.of(
                 context,
               ).resolveAssetUrl(user.avatarUrl),
@@ -894,7 +894,7 @@ class _JoinRequestRow extends StatelessWidget {
             onResolveRoomProfile: onResolveRoomProfile,
             onEnterCommonRoom: onOpenRoom,
             child: Avatar(
-              label: room_display.userPrimaryName(request.user),
+              label: room_display.userAvatarLabel(request.user),
               imageUrl: AppConfigScope.of(
                 context,
               ).resolveAssetUrl(request.user.avatarUrl),
@@ -1098,7 +1098,7 @@ class _JoinRequestInviterSourceLine extends StatelessWidget {
           onResolveRoomProfile: onResolveRoomProfile,
           onEnterCommonRoom: onOpenRoom,
           child: Avatar(
-            label: room_display.userPrimaryName(user),
+            label: room_display.userAvatarLabel(user),
             imageUrl: AppConfigScope.of(
               context,
             ).resolveAssetUrl(user.avatarUrl),

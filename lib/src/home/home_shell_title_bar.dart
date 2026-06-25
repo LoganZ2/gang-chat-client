@@ -279,7 +279,7 @@ class _TitleLiveRoomDock extends StatelessWidget {
                     Icon(Icons.volume_up, size: 16, color: UiColors.accent),
                     const SizedBox(width: 7),
                     Avatar(
-                      label: room.displayName,
+                      label: room.avatarLabel,
                       imageUrl: resolvedAvatar,
                       defaultAvatarKey: room.defaultAvatarKey,
                       size: 20,
@@ -667,7 +667,7 @@ class _TitleSearchResultsPanel extends StatelessWidget {
                 onResolveRoomUserProfile(room.id, user),
             onEnterRoom: onProfileRoomSelected,
             child: Avatar(
-              label: room.displayName,
+              label: room_display.roomCardAvatarLabel(room),
               imageUrl: AppConfigScope.of(
                 context,
               ).resolveAssetUrl(room.avatarUrl),
@@ -1019,7 +1019,7 @@ class _MessageSearchResultTile extends StatelessWidget {
     return _SearchResultTile(
       onPressed: onPressed,
       leading: Avatar(
-        label: result.room.displayName,
+        label: result.room.name,
         imageUrl: AppConfigScope.of(
           context,
         ).resolveAssetUrl(result.room.avatarUrl),
@@ -1212,6 +1212,7 @@ PublicRoom _publicRoomFromRoomCard(RoomCard room) {
     id: room.id,
     rid: room.rid,
     name: room.displayName,
+    avatarLabel: room_display.roomCardAvatarLabel(room),
     avatarUrl: room.avatarUrl,
     defaultAvatarKey: room.defaultAvatarKey,
     visibility: room.visibility,

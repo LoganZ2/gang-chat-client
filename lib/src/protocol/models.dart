@@ -699,6 +699,7 @@ class PublicRoom {
     required this.liveParticipantCount,
     required this.joined,
     required this.joinState,
+    this.avatarLabel,
     this.onlineMemberCount = 0,
     this.description = '',
     this.createdBy,
@@ -709,6 +710,7 @@ class PublicRoom {
   final String id;
   final String rid;
   final String name;
+  final String? avatarLabel;
   final String? avatarUrl;
   final String defaultAvatarKey;
   final String visibility;
@@ -744,6 +746,7 @@ class PublicRoom {
       createdBy: _nullableMap(json['created_by']) == null
           ? null
           : UserSummary.fromJson(_nullableMap(json['created_by'])!),
+      avatarLabel: _stringFromJson(json, const ['avatar_label']),
       personalProfile: RoomPersonalProfile.fromJson(
         _nullableMap(json['personal_profile']) ??
             _nullableMap(json['my_room_profile']) ??
@@ -766,6 +769,7 @@ class PublicRoom {
       id: id,
       rid: rid,
       name: name,
+      avatarLabel: avatarLabel,
       avatarUrl: avatarUrl,
       defaultAvatarKey: defaultAvatarKey,
       visibility: visibility,
@@ -945,15 +949,9 @@ class RoomMembership {
 }
 
 class RoomPersonalProfile {
-  const RoomPersonalProfile({
-    this.displayName,
-    this.avatarUrl,
-    this.defaultAvatarKey,
-  });
+  const RoomPersonalProfile({this.displayName});
 
   final String? displayName;
-  final String? avatarUrl;
-  final String? defaultAvatarKey;
 
   factory RoomPersonalProfile.fromJson(Map<String, Object?>? json) {
     if (json == null) return const RoomPersonalProfile();
@@ -964,15 +962,10 @@ class RoomPersonalProfile {
         'room_username',
         'room_nickname',
       ]),
-      avatarUrl: _stringFromJson(json, const ['avatar_url']),
-      defaultAvatarKey: _stringFromJson(json, const ['default_avatar_key']),
     );
   }
 
-  bool get isEmpty =>
-      _nonEmptyString(displayName) == null &&
-      _nonEmptyString(avatarUrl) == null &&
-      _nonEmptyString(defaultAvatarKey) == null;
+  bool get isEmpty => _nonEmptyString(displayName) == null;
 }
 
 /// A pending request to join an approval-required room, as seen by an admin
@@ -1121,8 +1114,6 @@ class RoomMemberProfile {
     required this.role,
     required this.joinedAt,
     this.roomDisplayName,
-    this.roomAvatarUrl,
-    this.roomDefaultAvatarKey,
     this.textMutedUntil,
   });
 
@@ -1130,8 +1121,6 @@ class RoomMemberProfile {
   final String role;
   final DateTime joinedAt;
   final String? roomDisplayName;
-  final String? roomAvatarUrl;
-  final String? roomDefaultAvatarKey;
   final String? textMutedUntil;
 
   factory RoomMemberProfile.fromJson(Map<String, Object?> json) {
@@ -1148,11 +1137,6 @@ class RoomMemberProfile {
       'room_nickname',
       'member_display_name',
     ]);
-    final roomAvatarUrl = _stringFromJson(json, const ['room_avatar_url']);
-    final roomDefaultAvatarKey = _stringFromJson(json, const [
-      'room_default_avatar_key',
-      'default_avatar_key',
-    ]);
     final isOnline =
         baseUser.isOnline ??
         _boolFromJson(json, const ['is_online', 'online']) ??
@@ -1167,8 +1151,6 @@ class RoomMemberProfile {
     final user = baseUser.copyWith(
       roomDisplayName: roomDisplayName,
       roomRole: role,
-      avatarUrl: roomAvatarUrl ?? baseUser.avatarUrl,
-      defaultAvatarKey: roomDefaultAvatarKey ?? baseUser.defaultAvatarKey,
       isOnline: isOnline,
     );
     return RoomMemberProfile(
@@ -1178,8 +1160,6 @@ class RoomMemberProfile {
           _parseDateTime(json['joined_at']) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       roomDisplayName: roomDisplayName,
-      roomAvatarUrl: roomAvatarUrl,
-      roomDefaultAvatarKey: roomDefaultAvatarKey,
       textMutedUntil: _stringFromJson(json, const ['text_muted_until']),
     );
   }
