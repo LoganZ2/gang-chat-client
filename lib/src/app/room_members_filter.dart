@@ -11,6 +11,7 @@ class RoomMemberPermissionState {
     required this.isSuperuser,
     required this.isOwner,
     required this.isAdmin,
+    required this.canEditRoomDisplayName,
     required this.canRoleEdit,
     required this.canRemoveMember,
   });
@@ -18,6 +19,7 @@ class RoomMemberPermissionState {
   final bool isSuperuser;
   final bool isOwner;
   final bool isAdmin;
+  final bool canEditRoomDisplayName;
   final bool canRoleEdit;
   final bool canRemoveMember;
 
@@ -703,6 +705,16 @@ RoomMemberPermissionState roomMemberPermissionState({
   final isOwner = isOwnerRoomMember(member, ownerUserId: ownerUserId);
   final isAdmin = isAdminRoomMember(member);
   final currentUserIsSuperuser = currentUser.isSuperuser;
+  final currentRank = currentUserPrivilegeRank(
+    currentUser: currentUser,
+    canEditCreatorOnly: canEditCreatorOnly,
+    canManageMembers: canManageMembers,
+  );
+  final targetRank = roomMemberPrivilegeRank(member, ownerUserId: ownerUserId);
+  final canEditRoomDisplayName =
+      canManageMembers &&
+      member.user.id != currentUser.id &&
+      currentRank > targetRank;
   final canRoleEdit =
       canEditCreatorOnly &&
       !isSuperuser &&
@@ -718,9 +730,28 @@ RoomMemberPermissionState roomMemberPermissionState({
     isSuperuser: isSuperuser,
     isOwner: isOwner,
     isAdmin: isAdmin,
+    canEditRoomDisplayName: canEditRoomDisplayName,
     canRoleEdit: canRoleEdit,
     canRemoveMember: canRemoveMember,
   );
+}
+
+int currentUserPrivilegeRank({
+  required CurrentUser currentUser,
+  required bool canEditCreatorOnly,
+  required bool canManageMembers,
+}) {
+  if (currentUser.isSuperuser) return 4;
+  if (canEditCreatorOnly) return 3;
+  if (canManageMembers) return 2;
+  return 1;
+}
+
+int roomMemberPrivilegeRank(RoomMember member, {String? ownerUserId}) {
+  if (isSuperuserRoomMember(member)) return 4;
+  if (isOwnerRoomMember(member, ownerUserId: ownerUserId)) return 3;
+  if (isAdminRoomMember(member)) return 2;
+  return 1;
 }
 
 String roomMemberDisplayName(RoomMember member) {
@@ -728,6 +759,24 @@ String roomMemberDisplayName(RoomMember member) {
       _nonEmpty(member.user.roomDisplayName) ??
       _nonEmpty(member.user.displayName) ??
       member.user.username;
+}
+
+String roomMemberDefaultDisplayName(RoomMember member) {
+  return _nonEmpty(member.user.displayName) ?? member.user.username;
+}
+
+String roomMemberRoomDisplayNameValue(RoomMember member) {
+  return _nonEmpty(member.roomDisplayName) ??
+      _nonEmpty(member.user.roomDisplayName) ??
+      '';
+}
+
+String roomMemberRoomDisplayNameOriginalLabel(RoomMember member) {
+  return roomMemberDisplayName(member);
+}
+
+String roomMemberRoomDisplayNameUpdatedNotice(RoomMember member) {
+  return '已修改 ${roomMemberDefaultDisplayName(member)} 的房间内用户名';
 }
 
 int roomMemberSearchRank(RoomMember member, String query) {

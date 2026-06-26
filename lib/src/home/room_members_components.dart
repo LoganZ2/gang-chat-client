@@ -124,6 +124,7 @@ class _MemberRow extends StatelessWidget {
     required this.onResolveProfile,
     required this.onResolveRoomProfile,
     required this.onOpenRoom,
+    required this.onEditRoomDisplayName,
     required this.onSetAdmin,
     required this.onUnsetAdmin,
     required this.onRemoveMember,
@@ -140,6 +141,7 @@ class _MemberRow extends StatelessWidget {
   final Future<UserSummary> Function(UserSummary user) onResolveProfile;
   final RoomProfileResolver onResolveRoomProfile;
   final ValueChanged<PublicRoom>? onOpenRoom;
+  final VoidCallback onEditRoomDisplayName;
   final VoidCallback onSetAdmin;
   final VoidCallback onUnsetAdmin;
   final VoidCallback onRemoveMember;
@@ -177,12 +179,30 @@ class _MemberRow extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: HighlightedText(
-                text: member_filter.roomMemberDisplayName(member),
-                query: query,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: UiTypography.body.copyWith(fontWeight: FontWeight.w600),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  HighlightedText(
+                    text: member_filter.roomMemberDisplayName(member),
+                    query: query,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: UiTypography.body.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '@${member.user.username}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: UiTypography.label.copyWith(
+                      color: UiColors.textMuted,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(width: 10),
@@ -201,9 +221,20 @@ class _MemberRow extends StatelessWidget {
                   strokeWidth: 2,
                 ),
               ),
-            ] else if (permission.canRoleEdit ||
+            ] else if (permission.canEditRoomDisplayName ||
+                permission.canRoleEdit ||
                 permission.canRemoveMember) ...[
               const SizedBox(width: 8),
+              if (permission.canEditRoomDisplayName) ...[
+                ButtonIcon(
+                  tooltip: '修改房间内用户名',
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: onEditRoomDisplayName,
+                  size: 34,
+                ),
+                if (permission.canRoleEdit || permission.canRemoveMember)
+                  const SizedBox(width: 6),
+              ],
               if (permission.canRoleEdit) ...[
                 ButtonIcon(
                   tooltip: permission.isAdmin ? '移除管理员' : '设为管理员',
@@ -239,6 +270,72 @@ class _MemberRow extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _EditRoomDisplayNameDialog extends StatefulWidget {
+  const _EditRoomDisplayNameDialog({required this.member});
+
+  final RoomMember member;
+
+  @override
+  State<_EditRoomDisplayNameDialog> createState() =>
+      _EditRoomDisplayNameDialogState();
+}
+
+class _EditRoomDisplayNameDialogState
+    extends State<_EditRoomDisplayNameDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(
+      text: member_filter.roomMemberRoomDisplayNameValue(widget.member),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final defaultName = member_filter.roomMemberDefaultDisplayName(
+      widget.member,
+    );
+    final originalName = member_filter.roomMemberRoomDisplayNameOriginalLabel(
+      widget.member,
+    );
+    return DialogFrame(
+      title: '修改$defaultName的房间内用户名',
+      icon: Icons.edit_outlined,
+      actions: [
+        Button(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        Button(
+          tone: ButtonTone.primary,
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: const Text('确认修改'),
+        ),
+      ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Input(controller: _controller, hintText: defaultName),
+          const SizedBox(height: UiSpacing.xs),
+          Text(
+            '原名称：$originalName',
+            style: UiTypography.label.copyWith(color: UiColors.textMuted),
+          ),
+        ],
       ),
     );
   }

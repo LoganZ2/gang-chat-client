@@ -718,6 +718,18 @@ class RoomsController {
     return api.updateRoomMemberRole(roomId: roomId, userId: userId, role: role);
   }
 
+  Future<RoomMember> updateRoomMemberRoomDisplayName({
+    required String roomId,
+    required String userId,
+    required String roomDisplayName,
+  }) {
+    return api.updateRoomMemberRoomDisplayName(
+      roomId: roomId,
+      userId: userId,
+      roomDisplayName: roomDisplayName,
+    );
+  }
+
   Future<void> removeRoomMember({
     required String roomId,
     required String userId,

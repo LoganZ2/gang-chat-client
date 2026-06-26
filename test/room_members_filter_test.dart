@@ -469,6 +469,7 @@ void main() {
     expect(member.canUnsetAdmin, isFalse);
     expect(member.canTransferCreator, isTrue);
     expect(member.canRemoveMember, isTrue);
+    expect(member.canEditRoomDisplayName, isTrue);
     expect(member.adminActionLabel, '设为管理员');
 
     final admin = roomMemberPermissionState(
@@ -481,6 +482,7 @@ void main() {
     expect(admin.canSetAdmin, isFalse);
     expect(admin.canUnsetAdmin, isTrue);
     expect(admin.canRemoveMember, isTrue);
+    expect(admin.canEditRoomDisplayName, isTrue);
     expect(admin.adminActionLabel, '移除管理员');
 
     final adminManagedByAdmin = roomMemberPermissionState(
@@ -492,6 +494,7 @@ void main() {
     );
     expect(adminManagedByAdmin.canRoleEdit, isFalse);
     expect(adminManagedByAdmin.canRemoveMember, isFalse);
+    expect(adminManagedByAdmin.canEditRoomDisplayName, isFalse);
 
     final managedByAdmin = roomMemberPermissionState(
       member: _member('managed'),
@@ -502,6 +505,7 @@ void main() {
     );
     expect(managedByAdmin.canRoleEdit, isFalse);
     expect(managedByAdmin.canRemoveMember, isTrue);
+    expect(managedByAdmin.canEditRoomDisplayName, isTrue);
   });
 
   test('roomMemberPermissionState blocks self owner and superuser edits', () {
@@ -527,6 +531,15 @@ void main() {
     );
     expect(
       roomMemberPermissionState(
+        member: _member('current'),
+        currentUser: currentUser,
+        canEditCreatorOnly: true,
+        canManageMembers: true,
+      ).canEditRoomDisplayName,
+      isFalse,
+    );
+    expect(
+      roomMemberPermissionState(
         member: _member('owner'),
         currentUser: currentUser,
         canEditCreatorOnly: true,
@@ -543,6 +556,16 @@ void main() {
         canManageMembers: true,
         ownerUserId: 'owner',
       ).canRemoveMember,
+      isFalse,
+    );
+    expect(
+      roomMemberPermissionState(
+        member: _member('owner'),
+        currentUser: currentUser,
+        canEditCreatorOnly: true,
+        canManageMembers: true,
+        ownerUserId: 'owner',
+      ).canEditRoomDisplayName,
       isFalse,
     );
     expect(
@@ -565,6 +588,15 @@ void main() {
     );
     expect(
       roomMemberPermissionState(
+        member: _member('superuser', isSuperuser: true),
+        currentUser: currentUser,
+        canEditCreatorOnly: true,
+        canManageMembers: true,
+      ).canEditRoomDisplayName,
+      isFalse,
+    );
+    expect(
+      roomMemberPermissionState(
         member: _member('member'),
         currentUser: currentUser,
         canEditCreatorOnly: false,
@@ -577,6 +609,14 @@ void main() {
         currentUser: currentUser,
         canEditCreatorOnly: false,
       ).canRemoveMember,
+      isFalse,
+    );
+    expect(
+      roomMemberPermissionState(
+        member: _member('member'),
+        currentUser: currentUser,
+        canEditCreatorOnly: false,
+      ).canEditRoomDisplayName,
       isFalse,
     );
   });
@@ -596,6 +636,7 @@ void main() {
     expect(creator.canUnsetAdmin, isFalse);
     expect(creator.canTransferCreator, isFalse);
     expect(creator.canRemoveMember, isTrue);
+    expect(creator.canEditRoomDisplayName, isTrue);
 
     final superuserCreator = roomMemberPermissionState(
       member: _member('owner', role: 'owner', isSuperuser: true),
@@ -605,6 +646,7 @@ void main() {
       ownerUserId: 'owner',
     );
     expect(superuserCreator.canRemoveMember, isFalse);
+    expect(superuserCreator.canEditRoomDisplayName, isFalse);
   });
 
   test('profile management shortcut follows member management permissions', () {

@@ -2184,10 +2184,32 @@ void main() {
               200,
             );
           case 6:
+            expect(request.method, 'PATCH');
+            expect(request.url.path, '/api/v1/rooms/room_1/members/user_2');
+            expect(jsonDecode(utf8.decode(request.bodyBytes)), {
+              'room_display_name': 'Room Bob',
+            });
+            return http.Response(
+              jsonEncode({
+                'member': {
+                  'user': {
+                    'id': 'user_2',
+                    'username': 'bob',
+                    'display_name': 'Bob',
+                    'room_display_name': 'Room Bob',
+                  },
+                  'room_display_name': 'Room Bob',
+                  'role': 'admin',
+                  'joined_at': '2026-05-31T14:00:00Z',
+                },
+              }),
+              200,
+            );
+          case 7:
             expect(request.method, 'DELETE');
             expect(request.url.path, '/api/v1/rooms/room_1/members/user_2');
             return http.Response('{}', 200);
-          case 7:
+          case 8:
             expect(request.method, 'PATCH');
             expect(request.url.path, '/api/v1/rooms/room_1/creator');
             expect(jsonDecode(utf8.decode(request.bodyBytes)), {
@@ -2236,6 +2258,11 @@ void main() {
       userId: 'user_2',
       role: 'admin',
     );
+    final renamedMember = await api.updateRoomMemberRoomDisplayName(
+      roomId: 'room_1',
+      userId: 'user_2',
+      roomDisplayName: 'Room Bob',
+    );
     await api.removeRoomMember(roomId: 'room_1', userId: 'user_2');
     final transferred = await api.transferRoomCreator(
       roomId: 'room_1',
@@ -2246,8 +2273,9 @@ void main() {
     expect(myRoom.remarkName, 'Ops');
     expect(myRoom.isPinned, isTrue);
     expect(member.role, 'admin');
+    expect(renamedMember.roomDisplayName, 'Room Bob');
     expect(transferred.createdBy?.id, 'user_2');
-    expect(requests, 7);
+    expect(requests, 8);
     api.close();
   });
 

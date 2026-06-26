@@ -218,6 +218,12 @@ abstract interface class GangApi {
     required String role,
   });
 
+  Future<RoomMember> updateRoomMemberRoomDisplayName({
+    required String roomId,
+    required String userId,
+    required String roomDisplayName,
+  });
+
   Future<void> removeRoomMember({
     required String roomId,
     required String userId,
@@ -1055,6 +1061,22 @@ class GangApiClient implements GangApi {
         _uri('/rooms/$roomId/members/$userId'),
         headers: _headers(token),
         body: encodeJsonBody({'role': role}),
+      );
+    });
+    return RoomMember.fromJson(decoded['member']! as Map<String, Object?>);
+  }
+
+  @override
+  Future<RoomMember> updateRoomMemberRoomDisplayName({
+    required String roomId,
+    required String userId,
+    required String roomDisplayName,
+  }) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.patch(
+        _uri('/rooms/$roomId/members/$userId'),
+        headers: _headers(token),
+        body: encodeJsonBody({'room_display_name': roomDisplayName}),
       );
     });
     return RoomMember.fromJson(decoded['member']! as Map<String, Object?>);

@@ -573,6 +573,41 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
     }
   }
 
+  Future<void> _editRoomDisplayName(RoomMember member) async {
+    if (_busyMemberIds.contains(member.user.id)) return;
+    final roomDisplayName = await showDialog<String>(
+      context: context,
+      builder: (context) => _EditRoomDisplayNameDialog(member: member),
+    );
+    if (roomDisplayName == null || !mounted) return;
+
+    setState(() {
+      _busyMemberIds.add(member.user.id);
+      _error = null;
+      _notice = null;
+    });
+    try {
+      final updated = await widget.controller.updateRoomMemberRoomDisplayName(
+        roomId: _room.id,
+        userId: member.user.id,
+        roomDisplayName: roomDisplayName,
+      );
+      if (!mounted) return;
+      setState(() {
+        _busyMemberIds.remove(member.user.id);
+        _members = member_filter.replaceRoomMember(_members, updated);
+        _changed = true;
+        _notice = member_filter.roomMemberRoomDisplayNameUpdatedNotice(updated);
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _busyMemberIds.remove(member.user.id);
+        _error = error.toString();
+      });
+    }
+  }
+
   Future<void> _transferCreator(RoomMember member) async {
     if (_busyMemberIds.contains(member.user.id)) return;
     final confirmed = await showDialog<bool>(
@@ -1002,6 +1037,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
           onResolveProfile: _resolveMemberProfile,
           onResolveRoomProfile: _resolveRoomProfile,
           onOpenRoom: widget.onOpenRoom,
+          onEditRoomDisplayName: () => _editRoomDisplayName(member),
           onSetAdmin: () => _setMemberRole(member, 'admin'),
           onUnsetAdmin: () => _setMemberRole(member, 'member'),
           onRemoveMember: () => _removeMember(member),

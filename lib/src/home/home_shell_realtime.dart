@@ -98,6 +98,9 @@ extension _HomeShellRealtime on _HomeShellState {
       case 'room_role_changed':
         _applyRoomRoleChanged(event.data);
         break;
+      case 'room_member_profile_changed':
+        _applyRoomMemberProfileChanged(event.data);
+        break;
       case 'room_join_requests_updated':
         _applyRoomJoinRequestsUpdated(event.data);
         break;
@@ -260,5 +263,11 @@ extension _HomeShellRealtime on _HomeShellState {
     if (roomId == null || roomId != _selectedServerId) return;
     _setHomeState(() => _membersReloadToken++);
     unawaited(_refreshSelectedJoinRequestBadge());
+  }
+
+  void _applyRoomMemberProfileChanged(Map<String, dynamic> data) {
+    final roomId = data['room_id'] as String?;
+    if (!mounted || roomId == null || roomId != _selectedServerId) return;
+    _setHomeState(() => _membersReloadToken++);
   }
 }
