@@ -11,6 +11,8 @@ const String kSystemEventRoomMemberRemoved = 'room_member_removed';
 const String kSystemEventLiveJoined = 'live_joined';
 const String kSystemEventLiveLeft = 'live_left';
 const String kSystemEventRoomRoleChanged = 'room_role_changed';
+const String kSystemEventRoomNameChanged = 'room_name_changed';
+const String kSystemEventRoomDescriptionChanged = 'room_description_changed';
 
 class SystemMessageEvent {
   const SystemMessageEvent({
@@ -21,6 +23,8 @@ class SystemMessageEvent {
     this.target,
     this.fromRole,
     this.toRole,
+    this.oldValue,
+    this.newValue,
   });
 
   final String event;
@@ -30,6 +34,8 @@ class SystemMessageEvent {
   final UserSummary? target;
   final String? fromRole;
   final String? toRole;
+  final String? oldValue;
+  final String? newValue;
 
   UserSummary get subject => target ?? user ?? message.sender;
   bool get isRoleChange => event == kSystemEventRoomRoleChanged;
@@ -169,6 +175,8 @@ SystemMessageEvent? systemMessageEvent(Message message) {
     target: target,
     fromRole: attachment?.fromRole,
     toRole: attachment?.toRole,
+    oldValue: attachment?.oldValue,
+    newValue: attachment?.newValue,
   );
 }
 

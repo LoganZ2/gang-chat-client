@@ -960,6 +960,33 @@ class _SystemMessageParts {
             fontWeight: FontWeight.w700,
           ),
         ];
+      case message_display.kSystemEventRoomNameChanged:
+        final actor = event.actor ?? event.user;
+        return [
+          _textWithTooltip('房间名称', '原房间名称：${event.oldValue ?? ''}'),
+          if (actor == null) ...[
+            _text('修改为'),
+          ] else ...[
+            _text('被'),
+            _userChip(actor),
+            _text('修改为'),
+          ],
+          _highlightText(_systemChangedValueLabel(event.newValue)),
+        ];
+      case message_display.kSystemEventRoomDescriptionChanged:
+        final actor = event.actor ?? event.user;
+        return [
+          _textWithTooltip('房间简介', '原房间简介：${event.oldValue ?? ''}'),
+          if (actor == null) ...[
+            _text('修改为'),
+          ] else ...[
+            _text('被'),
+            _userChip(actor),
+            _text('修改为'),
+          ],
+          _lineBreak(),
+          _highlightText(_systemChangedValueLabel(event.newValue), maxLines: 4),
+        ];
       default:
         final fallback = event.message.body.trim();
         return [_userChip(subject), if (fallback.isNotEmpty) _text(fallback)];
@@ -990,6 +1017,36 @@ class _SystemMessageParts {
         fontSize: 12,
       ),
     );
+  }
+
+  Widget _textWithTooltip(String value, String tooltip) {
+    return Tooltip(message: tooltip, child: _text(value));
+  }
+
+  Widget _highlightText(String value, {int maxLines = 1}) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: _messageMaxWidth),
+      child: Text(
+        value,
+        maxLines: maxLines,
+        overflow: TextOverflow.ellipsis,
+        style: UiTypography.label.copyWith(
+          color: UiColors.accent,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Widget _lineBreak() {
+    return const SizedBox(width: _messageMaxWidth + 96, height: 0);
+  }
+
+  String _systemChangedValueLabel(String? value) {
+    final normalized = value ?? '';
+    if (normalized.isEmpty) return '（空）';
+    return normalized;
   }
 }
 

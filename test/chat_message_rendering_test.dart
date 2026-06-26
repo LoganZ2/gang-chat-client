@@ -565,6 +565,89 @@ void main() {
     expect(find.text(detailed), findsOneWidget);
   });
 
+  testWidgets(
+    'system room profile change messages highlight values and tooltip labels',
+    (tester) async {
+      final controller = TextEditingController();
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        _host(
+          _chatPane(
+            controller: controller,
+            messages: [
+              _message(
+                type: 'system',
+                body: '房间名称被Owner修改为New Room',
+                clientMessageId: 'client_room_name_changed',
+                attachments: const [
+                  MessageAttachment(
+                    type: 'system',
+                    event: message_display.kSystemEventRoomNameChanged,
+                    user: _systemActor,
+                    actor: _systemActor,
+                    oldValue: 'Old Room',
+                    newValue: 'New Room',
+                  ),
+                ],
+              ),
+              _message(
+                type: 'system',
+                body: '房间简介被Owner修改为\nNew intro\nline 2',
+                clientMessageId: 'client_room_description_changed',
+                attachments: const [
+                  MessageAttachment(
+                    type: 'system',
+                    event: message_display.kSystemEventRoomDescriptionChanged,
+                    user: _systemActor,
+                    actor: _systemActor,
+                    oldValue: 'Old intro',
+                    newValue: 'New intro\nline 2',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('房间名称'), findsOneWidget);
+      expect(find.byTooltip('原房间名称：Old Room'), findsOneWidget);
+      expect(find.text('New Room'), findsOneWidget);
+      expect(
+        find.ancestor(
+          of: find.text('New Room'),
+          matching: find.byType(Tooltip),
+        ),
+        findsNothing,
+      );
+
+      expect(find.text('房间简介'), findsOneWidget);
+      expect(find.byTooltip('原房间简介：Old intro'), findsOneWidget);
+      expect(find.text('New intro\nline 2'), findsOneWidget);
+      expect(
+        find.ancestor(
+          of: find.text('New intro\nline 2'),
+          matching: find.byType(Tooltip),
+        ),
+        findsNothing,
+      );
+
+      final actorAvatar = find.byWidgetPredicate(
+        (widget) => widget is ui.Avatar && widget.label == 'Owner',
+      );
+      expect(actorAvatar, findsWidgets);
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: Offset.zero);
+      addTearDown(gesture.removePointer);
+      await gesture.moveTo(tester.getCenter(actorAvatar.first));
+      await tester.pumpAndSettle();
+
+      expect(find.text('@owner'), findsOneWidget);
+    },
+  );
+
   testWidgets('system message user avatar opens the resolved profile card', (
     tester,
   ) async {

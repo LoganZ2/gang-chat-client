@@ -485,6 +485,8 @@ class MessageAttachment {
     this.target,
     this.fromRole,
     this.toRole,
+    this.oldValue,
+    this.newValue,
   });
 
   final String type;
@@ -498,6 +500,8 @@ class MessageAttachment {
   final UserSummary? target;
   final String? fromRole;
   final String? toRole;
+  final String? oldValue;
+  final String? newValue;
 
   factory MessageAttachment.fromJson(Map<String, Object?> json) {
     final assetJson = _nullableMap(json['asset']);
@@ -516,6 +520,8 @@ class MessageAttachment {
       target: targetJson == null ? null : UserSummary.fromJson(targetJson),
       fromRole: _stringFromJson(json, const ['from_role', 'previous_role']),
       toRole: _stringFromJson(json, const ['to_role', 'role']),
+      oldValue: _stringFromJson(json, const ['old_value', 'previous_value']),
+      newValue: _stringFromJson(json, const ['new_value', 'value']),
     );
   }
 
@@ -532,6 +538,8 @@ class MessageAttachment {
       if (target != null) 'target': _userSummaryToJson(target!),
       if (fromRole != null) 'from_role': fromRole,
       if (toRole != null) 'to_role': toRole,
+      if (oldValue != null) 'old_value': oldValue,
+      if (newValue != null) 'new_value': newValue,
     };
   }
 }

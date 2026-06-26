@@ -181,6 +181,39 @@ void main() {
     expect(systemMessageRoleChangeOmitsActor(event), isTrue);
   });
 
+  test('systemMessageEvent parses room profile change values', () {
+    const actor = UserSummary(
+      id: 'user_actor',
+      username: 'owner',
+      displayName: 'Owner',
+      avatarUrl: null,
+      defaultAvatarKey: 'blue-3',
+    );
+    final event = systemMessageEvent(
+      _message(
+        type: 'system',
+        body: '房间名称被Owner修改为New Room',
+        attachments: const [
+          MessageAttachment(
+            type: 'system',
+            event: kSystemEventRoomNameChanged,
+            user: actor,
+            actor: actor,
+            oldValue: 'Old Room',
+            newValue: 'New Room',
+          ),
+        ],
+      ),
+    );
+
+    expect(event, isNotNull);
+    expect(event!.event, kSystemEventRoomNameChanged);
+    expect(event.subject.id, 'user_actor');
+    expect(event.actor?.id, 'user_actor');
+    expect(event.oldValue, 'Old Room');
+    expect(event.newValue, 'New Room');
+  });
+
   test('shouldShowFileAttachmentBody hides duplicate single-file body', () {
     const attachment = MessageAttachment(type: 'file', name: 'report.pdf');
 
