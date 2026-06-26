@@ -48,6 +48,34 @@ void main() {
       ),
       '[系统] Logan 加入了房间',
     );
+    expect(
+      roomSidebarSubtitle(
+        _roomCard(
+          lastMessage: LastMessagePreview(
+            id: 'message_3',
+            type: 'system',
+            senderDisplayName: '丁',
+            bodyPreview: '房间名称修改为123345',
+            createdAt: DateTime.utc(2026, 6, 4),
+          ),
+        ),
+      ),
+      '[系统] 房间名称 被 丁 修改为 123345',
+    );
+    expect(
+      roomSidebarSubtitle(
+        _roomCard(
+          lastMessage: LastMessagePreview(
+            id: 'message_4',
+            type: 'system',
+            senderDisplayName: '',
+            bodyPreview: '房间简介 被 丁 修改为 新简介',
+            createdAt: DateTime.utc(2026, 6, 4),
+          ),
+        ),
+      ),
+      '[系统] 房间简介 被 丁 修改为 新简介',
+    );
   });
 
   test('room sidebar latest message time follows compact chat rules', () {

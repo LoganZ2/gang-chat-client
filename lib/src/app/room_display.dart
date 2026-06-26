@@ -89,9 +89,62 @@ String roomSidebarSubtitle(RoomCard room) {
 String _systemLastMessagePreview(LastMessagePreview last) {
   final sender = _nonEmpty(last.senderDisplayName);
   final body = _nonEmpty(last.bodyPreview);
+  final roomProfilePreview = _roomProfileSystemLastMessagePreview(
+    sender: sender,
+    body: body,
+  );
+  if (roomProfilePreview != null) return roomProfilePreview;
   final parts = [?sender, ?body];
   if (parts.isEmpty) return '系统消息';
   return parts.join(' ');
+}
+
+String? _roomProfileSystemLastMessagePreview({
+  required String? sender,
+  required String? body,
+}) {
+  if (body == null) return null;
+  if (body.startsWith('房间名称 被 ') || body.startsWith('房间简介 被 ')) {
+    return body;
+  }
+
+  const namePrefix = '房间名称修改为';
+  const descriptionPrefix = '房间简介修改为';
+  if (body.startsWith(namePrefix)) {
+    return _roomProfileChangedPreview(
+      subject: '房间名称',
+      sender: sender,
+      value: body.substring(namePrefix.length),
+    );
+  }
+  if (body.startsWith(descriptionPrefix)) {
+    return _roomProfileChangedPreview(
+      subject: '房间简介',
+      sender: sender,
+      value: body.substring(descriptionPrefix.length),
+    );
+  }
+  return null;
+}
+
+String _roomProfileChangedPreview({
+  required String subject,
+  required String? sender,
+  required String value,
+}) {
+  final normalizedValue = _normalizeSystemChangedValue(value);
+  if (sender == null) return '$subject 修改为 $normalizedValue';
+  return '$subject 被 $sender 修改为 $normalizedValue';
+}
+
+String _normalizeSystemChangedValue(String value) {
+  final normalized = value
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .join(' ');
+  if (normalized.isEmpty) return '（空）';
+  return normalized;
 }
 
 String roomSidebarLastMessageTime(RoomCard room, {DateTime? now}) {
