@@ -999,6 +999,31 @@ void main() {
     expect(sameLastMessage.rooms.single.unreadCount, 6);
   });
 
+  test('patchRoomUpdated prefers server unread count when present', () {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        fail('Patch test should not call the API: ${request.url}');
+      }),
+    );
+    addTearDown(api.close);
+    final controller = RoomsController(api: api);
+
+    final patch = controller.patchRoomUpdated(
+      rooms: [_roomCard('room_1', unreadCount: 5, lastMessageId: 'msg_1')],
+      incoming: _roomCard(
+        'room_1',
+        unreadCount: 7,
+        hasUnreadCount: true,
+        lastMessageId: 'msg_2',
+      ),
+      selectedRoom: _roomDetail('room_2'),
+    );
+
+    expect(patch.rooms.single.unreadCount, 7);
+  });
+
   test('patchRoomUnreadCleared clears a single room count', () {
     final api = GangApiClient(
       baseUrl: 'http://example.test/api/v1',
@@ -1058,6 +1083,7 @@ RoomCard _roomCard(
   String? lastMessageId,
   String notificationPolicy = 'all',
   bool isPinned = false,
+  bool hasUnreadCount = false,
 }) {
   return RoomCard(
     id: id,
@@ -1080,6 +1106,7 @@ RoomCard _roomCard(
             createdAt: DateTime.utc(2026, 6, 4),
           ),
     unreadCount: unreadCount,
+    hasUnreadCount: hasUnreadCount,
     updatedAt: DateTime.utc(2026, 6, 4),
   );
 }

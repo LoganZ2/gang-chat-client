@@ -648,6 +648,69 @@ void main() {
     },
   );
 
+  testWidgets(
+    'unread divider stays above timestamp for batched system events',
+    (tester) async {
+      final controller = TextEditingController();
+      addTearDown(controller.dispose);
+      final now = DateTime.now();
+      final createdAt = now.subtract(const Duration(minutes: 2));
+      final timestamp = message_display.formatChatTimestamp(
+        createdAt,
+        now: now,
+      );
+
+      await tester.pumpWidget(
+        _host(
+          _chatPane(
+            controller: controller,
+            messages: [
+              _message(
+                type: 'system',
+                body: '房间名称修改为123456',
+                clientMessageId: 'client_room_name_changed',
+                createdAt: createdAt,
+                attachments: const [
+                  MessageAttachment(
+                    type: 'system',
+                    event: message_display.kSystemEventRoomNameChanged,
+                    user: _systemActor,
+                    actor: _systemActor,
+                    oldValue: 'old',
+                    newValue: '123456',
+                  ),
+                ],
+              ),
+              _message(
+                type: 'system',
+                body: '房间简介修改为\nintro',
+                clientMessageId: 'client_room_description_changed',
+                createdAt: createdAt.add(const Duration(milliseconds: 1)),
+                attachments: const [
+                  MessageAttachment(
+                    type: 'system',
+                    event: message_display.kSystemEventRoomDescriptionChanged,
+                    user: _systemActor,
+                    actor: _systemActor,
+                    oldValue: 'old intro',
+                    newValue: 'intro',
+                  ),
+                ],
+              ),
+            ],
+            newMessageCount: 2,
+          ),
+          height: 620,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final unreadRect = tester.getRect(find.text('未读消息'));
+      final timestampRect = tester.getRect(find.text(timestamp));
+      expect(unreadRect.bottom, lessThan(timestampRect.top));
+    },
+  );
+
   testWidgets('system message user avatar opens the resolved profile card', (
     tester,
   ) async {

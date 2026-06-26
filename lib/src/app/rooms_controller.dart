@@ -1118,6 +1118,7 @@ class RoomsController {
                 liveAvatarPreview: card.liveAvatarPreview,
                 lastMessage: existing.lastMessage,
                 unreadCount: existing.unreadCount,
+                hasUnreadCount: existing.hasUnreadCount,
                 updatedAt: card.updatedAt,
               ),
       ),
@@ -1245,6 +1246,7 @@ class RoomsController {
     required RoomCard existing,
     required RoomCard incoming,
   }) {
+    if (incoming.hasUnreadCount) return incoming.unreadCount;
     final incomingLastMessage = incoming.lastMessage;
     if (incomingLastMessage == null) return existing.unreadCount;
     if (room_display.normalizeRoomNotificationPolicy(
@@ -1281,6 +1283,7 @@ class RoomsController {
       liveAvatarPreview: incoming.liveAvatarPreview,
       lastMessage: incoming.lastMessage,
       unreadCount: unreadCount,
+      hasUnreadCount: true,
       updatedAt: incoming.updatedAt,
     );
   }
@@ -1354,6 +1357,7 @@ class RoomsController {
         liveAvatarPreview: preview ?? existing.liveAvatarPreview,
         lastMessage: existing.lastMessage,
         unreadCount: existing.unreadCount,
+        hasUnreadCount: existing.hasUnreadCount,
         updatedAt: existing.updatedAt,
       );
       nextRooms = orderedRoomCards(nextRooms);

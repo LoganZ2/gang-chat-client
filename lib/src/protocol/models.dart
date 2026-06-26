@@ -604,6 +604,7 @@ class RoomCard {
     this.notificationPolicy = 'all',
     this.isPinned = false,
     this.onlineMemberCount = 0,
+    this.hasUnreadCount = false,
   });
 
   final String id;
@@ -622,9 +623,11 @@ class RoomCard {
   final List<UserSummary> liveAvatarPreview;
   final LastMessagePreview? lastMessage;
   final int unreadCount;
+  final bool hasUnreadCount;
   final DateTime updatedAt;
 
   factory RoomCard.fromJson(Map<String, Object?> json) {
+    final hasUnreadCount = json.containsKey('unread_count');
     return RoomCard(
       id: json['id']! as String,
       name: json['name']! as String,
@@ -654,6 +657,7 @@ class RoomCard {
           ? null
           : LastMessagePreview.fromJson(_nullableMap(json['last_message'])!),
       unreadCount: json['unread_count'] as int? ?? 0,
+      hasUnreadCount: hasUnreadCount,
       updatedAt: DateTime.parse(json['updated_at']! as String),
     );
   }
@@ -668,7 +672,7 @@ class RoomCard {
   /// server-pushed public snapshot (room_updated) over an existing card: the
   /// snapshot carries no per-user fields, so the caller re-supplies the local
   /// [unreadCount] to keep it from being reset to 0.
-  RoomCard copyWith({int? unreadCount, bool? isPinned}) {
+  RoomCard copyWith({int? unreadCount, bool? isPinned, bool? hasUnreadCount}) {
     return RoomCard(
       id: id,
       name: name,
@@ -686,6 +690,7 @@ class RoomCard {
       liveAvatarPreview: liveAvatarPreview,
       lastMessage: lastMessage,
       unreadCount: unreadCount ?? this.unreadCount,
+      hasUnreadCount: hasUnreadCount ?? this.hasUnreadCount,
       updatedAt: updatedAt,
     );
   }

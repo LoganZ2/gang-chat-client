@@ -522,6 +522,7 @@ class LiveController {
       liveAvatarPreview: remainingPreview,
       lastMessage: existing.lastMessage,
       unreadCount: existing.unreadCount,
+      hasUnreadCount: existing.hasUnreadCount,
       updatedAt: existing.updatedAt,
     );
     return next;
