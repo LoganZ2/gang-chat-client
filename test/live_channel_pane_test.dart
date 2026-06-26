@@ -8,6 +8,7 @@ import 'package:client/src/protocol/models.dart';
 import 'package:client/src/ui/app_config_scope.dart';
 import 'package:client/src/ui/ui.dart' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:livekit_client/livekit_client.dart' as lk;
 
@@ -524,6 +525,189 @@ void main() {
     },
   );
 
+  testWidgets('remote screen share stage exposes bottom-right volume control', (
+    tester,
+  ) async {
+    final searchController = TextEditingController();
+    addTearDown(searchController.dispose);
+    liveVideoTrackRendererForTest = (track, fit, mirrorLocal) {
+      return ColoredBox(
+        key: ValueKey<String>(
+          'live-video-renderer:${track.identity}:${track.isScreenShare}',
+        ),
+        color: Colors.black,
+      );
+    };
+    addTearDown(resetLiveVideoTrackRendererForTest);
+    final volumeChanges = <double>[];
+    final live = _liveState([
+      _participant(
+        id: 'live_phabe',
+        user: _user('phabe', 'Phabe', roomRole: 'member'),
+        screenSharing: true,
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      _host(
+        searchController: searchController,
+        live: live,
+        height: 620,
+        videoTracks: [
+          _liveVideoTrack(
+            identity: 'phabe',
+            isScreenShare: true,
+            isLocal: false,
+          ),
+        ],
+        stageSelection: const LiveStageSelection.track(
+          identity: 'phabe',
+          isScreenShare: true,
+        ),
+        screenShareVolume: 0.75,
+        onScreenShareVolumeChanged: volumeChanges.add,
+      ),
+    );
+    await tester.pump();
+
+    final volumeButton = find.byKey(
+      const ValueKey<String>('live-stage:screen-share-volume'),
+    );
+    expect(volumeButton, findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('live-volume-slider:共享屏幕输出音量')),
+      findsNothing,
+    );
+
+    final rendererRect = tester.getRect(
+      find.byKey(const ValueKey<String>('live-video-renderer:phabe:true')),
+    );
+    final buttonRect = tester.getRect(volumeButton);
+    expect(buttonRect.right, closeTo(rendererRect.right - 8, 0.01));
+    expect(buttonRect.bottom, closeTo(rendererRect.bottom - 8, 0.01));
+
+    final hover = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await hover.addPointer(location: tester.getCenter(volumeButton));
+    await tester.pump();
+
+    final volumeSlider = find.byKey(
+      const ValueKey<String>('live-volume-slider:共享屏幕输出音量'),
+    );
+    final volumePanel = find.byKey(
+      const ValueKey<String>('live-volume-panel:共享屏幕输出音量'),
+    );
+    expect(volumeSlider, findsOneWidget);
+    expect(volumePanel, findsOneWidget);
+    expect(tester.getSize(volumePanel).width, closeTo(34, 1e-9));
+    expect(
+      tester.getRect(volumePanel).bottom,
+      lessThan(tester.getRect(volumeButton).top),
+    );
+
+    await tester.tapAt(
+      tester.getRect(volumeSlider).bottomCenter - const Offset(0, 1),
+    );
+    await tester.pump();
+    expect(volumeChanges.last, closeTo(0, 0.02));
+
+    await hover.removePointer();
+  });
+
+  testWidgets('local screen share stage only shows the exit control', (
+    tester,
+  ) async {
+    final searchController = TextEditingController();
+    addTearDown(searchController.dispose);
+    liveVideoTrackRendererForTest = (track, fit, mirrorLocal) {
+      return ColoredBox(
+        key: ValueKey<String>(
+          'live-video-renderer:${track.identity}:${track.isScreenShare}',
+        ),
+        color: Colors.black,
+      );
+    };
+    addTearDown(resetLiveVideoTrackRendererForTest);
+    final live = _liveState([
+      _participant(
+        id: 'live_self',
+        user: _currentUser.toSummary().copyWith(
+          roomDisplayName: 'Room Me',
+          roomRole: 'member',
+        ),
+        screenSharing: true,
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      _host(
+        searchController: searchController,
+        live: live,
+        height: 620,
+        videoTracks: [
+          _liveVideoTrack(
+            identity: 'current_user',
+            isScreenShare: true,
+            isLocal: true,
+          ),
+        ],
+        stageSelection: const LiveStageSelection.track(
+          identity: 'current_user',
+          isScreenShare: true,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final exitButton = find.byKey(const ValueKey<String>('live-stage:exit'));
+    expect(exitButton, findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('live-stage:fullscreen')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('live-stage:screen-share-volume')),
+      findsNothing,
+    );
+
+    final rendererRect = tester.getRect(
+      find.byKey(
+        const ValueKey<String>('live-video-renderer:current_user:true'),
+      ),
+    );
+    final exitRect = tester.getRect(exitButton);
+    expect(exitRect.right, closeTo(rendererRect.right - 8, 0.01));
+  });
+
+  testWidgets('full screen live stage exits with Escape', (tester) async {
+    liveVideoTrackRendererForTest = (track, fit, mirrorLocal) {
+      return const ColoredBox(color: Colors.black);
+    };
+    addTearDown(resetLiveVideoTrackRendererForTest);
+    var exitCount = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: LiveFullScreenStage(
+          track: _liveVideoTrack(
+            identity: 'phabe',
+            isScreenShare: true,
+            isLocal: false,
+          ),
+          label: 'Phabe 的屏幕共享',
+          onExit: () => exitCount++,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.escape);
+
+    expect(exitCount, 1);
+  });
+
   testWidgets('live member names use self and room role colors', (
     tester,
   ) async {
@@ -671,7 +855,10 @@ Widget _host({
   VoidCallback? onToggleCamera,
   VoidCallback? onToggleShare,
   ValueChanged<LiveStageSelection?>? onStageSelectionChanged,
+  LiveStageSelection? stageSelection,
   List<LiveVideoTrack> videoTracks = const [],
+  double screenShareVolume = 1,
+  ValueChanged<double>? onScreenShareVolumeChanged,
   double Function(String userId)? participantVoiceVolume,
   void Function(String userId, double volume)? onParticipantVoiceVolumeChanged,
   ValueChanged<String>? onParticipantVoiceMuteToggled,
@@ -708,7 +895,7 @@ Widget _host({
             screenSharing: false,
             speakingUserIds: speakingUserIds,
             videoTracks: videoTracks,
-            stageSelection: const LiveStageSelection.none(),
+            stageSelection: stageSelection ?? const LiveStageSelection.none(),
             onStageSelectionChanged: onStageSelectionChanged ?? (_) {},
             onEnterFullScreen: (_) {},
             onBackToChat: () {},
@@ -734,11 +921,11 @@ Widget _host({
             inputVolume: 1,
             outputVolume: 1,
             musicBoxVolume: 1,
-            screenShareVolume: 1,
+            screenShareVolume: screenShareVolume,
             onInputVolumeChanged: (_) {},
             onOutputVolumeChanged: (_) {},
             onMusicBoxVolumeChanged: (_) {},
-            onScreenShareVolumeChanged: (_) {},
+            onScreenShareVolumeChanged: onScreenShareVolumeChanged ?? (_) {},
             participantVoiceVolume: participantVoiceVolume ?? ((_) => 1),
             onParticipantVoiceVolumeChanged:
                 onParticipantVoiceVolumeChanged ?? ((_, _) {}),

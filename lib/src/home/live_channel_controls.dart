@@ -9,10 +9,8 @@ class _LiveControlBar extends StatelessWidget {
     required this.voiceBlocked,
     required this.cameraOn,
     required this.screenSharing,
-    required this.watchingRemoteScreenShare,
     required this.inputVolume,
     required this.outputVolume,
-    required this.screenShareVolume,
     required this.musicBox,
     required this.musicBoxEnabled,
     required this.musicBoxOpen,
@@ -24,7 +22,6 @@ class _LiveControlBar extends StatelessWidget {
     required this.onToggleShare,
     required this.onInputVolumeChanged,
     required this.onOutputVolumeChanged,
-    required this.onScreenShareVolumeChanged,
     required this.onToggleMusicBox,
     required this.onMusicBoxTogglePlayback,
     required this.onMusicBoxSkip,
@@ -38,10 +35,8 @@ class _LiveControlBar extends StatelessWidget {
   final bool voiceBlocked;
   final bool cameraOn;
   final bool screenSharing;
-  final bool watchingRemoteScreenShare;
   final double inputVolume;
   final double outputVolume;
-  final double screenShareVolume;
   final MusicBoxState? musicBox;
   final bool musicBoxEnabled;
   final bool musicBoxOpen;
@@ -53,7 +48,6 @@ class _LiveControlBar extends StatelessWidget {
   final VoidCallback onToggleShare;
   final ValueChanged<double> onInputVolumeChanged;
   final ValueChanged<double> onOutputVolumeChanged;
-  final ValueChanged<double> onScreenShareVolumeChanged;
   final VoidCallback onToggleMusicBox;
   final VoidCallback onMusicBoxTogglePlayback;
   final VoidCallback onMusicBoxSkip;
@@ -109,14 +103,10 @@ class _LiveControlBar extends StatelessWidget {
               size: _controlButtonSize,
             ),
           ),
-          _HoverVolumeButton(
-            key: const ValueKey<String>('live-control:screen-share'),
-            value: screenShareVolume,
-            semanticLabel: '共享屏幕输出音量',
-            infoMessage: screenSharing ? '停止共享屏幕' : '共享屏幕',
-            onChanged: onScreenShareVolumeChanged,
-            enabled: watchingRemoteScreenShare,
+          _HoverInfo(
+            message: screenSharing ? '停止共享屏幕' : '共享屏幕',
             child: ButtonIcon(
+              key: const ValueKey<String>('live-control:screen-share'),
               icon: Icon(
                 screenSharing
                     ? Icons.stop_screen_share
@@ -292,7 +282,6 @@ class _HoverVolumeButton extends StatefulWidget {
     required this.semanticLabel,
     required this.infoMessage,
     required this.onChanged,
-    this.enabled = true,
     this.maxValue = 1.0,
     this.valueFormatter,
     this.panelWidth = _controlButtonSize,
@@ -304,7 +293,6 @@ class _HoverVolumeButton extends StatefulWidget {
   final String semanticLabel;
   final String infoMessage;
   final ValueChanged<double> onChanged;
-  final bool enabled;
   final double maxValue;
   final String Function(double value)? valueFormatter;
   final double panelWidth;
@@ -342,7 +330,6 @@ class _HoverVolumeButtonState extends State<_HoverVolumeButton> {
       _value = _normalize(widget.value);
       _markOverlayNeedsBuild();
     }
-    if (!widget.enabled) _hideOverlay();
   }
 
   @override
@@ -353,7 +340,6 @@ class _HoverVolumeButtonState extends State<_HoverVolumeButton> {
   }
 
   void _showOverlay() {
-    if (!widget.enabled) return;
     _hideTimer?.cancel();
     if (_active != null && _active != this) {
       _active!._hideOverlay();

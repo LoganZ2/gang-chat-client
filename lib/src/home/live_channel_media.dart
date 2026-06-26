@@ -23,17 +23,23 @@ class _LiveMediaStage extends StatelessWidget {
   const _LiveMediaStage({
     required this.track,
     required this.label,
+    required this.screenShareVolume,
     required this.onExit,
     required this.onFullScreen,
+    required this.onScreenShareVolumeChanged,
   });
 
   final LiveVideoTrack track;
   final String label;
+  final double screenShareVolume;
   final VoidCallback onExit;
   final VoidCallback onFullScreen;
+  final ValueChanged<double> onScreenShareVolumeChanged;
 
   @override
   Widget build(BuildContext context) {
+    final isLocalScreenShare = track.isScreenShare && track.isLocal;
+    final isRemoteScreenShare = track.isScreenShare && !track.isLocal;
     final content = ColoredBox(
       color: UiColors.surfacePressed,
       child: Stack(
@@ -57,19 +63,32 @@ class _LiveMediaStage extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 _StageOverlayIconButton(
+                  key: const ValueKey<String>('live-stage:exit'),
                   icon: Icons.close_fullscreen,
                   infoMessage: '退出焦点画面',
                   onPressed: onExit,
                 ),
-                const SizedBox(width: 6),
-                _StageOverlayIconButton(
-                  icon: Icons.fullscreen,
-                  infoMessage: '全屏查看',
-                  onPressed: onFullScreen,
-                ),
+                if (!isLocalScreenShare) ...[
+                  const SizedBox(width: 6),
+                  _StageOverlayIconButton(
+                    key: const ValueKey<String>('live-stage:fullscreen'),
+                    icon: Icons.fullscreen,
+                    infoMessage: '全屏查看',
+                    onPressed: onFullScreen,
+                  ),
+                ],
               ],
             ),
           ),
+          if (isRemoteScreenShare)
+            Positioned(
+              right: 8,
+              bottom: 8,
+              child: _StageScreenShareVolumeButton(
+                value: screenShareVolume,
+                onChanged: onScreenShareVolumeChanged,
+              ),
+            ),
         ],
       ),
     );
@@ -81,7 +100,32 @@ class _LiveMediaStage extends StatelessWidget {
   }
 }
 
-class LiveFullScreenStage extends StatelessWidget {
+class _StageScreenShareVolumeButton extends StatelessWidget {
+  const _StageScreenShareVolumeButton({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final double value;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = normalizedAudioVolume(value);
+    return _HoverVolumeButton(
+      key: const ValueKey<String>('live-stage:screen-share-volume'),
+      value: normalized,
+      semanticLabel: '共享屏幕输出音量',
+      infoMessage: '调整共享屏幕音量',
+      onChanged: onChanged,
+      panelWidth: 34,
+      panelHeight: _hoverVolumePanelHeight * 34 / _controlButtonSize,
+      child: _StageOverlayIconSurface(icon: _screenShareVolumeIcon(normalized)),
+    );
+  }
+}
+
+class LiveFullScreenStage extends StatefulWidget {
   const LiveFullScreenStage({
     super.key,
     required this.track,
@@ -94,33 +138,65 @@ class LiveFullScreenStage extends StatelessWidget {
   final VoidCallback onExit;
 
   @override
+  State<LiveFullScreenStage> createState() => _LiveFullScreenStageState();
+}
+
+class _LiveFullScreenStageState extends State<LiveFullScreenStage> {
+  final FocusNode _focusNode = FocusNode(debugLabel: 'LiveFullScreenStage');
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: Colors.black,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          _LiveMediaVideo(track: track),
-          Positioned(
-            left: 14,
-            top: 14,
-            child: _LiveStageBadge(
-              label: label,
-              kind: track.isScreenShare
-                  ? _LiveMediaKind.screenShare
-                  : _LiveMediaKind.camera,
+    return KeyboardListener(
+      focusNode: _focusNode,
+      autofocus: true,
+      onKeyEvent: (event) {
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.escape) {
+          widget.onExit();
+        }
+      },
+      child: ColoredBox(
+        color: Colors.black,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _LiveMediaVideo(track: widget.track),
+            Positioned(
+              left: 14,
+              top: 14,
+              child: _LiveStageBadge(
+                label: widget.label,
+                kind: widget.track.isScreenShare
+                    ? _LiveMediaKind.screenShare
+                    : _LiveMediaKind.camera,
+              ),
             ),
-          ),
-          Positioned(
-            top: 14,
-            right: 14,
-            child: _StageOverlayIconButton(
-              icon: Icons.fullscreen_exit,
-              infoMessage: '退出全屏',
-              onPressed: onExit,
+            Positioned(
+              top: 14,
+              right: 14,
+              child: _StageOverlayIconButton(
+                key: const ValueKey<String>('live-fullscreen-stage:exit'),
+                icon: Icons.fullscreen_exit,
+                infoMessage: '退出全屏',
+                onPressed: widget.onExit,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -128,6 +204,7 @@ class LiveFullScreenStage extends StatelessWidget {
 
 class _StageOverlayIconButton extends StatefulWidget {
   const _StageOverlayIconButton({
+    super.key,
     required this.icon,
     required this.infoMessage,
     required this.onPressed,
@@ -147,7 +224,6 @@ class _StageOverlayIconButtonState extends State<_StageOverlayIconButton> {
 
   @override
   Widget build(BuildContext context) {
-    final color = _hovered ? UiColors.accent : UiColors.textSecondary;
     return _HoverInfo(
       message: widget.infoMessage,
       child: MouseRegion(
@@ -157,20 +233,50 @@ class _StageOverlayIconButtonState extends State<_StageOverlayIconButton> {
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: widget.onPressed,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 120),
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: _hovered
-                  ? UiColors.surface.withValues(alpha: 0.92)
-                  : UiColors.surface.withValues(alpha: 0.72),
-              borderRadius: BorderRadius.circular(UiRadii.md),
-            ),
-            child: Icon(widget.icon, size: 19, color: color),
-          ),
+          child: _StageOverlayIconSurface(icon: widget.icon, hovered: _hovered),
         ),
       ),
+    );
+  }
+}
+
+class _StageOverlayIconSurface extends StatefulWidget {
+  const _StageOverlayIconSurface({required this.icon, this.hovered});
+
+  final IconData icon;
+  final bool? hovered;
+
+  @override
+  State<_StageOverlayIconSurface> createState() =>
+      _StageOverlayIconSurfaceState();
+}
+
+class _StageOverlayIconSurfaceState extends State<_StageOverlayIconSurface> {
+  bool _hovered = false;
+
+  bool get _effectiveHovered => widget.hovered ?? _hovered;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _effectiveHovered ? UiColors.accent : UiColors.textSecondary;
+    final surface = AnimatedContainer(
+      duration: const Duration(milliseconds: 120),
+      width: 34,
+      height: 34,
+      decoration: BoxDecoration(
+        color: _effectiveHovered
+            ? UiColors.surface.withValues(alpha: 0.92)
+            : UiColors.surface.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(UiRadii.md),
+      ),
+      child: Icon(widget.icon, size: 19, color: color),
+    );
+    if (widget.hovered != null) return surface;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: surface,
     );
   }
 }
@@ -216,6 +322,13 @@ IconData _mediaIcon(_LiveMediaKind kind) {
     _LiveMediaKind.camera => Icons.videocam,
     _LiveMediaKind.screenShare => Icons.screen_share,
   };
+}
+
+IconData _screenShareVolumeIcon(double value) {
+  final normalized = normalizedAudioVolume(value);
+  if (normalized <= 0) return Icons.volume_off;
+  if (normalized < 0.5) return Icons.volume_down;
+  return Icons.volume_up;
 }
 
 String liveStageTrackLabel(LiveState? live, LiveVideoTrack track) {

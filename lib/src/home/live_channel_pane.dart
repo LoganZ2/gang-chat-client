@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show KeyDownEvent, LogicalKeyboardKey;
 
 import '../app/audio_levels.dart';
 import '../app/live_display.dart' as live_display;
@@ -278,9 +279,12 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                                     widget.live,
                                     stageTrack,
                                   ),
+                                  screenShareVolume: widget.screenShareVolume,
                                   onExit: _exitStage,
                                   onFullScreen: () =>
                                       widget.onEnterFullScreen(stageTrack),
+                                  onScreenShareVolumeChanged:
+                                      widget.onScreenShareVolumeChanged,
                                 ),
                               ),
                               const SizedBox(height: 14),
@@ -368,12 +372,8 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                   voiceBlocked: widget.voiceBlocked,
                   cameraOn: widget.cameraOn,
                   screenSharing: widget.screenSharing,
-                  watchingRemoteScreenShare:
-                      stageTrack?.isScreenShare == true &&
-                      stageTrack?.isLocal == false,
                   inputVolume: widget.inputVolume,
                   outputVolume: widget.outputVolume,
-                  screenShareVolume: widget.screenShareVolume,
                   musicBox: musicBox,
                   musicBoxEnabled: musicBoxEnabled,
                   musicBoxOpen: musicBoxOpen,
@@ -385,7 +385,6 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                   onToggleShare: widget.onToggleShare,
                   onInputVolumeChanged: widget.onInputVolumeChanged,
                   onOutputVolumeChanged: widget.onOutputVolumeChanged,
-                  onScreenShareVolumeChanged: widget.onScreenShareVolumeChanged,
                   onToggleMusicBox: widget.onToggleMusicBox,
                   onMusicBoxTogglePlayback: widget.onMusicBoxTogglePlayback,
                   onMusicBoxSkip: widget.onMusicBoxSkip,
