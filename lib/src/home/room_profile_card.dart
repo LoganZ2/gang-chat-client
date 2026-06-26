@@ -353,27 +353,13 @@ class _UserProfileCard extends StatelessWidget {
               style: UiTypography.label.copyWith(color: UiColors.textMuted),
             ),
             const SizedBox(height: UiSpacing.xs),
-            ...commonRooms
-                .take(4)
-                .map(
-                  (room) => Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: _UserCommonRoomRow(
-                      room: room,
-                      currentUser: currentUser,
-                      onResolveUserProfile: onResolveUserProfile,
-                      onResolveRoomProfile: onResolveRoomProfile,
-                      onEnterRoom: onEnterCommonRoom,
-                    ),
-                  ),
-                ),
-            if (commonRooms.length > 4) ...[
-              const SizedBox(height: 4),
-              Text(
-                '等 ${commonRooms.length} 个房间',
-                style: UiTypography.label.copyWith(color: UiColors.textMuted),
-              ),
-            ],
+            _UserCommonRoomList(
+              rooms: commonRooms,
+              currentUser: currentUser,
+              onResolveUserProfile: onResolveUserProfile,
+              onResolveRoomProfile: onResolveRoomProfile,
+              onEnterRoom: onEnterCommonRoom,
+            ),
           ],
           if (uid != null && uid.isNotEmpty) ...[
             const SizedBox(height: UiSpacing.sm),
@@ -398,6 +384,72 @@ class _UserProfileCard extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _UserCommonRoomList extends StatefulWidget {
+  const _UserCommonRoomList({
+    required this.rooms,
+    required this.currentUser,
+    required this.onResolveUserProfile,
+    required this.onResolveRoomProfile,
+    required this.onEnterRoom,
+  });
+
+  final List<UserCommonRoom> rooms;
+  final CurrentUser? currentUser;
+  final UserProfileResolver? onResolveUserProfile;
+  final RoomProfileResolver? onResolveRoomProfile;
+  final ValueChanged<PublicRoom>? onEnterRoom;
+
+  @override
+  State<_UserCommonRoomList> createState() => _UserCommonRoomListState();
+}
+
+class _UserCommonRoomListState extends State<_UserCommonRoomList> {
+  static const double _maxHeight = 116;
+
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final list = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final room in widget.rooms)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: _UserCommonRoomRow(
+              room: room,
+              currentUser: widget.currentUser,
+              onResolveUserProfile: widget.onResolveUserProfile,
+              onResolveRoomProfile: widget.onResolveRoomProfile,
+              onEnterRoom: widget.onEnterRoom,
+            ),
+          ),
+      ],
+    );
+
+    if (widget.rooms.length <= 4) return list;
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: _maxHeight),
+      child: Scrollbar(
+        controller: _scrollController,
+        thumbVisibility: true,
+        child: SingleChildScrollView(
+          controller: _scrollController,
+          padding: const EdgeInsets.only(right: UiSpacing.sm),
+          child: list,
+        ),
       ),
     );
   }

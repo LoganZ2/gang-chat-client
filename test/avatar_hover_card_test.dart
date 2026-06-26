@@ -349,6 +349,46 @@ void main() {
     expect(find.text('RID: R2'), findsOneWidget);
   });
 
+  testWidgets('common rooms overflow scrolls instead of showing summary row', (
+    tester,
+  ) async {
+    const manyRoomsUser = UserSummary(
+      id: 'u1',
+      username: 'logan',
+      displayName: 'Logan',
+      avatarUrl: null,
+      defaultAvatarKey: 'blue-3',
+      commonRooms: [
+        UserCommonRoom(id: 'r1', rid: 'R1', name: 'Room One'),
+        UserCommonRoom(id: 'r2', rid: 'R2', name: 'Room Two'),
+        UserCommonRoom(id: 'r3', rid: 'R3', name: 'Room Three'),
+        UserCommonRoom(id: 'r4', rid: 'R4', name: 'Room Four'),
+        UserCommonRoom(id: 'r5', rid: 'R5', name: 'Room Five'),
+        UserCommonRoom(id: 'r6', rid: 'R6', name: 'Room Six'),
+      ],
+    );
+
+    await tester.pumpWidget(
+      _host(const AvatarHoverCardForTest(user: manyRoomsUser)),
+    );
+
+    await tester.tap(find.byType(Avatar).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('6 个共同房间'), findsOneWidget);
+    expect(find.text('等 6 个房间'), findsNothing);
+    expect(find.byType(Scrollbar), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('Room Six'),
+      80,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Room Six'), findsOneWidget);
+  });
+
   testWidgets('clicking an earlier card rolls back later nested cards', (
     tester,
   ) async {
