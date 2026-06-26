@@ -626,7 +626,10 @@ void main() {
       MaterialApp(
         theme: ui.uiTheme(),
         home: HomePage(
-          app: _homeTestAppContext(requestedPaths: requestedPaths),
+          app: _homeTestAppContext(
+            requestedPaths: requestedPaths,
+            pinAlphaRoom: true,
+          ),
           realtime: _NoopRealtimeService(),
         ),
       ),
@@ -710,7 +713,20 @@ void main() {
         matching: find.byType(ui.PressableSurface),
       ),
     );
+    final alphaPinnedRect = tester.getRect(
+      find.byKey(const ValueKey('home-sidebar-room-pinned-server-alpha')),
+    );
+    final alphaAvatarRect = tester.getRect(
+      find.descendant(
+        of: find.byKey(const ValueKey('home-sidebar-room-server-alpha')),
+        matching: find.byType(ui.Avatar),
+      ),
+    );
     expect(userSummaryRect.right - alphaCardRect.right, closeTo(0, 0.01));
+    expect(alphaPinnedRect.left, lessThan(alphaAvatarRect.left));
+    expect(alphaPinnedRect.left, closeTo(alphaCardRect.left + 2, 1));
+    expect(alphaPinnedRect.top, lessThan(alphaAvatarRect.top));
+    expect(alphaPinnedRect.top, lessThan(alphaCardRect.top + 8));
 
     await tester.tap(find.text('Alpha Room'));
     await tester.pumpAndSettle();
@@ -5406,6 +5422,7 @@ AuthenticatedAppContext _homeTestAppContext({
   bool includeActionComparisonMember = false,
   bool includeUnreadRoomNotification = false,
   bool includeFreshRoomNotificationOnRefresh = false,
+  bool pinAlphaRoom = false,
   Future<void> Function(String roomId)? beforeRoomDetailResponse,
 }) {
   final user = CurrentUser(
@@ -5452,6 +5469,7 @@ AuthenticatedAppContext _homeTestAppContext({
       includeUnreadRoomNotification: includeUnreadRoomNotification,
       includeFreshRoomNotificationOnRefresh:
           includeFreshRoomNotificationOnRefresh,
+      pinAlphaRoom: pinAlphaRoom,
       beforeRoomDetailResponse: beforeRoomDetailResponse,
     ),
   );
@@ -5472,6 +5490,7 @@ GangApi _roomsApi({
   bool includeActionComparisonMember = false,
   bool includeUnreadRoomNotification = false,
   bool includeFreshRoomNotificationOnRefresh = false,
+  bool pinAlphaRoom = false,
   Future<void> Function(String roomId)? beforeRoomDetailResponse,
 }) {
   var roomNotificationsMarkedRead = false;
@@ -5521,7 +5540,10 @@ GangApi _roomsApi({
                 name: created['name']! as String,
                 memberCount: 1,
               ),
-            ..._serverListJson(currentRoomJoinPolicy: currentRoomJoinPolicy),
+            ..._serverListJson(
+              currentRoomJoinPolicy: currentRoomJoinPolicy,
+              pinAlphaRoom: pinAlphaRoom,
+            ),
           ],
         });
       }
@@ -6221,6 +6243,7 @@ http.Response _jsonResponse(Object body) {
 
 List<Map<String, Object?>> _serverListJson({
   String currentRoomJoinPolicy = 'approval_required',
+  bool pinAlphaRoom = false,
 }) {
   return [
     _roomCardJson(
@@ -6230,6 +6253,7 @@ List<Map<String, Object?>> _serverListJson({
       liveParticipantCount: 1,
       unreadCount: 3,
       joinPolicy: currentRoomJoinPolicy,
+      isPinned: pinAlphaRoom,
     ),
     _roomCardJson(id: 'server-beta', name: 'Beta Room', memberCount: 5),
   ];
@@ -6408,6 +6432,7 @@ Map<String, Object?> _roomCardJson({
   int memberCount = 1,
   int liveParticipantCount = 0,
   int unreadCount = 0,
+  bool isPinned = false,
 }) {
   return {
     'id': id,
@@ -6424,6 +6449,7 @@ Map<String, Object?> _roomCardJson({
     'live_avatar_preview': <Object?>[],
     'last_message': null,
     'unread_count': unreadCount,
+    'is_pinned': isPinned,
     'updated_at': '2026-06-05T00:00:00Z',
   };
 }

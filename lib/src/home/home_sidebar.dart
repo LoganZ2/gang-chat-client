@@ -11,6 +11,7 @@ const _serverCardHeight = 68.0;
 const _serverCardHoverLift = 2.0;
 const _serverCardBaseDepth = 4.0;
 const _serverCardGap = 10.0;
+const _serverCardHorizontalPadding = 10.0;
 const _footerButtonSize = 38.0;
 const _footerButtonGap = 8.0;
 const _footerButtonOuterHeight = _footerButtonSize + 3.0 + 5.0;
@@ -448,68 +449,93 @@ class _ServerCard extends StatelessWidget {
       borderColor: UiColors.border,
       selectedBorderColor: UiColors.selectedBorder,
       borderRadius: UiRadii.md,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      padding: const EdgeInsets.symmetric(
+        horizontal: _serverCardHorizontalPadding,
+      ),
       onPressed: onPressed,
-      child: Row(
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          _ServerAvatar(
-            server: server,
-            selected: selected,
-            voiceJoined: voiceJoined,
-          ),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+          Row(
+            children: [
+              _ServerAvatar(
+                server: server,
+                selected: selected,
+                voiceJoined: voiceJoined,
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: HighlightedText(
-                        text: server.displayName,
-                        query: searchQuery,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: UiColors.text,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: HighlightedText(
+                            text: server.displayName,
+                            query: searchQuery,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: UiColors.text,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0,
+                            ),
+                          ),
                         ),
+                        if (lastMessageTime.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            lastMessageTime,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: UiTypography.label.copyWith(
+                              color: selected
+                                  ? UiColors.textSecondary
+                                  : UiColors.textMuted,
+                              fontSize: 10.5,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    HighlightedText(
+                      text: room_display.roomSidebarSubtitle(server),
+                      query: searchQuery,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: UiTypography.label.copyWith(
+                        color: selected
+                            ? UiColors.textSecondary
+                            : UiColors.textMuted,
                       ),
                     ),
-                    if (lastMessageTime.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      Text(
-                        lastMessageTime,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: UiTypography.label.copyWith(
-                          color: selected
-                              ? UiColors.textSecondary
-                              : UiColors.textMuted,
-                          fontSize: 10.5,
-                        ),
-                      ),
-                    ],
                   ],
                 ),
-                const SizedBox(height: 4),
-                HighlightedText(
-                  text: room_display.roomSidebarSubtitle(server),
-                  query: searchQuery,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: UiTypography.label.copyWith(
-                    color: selected
-                        ? UiColors.textSecondary
-                        : UiColors.textMuted,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
+          if (server.isPinned)
+            Positioned(
+              top: 2,
+              left: 2 - _serverCardHorizontalPadding,
+              child: Icon(
+                Icons.push_pin,
+                key: ValueKey('home-sidebar-room-pinned-${server.id}'),
+                color: UiColors.text,
+                size: 14,
+                shadows: const [
+                  Shadow(
+                    color: Color(0xAA0F1115),
+                    blurRadius: 3,
+                    offset: Offset(0, 1),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -545,24 +571,6 @@ class _ServerAvatar extends StatelessWidget {
               activeBorderWidth: 1.2,
             ),
           ),
-          if (server.isPinned)
-            Positioned(
-              top: -1,
-              left: -1,
-              child: Icon(
-                Icons.push_pin,
-                key: ValueKey('home-sidebar-room-pinned-${server.id}'),
-                color: UiColors.text,
-                size: 14,
-                shadows: const [
-                  Shadow(
-                    color: Color(0xAA0F1115),
-                    blurRadius: 3,
-                    offset: Offset(0, 1),
-                  ),
-                ],
-              ),
-            ),
           if (server.unreadCount > 0)
             Positioned(
               top: 0,
