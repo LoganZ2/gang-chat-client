@@ -139,6 +139,65 @@ class _PasswordVisibilityToggle extends StatelessWidget {
   }
 }
 
+class _UsernameValidityIndicator extends StatelessWidget {
+  const _UsernameValidityIndicator({
+    required this.error,
+    required this.checking,
+    required this.enabled,
+  });
+
+  final String? error;
+  final bool checking;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final valid = error == null && !checking;
+    final color = !enabled
+        ? _textMuted
+        : checking
+        ? _textSecondary
+        : valid
+        ? _cyan
+        : _danger;
+    final label = checking ? '检测中' : (valid ? '合法' : '不合法');
+    final message = checking
+        ? '正在检测 Username 是否可用'
+        : (valid ? 'Username 可用' : error!);
+    return Tooltip(
+      message: message,
+      child: Semantics(
+        label: checking
+            ? '正在检测 Username 是否可用'
+            : (valid ? 'Username 可用' : 'Username 不合法'),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              checking
+                  ? Icons.hourglass_empty_outlined
+                  : valid
+                  ? Icons.check_circle_outline
+                  : Icons.error_outline,
+              size: 16,
+              color: color,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _FieldLabel extends StatelessWidget {
   const _FieldLabel(this.text);
 

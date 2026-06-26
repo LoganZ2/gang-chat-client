@@ -29,6 +29,63 @@ void main() {
       ).error,
       '邮箱不能为空',
     );
+    expect(
+      accountUpdateDraftFromForm(
+        user: _user(),
+        username: 'lo gan',
+        email: 'logan@example.test',
+        emailPublic: false,
+        phoneNumber: '',
+        phoneNumberPublic: false,
+        language: defaultUserLanguage,
+      ).error,
+      'Username 需为 3-32 位，只能包含英文字母、数字、下划线或连字符',
+    );
+  });
+
+  test('loginUsernameUpdateDraftFromForm validates username only', () {
+    expect(loginUsernameValidationError('lo'), isNotNull);
+    expect(loginUsernameValidationError('logan_01-test'), isNull);
+    expect(isLoginUsernameFormatValid('logan.test'), isFalse);
+
+    expect(
+      loginUsernameUpdateDraftFromForm(
+        user: _user(username: 'logan'),
+        username: ' logan ',
+      ).noChanges,
+      isTrue,
+    );
+
+    final draft = loginUsernameUpdateDraftFromForm(
+      user: _user(username: 'logan'),
+      username: ' new_logan ',
+    );
+    expect(draft.error, isNull);
+    expect(draft.username, 'new_logan');
+    expect(draft.email, isNull);
+    expect(draft.language, isNull);
+  });
+
+  test('loginUsernameAvailabilityError detects other users only', () {
+    expect(
+      loginUsernameAvailabilityError(
+        user: _user(id: 'user_1', username: 'logan'),
+        username: 'Logan',
+        candidates: [
+          _summary(id: 'user_1', username: 'logan'),
+          _summary(id: 'user_2', username: 'logan_suffix'),
+        ],
+      ),
+      isNull,
+    );
+    expect(
+      loginUsernameAvailabilityError(
+        user: _user(id: 'user_1', username: 'logan'),
+        username: 'New_Logan',
+        candidates: [_summary(id: 'user_2', username: 'new_logan')],
+      ),
+      '该登录 Username 已被其他用户使用',
+    );
   });
 
   test('accountUpdateDraftFromForm returns changed account fields only', () {
@@ -575,6 +632,7 @@ void main() {
 }
 
 CurrentUser _user({
+  String id = 'user_1',
   String username = 'logan',
   String displayName = 'Logan',
   String bio = '',
@@ -587,7 +645,7 @@ CurrentUser _user({
   String language = defaultUserLanguage,
 }) {
   return CurrentUser(
-    id: 'user_1',
+    id: id,
     uid: '1001',
     username: username,
     displayName: displayName,
@@ -602,5 +660,24 @@ CurrentUser _user({
     isSuperuser: false,
     language: language,
     createdAt: DateTime.utc(2026, 6, 4),
+  );
+}
+
+UserSummary _summary({required String id, required String username}) {
+  return UserSummary(
+    id: id,
+    uid: id,
+    username: username,
+    displayName: username,
+    bio: '',
+    gender: 'secret',
+    email: null,
+    emailPublic: false,
+    phoneNumber: null,
+    phoneNumberPublic: false,
+    avatarUrl: null,
+    defaultAvatarKey: 'blue-3',
+    isSuperuser: false,
+    isOnline: true,
   );
 }

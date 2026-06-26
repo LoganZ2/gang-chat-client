@@ -33,6 +33,15 @@ class SettingsController {
     return client.me();
   }
 
+  Future<List<UserSummary>?> searchUsers({
+    required String query,
+    int limit = 20,
+  }) {
+    final client = api;
+    if (client == null) return Future.value();
+    return client.searchUsers(query: query, limit: limit);
+  }
+
   Future<List<UserSession>?> loadSessions() {
     final client = api;
     if (client == null) return Future.value();

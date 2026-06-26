@@ -102,6 +102,36 @@ class PasswordChangeDraft {
   bool get isValid => error == null;
 }
 
+final _loginUsernamePattern = RegExp(r'^[A-Za-z0-9_-]{3,32}$');
+
+String? loginUsernameValidationError(String username) {
+  final trimmed = username.trim();
+  if (trimmed.isEmpty) {
+    return '用户名不能为空';
+  }
+  if (!_loginUsernamePattern.hasMatch(trimmed)) {
+    return 'Username 需为 3-32 位，只能包含英文字母、数字、下划线或连字符';
+  }
+  return null;
+}
+
+bool isLoginUsernameFormatValid(String username) {
+  return loginUsernameValidationError(username) == null;
+}
+
+String? loginUsernameAvailabilityError({
+  required CurrentUser user,
+  required String username,
+  required Iterable<UserSummary> candidates,
+}) {
+  final normalizedUsername = username.trim().toLowerCase();
+  final taken = candidates.any((candidate) {
+    return candidate.id != user.id &&
+        candidate.username.trim().toLowerCase() == normalizedUsername;
+  });
+  return taken ? '该登录 Username 已被其他用户使用' : null;
+}
+
 class AccountFormSaveStatePatch {
   const AccountFormSaveStatePatch({
     required this.savingAccount,
@@ -328,6 +358,21 @@ AccountFormSaveStatePatch accountFormSaveNoChanges({
     accountError: accountError,
     notice: _accountFormNoChangesNotice(target),
   );
+}
+
+AccountUpdateDraft loginUsernameUpdateDraftFromForm({
+  required CurrentUser user,
+  required String username,
+}) {
+  final nextUsername = username.trim();
+  final validationError = loginUsernameValidationError(nextUsername);
+  if (validationError != null) {
+    return AccountUpdateDraft.invalid(validationError);
+  }
+  if (nextUsername == user.username) {
+    return const AccountUpdateDraft.noChanges();
+  }
+  return AccountUpdateDraft.valid(username: nextUsername);
 }
 
 AccountFormSaveStatePatch accountFormSaveStarted({
@@ -584,8 +629,9 @@ AccountUpdateDraft accountUpdateDraftFromForm({
   final nextUsername = username.trim();
   final nextEmailValue = email.trim();
   final nextPhoneValue = phoneNumber.trim();
-  if (nextUsername.isEmpty) {
-    return const AccountUpdateDraft.invalid('用户名不能为空');
+  final usernameError = loginUsernameValidationError(nextUsername);
+  if (usernameError != null) {
+    return AccountUpdateDraft.invalid(usernameError);
   }
   if (nextEmailValue.isEmpty) {
     return const AccountUpdateDraft.invalid('邮箱不能为空');

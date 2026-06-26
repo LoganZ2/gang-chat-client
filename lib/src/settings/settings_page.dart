@@ -114,6 +114,10 @@ class _SettingsPageState extends State<SettingsPage> {
   final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
+  static const _usernameAvailabilityDebounceDuration = Duration(
+    milliseconds: 350,
+  );
+
   SettingsSection _section = SettingsSection.profile;
   CurrentUser? _user;
   List<UserSession> _sessions = const [];
@@ -149,6 +153,11 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _accountError;
   String? _securityError;
   String? _notice;
+  Timer? _usernameAvailabilityDebounce;
+  int _usernameAvailabilityRequestId = 0;
+  String? _usernameAvailabilityQuery;
+  bool _checkingUsernameAvailability = false;
+  String? _usernameAvailabilityError;
 
   StreamSubscription<List<AudioDeviceInfo>>? _deviceSubscription;
   List<AudioDeviceInfo> _audioInputs = const [];
@@ -223,6 +232,7 @@ class _SettingsPageState extends State<SettingsPage> {
   void dispose() {
     unawaited(_stopInputTest(updateState: false));
     unawaited(_stopOutputTest(updateState: false));
+    _usernameAvailabilityDebounce?.cancel();
     unawaited(_deviceSubscription?.cancel());
     unawaited(_systemDefaultInputSubscription?.cancel());
     unawaited(_systemDefaultOutputSubscription?.cancel());
@@ -253,6 +263,15 @@ class _SettingsPageState extends State<SettingsPage> {
     _clearUploadedAvatar = false;
     _pendingAvatarAssetId = null;
     _pendingAvatarUrl = null;
+    _resetUsernameAvailabilityCheck();
+  }
+
+  void _resetUsernameAvailabilityCheck() {
+    _usernameAvailabilityDebounce?.cancel();
+    _usernameAvailabilityRequestId++;
+    _usernameAvailabilityQuery = null;
+    _checkingUsernameAvailability = false;
+    _usernameAvailabilityError = null;
   }
 
   Future<void> _loadAccount() async {
@@ -280,6 +299,121 @@ class _SettingsPageState extends State<SettingsPage> {
         () =>
             _applyAccountLoadPatch(accountLoadFailed(user: _user, failure: e)),
       );
+    }
+  }
+
+  void _onLoginUsernameChanged(String value) {
+    final user = _user;
+    final username = value.trim();
+    _usernameAvailabilityDebounce?.cancel();
+    final requestId = ++_usernameAvailabilityRequestId;
+    final shouldCheck =
+        user != null &&
+        username != user.username &&
+        loginUsernameValidationError(username) == null &&
+        _settingsController.hasApi;
+    if (!shouldCheck) {
+      setState(() {
+        _usernameAvailabilityQuery = null;
+        _checkingUsernameAvailability = false;
+        _usernameAvailabilityError = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _usernameAvailabilityQuery = username;
+      _checkingUsernameAvailability = true;
+      _usernameAvailabilityError = null;
+    });
+    _usernameAvailabilityDebounce = Timer(
+      _usernameAvailabilityDebounceDuration,
+      () => unawaited(
+        _checkLoginUsernameAvailability(
+          user: user,
+          username: username,
+          requestId: requestId,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _checkLoginUsernameAvailability({
+    required CurrentUser user,
+    required String username,
+    required int requestId,
+  }) async {
+    try {
+      final users = await _settingsController.searchUsers(
+        query: username,
+        limit: 8,
+      );
+      if (!mounted || requestId != _usernameAvailabilityRequestId) return;
+      final error = loginUsernameAvailabilityError(
+        user: user,
+        username: username,
+        candidates: users ?? const [],
+      );
+      setState(() {
+        _usernameAvailabilityQuery = username;
+        _checkingUsernameAvailability = false;
+        _usernameAvailabilityError = error;
+      });
+    } catch (_) {
+      if (!mounted || requestId != _usernameAvailabilityRequestId) return;
+      setState(() {
+        _usernameAvailabilityQuery = username;
+        _checkingUsernameAvailability = false;
+        _usernameAvailabilityError = '暂时无法检测 Username 是否重复';
+      });
+    }
+  }
+
+  Future<String?> _ensureLoginUsernameAvailable({
+    required CurrentUser user,
+    required String username,
+  }) async {
+    final normalizedUsername = username.trim();
+    if (_usernameAvailabilityQuery == normalizedUsername &&
+        !_checkingUsernameAvailability) {
+      return _usernameAvailabilityError;
+    }
+
+    _usernameAvailabilityDebounce?.cancel();
+    final requestId = ++_usernameAvailabilityRequestId;
+    setState(() {
+      _usernameAvailabilityQuery = normalizedUsername;
+      _checkingUsernameAvailability = true;
+      _usernameAvailabilityError = null;
+    });
+    try {
+      final users = await _settingsController.searchUsers(
+        query: normalizedUsername,
+        limit: 8,
+      );
+      if (!mounted || requestId != _usernameAvailabilityRequestId) {
+        return null;
+      }
+      final error = loginUsernameAvailabilityError(
+        user: user,
+        username: normalizedUsername,
+        candidates: users ?? const [],
+      );
+      setState(() {
+        _checkingUsernameAvailability = false;
+        _usernameAvailabilityError = error;
+      });
+      return error;
+    } catch (_) {
+      const error = '暂时无法检测 Username 是否重复';
+      if (!mounted || requestId != _usernameAvailabilityRequestId) {
+        return error;
+      }
+      setState(() {
+        _checkingUsernameAvailability = false;
+        _usernameAvailabilityError = error;
+      });
+      return error;
     }
   }
 
@@ -645,19 +779,31 @@ class _SettingsPageState extends State<SettingsPage> {
     AccountFormSaveTarget target = AccountFormSaveTarget.account,
   }) async {
     final user = _user;
-    if (!_settingsController.hasApi || user == null || _savingAccount) return;
+    if (!_settingsController.hasApi ||
+        user == null ||
+        _savingAccount ||
+        _savingProfile) {
+      return;
+    }
 
-    final draft = target == AccountFormSaveTarget.preferences
-        ? preferencesUpdateDraftFromForm(user: user, language: _language)
-        : accountUpdateDraftFromForm(
-            user: user,
-            username: _usernameController.text,
-            email: _emailController.text,
-            emailPublic: _emailPublic,
-            phoneNumber: _phoneController.text,
-            phoneNumberPublic: _phonePublic,
-            language: _language,
-          );
+    final draft = switch (target) {
+      AccountFormSaveTarget.preferences => preferencesUpdateDraftFromForm(
+        user: user,
+        language: _language,
+      ),
+      AccountFormSaveTarget.account => accountUpdateDraftFromForm(
+        user: user,
+        username: _usernameController.text,
+        email: _emailController.text,
+        emailPublic: _emailPublic,
+        phoneNumber: _phoneController.text,
+        phoneNumberPublic: _phonePublic,
+        language: _language,
+      ),
+      AccountFormSaveTarget.profile => throw StateError(
+        'Profile uses _saveProfile',
+      ),
+    };
     if (draft.error != null) {
       setState(
         () => _applyAccountFormSaveStatePatch(
@@ -755,22 +901,25 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _saveProfile() async {
     final user = _user;
-    if (!_settingsController.hasApi || user == null || _savingProfile) return;
+    if (!_settingsController.hasApi ||
+        user == null ||
+        _savingProfile ||
+        _savingAccount) {
+      return;
+    }
 
-    final draft = profileUpdateDraftFromForm(
-      user: user,
-      displayName: _displayNameController.text,
-      bio: _bioController.text,
-      gender: _gender,
-      defaultAvatarKey: _defaultAvatarKey,
-      pendingAvatarAssetId: _pendingAvatarAssetId,
-      clearUploadedAvatar: _clearUploadedAvatar,
-    );
-    if (draft.error != null) {
+    final usernameChanged = _usernameController.text.trim() != user.username;
+    final usernameDraft = usernameChanged
+        ? loginUsernameUpdateDraftFromForm(
+            user: user,
+            username: _usernameController.text,
+          )
+        : const AccountUpdateDraft.noChanges();
+    if (usernameDraft.error != null) {
       setState(
         () => _applyAccountFormSaveStatePatch(
           accountFormSaveValidationFailed(
-            error: draft.error!,
+            error: usernameDraft.error!,
             savingAccount: _savingAccount,
             savingProfile: _savingProfile,
             notice: _notice,
@@ -779,7 +928,50 @@ class _SettingsPageState extends State<SettingsPage> {
       );
       return;
     }
-    if (draft.noChanges) {
+    if (!usernameDraft.noChanges) {
+      final availabilityError = await _ensureLoginUsernameAvailable(
+        user: user,
+        username: usernameDraft.username!,
+      );
+      if (!mounted) return;
+      if (availabilityError != null) {
+        setState(
+          () => _applyAccountFormSaveStatePatch(
+            accountFormSaveValidationFailed(
+              error: availabilityError,
+              savingAccount: _savingAccount,
+              savingProfile: _savingProfile,
+              notice: _notice,
+            ),
+          ),
+        );
+        return;
+      }
+    }
+
+    final profileDraft = profileUpdateDraftFromForm(
+      user: user,
+      displayName: _displayNameController.text,
+      bio: _bioController.text,
+      gender: _gender,
+      defaultAvatarKey: _defaultAvatarKey,
+      pendingAvatarAssetId: _pendingAvatarAssetId,
+      clearUploadedAvatar: _clearUploadedAvatar,
+    );
+    if (profileDraft.error != null) {
+      setState(
+        () => _applyAccountFormSaveStatePatch(
+          accountFormSaveValidationFailed(
+            error: profileDraft.error!,
+            savingAccount: _savingAccount,
+            savingProfile: _savingProfile,
+            notice: _notice,
+          ),
+        ),
+      );
+      return;
+    }
+    if (usernameDraft.noChanges && profileDraft.noChanges) {
       setState(
         () => _applyAccountFormSaveStatePatch(
           accountFormSaveNoChanges(
@@ -803,27 +995,52 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
     try {
-      final updated = await _settingsController.updateProfile(
-        displayName: draft.displayName,
-        bio: draft.bio,
-        gender: draft.gender,
-        defaultAvatarKey: draft.defaultAvatarKey,
-        avatarAssetId: draft.avatarAssetId,
-      );
-      if (!mounted) return;
-      if (updated == null) {
-        setState(
-          () => _applyAccountFormSaveStatePatch(
-            accountFormSaveCancelled(
-              target: AccountFormSaveTarget.profile,
-              savingAccount: _savingAccount,
-              savingProfile: _savingProfile,
-              accountError: _accountError,
-              notice: _notice,
-            ),
-          ),
+      CurrentUser updated = user;
+      if (!usernameDraft.noChanges) {
+        final accountUpdated = await _settingsController.updateAccount(
+          username: usernameDraft.username,
         );
-        return;
+        if (!mounted) return;
+        if (accountUpdated == null) {
+          setState(
+            () => _applyAccountFormSaveStatePatch(
+              accountFormSaveCancelled(
+                target: AccountFormSaveTarget.profile,
+                savingAccount: _savingAccount,
+                savingProfile: _savingProfile,
+                accountError: _accountError,
+                notice: _notice,
+              ),
+            ),
+          );
+          return;
+        }
+        updated = accountUpdated;
+      }
+      if (!profileDraft.noChanges) {
+        final profileUpdated = await _settingsController.updateProfile(
+          displayName: profileDraft.displayName,
+          bio: profileDraft.bio,
+          gender: profileDraft.gender,
+          defaultAvatarKey: profileDraft.defaultAvatarKey,
+          avatarAssetId: profileDraft.avatarAssetId,
+        );
+        if (!mounted) return;
+        if (profileUpdated == null) {
+          setState(
+            () => _applyAccountFormSaveStatePatch(
+              accountFormSaveCancelled(
+                target: AccountFormSaveTarget.profile,
+                savingAccount: _savingAccount,
+                savingProfile: _savingProfile,
+                accountError: _accountError,
+                notice: _notice,
+              ),
+            ),
+          );
+          return;
+        }
+        updated = profileUpdated;
       }
       setState(() {
         _user = updated;
@@ -2776,6 +2993,22 @@ class _SettingsPageState extends State<SettingsPage> {
         currentAvatarUrl: user?.avatarUrl,
       ),
     );
+    final usernameValidationError = loginUsernameValidationError(
+      _usernameController.text,
+    );
+    final usernameEditable =
+        user != null && account_display.canEditUsername(user);
+    final usernameChanged =
+        user != null && _usernameController.text.trim() != user.username;
+    final usernameAvailabilityApplies =
+        usernameChanged &&
+        usernameValidationError == null &&
+        _usernameAvailabilityQuery == _usernameController.text.trim();
+    final usernameEffectiveError =
+        usernameValidationError ??
+        (usernameAvailabilityApplies ? _usernameAvailabilityError : null);
+    final usernameChecking =
+        usernameAvailabilityApplies && _checkingUsernameAvailability;
     return SettingsList(
       children: [
         if (_notice != null) _SettingsNotice(message: _notice!),
@@ -2791,8 +3024,16 @@ class _SettingsPageState extends State<SettingsPage> {
               _LabeledTextField(
                 label: '登录 Username',
                 controller: _usernameController,
-                enabled: account_display.canEditUsername(user),
+                enabled: usernameEditable,
                 helperText: account_display.usernameHelperText(user),
+                suffix: usernameChanged
+                    ? _UsernameValidityIndicator(
+                        error: usernameEffectiveError,
+                        checking: usernameChecking,
+                        enabled: usernameEditable,
+                      )
+                    : null,
+                onChanged: _onLoginUsernameChanged,
               ),
             ],
           ),
@@ -2848,7 +3089,7 @@ class _SettingsPageState extends State<SettingsPage> {
           Align(
             alignment: Alignment.centerRight,
             child: Button(
-              onPressed: _savingProfile ? null : _saveProfile,
+              onPressed: _savingProfile || _savingAccount ? null : _saveProfile,
               loading: _savingProfile,
               icon: const Icon(Icons.save_outlined),
               tone: ButtonTone.primary,

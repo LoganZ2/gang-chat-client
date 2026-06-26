@@ -96,6 +96,8 @@ class _LabeledTextField extends StatelessWidget {
     this.obscureText = false,
     this.keyboardType,
     this.helperText,
+    this.suffix,
+    this.onChanged,
     this.onTogglePasswordVisibility,
   });
 
@@ -106,6 +108,8 @@ class _LabeledTextField extends StatelessWidget {
   final bool obscureText;
   final TextInputType? keyboardType;
   final String? helperText;
+  final Widget? suffix;
+  final ValueChanged<String>? onChanged;
   final VoidCallback? onTogglePasswordVisibility;
 
   @override
@@ -117,14 +121,15 @@ class _LabeledTextField extends StatelessWidget {
         const SizedBox(height: 8),
         Input(
           controller: controller,
-          hintText: label,
+          hintText: '',
           enabled: enabled,
           obscureText: obscureText,
           keyboardType: keyboardType,
           minLines: 1,
           maxLines: obscureText ? 1 : maxLines,
+          onChanged: onChanged,
           suffix: onTogglePasswordVisibility == null
-              ? null
+              ? suffix
               : _PasswordVisibilityToggle(
                   obscure: obscureText,
                   enabled: enabled,

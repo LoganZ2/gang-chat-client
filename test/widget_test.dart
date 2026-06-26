@@ -2270,6 +2270,155 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('settings profile save submits changed login username', (
+    WidgetTester tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(900, 900);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final accountUpdates = <Map<String, Object?>>[];
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async =>
+          'access-token',
+      httpClient: MockClient((request) async {
+        if (request.url.path == '/api/v1/me') {
+          return _jsonResponse(_currentUserJson);
+        }
+        if (request.url.path == '/api/v1/users/search') {
+          return _jsonResponse({'users': []});
+        }
+        if (request.url.path == '/api/v1/users/me/account') {
+          final body =
+              jsonDecode(utf8.decode(request.bodyBytes))
+                  as Map<String, Object?>;
+          accountUpdates.add(body);
+          return _jsonResponse({
+            'user': {..._currentUserJson, ...body},
+          });
+        }
+        return http.Response('unexpected request: ${request.url}', 404);
+      }),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: SettingsPage(
+          isSubWindow: true,
+          currentUser: CurrentUser.fromJson(_currentUserJson),
+          api: api,
+          apiBaseUrl: 'http://example.test/api/v1',
+          systemAudioDevices: SystemAudioDevices(supported: false),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(ui.Button, '保存登录 Username'), findsNothing);
+    expect(find.text('合法'), findsNothing);
+
+    final usernameField = find.byWidgetPredicate(
+      (widget) => widget is TextField && widget.controller?.text == 'kai',
+    );
+    await tester.enterText(usernameField, 'kai_new');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(find.text('合法'), findsOneWidget);
+    final saveProfileButton = find.widgetWithText(ui.Button, '保存用户资料');
+    if (saveProfileButton.evaluate().isEmpty) {
+      await tester.drag(find.byType(ListView).last, const Offset(0, -520));
+      await tester.pumpAndSettle();
+    }
+    expect(saveProfileButton, findsOneWidget);
+    await tester.tap(saveProfileButton);
+    await tester.pumpAndSettle();
+
+    expect(accountUpdates, [
+      {'username': 'kai_new'},
+    ]);
+    expect(find.text('合法'), findsNothing);
+  });
+
+  testWidgets('settings username availability marks duplicate invalid', (
+    WidgetTester tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(900, 900);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final accountUpdates = <Map<String, Object?>>[];
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async =>
+          'access-token',
+      httpClient: MockClient((request) async {
+        if (request.url.path == '/api/v1/me') {
+          return _jsonResponse(_currentUserJson);
+        }
+        if (request.url.path == '/api/v1/users/search') {
+          return _jsonResponse({
+            'users': [
+              _userJson(
+                id: 'user-2',
+                username: 'taken_name',
+                displayName: 'Taken',
+              ),
+            ],
+          });
+        }
+        if (request.url.path == '/api/v1/users/me/account') {
+          final body =
+              jsonDecode(utf8.decode(request.bodyBytes))
+                  as Map<String, Object?>;
+          accountUpdates.add(body);
+          return _jsonResponse({
+            'user': {..._currentUserJson, ...body},
+          });
+        }
+        return http.Response('unexpected request: ${request.url}', 404);
+      }),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: SettingsPage(
+          isSubWindow: true,
+          currentUser: CurrentUser.fromJson(_currentUserJson),
+          api: api,
+          apiBaseUrl: 'http://example.test/api/v1',
+          systemAudioDevices: SystemAudioDevices(supported: false),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final usernameField = find.byWidgetPredicate(
+      (widget) => widget is TextField && widget.controller?.text == 'kai',
+    );
+    await tester.enterText(usernameField, 'Taken_Name');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(find.text('不合法'), findsOneWidget);
+    expect(find.byTooltip('该登录 Username 已被其他用户使用'), findsOneWidget);
+
+    final saveProfileButton = find.widgetWithText(ui.Button, '保存用户资料');
+    if (saveProfileButton.evaluate().isEmpty) {
+      await tester.drag(find.byType(ListView).last, const Offset(0, -520));
+      await tester.pumpAndSettle();
+    }
+    await tester.tap(saveProfileButton);
+    await tester.pumpAndSettle();
+
+    expect(accountUpdates, isEmpty);
+  });
+
   testWidgets('settings audio sliders apply live mute coupling rules', (
     WidgetTester tester,
   ) async {
@@ -3554,6 +3703,14 @@ void main() {
     expect(find.text('用户资料'), findsOneWidget);
     expect(find.text('偏好设置'), findsOneWidget);
     expect(find.byTooltip('刷新设置'), findsOneWidget);
+    final displayNameField = find.byWidgetPredicate(
+      (widget) => widget is TextField && widget.controller?.text == 'Kai',
+    );
+    expect(displayNameField, findsOneWidget);
+    expect(
+      tester.widget<TextField>(displayNameField).decoration?.hintText,
+      isEmpty,
+    );
     expect(
       tester
           .widget<ui.PressableSurface>(
@@ -3565,6 +3722,19 @@ void main() {
           .selected,
       isTrue,
     );
+
+    final usernameField = find.byWidgetPredicate(
+      (widget) => widget is TextField && widget.controller?.text == 'kai',
+    );
+    expect(usernameField, findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '保存登录 Username'), findsNothing);
+    expect(find.text('合法'), findsNothing);
+
+    await tester.enterText(usernameField, 'kai_new');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(find.text('合法'), findsOneWidget);
 
     await tester.tap(find.text('偏好设置'));
     await tester.pumpAndSettle();
