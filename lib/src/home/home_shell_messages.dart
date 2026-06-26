@@ -46,7 +46,12 @@ extension _HomeShellMessages on _HomeShellState {
 
   void _clearSelectedRoomNewMessagePrompt() {
     if (_selectedRoomNewMessageCount == 0) return;
+    final roomId = _selectedServerId;
+    final messages = _messages;
     _setHomeState(() => _selectedRoomNewMessageCount = 0);
+    if (roomId != null) {
+      unawaited(_markRoomReadFromMessages(roomId, messages));
+    }
   }
 
   Future<void> _sendText(String value) async {

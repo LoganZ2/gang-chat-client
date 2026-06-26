@@ -151,9 +151,21 @@ extension _HomeShellRealtime on _HomeShellState {
       incoming: room,
       selectedRoom: _selectedRoom,
     );
+    int? selectedNewMessageCount;
+    if (shouldRefreshMessages) {
+      for (final candidate in patch.rooms) {
+        if (candidate.id == room.id) {
+          selectedNewMessageCount = candidate.unreadCount;
+          break;
+        }
+      }
+    }
     _setHomeState(() {
       _servers = patch.rooms;
       _selectedRoom = patch.selectedRoom;
+      if (selectedNewMessageCount != null) {
+        _selectedRoomNewMessageCount = selectedNewMessageCount;
+      }
       if (patch.shouldReloadMembers) _membersReloadToken++;
     });
     final selectedRoom = patch.selectedRoom;
@@ -186,7 +198,6 @@ extension _HomeShellRealtime on _HomeShellState {
       ];
       final nextMessages = [...messages, ...pending];
       _setHomeState(() => _messages = nextMessages);
-      unawaited(_markRoomReadFromMessages(roomId, messages));
     } catch (_) {}
   }
 

@@ -1077,11 +1077,9 @@ class RoomsController {
     required RoomCard incoming,
     required RoomDetail? selectedRoom,
   }) {
-    final isSelected = selectedRoom?.id == incoming.id;
     final nextRooms = patchRoomCardUpdated(
       rooms: rooms,
       incoming: incoming,
-      clearUnread: isSelected,
     ).rooms;
     final current = selectedRoom;
     if (current == null || current.id != incoming.id) {

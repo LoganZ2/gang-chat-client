@@ -1,8 +1,7 @@
 part of 'chat_pane.dart';
 
-/// How close (in logical pixels) to the bottom the reader must be for an
-/// incoming message from someone else to auto-scroll the list. Beyond this the
-/// reader is browsing history, so we leave their position alone.
+/// How close (in logical pixels) to the newest message counts as "at bottom"
+/// for saved scroll anchors and the jump-to-latest affordance.
 const double _autoScrollFollowThreshold = 120;
 const double _chatMessageListTopPadding = 18;
 const _messageListCacheExtent = ScrollCacheExtent.pixels(1200);
@@ -16,6 +15,13 @@ class _ScrollAnchor {
 
   final double offset;
   final bool atBottom;
+}
+
+class _ViewportAnchor {
+  const _ViewportAnchor({required this.clientMessageId, required this.top});
+
+  final String clientMessageId;
+  final double top;
 }
 
 /// Callbacks for file-attachment downloads, bundled so they can travel from
@@ -151,10 +157,13 @@ class _MessageStageState extends State<_MessageStage> {
   final GlobalKey _messageListKey = GlobalKey();
   final GlobalKey _oldestMessageKey = GlobalKey();
   final GlobalKey _firstNewMessageKey = GlobalKey();
+  final Map<String, GlobalKey> _messageRowKeys = {};
   double _underflowBottomSpacer = 0;
   bool _underflowAlignmentScheduled = false;
   bool _newMessageJumpVisibilityScheduled = false;
   bool _messageListReady = false;
+  bool _incomingUnreadWaitingForUserScroll = false;
+  bool _restoringIncomingViewport = false;
   // Guards queued scroll requests so overlapping requests don't stack up; the newest
   // request wins by bumping this token.
   int _scrollToBottomToken = 0;
@@ -187,8 +196,11 @@ class _MessageStageState extends State<_MessageStage> {
       _showLatestButton = false;
       _showNewMessageJumpButton = false;
       _newMessageJumpDismissed = false;
+      _incomingUnreadWaitingForUserScroll = false;
+      _restoringIncomingViewport = false;
       _clearRetainedNewMessageAnchor();
       _captureNewMessageAnchorFromWidget();
+      _messageRowKeys.clear();
       _underflowBottomSpacer = 0;
       _messageListReady = false;
       // New room: restore its remembered position, or snap to latest.
@@ -200,11 +212,21 @@ class _MessageStageState extends State<_MessageStage> {
       }
       return;
     }
+    final addedMessages = _addedMessagesSince(oldWidget);
+    final preserveIncomingViewport = _shouldPreserveViewportForIncoming(
+      addedMessages,
+    );
+    final viewportAnchor = preserveIncomingViewport
+        ? _captureViewportAnchorFrom(oldWidget.messages)
+        : null;
+
     if (oldWidget.newMessageCount != widget.newMessageCount) {
       _showNewMessageJumpButton = false;
       if (widget.newMessageCount > 0) {
         _newMessageJumpDismissed = false;
         _captureNewMessageAnchorFromWidget();
+      } else {
+        _incomingUnreadWaitingForUserScroll = false;
       }
     }
     if (oldWidget.messages.length != widget.messages.length ||
@@ -219,8 +241,13 @@ class _MessageStageState extends State<_MessageStage> {
         _captureNewMessageAnchorFromWidget();
       }
     }
-    if (_shouldFollowToBottom(oldWidget)) {
+    if (_shouldFollowToBottom(oldWidget, addedMessages)) {
       _scrollToBottom(animated: true);
+    } else if (viewportAnchor != null) {
+      _incomingUnreadWaitingForUserScroll =
+          _scrollController.hasClients &&
+          _scrollController.position.maxScrollExtent > 0;
+      _restoreViewportAnchorAfterIncoming(viewportAnchor);
     }
   }
 
@@ -267,22 +294,50 @@ class _MessageStageState extends State<_MessageStage> {
     });
   }
 
-  // Decides whether an incoming widget update introduced a new message worth
-  // following. We always chase our own outgoing messages (text, voice, files)
-  // to the bottom; for messages from others we only follow when the user is
-  // already reading the latest ones, so scrolling up through history isn't
-  // yanked back down.
-  bool _shouldFollowToBottom(_MessageStage oldWidget) {
+  List<Message> _addedMessagesSince(_MessageStage oldWidget) {
+    if (widget.messages.isEmpty) return const [];
+    final grew = widget.messages.length > oldWidget.messages.length;
+    final lastChanged =
+        oldWidget.messages.isNotEmpty &&
+        widget.messages.isNotEmpty &&
+        oldWidget.messages.last.clientMessageId !=
+            widget.messages.last.clientMessageId;
+    if (!grew && !lastChanged) return const [];
+    final oldClientMessageIds = {
+      for (final message in oldWidget.messages) message.clientMessageId,
+    };
+    return [
+      for (final message in widget.messages)
+        if (!oldClientMessageIds.contains(message.clientMessageId)) message,
+    ];
+  }
+
+  bool _shouldPreserveViewportForIncoming(List<Message> addedMessages) {
+    if (widget.newMessageCount <= 0 || addedMessages.isEmpty) return false;
+    return addedMessages.any(
+      (message) => message.sender.id != widget.currentUser.id,
+    );
+  }
+
+  // Decides whether an update introduced a new message worth following. We
+  // always chase our own outgoing messages; messages from others remain unread
+  // until the divider actually enters the viewport.
+  bool _shouldFollowToBottom(
+    _MessageStage oldWidget,
+    List<Message> addedMessages,
+  ) {
     final messages = widget.messages;
     if (messages.isEmpty) return false;
-    final grew = messages.length > oldWidget.messages.length;
+    if (addedMessages.isNotEmpty) {
+      return addedMessages.last.sender.id == widget.currentUser.id;
+    }
     final lastChanged =
         oldWidget.messages.isNotEmpty &&
         messages.last.clientMessageId !=
             oldWidget.messages.last.clientMessageId;
-    if (!grew && !lastChanged) return false;
+    if (!lastChanged) return false;
     if (messages.last.sender.id == widget.currentUser.id) return true;
-    return _isNearBottom();
+    return false;
   }
 
   bool _isNearBottom() {
@@ -300,6 +355,9 @@ class _MessageStageState extends State<_MessageStage> {
   }
 
   void _handleScrollChanged() {
+    if (_incomingUnreadWaitingForUserScroll && !_restoringIncomingViewport) {
+      _incomingUnreadWaitingForUserScroll = false;
+    }
     _rememberScrollPosition();
     _syncLatestButtonVisibility();
     _scheduleNewMessageJumpVisibilitySync();
@@ -367,8 +425,10 @@ class _MessageStageState extends State<_MessageStage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _newMessageJumpVisibilityScheduled = false;
       if (!mounted) return;
-      if (_firstNewMessageAnchorIsVisible() && !_newMessageJumpDismissed) {
-        _markNewMessagesViewed();
+      if (_firstNewMessageIsVisible() && !_newMessageJumpDismissed) {
+        if (!_incomingUnreadWaitingForUserScroll) {
+          _markNewMessagesViewed();
+        }
         return;
       }
       final next = _shouldShowNewMessageJumpButton();
@@ -399,21 +459,38 @@ class _MessageStageState extends State<_MessageStage> {
 
   bool _firstNewMessageAnchorIsVisible() {
     if (_firstNewMessageIndex == null) return false;
-    final listBox =
-        _messageListKey.currentContext?.findRenderObject() as RenderBox?;
     final anchorBox =
         _firstNewMessageKey.currentContext?.findRenderObject() as RenderBox?;
-    if (listBox == null ||
-        anchorBox == null ||
-        !listBox.hasSize ||
-        !anchorBox.hasSize) {
+    return _renderBoxIntersectsMessageList(anchorBox);
+  }
+
+  bool _firstNewMessageIsVisible() {
+    if (_firstNewMessageAnchorIsVisible()) return true;
+    final firstIndex = _firstNewMessageIndex;
+    if (firstIndex == null ||
+        firstIndex < 0 ||
+        firstIndex >= widget.messages.length) {
+      return false;
+    }
+    final message = widget.messages[firstIndex];
+    final rowBox =
+        _messageRowKeys[message.clientMessageId]?.currentContext
+                ?.findRenderObject()
+            as RenderBox?;
+    return _renderBoxIntersectsMessageList(rowBox);
+  }
+
+  bool _renderBoxIntersectsMessageList(RenderBox? box) {
+    final listBox =
+        _messageListKey.currentContext?.findRenderObject() as RenderBox?;
+    if (listBox == null || box == null || !listBox.hasSize || !box.hasSize) {
       return false;
     }
     final listTop = listBox.localToGlobal(Offset.zero).dy;
     final listBottom = listTop + listBox.size.height;
-    final anchorTop = anchorBox.localToGlobal(Offset.zero).dy;
-    final anchorBottom = anchorTop + anchorBox.size.height;
-    return anchorBottom >= listTop && anchorTop <= listBottom;
+    final boxTop = box.localToGlobal(Offset.zero).dy;
+    final boxBottom = boxTop + box.size.height;
+    return boxBottom >= listTop && boxTop <= listBottom;
   }
 
   // The list is reversed, so the latest message lives at the minimum scroll
@@ -450,6 +527,143 @@ class _MessageStageState extends State<_MessageStage> {
       _scrollController.jumpTo(target);
       _syncLatestButtonVisibility();
     });
+  }
+
+  GlobalKey _messageRowKey(String clientMessageId) {
+    return _messageRowKeys.putIfAbsent(clientMessageId, GlobalKey.new);
+  }
+
+  void _trimMessageRowKeys() {
+    final activeIds = {
+      for (final message in widget.messages) message.clientMessageId,
+    };
+    _messageRowKeys.removeWhere(
+      (id, key) => !activeIds.contains(id) || key.currentContext == null,
+    );
+  }
+
+  _ViewportAnchor? _captureViewportAnchorFrom(List<Message> messages) {
+    final listBox =
+        _messageListKey.currentContext?.findRenderObject() as RenderBox?;
+    if (listBox == null || !listBox.hasSize) return null;
+    final listTop = listBox.localToGlobal(Offset.zero).dy;
+    final listBottom = listTop + listBox.size.height;
+    for (final message in messages.reversed) {
+      final box =
+          _messageRowKeys[message.clientMessageId]?.currentContext
+                  ?.findRenderObject()
+              as RenderBox?;
+      if (box == null || !box.hasSize) continue;
+      final top = box.localToGlobal(Offset.zero).dy;
+      final bottom = top + box.size.height;
+      if (bottom >= listTop && top <= listBottom) {
+        return _ViewportAnchor(
+          clientMessageId: message.clientMessageId,
+          top: top,
+        );
+      }
+    }
+    return null;
+  }
+
+  void _restoreViewportAnchorAfterIncoming(_ViewportAnchor anchor) {
+    final token = ++_scrollToBottomToken;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          token != _scrollToBottomToken ||
+          !_scrollController.hasClients) {
+        return;
+      }
+      final position = _scrollController.position;
+      final anchorBox =
+          _messageRowKeys[anchor.clientMessageId]?.currentContext
+                  ?.findRenderObject()
+              as RenderBox?;
+      final listBox =
+          _messageListKey.currentContext?.findRenderObject() as RenderBox?;
+      if (anchorBox != null &&
+          anchorBox.hasSize &&
+          listBox != null &&
+          listBox.hasSize) {
+        final viewport = RenderAbstractViewport.of(anchorBox);
+        final listTop = listBox.localToGlobal(Offset.zero).dy;
+        final desiredTopInList = (anchor.top - listTop).clamp(
+          0.0,
+          listBox.size.height,
+        );
+        final alignment = listBox.size.height <= 0
+            ? 0.0
+            : desiredTopInList / listBox.size.height;
+        final target = viewport
+            .getOffsetToReveal(anchorBox, alignment)
+            .offset
+            .clamp(position.minScrollExtent, position.maxScrollExtent)
+            .toDouble();
+        if ((position.pixels - target).abs() > 0.5) {
+          _jumpToDuringIncomingViewportRestore(target);
+        }
+        _correctViewportAnchorAfterIncoming(anchor, token, remainingPasses: 2);
+        return;
+      }
+      _finishViewportAnchorRestore();
+    });
+  }
+
+  void _correctViewportAnchorAfterIncoming(
+    _ViewportAnchor anchor,
+    int token, {
+    required int remainingPasses,
+  }) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          token != _scrollToBottomToken ||
+          !_scrollController.hasClients) {
+        return;
+      }
+      final anchorBox =
+          _messageRowKeys[anchor.clientMessageId]?.currentContext
+                  ?.findRenderObject()
+              as RenderBox?;
+      if (anchorBox == null || !anchorBox.hasSize) {
+        _finishViewportAnchorRestore();
+        return;
+      }
+      final top = anchorBox.localToGlobal(Offset.zero).dy;
+      final delta = top - anchor.top;
+      if (delta.abs() > 0.5) {
+        final position = _scrollController.position;
+        final target = (position.pixels - delta)
+            .clamp(position.minScrollExtent, position.maxScrollExtent)
+            .toDouble();
+        if ((position.pixels - target).abs() > 0.5) {
+          _jumpToDuringIncomingViewportRestore(target);
+        }
+        if (remainingPasses > 0) {
+          _correctViewportAnchorAfterIncoming(
+            anchor,
+            token,
+            remainingPasses: remainingPasses - 1,
+          );
+          return;
+        }
+      }
+      _finishViewportAnchorRestore();
+    });
+  }
+
+  void _finishViewportAnchorRestore() {
+    _rememberScrollPosition();
+    _syncLatestButtonVisibility();
+    _scheduleNewMessageJumpVisibilitySync();
+  }
+
+  void _jumpToDuringIncomingViewportRestore(double target) {
+    _restoringIncomingViewport = true;
+    try {
+      _scrollController.jumpTo(target);
+    } finally {
+      _restoringIncomingViewport = false;
+    }
   }
 
   int get _effectiveWidgetNewMessageCount {
@@ -496,6 +710,7 @@ class _MessageStageState extends State<_MessageStage> {
     setState(() {
       _newMessageJumpDismissed = true;
       _showNewMessageJumpButton = false;
+      _incomingUnreadWaitingForUserScroll = false;
     });
     widget.onViewedNewMessages();
   }
@@ -554,6 +769,7 @@ class _MessageStageState extends State<_MessageStage> {
 
   @override
   Widget build(BuildContext context) {
+    _trimMessageRowKeys();
     if (widget.error != null && !widget.roomReady) {
       return _CenteredState(
         icon: Icons.error_outline,
@@ -678,7 +894,10 @@ class _MessageStageState extends State<_MessageStage> {
               ),
           ],
         );
-        final keyedRow = row;
+        final keyedRow = KeyedSubtree(
+          key: _messageRowKey(message.clientMessageId),
+          child: row,
+        );
         if (chronologicalIndex == 0) {
           return KeyedSubtree(key: _oldestMessageKey, child: keyedRow);
         }

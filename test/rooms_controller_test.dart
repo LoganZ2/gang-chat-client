@@ -963,12 +963,32 @@ void main() {
       selectedRoom: _roomDetail('room_1', onlineMemberCount: 1),
     );
 
-    expect(patch.rooms.single.unreadCount, 0);
+    expect(patch.rooms.single.unreadCount, 5);
     expect(patch.rooms.single.onlineMemberCount, 2);
     expect(patch.selectedRoom?.name, 'Renamed');
     expect(patch.selectedRoom?.memberCount, 4);
     expect(patch.selectedRoom?.onlineMemberCount, 2);
     expect(patch.shouldReloadMembers, isTrue);
+  });
+
+  test('patchRoomUpdated keeps selected room fresh messages unread', () {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        fail('Patch test should not call the API: ${request.url}');
+      }),
+    );
+    addTearDown(api.close);
+    final controller = RoomsController(api: api);
+
+    final patch = controller.patchRoomUpdated(
+      rooms: [_roomCard('room_1', unreadCount: 0, lastMessageId: 'msg_1')],
+      incoming: _roomCard('room_1', lastMessageId: 'msg_2'),
+      selectedRoom: _roomDetail('room_1'),
+    );
+
+    expect(patch.rooms.single.unreadCount, 1);
   });
 
   test('patchRoomUpdated increments unread for fresh messages off-room', () {

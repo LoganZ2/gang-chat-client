@@ -283,6 +283,80 @@ void main() {
     expect(find.byKey(const ValueKey('chat-jump-to-latest')), findsNothing);
   });
 
+  testWidgets('incoming unread messages preserve the current viewport', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    var messages = _textMessages(40);
+    var newMessageCount = 0;
+    var viewed = 0;
+    late StateSetter updateState;
+
+    await tester.pumpWidget(
+      _host(
+        StatefulBuilder(
+          builder: (context, setState) {
+            updateState = setState;
+            return _chatPane(
+              controller: controller,
+              room: _roomDetailFor('room_preserve_unread'),
+              messages: messages,
+              newMessageCount: newMessageCount,
+              onViewedNewMessages: () {
+                viewed += 1;
+                setState(() => newMessageCount = 0);
+              },
+            );
+          },
+        ),
+        height: 360,
+      ),
+    );
+    await tester.pump();
+
+    final scrollable = tester.state<ScrollableState>(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('chat-message-list')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    final previousLatestTop = tester.getTopLeft(find.text('Message 39')).dy;
+    final previousPixels = scrollable.position.pixels;
+
+    updateState(() {
+      messages = [
+        ...messages,
+        _message(
+          type: 'text',
+          body: 'Message 40',
+          clientMessageId: 'client_40',
+          createdAt: DateTime.utc(2026, 6, 11, 9, 40),
+        ),
+      ];
+      newMessageCount = 1;
+    });
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      tester.getTopLeft(find.text('Message 39')).dy,
+      closeTo(previousLatestTop, 1),
+    );
+    expect(scrollable.position.pixels, greaterThan(previousPixels));
+    expect(viewed, 0);
+
+    scrollable.position.jumpTo(scrollable.position.minScrollExtent);
+    await tester.pump();
+    await tester.pump();
+
+    expect(viewed, 1);
+  });
+
   testWidgets('chat pane can jump to the first new message', (tester) async {
     final controller = TextEditingController();
     addTearDown(controller.dispose);
