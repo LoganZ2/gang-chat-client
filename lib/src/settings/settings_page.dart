@@ -15,6 +15,7 @@ import '../app/audio_levels.dart';
 import '../app/close_behavior.dart';
 import '../app/confirmation.dart';
 import '../app/language_preference.dart';
+import '../app/settings_about.dart';
 import '../app/settings_controller.dart';
 import '../app/settings_shell_state.dart';
 import '../app/sticker_management.dart';
@@ -30,6 +31,7 @@ import '../protocol/models.dart';
 import '../protocol/sticker_pack_store.dart';
 import '../shell/clipboard_service.dart';
 import '../shell/file_selection_service.dart';
+import '../shell/feedback_mail_service.dart';
 import '../shell/local_close_behavior_store.dart';
 import '../shell/local_audio_device_store.dart';
 import '../shell/local_language_preference_store.dart';
@@ -64,8 +66,10 @@ class SettingsPage extends StatefulWidget {
     this.stickerPackStore = const StickerPackStore(),
     this.clipboardService = const ClipboardService(),
     this.fileSelectionService = const FileSelectionService(),
+    this.feedbackMailService = const FeedbackMailService(),
     this.closeBehaviorStore = const LocalCloseBehaviorStore(),
     this.languageStore = const LocalLanguagePreferenceStore(),
+    this.appVersion = gangChatClientVersion,
     this.currentUser,
     this.onUserUpdated,
     this.onDeviceSelected,
@@ -87,8 +91,10 @@ class SettingsPage extends StatefulWidget {
   final StickerPackStore stickerPackStore;
   final ClipboardService clipboardService;
   final FileSelectionService fileSelectionService;
+  final FeedbackMailService feedbackMailService;
   final CloseBehaviorStore closeBehaviorStore;
   final LanguagePreferenceStore languageStore;
+  final String appVersion;
   final CurrentUser? currentUser;
   final ValueChanged<CurrentUser>? onUserUpdated;
   final void Function(String kind, String deviceId)? onDeviceSelected;
@@ -152,7 +158,11 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _obscureConfirmPassword = true;
   String? _accountError;
   String? _securityError;
+  String? _aboutError;
   String? _notice;
+  String? _latestAppVersion;
+  bool _checkingAppVersion = false;
+  bool _openingFeedbackMail = false;
   Timer? _usernameAvailabilityDebounce;
   int _usernameAvailabilityRequestId = 0;
   String? _usernameAvailabilityQuery;
@@ -737,6 +747,80 @@ class _SettingsPageState extends State<SettingsPage> {
       case SettingsSection.voice:
         await _ensureVoiceInitialized(forceReload: true);
         break;
+      case SettingsSection.about:
+        await _checkAppVersion();
+        break;
+    }
+  }
+
+  Future<void> _checkAppVersion() async {
+    if (_checkingAppVersion) return;
+    if (!_settingsController.hasApi) {
+      setState(() => _aboutError = '检查更新需要登录后连接服务端');
+      return;
+    }
+    setState(() {
+      _checkingAppVersion = true;
+      _aboutError = null;
+      _notice = null;
+    });
+    try {
+      final info = await _settingsController.checkAppVersion();
+      if (!mounted) return;
+      final latestVersion = info?.latestVersion.trim() ?? '';
+      setState(() {
+        _checkingAppVersion = false;
+        _latestAppVersion = latestVersion.isEmpty ? null : latestVersion;
+        _notice = latestVersion.isEmpty
+            ? '暂时无法获取最新版本'
+            : updateCheckSucceededText(
+                currentVersion: widget.appVersion,
+                latestVersion: latestVersion,
+              );
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _checkingAppVersion = false;
+        _aboutError = '检查更新失败：$error';
+      });
+    }
+  }
+
+  Future<void> _openFeedbackMail() async {
+    if (_openingFeedbackMail) return;
+    final senderEmail = boundEmailForFeedback(_user?.email);
+    if (senderEmail == null) {
+      setState(() => _aboutError = '当前账号未绑定邮箱，无法发起意见反馈');
+      return;
+    }
+    final draft = FeedbackMailDraft(
+      from: senderEmail,
+      to: gangChatSupportEmail,
+      subject: feedbackMailSubject(widget.appVersion),
+      body: feedbackMailBody(
+        senderEmail: senderEmail,
+        currentVersion: widget.appVersion,
+      ),
+    );
+    setState(() {
+      _openingFeedbackMail = true;
+      _aboutError = null;
+      _notice = null;
+    });
+    try {
+      await widget.feedbackMailService.openDraft(draft);
+      if (!mounted) return;
+      setState(() {
+        _openingFeedbackMail = false;
+        _notice = '已打开邮件客户端';
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _openingFeedbackMail = false;
+        _aboutError = '无法打开邮件客户端：$error';
+      });
     }
   }
 
@@ -2703,6 +2787,7 @@ class _SettingsPageState extends State<SettingsPage> {
       loadingStickers: _loadingStickers,
       loadingSessions: _loadingSessions,
       loadingVoice: _loading,
+      loadingAbout: _checkingAppVersion,
     );
   }
 
@@ -2733,6 +2818,7 @@ class _SettingsPageState extends State<SettingsPage> {
       SettingsSection.stickers => _buildStickersContent(),
       SettingsSection.security => _buildSecurityContent(),
       SettingsSection.voice => _buildVoiceContent(),
+      SettingsSection.about => _buildAboutContent(),
     };
   }
 
@@ -3292,6 +3378,62 @@ class _SettingsPageState extends State<SettingsPage> {
             ],
           ),
         ],
+      ],
+    );
+  }
+
+  Widget _buildAboutContent() {
+    final latestVersion = _latestAppVersion;
+    final updateText = latestVersion == null
+        ? '检查当前是否是最新版本'
+        : updateCheckSucceededText(
+            currentVersion: widget.appVersion,
+            latestVersion: latestVersion,
+          );
+    final feedbackEmail = boundEmailForFeedback(_user?.email);
+    final feedbackText = feedbackEmail == null
+        ? '当前账号未绑定邮箱'
+        : '发件人：$feedbackEmail；收件人：$gangChatSupportEmail';
+
+    return SettingsList(
+      children: [
+        if (_notice != null) _SettingsNotice(message: _notice!),
+        if (_aboutError != null) _SettingsError(message: _aboutError!),
+        _SettingsGroup(
+          title: '关于Gang Chat',
+          children: [
+            _ReadOnlyLine(
+              label: '版本信息',
+              value: appVersionLabel(widget.appVersion),
+            ),
+            const SizedBox(height: 14),
+            _SettingsActionLine(
+              label: '检查更新',
+              value: updateText,
+              button: Button(
+                onPressed: _checkingAppVersion
+                    ? null
+                    : () => unawaited(_checkAppVersion()),
+                loading: _checkingAppVersion,
+                icon: const Icon(Icons.system_update_alt_outlined),
+                child: const Text('检查'),
+              ),
+            ),
+            const SizedBox(height: 14),
+            _SettingsActionLine(
+              label: '意见反馈',
+              value: feedbackText,
+              button: Button(
+                onPressed: _openingFeedbackMail
+                    ? null
+                    : () => unawaited(_openFeedbackMail()),
+                loading: _openingFeedbackMail,
+                icon: const Icon(Icons.outgoing_mail),
+                child: const Text('发邮件'),
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }

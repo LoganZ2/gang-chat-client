@@ -1,5 +1,32 @@
 const defaultUserLanguage = 'zh-Hans';
 
+class AppVersionInfo {
+  const AppVersionInfo({
+    required this.latestVersion,
+    this.minimumSupportedVersion,
+    this.releaseNotes,
+    this.downloadUrl,
+  });
+
+  final String latestVersion;
+  final String? minimumSupportedVersion;
+  final String? releaseNotes;
+  final String? downloadUrl;
+
+  factory AppVersionInfo.fromJson(Map<String, Object?> json) {
+    return AppVersionInfo(
+      latestVersion:
+          _stringFromJson(json, const ['latest_version', 'version']) ?? '',
+      minimumSupportedVersion: _stringFromJson(json, const [
+        'minimum_supported_version',
+        'minimum_version',
+      ]),
+      releaseNotes: _stringFromJson(json, const ['release_notes', 'notes']),
+      downloadUrl: _stringFromJson(json, const ['download_url']),
+    );
+  }
+}
+
 class UserCommonRoom {
   const UserCommonRoom({
     required this.id,

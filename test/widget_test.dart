@@ -27,6 +27,7 @@ import 'package:client/src/protocol/api_client.dart';
 import 'package:client/src/protocol/models.dart';
 import 'package:client/src/settings/settings_page.dart';
 import 'package:client/src/shell/desktop_window_controller.dart';
+import 'package:client/src/shell/feedback_mail_service.dart';
 import 'package:client/src/shell/login_page.dart';
 import 'package:client/src/ui/ui.dart' as ui;
 import 'package:client/src/home/hover_card_anchor.dart';
@@ -2417,6 +2418,74 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(accountUpdates, isEmpty);
+  });
+
+  testWidgets('settings about section checks updates and opens feedback mail', (
+    WidgetTester tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(980, 760);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final feedbackDrafts = <FeedbackMailDraft>[];
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async =>
+          'access-token',
+      httpClient: MockClient((request) async {
+        if (request.url.path == '/api/v1/me') {
+          return _jsonResponse(_currentUserJson);
+        }
+        if (request.url.path == '/api/v1/app/version') {
+          return _jsonResponse({
+            'latest_version': '1.0.0',
+            'minimum_supported_version': '1.0.0',
+          });
+        }
+        return http.Response('unexpected request: ${request.url}', 404);
+      }),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: SettingsPage(
+          isSubWindow: true,
+          currentUser: CurrentUser.fromJson(_currentUserJson),
+          api: api,
+          apiBaseUrl: 'http://example.test/api/v1',
+          appVersion: '1.0.0',
+          feedbackMailService: _FakeFeedbackMailService(feedbackDrafts),
+          systemAudioDevices: SystemAudioDevices(supported: false),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('关于Gang Chat').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('版本信息'), findsOneWidget);
+    expect(find.text('v1.0.0'), findsOneWidget);
+    expect(find.text('检查当前是否是最新版本'), findsOneWidget);
+    expect(
+      find.text('发件人：kai@example.com；收件人：gang-chat@outlook.com'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.widgetWithText(ui.Button, '检查'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('当前已是最新版本'), findsWidgets);
+
+    await tester.tap(find.widgetWithText(ui.Button, '发邮件'));
+    await tester.pumpAndSettle();
+
+    expect(feedbackDrafts, hasLength(1));
+    expect(feedbackDrafts.single.from, 'kai@example.com');
+    expect(feedbackDrafts.single.to, 'gang-chat@outlook.com');
+    expect(feedbackDrafts.single.subject, contains('v1.0.0'));
   });
 
   testWidgets('settings audio sliders apply live mute coupling rules', (
@@ -6756,6 +6825,17 @@ class _FakeSettingsAudioDeviceService extends LiveAudioDeviceService {
 
   @override
   Future<void> selectAudioOutput(AudioDeviceInfo device) async {}
+}
+
+class _FakeFeedbackMailService extends FeedbackMailService {
+  const _FakeFeedbackMailService(this.drafts);
+
+  final List<FeedbackMailDraft> drafts;
+
+  @override
+  Future<void> openDraft(FeedbackMailDraft draft) async {
+    drafts.add(draft);
+  }
 }
 
 class _FakeAudioDeviceStore extends AudioDeviceStore {

@@ -53,6 +53,16 @@ void main() {
     expect(preferences.shouldLoadStickers, isFalse);
     expect(preferences.shouldLoadSessions, isFalse);
     expect(preferences.shouldInitializeVoice, isFalse);
+
+    final about = settingsSectionSelected(
+      section: SettingsSection.about,
+      sessionsEmpty: true,
+      loadingSessions: false,
+    );
+
+    expect(about.shouldLoadStickers, isFalse);
+    expect(about.shouldLoadSessions, isFalse);
+    expect(about.shouldInitializeVoice, isFalse);
   });
 
   test('settings section titles are shared with shell UI', () {
@@ -61,6 +71,7 @@ void main() {
     expect(settingsSectionTitle(SettingsSection.security), '隐私和安全');
     expect(settingsSectionTitle(SettingsSection.voice), '语音和视频');
     expect(settingsSectionTitle(SettingsSection.stickers), '表情包管理');
+    expect(settingsSectionTitle(SettingsSection.about), '关于Gang Chat');
   });
 
   test('settings notice patch shows transient feedback text', () {
@@ -111,6 +122,18 @@ void main() {
         loadingVoice: false,
       ),
       isFalse,
+    );
+    expect(
+      settingsSectionRefreshing(
+        section: SettingsSection.about,
+        loadingAccount: false,
+        loadingPreferences: false,
+        loadingStickers: false,
+        loadingSessions: false,
+        loadingVoice: false,
+        loadingAbout: true,
+      ),
+      isTrue,
     );
   });
 }

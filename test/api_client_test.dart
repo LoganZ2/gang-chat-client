@@ -9,6 +9,35 @@ import 'package:client/src/protocol/api_client.dart';
 import 'package:client/src/protocol/models.dart';
 
 void main() {
+  test('getAppVersion fetches current server version metadata', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/api/v1/app/version');
+        expect(request.headers['authorization'], 'Bearer token');
+        return http.Response(
+          jsonEncode({
+            'latest_version': '1.2.3',
+            'minimum_supported_version': '1.0.0',
+            'release_notes': 'ok',
+            'download_url': 'https://example.test/download',
+          }),
+          200,
+        );
+      }),
+    );
+
+    final info = await api.getAppVersion();
+
+    expect(info.latestVersion, '1.2.3');
+    expect(info.minimumSupportedVersion, '1.0.0');
+    expect(info.releaseNotes, 'ok');
+    expect(info.downloadUrl, 'https://example.test/download');
+    api.close();
+  });
+
   test(
     'listMessages retries once after a transient closed connection',
     () async {

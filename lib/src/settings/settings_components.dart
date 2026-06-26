@@ -38,6 +38,11 @@ class _SettingsNavigation extends StatelessWidget {
           label: '我的表情包',
           icon: Icons.emoji_emotions_outlined,
         ),
+        Segment(
+          value: SettingsSection.about,
+          label: '关于Gang Chat',
+          icon: Icons.info_outline,
+        ),
       ],
     );
   }
@@ -209,6 +214,43 @@ class _ReadOnlyLine extends StatelessWidget {
             ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _SettingsActionLine extends StatelessWidget {
+  const _SettingsActionLine({
+    required this.label,
+    required this.value,
+    required this.button,
+  });
+
+  final String label;
+  final String value;
+  final Widget button;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SizedBox(width: 110, child: _FieldLabel(label)),
+        Expanded(
+          child: Text(
+            value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: _textSecondary,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              height: 1.35,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        button,
       ],
     );
   }

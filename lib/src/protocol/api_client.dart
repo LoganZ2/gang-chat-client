@@ -65,6 +65,8 @@ class UploadCancelledException implements Exception {
 }
 
 abstract interface class GangApi {
+  Future<AppVersionInfo> getAppVersion();
+
   Future<CurrentUser> me();
 
   Future<CurrentUser> updateAccount({
@@ -451,6 +453,14 @@ class GangApiClient implements GangApi {
   final String baseUrl;
   final AccessTokenProvider accessTokenProvider;
   final http.Client _httpClient;
+
+  @override
+  Future<AppVersionInfo> getAppVersion() async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.get(_uri('/app/version'), headers: _headers(token));
+    });
+    return AppVersionInfo.fromJson(decoded);
+  }
 
   @override
   Future<CurrentUser> me() async {

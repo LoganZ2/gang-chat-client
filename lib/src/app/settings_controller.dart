@@ -27,6 +27,12 @@ class SettingsController {
 
   bool get hasApi => api != null;
 
+  Future<AppVersionInfo?> checkAppVersion() {
+    final client = api;
+    if (client == null) return Future.value();
+    return client.getAppVersion();
+  }
+
   Future<CurrentUser?> loadAccount() {
     final client = api;
     if (client == null) return Future.value();
