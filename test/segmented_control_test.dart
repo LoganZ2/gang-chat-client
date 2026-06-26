@@ -49,7 +49,7 @@ void main() {
       final segmentRect = tester.getRect(
         find.ancestor(
           of: find.text('New Members'),
-          matching: find.byType(ui.PressableSurface),
+          matching: find.byType(GestureDetector),
         ),
       );
 

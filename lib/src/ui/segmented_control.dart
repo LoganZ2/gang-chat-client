@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import 'badge_dot.dart';
-import 'surface.dart';
 import 'tokens.dart';
 
 class Segment<T> {
@@ -43,13 +42,23 @@ class SegmentedControl<T> extends StatefulWidget {
 }
 
 class _SegmentedControlState<T> extends State<SegmentedControl<T>> {
-  static const double _segmentPadding = 12;
-  static const double _segmentGap = 8;
+  static const double _segmentPadding = 10;
   static const double _iconSize = 15;
   static const double _iconGap = 6;
-  static const double _hoverLift = 2;
-  static const double _pressDepth = 2;
-  static const double _baseDepth = 4;
+  static const double _hoverLift = 0;
+  static const double _baseDepth = 5;
+  static const double _contentLift = 0;
+  static const Duration _duration = Duration(milliseconds: 180);
+
+  int? _hoveredIndex;
+  int? _pressedIndex;
+
+  int get _selectedIndex {
+    final index = widget.segments.indexWhere(
+      (segment) => segment.value == widget.value,
+    );
+    return index < 0 ? 0 : index;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -65,59 +74,92 @@ class _SegmentedControlState<T> extends State<SegmentedControl<T>> {
           0,
           (sum, width) => sum + width,
         );
-        final preferredGapWidth = _segmentGap * (widget.segments.length - 1);
-        final naturalWidth = naturalContentWidth + preferredGapWidth;
+        final naturalWidth = naturalContentWidth;
         final constrained = constraints.maxWidth.isFinite;
         final width = widget.expanded && constrained
             ? constraints.maxWidth
             : constrained && naturalWidth > constraints.maxWidth
             ? constraints.maxWidth
             : naturalWidth;
-        final gapWidth = width < preferredGapWidth ? width : preferredGapWidth;
-        final segmentGap = widget.segments.length <= 1
-            ? 0.0
-            : gapWidth / (widget.segments.length - 1);
-        final contentWidth = (width - gapWidth).clamp(0.0, width).toDouble();
+        final contentWidth = width;
         final segmentWidths = _resolvedSegmentWidths(
           naturalWidths: naturalWidths,
           contentWidth: contentWidth,
           expanded: widget.expanded,
         );
+        final selectedIndex = _selectedIndex.clamp(
+          0,
+          widget.segments.length - 1,
+        );
+        final selectedLeft = segmentWidths
+            .take(selectedIndex)
+            .fold<double>(0, (sum, width) => sum + width);
+        final selectedPressed = _pressedIndex == selectedIndex;
+        final capTop = selectedPressed ? _baseDepth : 0.0;
 
         return SizedBox(
           width: widget.expanded ? double.infinity : width,
           height: widget.height + _hoverLift + _baseDepth,
-          child: Row(
+          child: Stack(
+            clipBehavior: Clip.none,
             children: [
-              for (var index = 0; index < widget.segments.length; index++) ...[
-                SizedBox(
-                  width: segmentWidths[index],
-                  child: PressableSurface(
-                    onPressed: () =>
-                        widget.onChanged(widget.segments[index].value),
-                    selected: widget.segments[index].value == widget.value,
-                    height: widget.height,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: _segmentPadding,
-                    ),
-                    backgroundColor: UiColors.background,
-                    selectedBackgroundColor: UiColors.selected,
-                    pressedBackgroundColor: UiColors.surfaceLow,
-                    borderColor: UiColors.border,
-                    selectedBorderColor: UiColors.selectedBorder,
-                    borderRadius: UiRadii.md,
-                    hoverLift: _hoverLift,
-                    pressDepth: _pressDepth,
-                    baseDepth: _baseDepth,
-                    child: _SegmentContent(
-                      segment: widget.segments[index],
-                      selected: widget.segments[index].value == widget.value,
-                    ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: widget.height,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: UiColors.surfacePressed,
+                    borderRadius: BorderRadius.circular(UiRadii.md),
+                    border: Border.all(color: UiColors.border),
                   ),
                 ),
-                if (index != widget.segments.length - 1)
-                  SizedBox(width: segmentGap),
-              ],
+              ),
+              AnimatedPositioned(
+                duration: _duration,
+                curve: Curves.easeOutCubic,
+                left: selectedLeft,
+                top: 0,
+                width: segmentWidths[selectedIndex],
+                height: widget.height + _hoverLift + _baseDepth,
+                child: _SegmentThumb(capTop: capTop, height: widget.height),
+              ),
+              Positioned.fill(
+                child: Row(
+                  children: [
+                    for (var index = 0; index < widget.segments.length; index++)
+                      SizedBox(
+                        width: segmentWidths[index],
+                        height: widget.height + _baseDepth,
+                        child: _SegmentHitTarget(
+                          segment: widget.segments[index],
+                          selected: index == selectedIndex,
+                          hovered: index == _hoveredIndex,
+                          height: widget.height,
+                          capTop: index == selectedIndex
+                              ? capTop - _contentLift
+                              : _baseDepth - _contentLift,
+                          onHoverChanged: (hovered) {
+                            setState(() {
+                              _hoveredIndex = hovered ? index : null;
+                              if (!hovered && _pressedIndex == index) {
+                                _pressedIndex = null;
+                              }
+                            });
+                          },
+                          onPressedChanged: (pressed) {
+                            setState(
+                              () => _pressedIndex = pressed ? index : null,
+                            );
+                          },
+                          onTap: () =>
+                              widget.onChanged(widget.segments[index].value),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ],
           ),
         );
@@ -161,54 +203,147 @@ class _SegmentedControlState<T> extends State<SegmentedControl<T>> {
   }
 }
 
-class _SegmentContent<T> extends StatelessWidget {
-  const _SegmentContent({required this.segment, required this.selected});
+class _SegmentThumb extends StatelessWidget {
+  const _SegmentThumb({required this.capTop, required this.height});
+
+  final double capTop;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(UiRadii.md);
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned(
+          left: 0,
+          right: 0,
+          top: _SegmentedControlState._baseDepth,
+          bottom: 0,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: UiColors.surfacePressed,
+              borderRadius: radius,
+              border: Border.all(color: UiColors.selectedBorder),
+            ),
+          ),
+        ),
+        AnimatedPositioned(
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOutCubic,
+          left: 0,
+          right: 0,
+          top: capTop,
+          height: height,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: UiColors.selected,
+              borderRadius: radius,
+              border: Border.all(color: UiColors.selectedBorder),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SegmentHitTarget<T> extends StatelessWidget {
+  const _SegmentHitTarget({
+    required this.segment,
+    required this.selected,
+    required this.hovered,
+    required this.capTop,
+    required this.height,
+    required this.onHoverChanged,
+    required this.onPressedChanged,
+    required this.onTap,
+  });
 
   final Segment<T> segment;
   final bool selected;
+  final bool hovered;
+  final double capTop;
+  final double height;
+  final ValueChanged<bool> onHoverChanged;
+  final ValueChanged<bool> onPressedChanged;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final foreground = selected
-        ? UiColors.controlAccent
+        ? UiColors.accent
+        : hovered
+        ? UiColors.text
         : UiColors.textSecondary;
-    return Center(
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (segment.icon != null) ...[
-                Icon(
-                  segment.icon,
-                  size: _SegmentedControlState._iconSize,
-                  color: foreground,
-                ),
-                const SizedBox(width: _SegmentedControlState._iconGap),
-              ],
-              Flexible(
-                child: Text(
-                  segment.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: foreground,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => onHoverChanged(true),
+      onExit: (_) => onHoverChanged(false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => onPressedChanged(true),
+        onTapUp: (_) => onPressedChanged(false),
+        onTapCancel: () => onPressedChanged(false),
+        onTap: onTap,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 140),
+              curve: Curves.easeOutCubic,
+              transform: Matrix4.translationValues(0, capTop, 0),
+              alignment: Alignment.center,
+              height: height,
+              padding: const EdgeInsets.symmetric(
+                horizontal: _SegmentedControlState._segmentPadding,
+              ),
+              child: Center(
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (segment.icon != null) ...[
+                          Icon(
+                            segment.icon,
+                            size: _SegmentedControlState._iconSize,
+                            color: foreground,
+                          ),
+                          const SizedBox(
+                            width: _SegmentedControlState._iconGap,
+                          ),
+                        ],
+                        Flexible(
+                          child: Text(
+                            segment.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: foreground,
+                              fontSize: 13,
+                              fontWeight: selected
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (segment.showBadge)
+                      Positioned(
+                        key: segment.badgeKey,
+                        top: -3,
+                        right: -6,
+                        child: const BadgeDot(size: 7),
+                      ),
+                  ],
                 ),
               ),
-            ],
-          ),
-          if (segment.showBadge)
-            Positioned(
-              key: segment.badgeKey,
-              top: -3,
-              right: -6,
-              child: const BadgeDot(size: 7),
             ),
-        ],
+          ],
+        ),
       ),
     );
   }

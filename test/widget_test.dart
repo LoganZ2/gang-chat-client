@@ -4173,29 +4173,17 @@ void main() {
     );
 
     expect(find.byType(InkWell), findsNothing);
+    expect(find.byType(ui.PressableSurface), findsNothing);
     expect(
       find.descendant(
         of: find.byType(ui.SegmentedControl<String>),
-        matching: find.byType(ui.PressableSurface),
+        matching: find.byType(GestureDetector),
       ),
       findsNWidgets(2),
     );
-    final surfaces = tester
-        .widgetList<ui.PressableSurface>(
-          find.descendant(
-            of: find.byType(ui.SegmentedControl<String>),
-            matching: find.byType(ui.PressableSurface),
-          ),
-        )
-        .toList();
-    expect(surfaces.first.backgroundColor, ui.UiColors.background);
-    expect(surfaces.first.selectedBackgroundColor, ui.UiColors.selected);
-    expect(surfaces.first.pressedBackgroundColor, ui.UiColors.surfaceLow);
-    expect(surfaces.first.selected, isTrue);
-    expect(surfaces.last.selected, isFalse);
     expect(
       tester.widget<Text>(find.text('Chat')).style?.color,
-      ui.UiColors.controlAccent,
+      ui.UiColors.accent,
     );
     expect(
       tester.widget<Text>(find.text('Forms')).style?.color,
@@ -4207,7 +4195,7 @@ void main() {
     );
     expect(
       tester.widget<Text>(find.text('Forms')).style?.fontWeight,
-      FontWeight.w600,
+      FontWeight.w500,
     );
     expect(
       tester.getSize(find.byType(ui.SegmentedControl<String>)).width,
@@ -4215,7 +4203,7 @@ void main() {
     );
     expect(
       tester.getSize(find.byType(ui.SegmentedControl<String>)).height,
-      closeTo(42, 0.01),
+      closeTo(41, 0.01),
     );
     expect(tester.takeException(), isNull);
   });
@@ -5459,7 +5447,7 @@ void main() {
     for (final label in ['A', 'B', 'C']) {
       final segment = find.ancestor(
         of: find.text(label),
-        matching: find.byType(ui.PressableSurface),
+        matching: find.byType(GestureDetector),
       );
       expect(
         tester.getRect(find.text(label)).center.dx,
