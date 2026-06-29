@@ -207,6 +207,8 @@ class LiveSessionController {
 
   String? get watchedScreenShareIdentity => session.watchedScreenShareIdentity;
 
+  String? get watchedCameraIdentity => session.watchedCameraIdentity;
+
   Future<void> setScreenShareVolume(double volume) async {
     await session.setScreenShareVolume(volume);
     try {
@@ -218,6 +220,10 @@ class LiveSessionController {
 
   Future<void> setWatchedScreenShareIdentity(String? identity) {
     return session.setWatchedScreenShareIdentity(identity);
+  }
+
+  Future<void> setWatchedCameraIdentity(String? identity) {
+    return session.setWatchedCameraIdentity(identity);
   }
 
   int get screenShareMaxHeight => session.screenShareMaxHeight;

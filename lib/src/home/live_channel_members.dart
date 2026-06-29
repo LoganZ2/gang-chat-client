@@ -33,6 +33,7 @@ class _LiveMemberStage extends StatelessWidget {
     required this.stageTrack,
     required this.onSelectStage,
     required this.onSelectScreenShareStage,
+    required this.onSelectCameraStage,
     required this.onToggleMic,
     required this.onToggleHeadphones,
     required this.participantVoiceVolume,
@@ -56,6 +57,7 @@ class _LiveMemberStage extends StatelessWidget {
   final LiveVideoTrack? stageTrack;
   final ValueChanged<LiveVideoTrack> onSelectStage;
   final ValueChanged<String> onSelectScreenShareStage;
+  final ValueChanged<String> onSelectCameraStage;
   final VoidCallback? onToggleMic;
   final VoidCallback onToggleHeadphones;
   final double Function(String userId) participantVoiceVolume;
@@ -103,6 +105,9 @@ class _LiveMemberStage extends StatelessWidget {
                       screenShareFocused:
                           stageTrack?.identity == participant.user.id &&
                           stageTrack?.isScreenShare == true,
+                      cameraFocused:
+                          stageTrack?.identity == participant.user.id &&
+                          stageTrack?.isScreenShare == false,
                       previewTrack: _memberPreviewTrack(
                         tracks: videoTracks,
                         userId: participant.user.id,
@@ -115,6 +120,7 @@ class _LiveMemberStage extends StatelessWidget {
                       ),
                       onSelectPreview: onSelectStage,
                       onSelectScreenShare: onSelectScreenShareStage,
+                      onSelectCamera: onSelectCameraStage,
                       onToggleMic: onToggleMic,
                       onToggleHeadphones: onToggleHeadphones,
                       participantVoiceVolume: participantVoiceVolume,
@@ -154,8 +160,10 @@ class _LiveMemberCard extends StatelessWidget {
     required this.local,
     required this.speaking,
     required this.screenShareFocused,
+    required this.cameraFocused,
     required this.onSelectPreview,
     required this.onSelectScreenShare,
+    required this.onSelectCamera,
     required this.onToggleMic,
     required this.onToggleHeadphones,
     required this.participantVoiceVolume,
@@ -179,10 +187,12 @@ class _LiveMemberCard extends StatelessWidget {
   final bool local;
   final bool speaking;
   final bool screenShareFocused;
+  final bool cameraFocused;
   final LiveVideoTrack? previewTrack;
   final LiveVideoTrack? selectableTrack;
   final ValueChanged<LiveVideoTrack> onSelectPreview;
   final ValueChanged<String> onSelectScreenShare;
+  final ValueChanged<String> onSelectCamera;
   final VoidCallback? onToggleMic;
   final VoidCallback onToggleHeadphones;
   final double Function(String userId) participantVoiceVolume;
@@ -254,10 +264,22 @@ class _LiveMemberCard extends StatelessWidget {
         !screenShareFocused &&
         (previewTrack?.isScreenShare == true ||
             (participant.screenSharing && previewTrack == null));
-    if (previewTrack != null ||
-        (participant.screenSharing && !screenShareFocused)) {
+    final showCameraPreview =
+        !cameraFocused &&
+        !showScreenSharePreview &&
+        (previewTrack?.isScreenShare == false ||
+            (participant.cameraOn && previewTrack == null));
+    final showMediaCard =
+        showScreenSharePreview ||
+        showCameraPreview ||
+        (previewTrack != null && !screenShareFocused && !cameraFocused);
+    if (showMediaCard) {
       final preview = showScreenSharePreview
-          ? const _StoppedScreenShareThumbnail()
+          ? const _StoppedLiveMediaThumbnail(
+              kind: _StoppedLiveMediaKind.screenShare,
+            )
+          : showCameraPreview
+          ? const _StoppedLiveMediaThumbnail(kind: _StoppedLiveMediaKind.camera)
           : _LiveMemberVideo(track: previewTrack!);
       return SizedBox(
         width: _memberCardWidth,
@@ -292,6 +314,15 @@ class _LiveMemberCard extends StatelessWidget {
                     onTap: () {
                       if (showScreenSharePreview) {
                         onSelectScreenShare(participant.user.id);
+                        return;
+                      }
+                      if (showCameraPreview) {
+                        if (previewTrack != null &&
+                            previewTrack.isScreenShare == false) {
+                          onSelectPreview(previewTrack);
+                          return;
+                        }
+                        onSelectCamera(participant.user.id);
                         return;
                       }
                       if (previewTrack != null) {
@@ -710,33 +741,44 @@ class _LiveMemberVideo extends StatelessWidget {
   }
 }
 
-class _StoppedScreenShareThumbnail extends StatefulWidget {
-  const _StoppedScreenShareThumbnail();
+enum _StoppedLiveMediaKind { camera, screenShare }
+
+class _StoppedLiveMediaThumbnail extends StatefulWidget {
+  const _StoppedLiveMediaThumbnail({required this.kind});
+
+  final _StoppedLiveMediaKind kind;
 
   @override
-  State<_StoppedScreenShareThumbnail> createState() =>
-      _StoppedScreenShareThumbnailState();
+  State<_StoppedLiveMediaThumbnail> createState() =>
+      _StoppedLiveMediaThumbnailState();
 }
 
-class _StoppedScreenShareThumbnailState
-    extends State<_StoppedScreenShareThumbnail> {
+class _StoppedLiveMediaThumbnailState
+    extends State<_StoppedLiveMediaThumbnail> {
   bool _hovered = false;
 
   @override
   Widget build(BuildContext context) {
+    final isCamera = widget.kind == _StoppedLiveMediaKind.camera;
     return MouseRegion(
-      key: const ValueKey<String>('live-member:screen-share-thumbnail'),
+      key: ValueKey<String>(
+        isCamera
+            ? 'live-member:camera-thumbnail'
+            : 'live-member:screen-share-thumbnail',
+      ),
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: Stack(
         fit: StackFit.expand,
         children: [
-          const DecoratedBox(
-            decoration: BoxDecoration(color: UiColors.surfacePressed),
+          DecoratedBox(
+            decoration: const BoxDecoration(color: UiColors.surfacePressed),
             child: Center(
               child: Icon(
-                Icons.screen_share_outlined,
+                isCamera
+                    ? Icons.videocam_outlined
+                    : Icons.screen_share_outlined,
                 color: UiColors.textMuted,
                 size: 30,
               ),

@@ -318,6 +318,7 @@ class LiveSession extends ChangeNotifier {
   double _musicBoxVolume = defaultAudioVolume;
   double _screenShareVolume = defaultAudioVolume;
   String? _watchedScreenShareIdentity;
+  String? _watchedCameraIdentity;
   final Map<String, double> _participantVoiceVolumes = <String, double>{};
   bool _outputMuted = false;
   // Local mic mute (Option A): muting keeps the capture running and only zeroes
@@ -383,6 +384,9 @@ class LiveSession extends ChangeNotifier {
   /// The screen-share owner whose remote share is currently being watched.
   /// Screen-share audio is muted unless it belongs to this identity.
   String? get watchedScreenShareIdentity => _watchedScreenShareIdentity;
+
+  /// The camera owner whose remote camera is currently being watched.
+  String? get watchedCameraIdentity => _watchedCameraIdentity;
 
   bool get outputMuted => _outputMuted;
 
@@ -553,6 +557,7 @@ class LiveSession extends ChangeNotifier {
       await _applyOutputVolume();
       await _applyMusicBoxVolume();
       await _applyScreenShareSubscriptions();
+      await _applyCameraSubscriptions();
       await _applyScreenShareVolume();
       _refreshAllMicStates();
       _startOutputRebinder();
@@ -568,6 +573,8 @@ class LiveSession extends ChangeNotifier {
       _connecting = false;
       _screenSharing = false;
       _localMicrophonePublishUnavailable = false;
+      _watchedScreenShareIdentity = null;
+      _watchedCameraIdentity = null;
       unawaited(_stopScreenAudioPublisher());
       _speakingIdentities.clear();
       _micMutedByIdentity.clear();
@@ -673,6 +680,15 @@ class LiveSession extends ChangeNotifier {
     _watchedScreenShareIdentity = normalized;
     await _applyScreenShareSubscriptions();
     await _applyScreenShareVolume();
+    if (changed) notifyListeners();
+  }
+
+  Future<void> setWatchedCameraIdentity(String? identity) async {
+    final next = identity?.trim();
+    final normalized = next == null || next.isEmpty ? null : next;
+    final changed = _watchedCameraIdentity != normalized;
+    _watchedCameraIdentity = normalized;
+    await _applyCameraSubscriptions();
     if (changed) notifyListeners();
   }
 
@@ -917,6 +933,7 @@ class LiveSession extends ChangeNotifier {
     _connecting = false;
     _screenSharing = false;
     _watchedScreenShareIdentity = null;
+    _watchedCameraIdentity = null;
     _localMicrophonePublishUnavailable = false;
     _canPublish = true;
     _speakingIdentities.clear();
@@ -954,6 +971,7 @@ class LiveSession extends ChangeNotifier {
     _roomName = null;
     _screenSharing = false;
     _watchedScreenShareIdentity = null;
+    _watchedCameraIdentity = null;
     _localMicrophonePublishUnavailable = false;
     unawaited(_stopScreenAudioPublisher());
     _speakingIdentities.clear();
@@ -1011,6 +1029,7 @@ class LiveSession extends ChangeNotifier {
       unawaited(_applyOutputVolume());
       unawaited(_applyMusicBoxVolume());
       unawaited(_applyScreenShareSubscriptions());
+      unawaited(_applyCameraSubscriptions());
       unawaited(_applyScreenShareVolume());
       notifyListeners();
       return;
@@ -1066,7 +1085,12 @@ class LiveSession extends ChangeNotifier {
           !_remoteScreenSharePublicationExists(_watchedScreenShareIdentity!)) {
         _watchedScreenShareIdentity = null;
       }
+      if (_watchedCameraIdentity != null &&
+          !_remoteCameraPublicationExists(_watchedCameraIdentity!)) {
+        _watchedCameraIdentity = null;
+      }
       unawaited(_applyScreenShareSubscriptions());
+      unawaited(_applyCameraSubscriptions());
       unawaited(_applyScreenShareVolume());
       notifyListeners();
       return;
@@ -1074,6 +1098,7 @@ class LiveSession extends ChangeNotifier {
     if (event is lk.RoomDisconnectedEvent) {
       _screenSharing = false;
       _watchedScreenShareIdentity = null;
+      _watchedCameraIdentity = null;
       _localMicrophonePublishUnavailable = false;
       unawaited(_stopScreenAudioPublisher());
       _speakingIdentities.clear();
@@ -1330,11 +1355,40 @@ class LiveSession extends ChangeNotifier {
     }
   }
 
+  Future<void> _applyCameraSubscriptions() async {
+    final room = _room;
+    if (room == null) return;
+    final watchedIdentity = _watchedCameraIdentity;
+    for (final participant in room.remoteParticipants.values) {
+      if (_isScreenAudioAux(participant.identity)) continue;
+      for (final pub in participant.videoTrackPublications) {
+        if (pub.source != lk.TrackSource.camera) continue;
+        final shouldSubscribe =
+            watchedIdentity != null && participant.identity == watchedIdentity;
+        try {
+          if (shouldSubscribe) {
+            await pub.subscribe();
+          } else {
+            await pub.unsubscribe();
+          }
+        } catch (_) {}
+      }
+    }
+  }
+
   bool _remoteScreenSharePublicationExists(String identity) {
     final participant = _room?.remoteParticipants[identity];
     if (participant == null) return false;
     return participant.videoTrackPublications.any(
       (pub) => pub.source == lk.TrackSource.screenShareVideo,
+    );
+  }
+
+  bool _remoteCameraPublicationExists(String identity) {
+    final participant = _room?.remoteParticipants[identity];
+    if (participant == null) return false;
+    return participant.videoTrackPublications.any(
+      (pub) => pub.source == lk.TrackSource.camera,
     );
   }
 

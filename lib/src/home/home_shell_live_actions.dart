@@ -5,33 +5,46 @@ extension _HomeShellLiveActions on _HomeShellState {
     final roomId = _selectedServerId;
     if (roomId == null) return;
     _setHomeState(() => _liveStageSelections[roomId] = selection);
-    _syncWatchedScreenShareSelection(selection);
+    _syncWatchedLiveStageSelection(selection);
   }
 
   void _enterLiveFullScreen(LiveVideoTrack track) {
     _setHomeState(() => _fullScreenLiveTrack = track);
-    if (track.isScreenShare && !track.isLocal) {
-      unawaited(
-        _liveSessionController.setWatchedScreenShareIdentity(track.identity),
-      );
+    if (!track.isLocal) {
+      if (track.isScreenShare) {
+        unawaited(
+          _liveSessionController.setWatchedScreenShareIdentity(track.identity),
+        );
+      } else {
+        unawaited(
+          _liveSessionController.setWatchedCameraIdentity(track.identity),
+        );
+      }
     }
     unawaited(_setSystemFullScreen(true));
   }
 
   void _exitLiveFullScreen() {
     _setHomeState(() => _fullScreenLiveTrack = null);
-    _syncWatchedScreenShareSelection(_liveStageSelections[_selectedServerId]);
+    _syncWatchedLiveStageSelection(_liveStageSelections[_selectedServerId]);
     unawaited(_setSystemFullScreen(false));
   }
 
-  void _syncWatchedScreenShareSelection(LiveStageSelection? selection) {
-    final identity =
-        selection?.mode == LiveStageSelectionMode.track &&
-            selection?.isScreenShare == true &&
-            selection?.identity != _currentUser.id
-        ? selection?.identity
-        : null;
-    unawaited(_liveSessionController.setWatchedScreenShareIdentity(identity));
+  void _syncWatchedLiveStageSelection(LiveStageSelection? selection) {
+    String? screenShareIdentity;
+    String? cameraIdentity;
+    if (selection?.mode == LiveStageSelectionMode.track &&
+        selection?.identity != _currentUser.id) {
+      if (selection?.isScreenShare == true) {
+        screenShareIdentity = selection?.identity;
+      } else {
+        cameraIdentity = selection?.identity;
+      }
+    }
+    unawaited(
+      _liveSessionController.setWatchedScreenShareIdentity(screenShareIdentity),
+    );
+    unawaited(_liveSessionController.setWatchedCameraIdentity(cameraIdentity));
   }
 
   Future<void> _setSystemFullScreen(bool fullScreen) async {
@@ -67,7 +80,7 @@ extension _HomeShellLiveActions on _HomeShellState {
     }
     if (_fullScreenLiveTrack != null && _resolveFullScreenLiveTrack() == null) {
       _fullScreenLiveTrack = null;
-      _syncWatchedScreenShareSelection(_liveStageSelections[_selectedServerId]);
+      _syncWatchedLiveStageSelection(_liveStageSelections[_selectedServerId]);
       unawaited(_setSystemFullScreen(false));
     }
     _setHomeState(() {});

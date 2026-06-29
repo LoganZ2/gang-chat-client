@@ -512,11 +512,13 @@ void main() {
       }
 
       await pumpMediaCard(screenShare: false);
-      _expectMediaMemberCard(tester, activityIcon: Icons.videocam);
+      _expectMediaMemberCard(
+        tester,
+        activityIcon: Icons.videocam,
+        stoppedThumbnailKey: 'live-member:camera-thumbnail',
+      );
       await tester.tap(
-        find.byKey(
-          const ValueKey<String>('live-video-renderer:current_user:false'),
-        ),
+        find.byKey(const ValueKey<String>('live-member:camera-thumbnail')),
       );
       expect(stageSelections, 1);
 
@@ -524,7 +526,7 @@ void main() {
       _expectMediaMemberCard(
         tester,
         activityIcon: Icons.screen_share_outlined,
-        showsLiveVideo: false,
+        stoppedThumbnailKey: 'live-member:screen-share-thumbnail',
       );
       await tester.tap(
         find.byKey(
@@ -583,6 +585,71 @@ void main() {
         of: cardFinder,
         matching: find.byKey(
           const ValueKey<String>('live-member:screen-share-thumbnail'),
+        ),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: cardFinder, matching: find.byType(ui.Avatar)),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: cardFinder,
+        matching: find.byType(LiveVideoTrackView),
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets('focused camera leaves member card in avatar layout', (
+    tester,
+  ) async {
+    final searchController = TextEditingController();
+    addTearDown(searchController.dispose);
+    liveVideoTrackRendererForTest = (track, fit, mirrorLocal) {
+      return ColoredBox(
+        key: ValueKey<String>(
+          'live-video-renderer:${track.identity}:${track.isScreenShare}',
+        ),
+        color: Colors.black,
+      );
+    };
+    addTearDown(resetLiveVideoTrackRendererForTest);
+    final user = _user('phabe', 'Room Phabe', roomRole: 'member');
+    final live = _liveState([
+      _participant(id: 'live_phabe', user: user, cameraOn: true),
+    ]);
+
+    await tester.pumpWidget(
+      _host(
+        searchController: searchController,
+        live: live,
+        videoTracks: [
+          _liveVideoTrack(
+            identity: 'phabe',
+            isScreenShare: false,
+            isLocal: false,
+          ),
+        ],
+        stageSelection: const LiveStageSelection.track(
+          identity: 'phabe',
+          isScreenShare: false,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final cardFinder = find.ancestor(
+      of: find.text('Room Phabe'),
+      matching: find.byType(ui.PressableSurface),
+    );
+    expect(cardFinder, findsOneWidget);
+    expect(
+      find.descendant(
+        of: cardFinder,
+        matching: find.byKey(
+          const ValueKey<String>('live-member:camera-thumbnail'),
         ),
       ),
       findsNothing,
@@ -1025,7 +1092,7 @@ Widget _host({
 void _expectMediaMemberCard(
   WidgetTester tester, {
   required IconData activityIcon,
-  bool showsLiveVideo = true,
+  String? stoppedThumbnailKey,
 }) {
   final cardFinder = find.ancestor(
     of: find.text('Room Me'),
@@ -1069,29 +1136,23 @@ void _expectMediaMemberCard(
     of: cardFinder,
     matching: find.byType(LiveVideoTrackView),
   );
-  final previewRect = showsLiveVideo
-      ? tester.getRect(liveVideoFinder)
-      : tester.getRect(
-          find.descendant(
-            of: cardFinder,
-            matching: find.byKey(
-              const ValueKey<String>('live-member:screen-share-thumbnail'),
-            ),
-          ),
+  final Finder? stoppedThumbnailFinder = stoppedThumbnailKey == null
+      ? null
+      : find.descendant(
+          of: cardFinder,
+          matching: find.byKey(ValueKey<String>(stoppedThumbnailKey)),
         );
+  final previewRect = stoppedThumbnailKey == null
+      ? tester.getRect(liveVideoFinder)
+      : tester.getRect(stoppedThumbnailFinder!);
 
   expect(card.height, closeTo(cardRect.width, 0.01));
-  expect(liveVideoFinder, showsLiveVideo ? findsOneWidget : findsNothing);
-  if (!showsLiveVideo) {
-    expect(
-      find.descendant(
-        of: cardFinder,
-        matching: find.byKey(
-          const ValueKey<String>('live-member:screen-share-thumbnail'),
-        ),
-      ),
-      findsOneWidget,
-    );
+  expect(
+    liveVideoFinder,
+    stoppedThumbnailKey == null ? findsOneWidget : findsNothing,
+  );
+  if (stoppedThumbnailFinder != null) {
+    expect(stoppedThumbnailFinder, findsOneWidget);
   }
   expect(
     find.descendant(of: cardFinder, matching: find.byType(ui.Avatar)),

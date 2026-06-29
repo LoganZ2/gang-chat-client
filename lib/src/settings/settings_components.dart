@@ -305,36 +305,13 @@ class _SegmentedSetting extends StatelessWidget {
       children: [
         _FieldLabel(label),
         const SizedBox(height: 8),
-        Row(
-          children: [
-            for (final option in options) ...[
-              Expanded(
-                child: PressableSurface(
-                  onPressed: () => onChanged(option.value),
-                  selected: value == option.value,
-                  height: 36,
-                  backgroundColor: _primaryDark,
-                  selectedBackgroundColor: const Color(0xFF1F2D27),
-                  pressedBackgroundColor: _primaryDarkLow,
-                  borderColor: _borderColor,
-                  selectedBorderColor: UiColors.selectedBorder,
-                  hoverLift: 2,
-                  pressDepth: 2,
-                  baseDepth: 4,
-                  child: Center(
-                    child: Text(
-                      option.label,
-                      style: TextStyle(
-                        color: value == option.value ? _cyan : _textSecondary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              if (option != options.last) const SizedBox(width: 8),
-            ],
+        SegmentedControl<String>(
+          expanded: true,
+          value: value,
+          onChanged: onChanged,
+          segments: [
+            for (final option in options)
+              Segment(value: option.value, label: option.label),
           ],
         ),
       ],

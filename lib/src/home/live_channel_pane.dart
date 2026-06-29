@@ -222,6 +222,12 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
     );
   }
 
+  void _selectCameraStage(String identity) {
+    widget.onStageSelectionChanged(
+      LiveStageSelection.track(identity: identity, isScreenShare: false),
+    );
+  }
+
   void _exitStage() {
     widget.onStageSelectionChanged(const LiveStageSelection.none());
   }
@@ -310,6 +316,7 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                                 onSelectStage: _selectStage,
                                 onSelectScreenShareStage:
                                     _selectScreenShareStage,
+                                onSelectCameraStage: _selectCameraStage,
                                 onToggleMic: widget.onToggleMic,
                                 onToggleHeadphones: widget.onToggleHeadphones,
                                 participantVoiceVolume:

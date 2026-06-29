@@ -399,7 +399,7 @@ LiveVideoTrack? _resolveLiveStageTrack({
     if (selection.mode == LiveStageSelectionMode.none) return null;
     final track = _trackForSelection(tracks, selection);
     if (track != null) return track;
-    return _localScreenShare(tracks);
+    return null;
   }
 
   return _localScreenShare(tracks);
