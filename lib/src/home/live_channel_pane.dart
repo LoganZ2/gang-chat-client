@@ -111,6 +111,7 @@ class LiveChannelPane extends StatefulWidget {
     required this.onOutputVolumeChanged,
     required this.onMusicBoxVolumeChanged,
     required this.onScreenShareVolumeChanged,
+    required this.onScreenShareMuteToggled,
     required this.onParticipantVoiceVolumeChanged,
     required this.onParticipantVoiceMuteToggled,
     required this.canModerateParticipant,
@@ -185,6 +186,7 @@ class LiveChannelPane extends StatefulWidget {
   final ValueChanged<double> onOutputVolumeChanged;
   final ValueChanged<double> onMusicBoxVolumeChanged;
   final ValueChanged<double> onScreenShareVolumeChanged;
+  final VoidCallback onScreenShareMuteToggled;
   final void Function(String userId, double volume)
   onParticipantVoiceVolumeChanged;
   final ValueChanged<String> onParticipantVoiceMuteToggled;
@@ -212,6 +214,12 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
 
   void _selectStage(LiveVideoTrack track) {
     widget.onStageSelectionChanged(LiveStageSelection.fromTrack(track));
+  }
+
+  void _selectScreenShareStage(String identity) {
+    widget.onStageSelectionChanged(
+      LiveStageSelection.track(identity: identity, isScreenShare: true),
+    );
   }
 
   void _exitStage() {
@@ -285,6 +293,8 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                                       widget.onEnterFullScreen(stageTrack),
                                   onScreenShareVolumeChanged:
                                       widget.onScreenShareVolumeChanged,
+                                  onScreenShareMuteToggled:
+                                      widget.onScreenShareMuteToggled,
                                 ),
                               ),
                               const SizedBox(height: 14),
@@ -298,6 +308,8 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                                 videoTracks: widget.videoTracks,
                                 stageTrack: stageTrack,
                                 onSelectStage: _selectStage,
+                                onSelectScreenShareStage:
+                                    _selectScreenShareStage,
                                 onToggleMic: widget.onToggleMic,
                                 onToggleHeadphones: widget.onToggleHeadphones,
                                 participantVoiceVolume:

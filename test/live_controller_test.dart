@@ -378,10 +378,11 @@ void main() {
     );
 
     expect(patch.micMuted, isTrue);
-    expect(patch.cameraOn, isTrue);
+    expect(patch.cameraOn, isFalse);
     expect(patch.screenSharing, isTrue);
     expect(patch.voiceBlocked, isTrue);
-    expect(patch.live, same(live));
+    expect(patch.live.participants.first.cameraOn, isFalse);
+    expect(patch.live.participants.first.screenSharing, isTrue);
     expect(patch.rooms[0].liveParticipantCount, 2);
     expect(patch.rooms[0].liveAvatarPreview.map((user) => user.id), [
       'alice',
@@ -458,7 +459,7 @@ void main() {
 
     expect(patch.micMuted, isTrue);
     expect(patch.voiceBlocked, isTrue);
-    expect(patch.cameraOn, isTrue);
+    expect(patch.cameraOn, isFalse);
     expect(patch.screenSharing, isTrue);
     expect(patch.live?.participantCount, 2);
     expect(patch.live?.participants.map((item) => item.user.id), [
@@ -466,6 +467,36 @@ void main() {
       'bob',
     ]);
   });
+
+  test(
+    'patchStateUpdate preserves room display names from the live roster',
+    () {
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          fail('Reducer test should not call the API: ${request.url}');
+        }),
+      );
+      addTearDown(api.close);
+      final controller = LiveController(api: api);
+      final existing = _participant(
+        _user('alice').copyWith(roomDisplayName: 'Room Alice'),
+      );
+      final incoming = _participant(_user('alice'), micMuted: true);
+
+      final patch = controller.patchStateUpdate(
+        live: _live('room_1', [existing]),
+        participant: incoming,
+      );
+
+      expect(
+        patch.live?.participants.single.user.roomDisplayName,
+        'Room Alice',
+      );
+      expect(patch.live?.participants.single.micMuted, isTrue);
+    },
+  );
 
   test('live kit mic sync is needed only when server changed mic state', () {
     expect(

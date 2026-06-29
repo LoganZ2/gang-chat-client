@@ -92,7 +92,19 @@ String liveParticipantDisplayName(
   String userId, {
   String fallback = '',
 }) {
-  return liveParticipantByUserId(live, userId)?.user.displayName ?? fallback;
+  final participant = liveParticipantByUserId(live, userId);
+  if (participant == null) return fallback;
+  return liveUserDisplayName(participant.user, fallback: fallback);
+}
+
+String liveUserDisplayName(UserSummary user, {String fallback = ''}) {
+  final roomName = _nonEmpty(user.roomDisplayName);
+  if (roomName != null) return roomName;
+  final displayName = _nonEmpty(user.displayName);
+  if (displayName != null) return displayName;
+  final username = _nonEmpty(user.username);
+  if (username != null) return username;
+  return fallback;
 }
 
 List<LiveParticipant> visibleLiveParticipantsForStage(
@@ -102,9 +114,15 @@ List<LiveParticipant> visibleLiveParticipantsForStage(
 }) {
   return [
     for (final participant in participants)
-      if (localParticipantReady || participant.user.id != currentUserId)
+      if (liveParticipantConnectionReady(participant) &&
+          (localParticipantReady || participant.user.id != currentUserId))
         participant,
   ];
+}
+
+bool liveParticipantConnectionReady(LiveParticipant participant) {
+  final state = participant.connectionState.trim().toLowerCase();
+  return state == 'online' || state == 'connected' || state == 'joined';
 }
 
 LiveParticipantTileState liveParticipantTileState(

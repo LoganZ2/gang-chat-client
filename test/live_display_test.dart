@@ -23,6 +23,14 @@ void main() {
     );
   });
 
+  test('liveParticipantDisplayName prefers room display name', () {
+    final live = _liveWithParticipants([
+      _participant('alice', roomDisplayName: 'Room Alice'),
+    ]);
+
+    expect(liveParticipantDisplayName(live, 'alice'), 'Room Alice');
+  });
+
   test('visible live participants hide local user until join is ready', () {
     final live = _live(['alice', 'bob']);
 
@@ -49,6 +57,22 @@ void main() {
         localParticipantReady: false,
       ).map((participant) => participant.user.id),
       ['alice', 'bob'],
+    );
+  });
+
+  test('visible live participants hide joining users', () {
+    final live = _liveWithParticipants([
+      _participant('alice', connectionState: 'joining'),
+      _participant('bob', connectionState: 'online'),
+    ]);
+
+    expect(
+      visibleLiveParticipantsForStage(
+        live.participants,
+        currentUserId: 'missing',
+        localParticipantReady: true,
+      ).map((participant) => participant.user.id),
+      ['bob'],
     );
   });
 
@@ -510,10 +534,16 @@ void main() {
 }
 
 LiveState _live(List<String> userIds) {
+  return _liveWithParticipants([
+    for (final id in userIds) _participant(id, micMuted: true),
+  ]);
+}
+
+LiveState _liveWithParticipants(List<LiveParticipant> participants) {
   return LiveState(
     roomId: 'room_1',
-    participantCount: userIds.length,
-    participants: [for (final id in userIds) _participant(id, micMuted: true)],
+    participantCount: participants.length,
+    participants: participants,
     updatedAt: DateTime.utc(2026, 6, 5),
   );
 }
@@ -524,6 +554,8 @@ LiveParticipant _participant(
   bool voiceBlocked = false,
   bool cameraOn = false,
   bool screenSharing = false,
+  String connectionState = 'connected',
+  String? roomDisplayName,
 }) {
   return LiveParticipant(
     liveSessionId: 'live_$id',
@@ -533,6 +565,7 @@ LiveParticipant _participant(
       displayName: 'User $id',
       avatarUrl: null,
       defaultAvatarKey: 'blue-3',
+      roomDisplayName: roomDisplayName,
     ),
     joinedAt: DateTime.utc(2026, 6, 5),
     micMuted: micMuted,
@@ -540,7 +573,7 @@ LiveParticipant _participant(
     voiceBlocked: voiceBlocked,
     cameraOn: cameraOn,
     screenSharing: screenSharing,
-    connectionState: 'connected',
+    connectionState: connectionState,
   );
 }
 

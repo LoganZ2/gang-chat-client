@@ -1376,6 +1376,12 @@ class RoomsController {
     var selectedLive = selectedRoomId == roomId && liveJson != null
         ? LiveState.fromJson(liveJson)
         : null;
+    if (selectedLive != null && previousLive?.roomId == roomId) {
+      selectedLive = _mergeLiveParticipantUsers(
+        selectedLive,
+        previousLive: previousLive!,
+      );
+    }
 
     // Self-preservation: a snapshot computed server-side before our own join
     // (SSE delivery and the LiveKit webhook can lag/reorder) can arrive right
@@ -1415,6 +1421,48 @@ class RoomsController {
       rooms: nextRooms,
       selectedLive: selectedLive,
     );
+  }
+
+  LiveState _mergeLiveParticipantUsers(
+    LiveState live, {
+    required LiveState previousLive,
+  }) {
+    final previousByUserId = {
+      for (final participant in previousLive.participants)
+        participant.user.id: participant,
+    };
+    var changed = false;
+    final participants = [
+      for (final participant in live.participants)
+        if (previousByUserId[participant.user.id] case final previous?)
+          _mergeLiveParticipantUser(
+            participant,
+            previous,
+            changed: () {
+              changed = true;
+            },
+          )
+        else
+          participant,
+    ];
+    if (!changed) return live;
+    return LiveState(
+      roomId: live.roomId,
+      participantCount: live.participantCount,
+      participants: participants,
+      updatedAt: live.updatedAt,
+    );
+  }
+
+  LiveParticipant _mergeLiveParticipantUser(
+    LiveParticipant participant,
+    LiveParticipant previous, {
+    required void Function() changed,
+  }) {
+    final mergedUser = participant.user.mergeMissing(previous.user);
+    if (identical(mergedUser, participant.user)) return participant;
+    changed();
+    return participant.copyWith(user: mergedUser);
   }
 
   List<RoomCard> patchRoomLiveCount(

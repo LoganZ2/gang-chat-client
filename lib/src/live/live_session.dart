@@ -35,6 +35,11 @@ bool _isOwnScreenAudioAux(String identity, String? localIdentity) {
   return identity == '$localIdentity$_screenAudioAuxSuffix';
 }
 
+String _screenShareAudioOwnerIdentity(String identity) {
+  if (!_isScreenAudioAux(identity)) return identity;
+  return identity.substring(0, identity.length - _screenAudioAuxSuffix.length);
+}
+
 /// A capturable desktop source (a whole screen or a single window), used to
 /// populate the screen-share picker. Wraps flutter_webrtc's source so the UI
 /// doesn't depend on the WebRTC types directly.
@@ -312,6 +317,7 @@ class LiveSession extends ChangeNotifier {
   double _outputVolume = defaultAudioVolume;
   double _musicBoxVolume = defaultAudioVolume;
   double _screenShareVolume = defaultAudioVolume;
+  String? _watchedScreenShareIdentity;
   final Map<String, double> _participantVoiceVolumes = <String, double>{};
   bool _outputMuted = false;
   // Local mic mute (Option A): muting keeps the capture running and only zeroes
@@ -373,6 +379,10 @@ class LiveSession extends ChangeNotifier {
   /// Local listening volume applied only to remote screen-share audio tracks,
   /// independent of [outputVolume] (which covers ordinary voice tracks).
   double get screenShareVolume => _screenShareVolume;
+
+  /// The screen-share owner whose remote share is currently being watched.
+  /// Screen-share audio is muted unless it belongs to this identity.
+  String? get watchedScreenShareIdentity => _watchedScreenShareIdentity;
 
   bool get outputMuted => _outputMuted;
 
@@ -542,6 +552,7 @@ class LiveSession extends ChangeNotifier {
       await _applyLocalMicrophoneState();
       await _applyOutputVolume();
       await _applyMusicBoxVolume();
+      await _applyScreenShareSubscriptions();
       await _applyScreenShareVolume();
       _refreshAllMicStates();
       _startOutputRebinder();
@@ -655,6 +666,16 @@ class LiveSession extends ChangeNotifier {
     await _applyScreenShareVolume();
   }
 
+  Future<void> setWatchedScreenShareIdentity(String? identity) async {
+    final next = identity?.trim();
+    final normalized = next == null || next.isEmpty ? null : next;
+    final changed = _watchedScreenShareIdentity != normalized;
+    _watchedScreenShareIdentity = normalized;
+    await _applyScreenShareSubscriptions();
+    await _applyScreenShareVolume();
+    if (changed) notifyListeners();
+  }
+
   Future<void> setOutputMuted(bool muted) async {
     _outputMuted = muted;
     await _applyOutputVolume();
@@ -668,6 +689,7 @@ class LiveSession extends ChangeNotifier {
     final local = _room?.localParticipant;
     if (local == null) return false;
     if (enabled) {
+      await local.setCameraEnabled(false);
       // A concrete maxFrameRate is required: livekit's desktop
       // ScreenShareCaptureOptions sends `mandatory: {frameRate: maxFrameRate}`,
       // and when maxFrameRate is null (the default) that becomes a null value.
@@ -811,6 +833,9 @@ class LiveSession extends ChangeNotifier {
   Future<bool> setCameraEnabled(bool enabled) async {
     final local = _room?.localParticipant;
     if (local == null) return false;
+    if (enabled && _screenSharing) {
+      await setScreenShareEnabled(false);
+    }
     await local.setCameraEnabled(enabled);
     notifyListeners();
     return enabled;
@@ -891,6 +916,7 @@ class LiveSession extends ChangeNotifier {
     _resolvedLiveKitUrl = null;
     _connecting = false;
     _screenSharing = false;
+    _watchedScreenShareIdentity = null;
     _localMicrophonePublishUnavailable = false;
     _canPublish = true;
     _speakingIdentities.clear();
@@ -927,6 +953,7 @@ class LiveSession extends ChangeNotifier {
     _room = null;
     _roomName = null;
     _screenSharing = false;
+    _watchedScreenShareIdentity = null;
     _localMicrophonePublishUnavailable = false;
     unawaited(_stopScreenAudioPublisher());
     _speakingIdentities.clear();
@@ -983,6 +1010,7 @@ class LiveSession extends ChangeNotifier {
       );
       unawaited(_applyOutputVolume());
       unawaited(_applyMusicBoxVolume());
+      unawaited(_applyScreenShareSubscriptions());
       unawaited(_applyScreenShareVolume());
       notifyListeners();
       return;
@@ -1034,11 +1062,18 @@ class LiveSession extends ChangeNotifier {
       if (wasScreenSharing && !_screenSharing) {
         unawaited(_stopScreenAudioPublisher());
       }
+      if (_watchedScreenShareIdentity != null &&
+          !_remoteScreenSharePublicationExists(_watchedScreenShareIdentity!)) {
+        _watchedScreenShareIdentity = null;
+      }
+      unawaited(_applyScreenShareSubscriptions());
+      unawaited(_applyScreenShareVolume());
       notifyListeners();
       return;
     }
     if (event is lk.RoomDisconnectedEvent) {
       _screenSharing = false;
+      _watchedScreenShareIdentity = null;
       _localMicrophonePublishUnavailable = false;
       unawaited(_stopScreenAudioPublisher());
       _speakingIdentities.clear();
@@ -1254,18 +1289,53 @@ class LiveSession extends ChangeNotifier {
         participant.identity,
         localIdentity,
       );
+      final ownerIdentity = _screenShareAudioOwnerIdentity(
+        participant.identity,
+      );
+      final isWatched =
+          _watchedScreenShareIdentity != null &&
+          ownerIdentity == _watchedScreenShareIdentity;
       for (final pub in participant.audioTrackPublications) {
         if (pub.source != lk.TrackSource.screenShareAudio) continue;
         final track = pub.track;
         if (track == null) continue;
         try {
           await rtc.Helper.setVolume(
-            isOwnAux ? 0.0 : _screenShareVolume,
+            isOwnAux || !isWatched ? 0.0 : _screenShareVolume,
             track.mediaStreamTrack,
           );
         } catch (_) {}
       }
     }
+  }
+
+  Future<void> _applyScreenShareSubscriptions() async {
+    final room = _room;
+    if (room == null) return;
+    final watchedIdentity = _watchedScreenShareIdentity;
+    for (final participant in room.remoteParticipants.values) {
+      if (_isScreenAudioAux(participant.identity)) continue;
+      for (final pub in participant.videoTrackPublications) {
+        if (pub.source != lk.TrackSource.screenShareVideo) continue;
+        final shouldSubscribe =
+            watchedIdentity != null && participant.identity == watchedIdentity;
+        try {
+          if (shouldSubscribe) {
+            await pub.subscribe();
+          } else {
+            await pub.unsubscribe();
+          }
+        } catch (_) {}
+      }
+    }
+  }
+
+  bool _remoteScreenSharePublicationExists(String identity) {
+    final participant = _room?.remoteParticipants[identity];
+    if (participant == null) return false;
+    return participant.videoTrackPublications.any(
+      (pub) => pub.source == lk.TrackSource.screenShareVideo,
+    );
   }
 
   // Re-bind WebRTC's audio output to the live default endpoint and re-apply

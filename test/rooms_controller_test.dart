@@ -941,6 +941,36 @@ void main() {
     },
   );
 
+  test('patchLiveSnapshot preserves participant room display names', () {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        fail('Patch test should not call the API: ${request.url}');
+      }),
+    );
+    addTearDown(api.close);
+    final controller = RoomsController(api: api);
+    final previousJson = _liveJsonWithParticipants(['me']);
+    final participants = previousJson['participants']! as List<Object?>;
+    (participants.single! as Map<String, Object?>)['room_display_name'] =
+        'Room Me';
+    final previousLive = LiveState.fromJson(previousJson);
+
+    final patch = controller.patchLiveSnapshot(
+      rooms: [_roomCard('room_1')],
+      selectedRoomId: 'room_1',
+      data: _liveSnapshotData(['me']),
+      previousLive: previousLive,
+    );
+
+    expect(patch, isNotNull);
+    expect(
+      patch!.selectedLive!.participants.single.user.roomDisplayName,
+      'Room Me',
+    );
+  });
+
   test('patchRoomUpdated updates selected room counts and reload hint', () {
     final api = GangApiClient(
       baseUrl: 'http://example.test/api/v1',

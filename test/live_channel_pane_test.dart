@@ -521,11 +521,21 @@ void main() {
       expect(stageSelections, 1);
 
       await pumpMediaCard(screenShare: true);
-      _expectMediaMemberCard(tester, activityIcon: Icons.screen_share_outlined);
+      _expectMediaMemberCard(
+        tester,
+        activityIcon: Icons.screen_share_outlined,
+        showsLiveVideo: false,
+      );
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('live-member:screen-share-thumbnail'),
+        ),
+      );
+      expect(stageSelections, 2);
     },
   );
 
-  testWidgets('remote screen share stage exposes bottom-right volume control', (
+  testWidgets('focused screen share leaves member card in avatar layout', (
     tester,
   ) async {
     final searchController = TextEditingController();
@@ -539,6 +549,72 @@ void main() {
       );
     };
     addTearDown(resetLiveVideoTrackRendererForTest);
+    final user = _user('phabe', 'Room Phabe', roomRole: 'member');
+    final live = _liveState([
+      _participant(id: 'live_phabe', user: user, screenSharing: true),
+    ]);
+
+    await tester.pumpWidget(
+      _host(
+        searchController: searchController,
+        live: live,
+        videoTracks: [
+          _liveVideoTrack(
+            identity: 'phabe',
+            isScreenShare: true,
+            isLocal: false,
+          ),
+        ],
+        stageSelection: const LiveStageSelection.track(
+          identity: 'phabe',
+          isScreenShare: true,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final cardFinder = find.ancestor(
+      of: find.text('Room Phabe'),
+      matching: find.byType(ui.PressableSurface),
+    );
+    expect(cardFinder, findsOneWidget);
+    expect(
+      find.descendant(
+        of: cardFinder,
+        matching: find.byKey(
+          const ValueKey<String>('live-member:screen-share-thumbnail'),
+        ),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: cardFinder, matching: find.byType(ui.Avatar)),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: cardFinder,
+        matching: find.byType(LiveVideoTrackView),
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets('remote screen share stage exposes bottom-right mute control', (
+    tester,
+  ) async {
+    final searchController = TextEditingController();
+    addTearDown(searchController.dispose);
+    liveVideoTrackRendererForTest = (track, fit, mirrorLocal) {
+      return ColoredBox(
+        key: ValueKey<String>(
+          'live-video-renderer:${track.identity}:${track.isScreenShare}',
+        ),
+        color: Colors.black,
+      );
+    };
+    addTearDown(resetLiveVideoTrackRendererForTest);
+    var muteToggles = 0;
     final volumeChanges = <double>[];
     final live = _liveState([
       _participant(
@@ -566,14 +642,15 @@ void main() {
         ),
         screenShareVolume: 0.75,
         onScreenShareVolumeChanged: volumeChanges.add,
+        onScreenShareMuteToggled: () => muteToggles += 1,
       ),
     );
     await tester.pump();
 
-    final volumeButton = find.byKey(
+    final muteButton = find.byKey(
       const ValueKey<String>('live-stage:screen-share-volume'),
     );
-    expect(volumeButton, findsOneWidget);
+    expect(muteButton, findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('live-volume-slider:共享屏幕输出音量')),
       findsNothing,
@@ -582,33 +659,27 @@ void main() {
     final rendererRect = tester.getRect(
       find.byKey(const ValueKey<String>('live-video-renderer:phabe:true')),
     );
-    final buttonRect = tester.getRect(volumeButton);
+    final buttonRect = tester.getRect(muteButton);
     expect(buttonRect.right, closeTo(rendererRect.right - 8, 0.01));
     expect(buttonRect.bottom, closeTo(rendererRect.bottom - 8, 0.01));
 
     final hover = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    await hover.addPointer(location: tester.getCenter(volumeButton));
+    await hover.addPointer(location: tester.getCenter(muteButton));
     await tester.pump();
 
     final volumeSlider = find.byKey(
       const ValueKey<String>('live-volume-slider:共享屏幕输出音量'),
     );
-    final volumePanel = find.byKey(
-      const ValueKey<String>('live-volume-panel:共享屏幕输出音量'),
-    );
     expect(volumeSlider, findsOneWidget);
-    expect(volumePanel, findsOneWidget);
-    expect(tester.getSize(volumePanel).width, closeTo(34, 1e-9));
-    expect(
-      tester.getRect(volumePanel).bottom,
-      lessThan(tester.getRect(volumeButton).top),
-    );
-
     await tester.tapAt(
       tester.getRect(volumeSlider).bottomCenter - const Offset(0, 1),
     );
     await tester.pump();
     expect(volumeChanges.last, closeTo(0, 0.02));
+
+    await tester.tap(muteButton);
+    await tester.pump();
+    expect(muteToggles, 1);
 
     await hover.removePointer();
   });
@@ -695,6 +766,9 @@ void main() {
             isLocal: false,
           ),
           label: 'Phabe 的屏幕共享',
+          screenShareVolume: 0.75,
+          onScreenShareVolumeChanged: (_) {},
+          onScreenShareMuteToggled: () {},
           onExit: () => exitCount++,
         ),
       ),
@@ -859,6 +933,7 @@ Widget _host({
   List<LiveVideoTrack> videoTracks = const [],
   double screenShareVolume = 1,
   ValueChanged<double>? onScreenShareVolumeChanged,
+  VoidCallback? onScreenShareMuteToggled,
   double Function(String userId)? participantVoiceVolume,
   void Function(String userId, double volume)? onParticipantVoiceVolumeChanged,
   ValueChanged<String>? onParticipantVoiceMuteToggled,
@@ -926,6 +1001,7 @@ Widget _host({
             onOutputVolumeChanged: (_) {},
             onMusicBoxVolumeChanged: (_) {},
             onScreenShareVolumeChanged: onScreenShareVolumeChanged ?? (_) {},
+            onScreenShareMuteToggled: onScreenShareMuteToggled ?? () {},
             participantVoiceVolume: participantVoiceVolume ?? ((_) => 1),
             onParticipantVoiceVolumeChanged:
                 onParticipantVoiceVolumeChanged ?? ((_, _) {}),
@@ -949,6 +1025,7 @@ Widget _host({
 void _expectMediaMemberCard(
   WidgetTester tester, {
   required IconData activityIcon,
+  bool showsLiveVideo = true,
 }) {
   final cardFinder = find.ancestor(
     of: find.text('Room Me'),
@@ -988,15 +1065,34 @@ void _expectMediaMemberCard(
     ),
   );
   final tagRect = tester.getRect(activityTag);
-  final videoRect = tester.getRect(
-    find.descendant(of: cardFinder, matching: find.byType(LiveVideoTrackView)),
+  final liveVideoFinder = find.descendant(
+    of: cardFinder,
+    matching: find.byType(LiveVideoTrackView),
   );
+  final previewRect = showsLiveVideo
+      ? tester.getRect(liveVideoFinder)
+      : tester.getRect(
+          find.descendant(
+            of: cardFinder,
+            matching: find.byKey(
+              const ValueKey<String>('live-member:screen-share-thumbnail'),
+            ),
+          ),
+        );
 
   expect(card.height, closeTo(cardRect.width, 0.01));
-  expect(
-    find.descendant(of: cardFinder, matching: find.byType(LiveVideoTrackView)),
-    findsOneWidget,
-  );
+  expect(liveVideoFinder, showsLiveVideo ? findsOneWidget : findsNothing);
+  if (!showsLiveVideo) {
+    expect(
+      find.descendant(
+        of: cardFinder,
+        matching: find.byKey(
+          const ValueKey<String>('live-member:screen-share-thumbnail'),
+        ),
+      ),
+      findsOneWidget,
+    );
+  }
   expect(
     find.descendant(of: cardFinder, matching: find.byType(ui.Avatar)),
     findsNothing,
@@ -1016,7 +1112,7 @@ void _expectMediaMemberCard(
   expect(voiceVolumeButtonFinder, findsNothing);
   expect(kickButtonFinder, findsNothing);
   expect(nameRect.left, lessThan(tagRect.left));
-  expect(nameRect.top, lessThan(videoRect.top));
+  expect(nameRect.top, lessThan(previewRect.top));
   expect(nameRect.bottom, lessThan(micButtonRect.top));
   expect(tagRect.top, lessThan(micButtonRect.top));
   expect(tagRect.right, lessThanOrEqualTo(cardRect.right));

@@ -196,6 +196,7 @@ class _HomeShellState extends State<HomeShell> {
   bool _headphonesMuted = false;
   double _lastInputVolumeBeforeMute = _defaultLiveVolumeRestore;
   double _lastOutputVolumeBeforeMute = _defaultLiveVolumeRestore;
+  double _lastScreenShareVolumeBeforeMute = _defaultLiveVolumeRestore;
   bool _cameraOn = false;
   bool _screenSharing = false;
   bool _voiceBlocked = false;
@@ -528,6 +529,10 @@ class _HomeShellState extends State<HomeShell> {
                     child: LiveFullScreenStage(
                       track: fullScreenTrack,
                       label: liveStageTrackLabel(_live, fullScreenTrack),
+                      screenShareVolume:
+                          _liveSessionController.screenShareVolume,
+                      onScreenShareVolumeChanged: _changeScreenShareVolume,
+                      onScreenShareMuteToggled: _toggleScreenShareAudioMute,
                       onExit: _exitLiveFullScreen,
                     ),
                   ),

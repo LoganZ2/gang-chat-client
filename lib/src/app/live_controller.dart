@@ -160,6 +160,11 @@ bool shouldSyncLiveKitMicAfterServerPatch({
   return requestedMicMuted != null && serverMicMuted != requestedMicMuted;
 }
 
+LiveParticipant liveParticipantWithExclusiveMedia(LiveParticipant participant) {
+  if (!participant.cameraOn || !participant.screenSharing) return participant;
+  return participant.copyWith(cameraOn: false);
+}
+
 LiveOutputMutePatch liveOutputMuteToggled({required bool headphonesMuted}) {
   return LiveOutputMutePatch(headphonesMuted: !headphonesMuted);
 }
@@ -186,6 +191,7 @@ class LiveController {
     bool? headphonesMuted,
     bool? cameraOn,
     bool? screenSharing,
+    String? connectionState,
   }) {
     return api.updateMyLiveState(
       roomId: roomId,
@@ -193,6 +199,7 @@ class LiveController {
       headphonesMuted: headphonesMuted,
       cameraOn: cameraOn,
       screenSharing: screenSharing,
+      connectionState: connectionState,
     );
   }
 
@@ -324,9 +331,11 @@ class LiveController {
     required LiveJoinResult result,
     bool showMicUnmutedWhenAllowed = false,
   }) {
-    final participant = _joinResultParticipantForDisplay(
-      result.participant,
-      showMicUnmutedWhenAllowed: showMicUnmutedWhenAllowed,
+    final participant = liveParticipantWithExclusiveMedia(
+      _joinResultParticipantForDisplay(
+        result.participant,
+        showMicUnmutedWhenAllowed: showMicUnmutedWhenAllowed,
+      ),
     );
     final live = _replaceParticipantInLive(result.live, participant);
     return LiveJoinResultPatch(
@@ -365,9 +374,10 @@ class LiveController {
     final participants = live.participants.map((item) {
       if (item.liveSessionId != participant.liveSessionId) return item;
       replaced = true;
-      if (identical(item, participant)) return item;
+      final merged = _mergeLiveParticipant(participant, fallback: item);
+      if (identical(item, merged)) return item;
       changed = true;
-      return participant;
+      return merged;
     }).toList();
     if (!replaced || !changed) return live;
     return LiveState(
@@ -382,12 +392,13 @@ class LiveController {
     required LiveState? live,
     required LiveParticipant participant,
   }) {
+    final normalized = liveParticipantWithExclusiveMedia(participant);
     return LiveStateUpdatePatch(
-      micMuted: participant.micMuted,
-      cameraOn: participant.cameraOn,
-      screenSharing: participant.screenSharing,
-      voiceBlocked: participant.voiceBlocked,
-      live: mergeParticipant(live, participant),
+      micMuted: normalized.micMuted,
+      cameraOn: normalized.cameraOn,
+      screenSharing: normalized.screenSharing,
+      voiceBlocked: normalized.voiceBlocked,
+      live: mergeParticipant(live, normalized),
     );
   }
 
@@ -417,15 +428,26 @@ class LiveController {
     final participants = live.participants.map((item) {
       if (item.liveSessionId != participant.liveSessionId) return item;
       replaced = true;
-      return participant;
+      return _mergeLiveParticipant(participant, fallback: item);
     }).toList();
     return LiveState(
       roomId: live.roomId,
       participantCount: replaced
           ? live.participantCount
           : live.participantCount + 1,
-      participants: replaced ? participants : [...participants, participant],
+      participants: replaced
+          ? participants
+          : [...participants, liveParticipantWithExclusiveMedia(participant)],
       updatedAt: DateTime.now().toUtc(),
+    );
+  }
+
+  LiveParticipant _mergeLiveParticipant(
+    LiveParticipant participant, {
+    required LiveParticipant fallback,
+  }) {
+    return liveParticipantWithExclusiveMedia(
+      participant.copyWith(user: participant.user.mergeMissing(fallback.user)),
     );
   }
 

@@ -32,6 +32,7 @@ class _LiveMemberStage extends StatelessWidget {
     required this.videoTracks,
     required this.stageTrack,
     required this.onSelectStage,
+    required this.onSelectScreenShareStage,
     required this.onToggleMic,
     required this.onToggleHeadphones,
     required this.participantVoiceVolume,
@@ -54,6 +55,7 @@ class _LiveMemberStage extends StatelessWidget {
   final List<LiveVideoTrack> videoTracks;
   final LiveVideoTrack? stageTrack;
   final ValueChanged<LiveVideoTrack> onSelectStage;
+  final ValueChanged<String> onSelectScreenShareStage;
   final VoidCallback? onToggleMic;
   final VoidCallback onToggleHeadphones;
   final double Function(String userId) participantVoiceVolume;
@@ -98,6 +100,9 @@ class _LiveMemberStage extends StatelessWidget {
                       currentUser: currentUser,
                       local: participant.user.id == currentUser.id,
                       speaking: speakingUserIds.contains(participant.user.id),
+                      screenShareFocused:
+                          stageTrack?.identity == participant.user.id &&
+                          stageTrack?.isScreenShare == true,
                       previewTrack: _memberPreviewTrack(
                         tracks: videoTracks,
                         userId: participant.user.id,
@@ -109,6 +114,7 @@ class _LiveMemberStage extends StatelessWidget {
                         stageTrack: stageTrack,
                       ),
                       onSelectPreview: onSelectStage,
+                      onSelectScreenShare: onSelectScreenShareStage,
                       onToggleMic: onToggleMic,
                       onToggleHeadphones: onToggleHeadphones,
                       participantVoiceVolume: participantVoiceVolume,
@@ -147,7 +153,9 @@ class _LiveMemberCard extends StatelessWidget {
     required this.currentUser,
     required this.local,
     required this.speaking,
+    required this.screenShareFocused,
     required this.onSelectPreview,
+    required this.onSelectScreenShare,
     required this.onToggleMic,
     required this.onToggleHeadphones,
     required this.participantVoiceVolume,
@@ -170,9 +178,11 @@ class _LiveMemberCard extends StatelessWidget {
   final CurrentUser currentUser;
   final bool local;
   final bool speaking;
+  final bool screenShareFocused;
   final LiveVideoTrack? previewTrack;
   final LiveVideoTrack? selectableTrack;
   final ValueChanged<LiveVideoTrack> onSelectPreview;
+  final ValueChanged<String> onSelectScreenShare;
   final VoidCallback? onToggleMic;
   final VoidCallback onToggleHeadphones;
   final double Function(String userId) participantVoiceVolume;
@@ -240,7 +250,15 @@ class _LiveMemberCard extends StatelessWidget {
           ? () => onRemoveParticipant(participant)
           : null,
     );
-    if (previewTrack != null) {
+    final showScreenSharePreview =
+        !screenShareFocused &&
+        (previewTrack?.isScreenShare == true ||
+            (participant.screenSharing && previewTrack == null));
+    if (previewTrack != null ||
+        (participant.screenSharing && !screenShareFocused)) {
+      final preview = showScreenSharePreview
+          ? const _StoppedScreenShareThumbnail()
+          : _LiveMemberVideo(track: previewTrack!);
       return SizedBox(
         width: _memberCardWidth,
         child: PressableSurface(
@@ -271,12 +289,21 @@ class _LiveMemberCard extends StatelessWidget {
                   cursor: SystemMouseCursors.click,
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onTap: () => onSelectPreview(previewTrack),
+                    onTap: () {
+                      if (showScreenSharePreview) {
+                        onSelectScreenShare(participant.user.id);
+                        return;
+                      }
+                      if (previewTrack != null) {
+                        onSelectPreview(previewTrack);
+                        return;
+                      }
+                    },
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(UiRadii.md),
                       child: ColoredBox(
                         color: UiColors.surfacePressed,
-                        child: _LiveMemberVideo(track: previewTrack),
+                        child: preview,
                       ),
                     ),
                   ),
@@ -679,6 +706,56 @@ class _LiveMemberVideo extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(UiRadii.lg),
       child: video,
+    );
+  }
+}
+
+class _StoppedScreenShareThumbnail extends StatefulWidget {
+  const _StoppedScreenShareThumbnail();
+
+  @override
+  State<_StoppedScreenShareThumbnail> createState() =>
+      _StoppedScreenShareThumbnailState();
+}
+
+class _StoppedScreenShareThumbnailState
+    extends State<_StoppedScreenShareThumbnail> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      key: const ValueKey<String>('live-member:screen-share-thumbnail'),
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          const DecoratedBox(
+            decoration: BoxDecoration(color: UiColors.surfacePressed),
+            child: Center(
+              child: Icon(
+                Icons.screen_share_outlined,
+                color: UiColors.textMuted,
+                size: 30,
+              ),
+            ),
+          ),
+          ColoredBox(color: Colors.black.withValues(alpha: 0.32)),
+          AnimatedOpacity(
+            opacity: _hovered ? 1 : 0,
+            duration: const Duration(milliseconds: 120),
+            child: Center(
+              child: Icon(
+                Icons.search,
+                color: Colors.white.withValues(alpha: 0.92),
+                size: 32,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

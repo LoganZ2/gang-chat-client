@@ -2117,7 +2117,7 @@ void main() {
 
     expect(liveSession.micMutes, contains(true));
     expect(liveSession.outputMutes, containsAll([true, false]));
-    expect(liveSession.cameraEnables, [true]);
+    expect(liveSession.cameraEnables, [true, false]);
     expect(liveSession.screenShareEnables, [true]);
     expect(liveSession.screenShareSourceIds, ['screen-primary']);
     expect(

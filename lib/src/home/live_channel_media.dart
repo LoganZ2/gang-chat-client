@@ -27,6 +27,7 @@ class _LiveMediaStage extends StatelessWidget {
     required this.onExit,
     required this.onFullScreen,
     required this.onScreenShareVolumeChanged,
+    required this.onScreenShareMuteToggled,
   });
 
   final LiveVideoTrack track;
@@ -35,6 +36,7 @@ class _LiveMediaStage extends StatelessWidget {
   final VoidCallback onExit;
   final VoidCallback onFullScreen;
   final ValueChanged<double> onScreenShareVolumeChanged;
+  final VoidCallback onScreenShareMuteToggled;
 
   @override
   Widget build(BuildContext context) {
@@ -87,6 +89,7 @@ class _LiveMediaStage extends StatelessWidget {
               child: _StageScreenShareVolumeButton(
                 value: screenShareVolume,
                 onChanged: onScreenShareVolumeChanged,
+                onPressed: onScreenShareMuteToggled,
               ),
             ),
         ],
@@ -104,23 +107,36 @@ class _StageScreenShareVolumeButton extends StatelessWidget {
   const _StageScreenShareVolumeButton({
     required this.value,
     required this.onChanged,
+    required this.onPressed,
   });
 
   final double value;
   final ValueChanged<double> onChanged;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     final normalized = normalizedAudioVolume(value);
+    final message = normalized <= 0 ? '取消静音共享屏幕' : '静音共享屏幕';
     return _HoverVolumeButton(
       key: const ValueKey<String>('live-stage:screen-share-volume'),
       value: normalized,
       semanticLabel: '共享屏幕输出音量',
-      infoMessage: '调整共享屏幕音量',
+      infoMessage: message,
       onChanged: onChanged,
       panelWidth: 34,
       panelHeight: _hoverVolumePanelHeight * 34 / _controlButtonSize,
-      child: _StageOverlayIconSurface(icon: _screenShareVolumeIcon(normalized)),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onPressed,
+        child: Semantics(
+          button: true,
+          label: message,
+          child: _StageOverlayIconSurface(
+            icon: _screenShareVolumeIcon(normalized),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -130,11 +146,17 @@ class LiveFullScreenStage extends StatefulWidget {
     super.key,
     required this.track,
     required this.label,
+    required this.screenShareVolume,
+    required this.onScreenShareVolumeChanged,
+    required this.onScreenShareMuteToggled,
     required this.onExit,
   });
 
   final LiveVideoTrack track;
   final String label;
+  final double screenShareVolume;
+  final ValueChanged<double> onScreenShareVolumeChanged;
+  final VoidCallback onScreenShareMuteToggled;
   final VoidCallback onExit;
 
   @override
@@ -195,6 +217,16 @@ class _LiveFullScreenStageState extends State<LiveFullScreenStage> {
                 onPressed: widget.onExit,
               ),
             ),
+            if (widget.track.isScreenShare && !widget.track.isLocal)
+              Positioned(
+                right: 14,
+                bottom: 14,
+                child: _StageScreenShareVolumeButton(
+                  value: widget.screenShareVolume,
+                  onChanged: widget.onScreenShareVolumeChanged,
+                  onPressed: widget.onScreenShareMuteToggled,
+                ),
+              ),
           ],
         ),
       ),

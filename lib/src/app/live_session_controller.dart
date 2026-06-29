@@ -205,6 +205,8 @@ class LiveSessionController {
 
   double get screenShareVolume => session.screenShareVolume;
 
+  String? get watchedScreenShareIdentity => session.watchedScreenShareIdentity;
+
   Future<void> setScreenShareVolume(double volume) async {
     await session.setScreenShareVolume(volume);
     try {
@@ -212,6 +214,10 @@ class LiveSessionController {
     } catch (_) {
       // A failed persist shouldn't undo the live change.
     }
+  }
+
+  Future<void> setWatchedScreenShareIdentity(String? identity) {
+    return session.setWatchedScreenShareIdentity(identity);
   }
 
   int get screenShareMaxHeight => session.screenShareMaxHeight;
