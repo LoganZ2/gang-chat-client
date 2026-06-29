@@ -23,7 +23,6 @@ void main() {
             'minimum_supported_version': '1.0.0',
             'release_notes': 'ok',
             'download_url': 'https://example.test/download',
-            'sha256': 'abc123',
           }),
           200,
         );
@@ -36,7 +35,6 @@ void main() {
     expect(info.minimumSupportedVersion, '1.0.0');
     expect(info.releaseNotes, 'ok');
     expect(info.downloadUrl, 'https://example.test/download');
-    expect(info.sha256, 'abc123');
     api.close();
   });
 

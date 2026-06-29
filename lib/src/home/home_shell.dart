@@ -37,7 +37,6 @@ import '../app/room_members_filter.dart' as member_filter;
 import '../app/room_notifications.dart' as room_notifications;
 import '../app/rooms_controller.dart';
 import '../app/search_display.dart' as search_display;
-import '../app/settings_about.dart';
 import '../app/sticker_display.dart' as sticker_display;
 import '../app/sticker_packs_controller.dart';
 import '../app/voice_message_display.dart' as voice_display;
@@ -100,7 +99,6 @@ class HomeShell extends StatefulWidget {
     required this.audioDeviceStore,
     required this.closeBehaviorStore,
     required this.languageStore,
-    required this.autoUpdatePromptStore,
     required this.windowController,
     this.liveSessionController,
     this.realtime,
@@ -110,7 +108,6 @@ class HomeShell extends StatefulWidget {
   final AudioDeviceStore audioDeviceStore;
   final CloseBehaviorStore closeBehaviorStore;
   final LanguagePreferenceStore languageStore;
-  final AutoUpdatePromptStore autoUpdatePromptStore;
   final DesktopWindowController windowController;
   final LiveSessionController? liveSessionController;
   final RealtimeService? realtime;
@@ -236,7 +233,6 @@ class _HomeShellState extends State<HomeShell> {
   Set<String> _searchPendingPublicRoomIds = const {};
   bool _showingJoinApplicationDialog = false;
   RealtimeConnectionStatus _realtimeStatus = RealtimeConnectionStatus.offline;
-  int _autoUpdatePromptSerial = 0;
 
   RoomsController get _roomsController => _services.rooms;
   MessagesController get _messagesController => _services.messages;
@@ -265,7 +261,6 @@ class _HomeShellState extends State<HomeShell> {
     _startRealtime();
     unawaited(_loadServers());
     unawaited(_refreshPendingRoomInviteBadge());
-    unawaited(_maybePromptAppUpdate());
   }
 
   @override
@@ -348,7 +343,6 @@ class _HomeShellState extends State<HomeShell> {
     unawaited(_voicePlaybackService.stop());
     unawaited(_loadServers());
     unawaited(_refreshPendingRoomInviteBadge());
-    unawaited(_maybePromptAppUpdate());
   }
 
   @override
@@ -376,7 +370,6 @@ class _HomeShellState extends State<HomeShell> {
     _voicePlaybackService.state.removeListener(_handleVoicePlaybackChanged);
     unawaited(_voicePlaybackService.dispose());
     _cancelActiveDownloads();
-    _autoUpdatePromptSerial++;
     _services.close();
     super.dispose();
   }
@@ -391,42 +384,6 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   void _setHomeState(VoidCallback update) => setState(update);
-
-  Future<void> _maybePromptAppUpdate() async {
-    final serial = ++_autoUpdatePromptSerial;
-    bool enabled;
-    try {
-      enabled = await widget.autoUpdatePromptStore.read();
-    } catch (_) {
-      return;
-    }
-    if (!mounted || serial != _autoUpdatePromptSerial || !enabled) return;
-    try {
-      final info = await _services.settings.checkAppVersion();
-      if (!mounted || serial != _autoUpdatePromptSerial) return;
-      final latestVersion = info?.latestVersion.trim() ?? '';
-      if (latestVersion.isEmpty) return;
-      if (compareAppVersions(gangChatClientVersion, latestVersion) >= 0) {
-        return;
-      }
-      final messenger = ScaffoldMessenger.maybeOf(context);
-      messenger
-        ?..clearSnackBars()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(
-              updateCheckSucceededText(
-                currentVersion: gangChatClientVersion,
-                latestVersion: latestVersion,
-              ),
-            ),
-          ),
-        );
-    } catch (_) {
-      // Startup update prompts are opportunistic; manual checks in Settings
-      // still surface failures when the user asks for them.
-    }
-  }
 
   void _handleVoicePlaybackChanged() {
     if (!mounted) return;
