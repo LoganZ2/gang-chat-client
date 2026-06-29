@@ -754,6 +754,30 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('authenticated home shell prompts when a newer version exists', (
+    WidgetTester tester,
+  ) async {
+    final autoUpdateWrites = <bool>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(appLatestVersion: '0.3.2'),
+          realtime: _NoopRealtimeService(),
+          autoUpdatePromptStore: _FakeAutoUpdatePromptStore(
+            autoUpdateWrites,
+            initialValue: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('发现新版本 v0.3.2'), findsOneWidget);
+    expect(autoUpdateWrites, isEmpty);
+  });
+
   testWidgets('authenticated home shell title search keeps fixed resize size', (
     WidgetTester tester,
   ) async {
@@ -5671,6 +5695,7 @@ AuthenticatedAppContext _homeTestAppContext({
   bool includeUnreadRoomNotification = false,
   bool includeFreshRoomNotificationOnRefresh = false,
   bool pinAlphaRoom = false,
+  String appLatestVersion = '0.3.1',
   Future<void> Function(String roomId)? beforeRoomDetailResponse,
 }) {
   final user = CurrentUser(
@@ -5718,6 +5743,7 @@ AuthenticatedAppContext _homeTestAppContext({
       includeFreshRoomNotificationOnRefresh:
           includeFreshRoomNotificationOnRefresh,
       pinAlphaRoom: pinAlphaRoom,
+      appLatestVersion: appLatestVersion,
       beforeRoomDetailResponse: beforeRoomDetailResponse,
     ),
   );
@@ -5739,6 +5765,7 @@ GangApi _roomsApi({
   bool includeUnreadRoomNotification = false,
   bool includeFreshRoomNotificationOnRefresh = false,
   bool pinAlphaRoom = false,
+  String appLatestVersion = '0.3.1',
   Future<void> Function(String roomId)? beforeRoomDetailResponse,
 }) {
   var roomNotificationsMarkedRead = false;
@@ -6475,6 +6502,14 @@ GangApi _roomsApi({
       }
       if (request.url.path == '/api/v1/me') {
         return _jsonResponse(_currentUserJson);
+      }
+      if (request.url.path == '/api/v1/app/version') {
+        return _jsonResponse({
+          'latest_version': appLatestVersion,
+          'minimum_supported_version': appLatestVersion,
+          'download_url': 'https://example.test/download',
+          'sha256': 'abc123',
+        });
       }
       return http.Response('unexpected request: ${request.url}', 404);
     }),

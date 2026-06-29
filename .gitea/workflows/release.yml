@@ -81,6 +81,9 @@ jobs:
     runs-on: macos-arm64
     needs: [prepare]
     if: needs.prepare.outputs.duplicate != 'true'
+    outputs:
+      dmg_name: ${{ steps.dmg.outputs.name }}
+      dmg_sha256: ${{ steps.dmg.outputs.sha256 }}
     env:
       # 固定为 Flutter 中国镜像，与 build-windows 一致。runner 在国内，pub.dev
       # 不稳；不依赖 runner 全局配置可避免 pubspec.lock 的 url: 被改写漂移。
@@ -111,7 +114,7 @@ jobs:
         run: dart tool/check_utf8.dart
 
       - name: Build macOS (release)
-        run: flutter build macos --release --build-name="${{ needs.prepare.outputs.version }}"
+        run: flutter build macos --release --build-name="${{ needs.prepare.outputs.version }}" --dart-define=GANG_CHAT_VERSION="${{ needs.prepare.outputs.version }}"
 
       - name: Package DMG
         id: dmg
@@ -125,8 +128,11 @@ jobs:
           hdiutil create -volname "Gang Chat" -srcfolder "$STAGING" \
             -ov -format UDZO "$DMG"
           rm -rf "$STAGING"
+          SHA256="$(shasum -a 256 "$DMG" | awk '{print $1}')"
           echo "name=$DMG" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
           ls -lh "$DMG"
+          echo "sha256=$SHA256"
 
       - name: Upload DMG to release
         env:
@@ -144,6 +150,11 @@ jobs:
     runs-on: windows
     needs: [prepare]
     if: needs.prepare.outputs.duplicate != 'true'
+    outputs:
+      zip_name: ${{ steps.zip.outputs.name }}
+      zip_sha256: ${{ steps.zip.outputs.sha256 }}
+      installer_name: ${{ steps.installer.outputs.name }}
+      installer_sha256: ${{ steps.installer.outputs.sha256 }}
     env:
       PUB_HOSTED_URL: https://pub.flutter-io.cn
       FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
@@ -227,7 +238,7 @@ jobs:
         shell: powershell
         run: |
           $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
-          flutter build windows --release --build-name="${{ needs.prepare.outputs.version }}"
+          flutter build windows --release --build-name="${{ needs.prepare.outputs.version }}" --dart-define=GANG_CHAT_VERSION="${{ needs.prepare.outputs.version }}"
 
       - name: Package ZIP
         id: zip
@@ -239,9 +250,55 @@ jobs:
           if (-not (Test-Path $SRC)) { Write-Error "build output not found at $SRC"; exit 1 }
           $ZIP = "GangChat-$VERSION-windows.zip"
           Compress-Archive -Path "$SRC\*" -DestinationPath $ZIP
+          $SHA256 = (Get-FileHash -Algorithm SHA256 -Path $ZIP).Hash.ToLowerInvariant()
           # 用 .NET 方法写入，避免 PS5 Out-File -Encoding utf8 带 BOM 导致 runner 解析失败
           [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "name=$ZIP`n")
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "sha256=$SHA256`n")
           Get-Item $ZIP | Select-Object Name, @{n='Size';e={'{0:N0} bytes' -f $_.Length}}
+          Write-Host "sha256=$SHA256"
+
+      - name: Package Windows installer
+        id: installer
+        shell: powershell
+        run: |
+          $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
+          $VERSION = "${{ needs.prepare.outputs.version }}"
+          $SRC = "build\windows\x64\runner\Release"
+          $OUT = "build\installer"
+          $ICON = "windows\runner\resources\app_icon.ico"
+          if (-not (Test-Path $SRC)) { Write-Error "build output not found at $SRC"; exit 1 }
+          if (-not (Test-Path $ICON)) { Write-Error "installer icon not found at $ICON"; exit 1 }
+          New-Item -ItemType Directory -Force -Path $OUT | Out-Null
+
+          $candidates = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+            "${env:ProgramFiles(x86)}\Inno Setup 5\ISCC.exe",
+            "$env:ProgramFiles\Inno Setup 5\ISCC.exe"
+          )
+          $ISCC = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+          if (-not $ISCC) {
+            $cmd = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+            if ($cmd) { $ISCC = $cmd.Source }
+          }
+          if (-not $ISCC) {
+            Write-Error "Inno Setup compiler (ISCC.exe) not found. Install Inno Setup 6 on the Windows runner."
+            exit 1
+          }
+
+          $sourceDir = (Resolve-Path $SRC).Path
+          $outputDir = (Resolve-Path $OUT).Path
+          $iconFile = (Resolve-Path $ICON).Path
+          & $ISCC "/DAppVersion=$VERSION" "/DSourceDir=$sourceDir" "/DOutputDir=$outputDir" "/DAppIconFile=$iconFile" "installer\gangchat.iss"
+          if ($LASTEXITCODE -ne 0) { Write-Error "Inno Setup failed"; exit 1 }
+
+          $EXE = Join-Path $OUT "GangChat-$VERSION-windows-x64-setup.exe"
+          if (-not (Test-Path $EXE)) { Write-Error "installer not found at $EXE"; exit 1 }
+          $SHA256 = (Get-FileHash -Algorithm SHA256 -Path $EXE).Hash.ToLowerInvariant()
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "name=$(Split-Path $EXE -Leaf)`n")
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "sha256=$SHA256`n")
+          Get-Item $EXE | Select-Object Name, @{n='Size';e={'{0:N0} bytes' -f $_.Length}}
+          Write-Host "sha256=$SHA256"
 
       - name: Upload ZIP to release
         shell: powershell
@@ -260,11 +317,98 @@ jobs:
           curl.exe @curlArgs
           Write-Host "Uploaded $ZIP"
 
+      - name: Upload Windows installer to release
+        shell: powershell
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
+          $EXE = "build\installer\${{ steps.installer.outputs.name }}"
+          $API = "$env:GITHUB_SERVER_URL/api/v1/repos/$env:GITHUB_REPOSITORY"
+          $RELEASE_ID = "${{ needs.prepare.outputs.release_id }}"
+          $curlArgs = @('-fsS', '-X', 'POST',
+            "$API/releases/$RELEASE_ID/assets?name=${{ steps.installer.outputs.name }}",
+            '-H', "Authorization: token $env:TOKEN",
+            '-F', "attachment=@$EXE")
+          curl.exe @curlArgs
+          Write-Host "Uploaded ${{ steps.installer.outputs.name }}"
+
   release:
     runs-on: macos-arm64
     needs: [prepare, build-macos, build-windows]
     if: needs.prepare.outputs.duplicate != 'true'
     steps:
+      - name: Generate update manifest
+        id: manifest
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          WINDOWS_INSTALLER_NAME: ${{ needs.build-windows.outputs.installer_name }}
+          WINDOWS_INSTALLER_SHA256: ${{ needs.build-windows.outputs.installer_sha256 }}
+          WINDOWS_ZIP_NAME: ${{ needs.build-windows.outputs.zip_name }}
+          WINDOWS_ZIP_SHA256: ${{ needs.build-windows.outputs.zip_sha256 }}
+          MACOS_DMG_NAME: ${{ needs.build-macos.outputs.dmg_name }}
+          MACOS_DMG_SHA256: ${{ needs.build-macos.outputs.dmg_sha256 }}
+        run: |
+          export RELEASE_BASE="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/${TAG}"
+          python3 - <<'PY'
+          import datetime
+          import json
+          import os
+          from pathlib import Path
+
+          version = os.environ["VERSION"]
+          release_base = os.environ["RELEASE_BASE"].rstrip("/")
+
+          def asset(name_key, sha_key):
+              name = os.environ[name_key]
+              return {
+                  "name": name,
+                  "url": f"{release_base}/{name}",
+                  "sha256": os.environ[sha_key],
+              }
+
+          windows_installer = asset(
+              "WINDOWS_INSTALLER_NAME",
+              "WINDOWS_INSTALLER_SHA256",
+          )
+          data = {
+              "version": version,
+              "latest_version": version,
+              "minimum_supported_version": version,
+              "release_date": datetime.datetime.utcnow().strftime("%Y/%m/%d"),
+              "download_url": windows_installer["url"],
+              "sha256": windows_installer["sha256"],
+              "platforms": {
+                  "windows-x64": {
+                      "installer": windows_installer,
+                      "zip": asset("WINDOWS_ZIP_NAME", "WINDOWS_ZIP_SHA256"),
+                  },
+                  "macos": {
+                      "dmg": asset("MACOS_DMG_NAME", "MACOS_DMG_SHA256"),
+                  },
+              },
+          }
+          Path("app-update.json").write_text(
+              json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+          echo "name=app-update.json" >> "$GITHUB_OUTPUT"
+          cat app-update.json
+
+      - name: Upload update manifest to release
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+        run: |
+          API="${GITHUB_SERVER_URL}/api/v1/repos/${GITHUB_REPOSITORY}"
+          MANIFEST="${{ steps.manifest.outputs.name }}"
+          curl -fsS -X POST "$API/releases/$RELEASE_ID/assets?name=$MANIFEST" \
+            -H "Authorization: token $TOKEN" \
+            -F "attachment=@$MANIFEST"
+          echo "Uploaded $MANIFEST"
+
       - name: Publish release
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}

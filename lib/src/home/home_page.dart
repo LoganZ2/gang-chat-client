@@ -6,6 +6,8 @@ import '../app/close_behavior.dart';
 import '../app/language_preference.dart';
 import '../app/live_session_controller.dart';
 import '../app/realtime_controller.dart';
+import '../app/settings_about.dart';
+import '../shell/local_auto_update_prompt_store.dart';
 import '../shell/local_close_behavior_store.dart';
 import '../shell/desktop_window_controller.dart';
 import '../shell/local_audio_device_store.dart';
@@ -21,6 +23,7 @@ class HomePage extends StatelessWidget {
     this.realtime,
     this.closeBehaviorStore = const LocalCloseBehaviorStore(),
     this.languageStore = const LocalLanguagePreferenceStore(),
+    this.autoUpdatePromptStore = const LocalAutoUpdatePromptStore(),
     DesktopWindowController? windowController,
   }) : windowController = windowController ?? DesktopWindowController();
 
@@ -30,6 +33,7 @@ class HomePage extends StatelessWidget {
   final RealtimeService? realtime;
   final CloseBehaviorStore closeBehaviorStore;
   final LanguagePreferenceStore languageStore;
+  final AutoUpdatePromptStore autoUpdatePromptStore;
   final DesktopWindowController windowController;
 
   @override
@@ -41,6 +45,7 @@ class HomePage extends StatelessWidget {
       realtime: realtime,
       closeBehaviorStore: closeBehaviorStore,
       languageStore: languageStore,
+      autoUpdatePromptStore: autoUpdatePromptStore,
       windowController: windowController,
     );
   }

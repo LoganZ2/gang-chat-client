@@ -6,12 +6,14 @@ class AppVersionInfo {
     this.minimumSupportedVersion,
     this.releaseNotes,
     this.downloadUrl,
+    this.sha256,
   });
 
   final String latestVersion;
   final String? minimumSupportedVersion;
   final String? releaseNotes;
   final String? downloadUrl;
+  final String? sha256;
 
   factory AppVersionInfo.fromJson(Map<String, Object?> json) {
     return AppVersionInfo(
@@ -23,6 +25,7 @@ class AppVersionInfo {
       ]),
       releaseNotes: _stringFromJson(json, const ['release_notes', 'notes']),
       downloadUrl: _stringFromJson(json, const ['download_url']),
+      sha256: _stringFromJson(json, const ['sha256', 'checksum']),
     );
   }
 }
