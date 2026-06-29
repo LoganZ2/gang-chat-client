@@ -257,6 +257,71 @@ jobs:
           Get-Item $ZIP | Select-Object Name, @{n='Size';e={'{0:N0} bytes' -f $_.Length}}
           Write-Host "sha256=$SHA256"
 
+      - name: Ensure Inno Setup
+        id: inno
+        shell: powershell
+        run: |
+          $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
+          $version = "6.7.3"
+          $toolRoot = if ($env:RUNNER_TOOL_CACHE) {
+            Join-Path $env:RUNNER_TOOL_CACHE "inno-setup\$version"
+          } else {
+            Join-Path $env:LOCALAPPDATA "GangChatBuildTools\InnoSetup-$version"
+          }
+
+          function Find-Iscc {
+            $candidates = @(
+              $env:GANG_INNO_SETUP_ISCC,
+              (Join-Path $toolRoot "ISCC.exe"),
+              "E:\Programs\InnoSetup\ISCC.exe",
+              "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+              "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+              "${env:ProgramFiles(x86)}\Inno Setup 5\ISCC.exe",
+              "$env:ProgramFiles\Inno Setup 5\ISCC.exe"
+            )
+            $found = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+            if ($found) { return $found }
+            $cmd = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+            if ($cmd) { return $cmd.Source }
+            return $null
+          }
+
+          $ISCC = Find-Iscc
+          if (-not $ISCC) {
+            New-Item -ItemType Directory -Force -Path $toolRoot | Out-Null
+            $installer = Join-Path ([IO.Path]::GetTempPath()) "innosetup-$version.exe"
+            $url = "https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-$version.exe"
+            Write-Host "Downloading Inno Setup $version..."
+            curl.exe -L --connect-timeout 30 --retry 5 --retry-delay 10 -o $installer $url
+            if ($LASTEXITCODE -ne 0) { Write-Error "Inno Setup download failed: $url"; exit 1 }
+
+            $argumentSets = @(
+              @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', "/DIR=$toolRoot"),
+              @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$toolRoot")
+            )
+            $installed = $false
+            foreach ($arguments in $argumentSets) {
+              $process = Start-Process -FilePath $installer -ArgumentList $arguments -Wait -PassThru
+              if ($process.ExitCode -eq 0) {
+                $installed = $true
+                break
+              }
+              Write-Host "Inno Setup installer exited with $($process.ExitCode); retrying with fallback arguments..."
+            }
+            if (-not $installed) {
+              Write-Error "Inno Setup installer failed"
+              exit 1
+            }
+            $ISCC = Find-Iscc
+          }
+
+          if (-not $ISCC) {
+            Write-Error "Inno Setup compiler (ISCC.exe) not found after installation."
+            exit 1
+          }
+          Write-Host "Using Inno Setup compiler: $ISCC"
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "iscc=$ISCC`n")
+
       - name: Package Windows installer
         id: installer
         shell: powershell
@@ -270,19 +335,9 @@ jobs:
           if (-not (Test-Path $ICON)) { Write-Error "installer icon not found at $ICON"; exit 1 }
           New-Item -ItemType Directory -Force -Path $OUT | Out-Null
 
-          $candidates = @(
-            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
-            "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
-            "${env:ProgramFiles(x86)}\Inno Setup 5\ISCC.exe",
-            "$env:ProgramFiles\Inno Setup 5\ISCC.exe"
-          )
-          $ISCC = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
-          if (-not $ISCC) {
-            $cmd = Get-Command ISCC.exe -ErrorAction SilentlyContinue
-            if ($cmd) { $ISCC = $cmd.Source }
-          }
-          if (-not $ISCC) {
-            Write-Error "Inno Setup compiler (ISCC.exe) not found. Install Inno Setup 6 on the Windows runner."
+          $ISCC = "${{ steps.inno.outputs.iscc }}"
+          if (-not (Test-Path $ISCC)) {
+            Write-Error "Inno Setup compiler not found at $ISCC"
             exit 1
           }
 
