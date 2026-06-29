@@ -1,14 +1,23 @@
 const gangChatClientVersion = String.fromEnvironment(
   'GANG_CHAT_VERSION',
-  defaultValue: '1.0.0',
+  defaultValue: '0.3.1',
 );
 
+const gangChatClientReleaseDate = '2026/06/29';
+const gangChatClientLastUpdateDate = '2026/06/29';
 const gangChatSupportEmail = 'gang-chat@outlook.com';
+const defaultAutoUpdatePromptEnabled = true;
 
 String appVersionLabel(String version) {
   final normalized = version.trim();
   if (normalized.isEmpty) return 'v0.0.0';
   return normalized.startsWith('v') ? normalized : 'v$normalized';
+}
+
+String appVersionNumberLabel(String version) {
+  final normalized = version.trim();
+  if (normalized.isEmpty) return '0.0.0';
+  return normalized.startsWith('v') ? normalized.substring(1) : normalized;
 }
 
 String updateCheckSucceededText({
@@ -40,6 +49,20 @@ String? boundEmailForFeedback(String? email) {
   final trimmed = email?.trim();
   if (trimmed == null || trimmed.isEmpty) return null;
   return trimmed;
+}
+
+class AutoUpdatePromptStore {
+  const AutoUpdatePromptStore();
+
+  Future<bool> read() {
+    throw UnimplementedError('AutoUpdatePromptStore.read must be implemented.');
+  }
+
+  Future<void> write(bool enabled) {
+    throw UnimplementedError(
+      'AutoUpdatePromptStore.write must be implemented.',
+    );
+  }
 }
 
 int compareAppVersions(String left, String right) {

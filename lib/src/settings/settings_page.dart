@@ -32,6 +32,7 @@ import '../protocol/sticker_pack_store.dart';
 import '../shell/clipboard_service.dart';
 import '../shell/file_selection_service.dart';
 import '../shell/feedback_mail_service.dart';
+import '../shell/local_auto_update_prompt_store.dart';
 import '../shell/local_close_behavior_store.dart';
 import '../shell/local_audio_device_store.dart';
 import '../shell/local_language_preference_store.dart';
@@ -67,6 +68,7 @@ class SettingsPage extends StatefulWidget {
     this.clipboardService = const ClipboardService(),
     this.fileSelectionService = const FileSelectionService(),
     this.feedbackMailService = const FeedbackMailService(),
+    this.autoUpdatePromptStore = const LocalAutoUpdatePromptStore(),
     this.closeBehaviorStore = const LocalCloseBehaviorStore(),
     this.languageStore = const LocalLanguagePreferenceStore(),
     this.appVersion = gangChatClientVersion,
@@ -92,6 +94,7 @@ class SettingsPage extends StatefulWidget {
   final ClipboardService clipboardService;
   final FileSelectionService fileSelectionService;
   final FeedbackMailService feedbackMailService;
+  final AutoUpdatePromptStore autoUpdatePromptStore;
   final CloseBehaviorStore closeBehaviorStore;
   final LanguagePreferenceStore languageStore;
   final String appVersion;
@@ -160,9 +163,9 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _securityError;
   String? _aboutError;
   String? _notice;
-  String? _latestAppVersion;
   bool _checkingAppVersion = false;
   bool _openingFeedbackMail = false;
+  bool _autoPromptUpdates = defaultAutoUpdatePromptEnabled;
   Timer? _usernameAvailabilityDebounce;
   int _usernameAvailabilityRequestId = 0;
   String? _usernameAvailabilityQuery;
@@ -223,6 +226,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _user = widget.currentUser;
     _syncUserFields(widget.currentUser);
     unawaited(_loadCloseBehavior());
+    unawaited(_loadAutoUpdatePrompt());
     unawaited(_loadAccount());
   }
 
@@ -235,6 +239,9 @@ class _SettingsPageState extends State<SettingsPage> {
     }
     if (oldWidget.closeBehaviorStore != widget.closeBehaviorStore) {
       unawaited(_loadCloseBehavior());
+    }
+    if (oldWidget.autoUpdatePromptStore != widget.autoUpdatePromptStore) {
+      unawaited(_loadAutoUpdatePrompt());
     }
   }
 
@@ -480,6 +487,38 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() {
         _loadingCloseBehavior = false;
         _closeBehaviorError = error.toString();
+      });
+    }
+  }
+
+  Future<void> _loadAutoUpdatePrompt() async {
+    try {
+      final enabled = await widget.autoUpdatePromptStore.read();
+      if (!mounted) return;
+      setState(() => _autoPromptUpdates = enabled);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _aboutError = '读取自动提示更新失败：$error');
+    }
+  }
+
+  Future<void> _setAutoUpdatePrompt(bool value) async {
+    if (_autoPromptUpdates == value) return;
+    final previous = _autoPromptUpdates;
+    setState(() {
+      _autoPromptUpdates = value;
+      _aboutError = null;
+      _notice = null;
+    });
+    try {
+      await widget.autoUpdatePromptStore.write(value);
+      if (!mounted) return;
+      setState(() => _notice = '自动提示更新已保存');
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _autoPromptUpdates = previous;
+        _aboutError = '自动提示更新保存失败：$error';
       });
     }
   }
@@ -770,7 +809,6 @@ class _SettingsPageState extends State<SettingsPage> {
       final latestVersion = info?.latestVersion.trim() ?? '';
       setState(() {
         _checkingAppVersion = false;
-        _latestAppVersion = latestVersion.isEmpty ? null : latestVersion;
         _notice = latestVersion.isEmpty
             ? '暂时无法获取最新版本'
             : updateCheckSucceededText(
@@ -3383,54 +3421,56 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildAboutContent() {
-    final latestVersion = _latestAppVersion;
-    final updateText = latestVersion == null
-        ? '检查当前是否是最新版本'
-        : updateCheckSucceededText(
-            currentVersion: widget.appVersion,
-            latestVersion: latestVersion,
-          );
-    final feedbackEmail = boundEmailForFeedback(_user?.email);
-    final feedbackText = feedbackEmail == null
-        ? '当前账号未绑定邮箱'
-        : '发件人：$feedbackEmail；收件人：$gangChatSupportEmail';
-
     return SettingsList(
       children: [
         if (_notice != null) _SettingsNotice(message: _notice!),
         if (_aboutError != null) _SettingsError(message: _aboutError!),
         _SettingsGroup(
-          title: '关于Gang Chat',
+          title: '版本信息',
           children: [
-            _ReadOnlyLine(
-              label: '版本信息',
-              value: appVersionLabel(widget.appVersion),
+            _CopyableField(
+              label: '版本编号',
+              value: appVersionNumberLabel(widget.appVersion),
             ),
             const SizedBox(height: 14),
-            _SettingsActionLine(
-              label: '检查更新',
-              value: updateText,
-              button: Button(
-                onPressed: _checkingAppVersion
-                    ? null
-                    : () => unawaited(_checkAppVersion()),
-                loading: _checkingAppVersion,
-                icon: const Icon(Icons.system_update_alt_outlined),
-                child: const Text('检查'),
-              ),
+            const _CopyableField(
+              label: '发行时间',
+              value: gangChatClientReleaseDate,
             ),
             const SizedBox(height: 14),
-            _SettingsActionLine(
-              label: '意见反馈',
-              value: feedbackText,
-              button: Button(
-                onPressed: _openingFeedbackMail
-                    ? null
-                    : () => unawaited(_openFeedbackMail()),
-                loading: _openingFeedbackMail,
-                icon: const Icon(Icons.outgoing_mail),
-                child: const Text('发邮件'),
-              ),
+            const _CopyableField(
+              label: '上次更新时间',
+              value: gangChatClientLastUpdateDate,
+            ),
+            const SizedBox(height: 14),
+            _ToggleSetting(
+              label: '自动提示更新',
+              value: _autoPromptUpdates,
+              onChanged: (value) => unawaited(_setAutoUpdatePrompt(value)),
+            ),
+            const SizedBox(height: 14),
+            Button(
+              onPressed: _checkingAppVersion
+                  ? null
+                  : () => unawaited(_checkAppVersion()),
+              loading: _checkingAppVersion,
+              tone: ButtonTone.primary,
+              width: double.infinity,
+              child: const Text('检查更新'),
+            ),
+          ],
+        ),
+        _SettingsGroup(
+          title: '意见反馈',
+          children: [
+            Button(
+              onPressed: _openingFeedbackMail
+                  ? null
+                  : () => unawaited(_openFeedbackMail()),
+              loading: _openingFeedbackMail,
+              tone: ButtonTone.primary,
+              width: double.infinity,
+              child: const Text('意见反馈'),
             ),
           ],
         ),

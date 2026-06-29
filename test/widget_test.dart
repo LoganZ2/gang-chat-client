@@ -18,6 +18,7 @@ import 'package:client/src/app/close_behavior.dart';
 import 'package:client/src/app/login_account_history.dart';
 import 'package:client/src/app/live_session_controller.dart';
 import 'package:client/src/app/realtime_controller.dart';
+import 'package:client/src/app/settings_about.dart';
 import 'package:client/src/auth/auth_client.dart';
 import 'package:client/src/auth/token_store.dart';
 import 'package:client/src/live/audio_device_service.dart';
@@ -2429,6 +2430,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
 
     final feedbackDrafts = <FeedbackMailDraft>[];
+    final autoUpdateWrites = <bool>[];
     final api = GangApiClient(
       baseUrl: 'http://example.test/api/v1',
       accessTokenProvider: ({bool forceRefresh = false}) async =>
@@ -2439,8 +2441,8 @@ void main() {
         }
         if (request.url.path == '/api/v1/app/version') {
           return _jsonResponse({
-            'latest_version': '1.0.0',
-            'minimum_supported_version': '1.0.0',
+            'latest_version': '0.3.1',
+            'minimum_supported_version': '0.3.1',
           });
         }
         return http.Response('unexpected request: ${request.url}', 404);
@@ -2455,8 +2457,12 @@ void main() {
           currentUser: CurrentUser.fromJson(_currentUserJson),
           api: api,
           apiBaseUrl: 'http://example.test/api/v1',
-          appVersion: '1.0.0',
+          appVersion: '0.3.1',
           feedbackMailService: _FakeFeedbackMailService(feedbackDrafts),
+          autoUpdatePromptStore: _FakeAutoUpdatePromptStore(
+            autoUpdateWrites,
+            initialValue: true,
+          ),
           systemAudioDevices: SystemAudioDevices(supported: false),
         ),
       ),
@@ -2467,25 +2473,40 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('版本信息'), findsOneWidget);
-    expect(find.text('v1.0.0'), findsOneWidget);
-    expect(find.text('检查当前是否是最新版本'), findsOneWidget);
-    expect(
-      find.text('发件人：kai@example.com；收件人：gang-chat@outlook.com'),
-      findsOneWidget,
-    );
+    expect(find.text('版本编号'), findsOneWidget);
+    expect(find.text('0.3.1'), findsOneWidget);
+    expect(find.text('发行时间'), findsOneWidget);
+    expect(find.text('上次更新时间'), findsOneWidget);
+    expect(find.text('2026/06/29'), findsNWidgets(2));
+    expect(find.text('自动提示更新'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '检查更新'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '意见反馈'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(ui.Button, '检查'));
+    final autoUpdateSwitch = find.descendant(
+      of: find.ancestor(of: find.text('自动提示更新'), matching: find.byType(Row)),
+      matching: find.byType(ui.UiSwitch),
+    );
+    expect(autoUpdateSwitch, findsOneWidget);
+    expect(tester.widget<ui.UiSwitch>(autoUpdateSwitch).value, isTrue);
+
+    await tester.tap(autoUpdateSwitch);
+    await tester.pumpAndSettle();
+
+    expect(autoUpdateWrites, [false]);
+    expect(tester.widget<ui.UiSwitch>(autoUpdateSwitch).value, isFalse);
+
+    await tester.tap(find.widgetWithText(ui.Button, '检查更新'));
     await tester.pumpAndSettle();
 
     expect(find.text('当前已是最新版本'), findsWidgets);
 
-    await tester.tap(find.widgetWithText(ui.Button, '发邮件'));
+    await tester.tap(find.widgetWithText(ui.Button, '意见反馈'));
     await tester.pumpAndSettle();
 
     expect(feedbackDrafts, hasLength(1));
     expect(feedbackDrafts.single.from, 'kai@example.com');
     expect(feedbackDrafts.single.to, 'gang-chat@outlook.com');
-    expect(feedbackDrafts.single.subject, contains('v1.0.0'));
+    expect(feedbackDrafts.single.subject, contains('v0.3.1'));
   });
 
   testWidgets('settings audio sliders apply live mute coupling rules', (
@@ -6835,6 +6856,23 @@ class _FakeFeedbackMailService extends FeedbackMailService {
   @override
   Future<void> openDraft(FeedbackMailDraft draft) async {
     drafts.add(draft);
+  }
+}
+
+class _FakeAutoUpdatePromptStore extends AutoUpdatePromptStore {
+  _FakeAutoUpdatePromptStore(this.writes, {required this.initialValue});
+
+  final List<bool> writes;
+  final bool initialValue;
+  bool? value;
+
+  @override
+  Future<bool> read() async => value ?? initialValue;
+
+  @override
+  Future<void> write(bool enabled) async {
+    value = enabled;
+    writes.add(enabled);
   }
 }
 

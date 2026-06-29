@@ -8,6 +8,11 @@ void main() {
     expect(appVersionLabel('v2.0.0'), 'v2.0.0');
   });
 
+  test('appVersionNumberLabel strips display prefix', () {
+    expect(appVersionNumberLabel('1.2.3'), '1.2.3');
+    expect(appVersionNumberLabel('v2.0.0'), '2.0.0');
+  });
+
   test('compareAppVersions compares semantic version parts', () {
     expect(compareAppVersions('1.2.3', '1.2.3'), 0);
     expect(compareAppVersions('1.2.4', '1.2.3'), greaterThan(0));
