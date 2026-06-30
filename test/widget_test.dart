@@ -3658,7 +3658,7 @@ void main() {
   });
 
   testWidgets(
-    'authenticated home shell restores live after realtime reconnect',
+    'authenticated home shell keeps live session on realtime reconnect',
     (WidgetTester tester) async {
       final realtime = _FakeRealtimeService();
       final liveJoinRequests = <Map<String, Object?>>[];
@@ -3720,15 +3720,9 @@ void main() {
       realtime.emitReconnect();
       await tester.pumpAndSettle();
 
-      expect(
-        liveJoinRequests.map((body) => body['source']),
-        contains('reconnect'),
-      );
-      expect(liveSession.connectAttempts, 2);
-      expect(liveStateUpdates.last['mic_muted'], true);
-      expect(liveStateUpdates.last['headphones_muted'], false);
-      expect(liveStateUpdates.last['camera_on'], false);
-      expect(liveStateUpdates.last['screen_sharing'], false);
+      expect(liveJoinRequests, isEmpty);
+      expect(liveSession.connectAttempts, 1);
+      expect(liveStateUpdates, isEmpty);
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('home-sidebar-user-summary')),
@@ -3743,6 +3737,63 @@ void main() {
         ),
         findsOneWidget,
       );
+    },
+  );
+
+  testWidgets(
+    'authenticated home shell restores live after LiveKit disconnect',
+    (WidgetTester tester) async {
+      final realtime = _FakeRealtimeService();
+      final liveJoinRequests = <Map<String, Object?>>[];
+      final liveStateUpdates = <Map<String, Object?>>[];
+      final liveSession = _FakeLiveSession();
+      final liveSessionController = _FakeLiveSessionController(
+        session: liveSession,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: HomePage(
+            app: _homeTestAppContext(
+              liveJoinRequests: liveJoinRequests,
+              liveStateUpdates: liveStateUpdates,
+            ),
+            liveSessionController: liveSessionController,
+            realtime: realtime,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Alpha Room'));
+      await tester.pumpAndSettle();
+      await _openLiveChannelFromHeader(tester);
+      await tester.tap(find.widgetWithText(ui.Button, '加入'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(_liveControl('mic'));
+      await tester.pumpAndSettle();
+      liveJoinRequests.clear();
+      liveStateUpdates.clear();
+
+      await liveSession.disconnect();
+
+      realtime.setStatus(RealtimeConnectionStatus.reconnecting);
+      await tester.pumpAndSettle();
+      realtime.setStatus(RealtimeConnectionStatus.connected);
+      realtime.emitReconnect();
+      await tester.pumpAndSettle();
+
+      expect(
+        liveJoinRequests.map((body) => body['source']),
+        contains('reconnect'),
+      );
+      expect(liveSession.connectAttempts, 2);
+      expect(liveStateUpdates.last['mic_muted'], true);
+      expect(liveStateUpdates.last['headphones_muted'], false);
+      expect(liveStateUpdates.last['camera_on'], false);
+      expect(liveStateUpdates.last['screen_sharing'], false);
     },
   );
 
@@ -6454,7 +6505,7 @@ GangApi _roomsApi({
             'server_url': 'ws://live.example.test',
             'token': 'live-token',
             'token_expires_at': '2026-06-05T09:00:00Z',
-            'room_name': 'room_server_alpha',
+            'room_name': 'server-alpha',
           },
           'participant': participant,
           'live': _liveStateJson(
@@ -7089,6 +7140,8 @@ class _FakeLiveSessionController extends LiveSessionController {
 class _FakeLiveSession extends LiveSession {
   int connectAttempts = 0;
   int disconnects = 0;
+  bool _connected = false;
+  String? _roomName;
   final inputVolumes = <double>[];
   final outputVolumes = <double>[];
   final participantVoiceVolumeWrites = <String>[];
@@ -7107,12 +7160,25 @@ class _FakeLiveSession extends LiveSession {
     required bool micMuted,
   }) async {
     connectAttempts += 1;
+    _connected = true;
+    _roomName = roomName;
   }
 
   @override
   Future<void> disconnect() async {
     disconnects += 1;
+    _connected = false;
+    _roomName = null;
   }
+
+  @override
+  bool get isConnected => _connected;
+
+  @override
+  String? get roomName => _roomName;
+
+  @override
+  bool isAttachedToRoom(String roomName) => _connected && _roomName == roomName;
 
   @override
   Future<void> setMicMuted(bool muted) async {

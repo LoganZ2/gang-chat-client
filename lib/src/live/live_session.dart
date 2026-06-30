@@ -359,6 +359,15 @@ class LiveSession extends ChangeNotifier {
   bool get isScreenSharing => _screenSharing;
   String? get roomName => _roomName;
 
+  bool isAttachedToRoom(String roomName) {
+    if (_roomName != roomName) return false;
+    if (_connecting) return true;
+    final state = _room?.connectionState;
+    return state == lk.ConnectionState.connected ||
+        state == lk.ConnectionState.connecting ||
+        state == lk.ConnectionState.reconnecting;
+  }
+
   /// Whether LiveKit currently grants the local participant publish rights.
   /// False once an admin `block_voice` revokes it; LiveKit is the source of
   /// truth here, not any locally-tracked flag.

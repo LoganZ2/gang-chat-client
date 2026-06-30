@@ -693,6 +693,10 @@ extension _HomeShellLiveActions on _HomeShellState {
 
   Future<void> _restoreLiveAfterRealtimeReconnect(String roomId) async {
     if (_joiningLive || _joinedLiveRoomId != roomId) return;
+    if (_liveSessionController.isAttachedToRoom(roomId)) {
+      await _refreshLiveSilently(roomId);
+      return;
+    }
 
     final previousMicMuted = _micMuted;
     final previousHeadphonesMuted = _headphonesMuted;

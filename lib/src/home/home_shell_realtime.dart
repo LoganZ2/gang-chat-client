@@ -28,7 +28,8 @@ extension _HomeShellRealtime on _HomeShellState {
     final selected = _selectedServerId;
     if (selected != null) unawaited(_refreshLiveSilently(selected));
     final joinedLiveRoomId = _joinedLiveRoomId;
-    if (joinedLiveRoomId != null) {
+    if (joinedLiveRoomId != null &&
+        !_liveSessionController.isAttachedToRoom(joinedLiveRoomId)) {
       unawaited(_restoreLiveAfterRealtimeReconnect(joinedLiveRoomId));
     }
   }
