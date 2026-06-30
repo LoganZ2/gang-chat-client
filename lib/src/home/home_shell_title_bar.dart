@@ -46,13 +46,13 @@ class _HomeTitleBar extends StatefulWidget {
     required this.windowController,
     required this.searchController,
     required this.searchTapRegionGroup,
-    required this.searchQuery,
     required this.liveRoom,
     required this.micMuted,
     required this.headphonesMuted,
     required this.voiceBlocked,
     required this.onActivateSearch,
     required this.onSearchTapOutside,
+    required this.onSearchContextMenuOpenChanged,
     required this.onClearSearchQuery,
     required this.onOpenLiveRoom,
     required this.onToggleMic,
@@ -63,13 +63,13 @@ class _HomeTitleBar extends StatefulWidget {
   final DesktopWindowController windowController;
   final TextEditingController searchController;
   final Object searchTapRegionGroup;
-  final String searchQuery;
   final live_display.JoinedLiveRoomSummary? liveRoom;
   final bool micMuted;
   final bool headphonesMuted;
   final bool voiceBlocked;
   final VoidCallback onActivateSearch;
   final VoidCallback onSearchTapOutside;
+  final ValueChanged<bool> onSearchContextMenuOpenChanged;
   final VoidCallback onClearSearchQuery;
   final VoidCallback onOpenLiveRoom;
   final VoidCallback? onToggleMic;
@@ -207,7 +207,9 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
                         height: _homeTitleBarSearchHeight,
                         child: _TitleSearchField(
                           controller: widget.searchController,
-                          query: widget.searchQuery,
+                          tapRegionGroup: widget.searchTapRegionGroup,
+                          onContextMenuOpenChanged:
+                              widget.onSearchContextMenuOpenChanged,
                           onActivated: widget.onActivateSearch,
                           onClearQuery: widget.onClearSearchQuery,
                         ),
@@ -391,13 +393,15 @@ class _TitleLiveActionButton extends StatelessWidget {
 class _TitleSearchField extends StatefulWidget {
   const _TitleSearchField({
     required this.controller,
-    required this.query,
+    required this.tapRegionGroup,
+    required this.onContextMenuOpenChanged,
     required this.onActivated,
     required this.onClearQuery,
   });
 
   final TextEditingController controller;
-  final String query;
+  final Object tapRegionGroup;
+  final ValueChanged<bool> onContextMenuOpenChanged;
   final VoidCallback onActivated;
   final VoidCallback onClearQuery;
 
@@ -409,15 +413,28 @@ class _TitleSearchFieldState extends State<_TitleSearchField> {
   final FocusNode _focusNode = FocusNode();
   final UndoHistoryController _undoController = UndoHistoryController();
   bool _focused = false;
+  bool _hasText = false;
 
   @override
   void initState() {
     super.initState();
+    _hasText = widget.controller.text.trim().isNotEmpty;
+    widget.controller.addListener(_handleTextChanged);
     _focusNode.addListener(_handleFocusChange);
   }
 
   @override
+  void didUpdateWidget(_TitleSearchField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller == widget.controller) return;
+    oldWidget.controller.removeListener(_handleTextChanged);
+    _hasText = widget.controller.text.trim().isNotEmpty;
+    widget.controller.addListener(_handleTextChanged);
+  }
+
+  @override
   void dispose() {
+    widget.controller.removeListener(_handleTextChanged);
     _focusNode.removeListener(_handleFocusChange);
     _focusNode.dispose();
     _undoController.dispose();
@@ -429,6 +446,12 @@ class _TitleSearchFieldState extends State<_TitleSearchField> {
     if (_focused != _focusNode.hasFocus) {
       setState(() => _focused = _focusNode.hasFocus);
     }
+  }
+
+  void _handleTextChanged() {
+    final hasText = widget.controller.text.trim().isNotEmpty;
+    if (_hasText == hasText) return;
+    setState(() => _hasText = hasText);
   }
 
   @override
@@ -453,6 +476,7 @@ class _TitleSearchFieldState extends State<_TitleSearchField> {
           Expanded(
             child: TextFieldEditingShortcuts(
               controller: widget.controller,
+              focusNode: _focusNode,
               undoController: _undoController,
               child: TextField(
                 controller: widget.controller,
@@ -469,6 +493,8 @@ class _TitleSearchFieldState extends State<_TitleSearchField> {
                       context,
                       editableTextState,
                       undoController: _undoController,
+                      tapRegionGroupId: widget.tapRegionGroup,
+                      onOpenChanged: widget.onContextMenuOpenChanged,
                     ),
                 decoration: InputDecoration(
                   isCollapsed: true,
@@ -483,7 +509,7 @@ class _TitleSearchFieldState extends State<_TitleSearchField> {
               ),
             ),
           ),
-          if (widget.query.trim().isNotEmpty) ...[
+          if (_hasText) ...[
             const SizedBox(width: 6),
             Tooltip(
               message: '清空搜索',

@@ -35,6 +35,7 @@ class TextInput extends StatefulWidget {
 
 class _TextInputState extends State<TextInput> {
   TextEditingController? _localController;
+  final FocusNode _focusNode = FocusNode();
   UndoHistoryController? _localUndoController;
 
   TextEditingController get _effectiveController =>
@@ -79,6 +80,7 @@ class _TextInputState extends State<TextInput> {
   @override
   void dispose() {
     _localController?.dispose();
+    _focusNode.dispose();
     _localUndoController?.dispose();
     super.dispose();
   }
@@ -108,9 +110,11 @@ class _TextInputState extends State<TextInput> {
           Expanded(
             child: TextFieldEditingShortcuts(
               controller: _effectiveController,
+              focusNode: _focusNode,
               undoController: _effectiveUndoController,
               child: TextField(
                 controller: _effectiveController,
+                focusNode: _focusNode,
                 obscureText: widget.obscureText,
                 minLines: widget.minLines,
                 maxLines: widget.maxLines,

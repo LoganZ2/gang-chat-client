@@ -123,6 +123,7 @@ class _HomeShellState extends State<HomeShell> {
   final ChatComposerController _composerPanelController =
       ChatComposerController();
   final TextEditingController _titleSearchController = TextEditingController();
+  String _lastTitleSearchText = '';
   final GlobalKey _composerDropKey = GlobalKey();
   final Object _searchTapRegionGroup = Object();
   StreamSubscription<RealtimeEvent>? _realtimeEvents;
@@ -213,6 +214,7 @@ class _HomeShellState extends State<HomeShell> {
   // Drives the music box search field; results are fetched debounced.
   final TextEditingController _musicBoxSearchController =
       TextEditingController();
+  String _lastMusicBoxSearchText = '';
   List<MusicBoxSearchResult> _musicBoxSearchResults = const [];
   bool _musicBoxSearching = false;
   String? _musicBoxSearchError;
@@ -225,6 +227,8 @@ class _HomeShellState extends State<HomeShell> {
   int _searchRequestSerial = 0;
   String _searchQuery = '';
   bool _searchExpanded = false;
+  bool _titleSearchContextMenuOpen = false;
+  VoidCallback? _pendingTitleSearchContextMenuUpdate;
   bool _searching = false;
   bool _searchLoadingMore = false;
   String? _searchError;
@@ -287,6 +291,9 @@ class _HomeShellState extends State<HomeShell> {
     _searchRequestSerial++;
     _titleSearchController.removeListener(_handleTitleSearchChanged);
     _titleSearchController.clear();
+    _lastTitleSearchText = _titleSearchController.text;
+    _titleSearchContextMenuOpen = false;
+    _pendingTitleSearchContextMenuUpdate = null;
     _titleSearchController.addListener(_handleTitleSearchChanged);
     setState(() {
       _currentUser = widget.app.currentUser;
@@ -449,13 +456,14 @@ class _HomeShellState extends State<HomeShell> {
                         windowController: widget.windowController,
                         searchController: _titleSearchController,
                         searchTapRegionGroup: _searchTapRegionGroup,
-                        searchQuery: _searchQuery,
                         liveRoom: joinedLiveRoom,
                         micMuted: _micMuted,
                         headphonesMuted: _headphonesMuted,
                         voiceBlocked: _voiceBlocked,
                         onActivateSearch: _activateSearch,
                         onSearchTapOutside: _collapseSearch,
+                        onSearchContextMenuOpenChanged:
+                            _handleTitleSearchContextMenuOpenChanged,
                         onClearSearchQuery: _clearSearchQuery,
                         onOpenLiveRoom: () =>
                             unawaited(_openJoinedLiveChannel()),

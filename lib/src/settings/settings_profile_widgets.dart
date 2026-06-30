@@ -11,11 +11,13 @@ class _DeleteAccountDialog extends StatefulWidget {
 
 class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
   final _controller = TextEditingController();
+  final _focusNode = FocusNode();
   final _undoController = UndoHistoryController();
 
   @override
   void dispose() {
     _controller.dispose();
+    _focusNode.dispose();
     _undoController.dispose();
     super.dispose();
   }
@@ -61,9 +63,11 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
               const SizedBox(height: 14),
               TextFieldEditingShortcuts(
                 controller: _controller,
+                focusNode: _focusNode,
                 undoController: _undoController,
                 child: TextField(
                   controller: _controller,
+                  focusNode: _focusNode,
                   autofocus: true,
                   onChanged: (_) => setState(() {}),
                   cursorColor: _textSecondary,

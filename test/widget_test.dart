@@ -1396,7 +1396,7 @@ void main() {
     final confirmButton = find.widgetWithText(ui.Button, '确定');
     await tester.ensureVisible(confirmButton);
     await tester.pumpAndSettle();
-    await tester.tap(confirmButton);
+    await tester.tapAt(tester.getTopLeft(confirmButton) + const Offset(24, 12));
     await tester.pumpAndSettle();
 
     expect(roomCreations, hasLength(1));
@@ -4657,7 +4657,7 @@ void main() {
     expect(
       (tester.widget<AnimatedPadding>(animatedCapFinder).padding as EdgeInsets)
           .top,
-      closeTo(3, 0.01),
+      closeTo(0, 0.01),
     );
     inputDecorations = _inputLayerDecorations(tester, inputFinder);
     expect(_topBorderColor(inputDecorations.first), ui.UiColors.accentBorder);

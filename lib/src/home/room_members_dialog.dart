@@ -73,6 +73,9 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
   String _memberQuery = '';
   String _inviteQuery = '';
   String _blockQuery = '';
+  String _lastMemberSearchText = '';
+  String _lastInviteSearchText = '';
+  String _lastBlockSearchText = '';
   String? _error;
   String? _requestError;
   String? _inviteError;
@@ -205,8 +208,11 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
 
   void _onMemberSearchChanged() {
     if (_syncingMemberSearch) return;
+    final text = _memberSearchController.text;
+    if (text == _lastMemberSearchText) return;
+    _lastMemberSearchText = text;
     setState(() {
-      _memberQuery = _memberSearchController.text;
+      _memberQuery = text;
       _refreshMemberDisplayOrder();
     });
   }
@@ -214,6 +220,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
   void _applyMemberSearchQuery(String query) {
     final value = query.trim();
     _memberQuery = value;
+    _lastMemberSearchText = value;
     if (_memberSearchController.text == value) return;
     _syncingMemberSearch = true;
     _memberSearchController.value = TextEditingValue(
@@ -224,8 +231,11 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
   }
 
   void _onInviteSearchChanged() {
+    final text = _inviteSearchController.text;
+    if (text == _lastInviteSearchText) return;
+    _lastInviteSearchText = text;
     if (!_canInviteMembers) return;
-    final query = _inviteSearchController.text.trim();
+    final query = text.trim();
     setState(() {
       _inviteQuery = query;
       _inviteError = null;
@@ -246,8 +256,11 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
   }
 
   void _onBlockSearchChanged() {
+    final text = _blockSearchController.text;
+    if (text == _lastBlockSearchText) return;
+    _lastBlockSearchText = text;
     if (!_canManageMembers) return;
-    final query = _blockSearchController.text.trim();
+    final query = text.trim();
     setState(() {
       _blockQuery = query;
       _blockError = null;

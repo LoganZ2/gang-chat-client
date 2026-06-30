@@ -28,6 +28,9 @@ extension _HomeShellSearch on _HomeShellState {
 
   void _handleTitleSearchChanged() {
     final query = _titleSearchController.text;
+    if (query == _lastTitleSearchText) return;
+    _lastTitleSearchText = query;
+    _pendingTitleSearchContextMenuUpdate = null;
     _searchDebounce?.cancel();
     _searchRequestSerial++;
     final requestSerial = _searchRequestSerial;
@@ -61,7 +64,7 @@ extension _HomeShellSearch on _HomeShellState {
       final results = await _globalSearchController.search(query: query);
       if (!mounted || requestSerial != _searchRequestSerial) return;
       if (_titleSearchController.text.trim() != query) return;
-      _setHomeState(() {
+      _setTitleSearchResultsState(() {
         _searchResults = search_display.globalSearchResultsForView(
           results,
           query: query,
@@ -72,7 +75,7 @@ extension _HomeShellSearch on _HomeShellState {
       });
     } catch (error) {
       if (!mounted || requestSerial != _searchRequestSerial) return;
-      _setHomeState(() {
+      _setTitleSearchResultsState(() {
         _searching = false;
         _searchLoadingMore = false;
         _searchError = error.toString();
@@ -102,7 +105,7 @@ extension _HomeShellSearch on _HomeShellState {
       current.nextCursors,
       categories,
     );
-    _setHomeState(() => _searchLoadingMore = true);
+    _setTitleSearchResultsState(() => _searchLoadingMore = true);
 
     try {
       final page = await _globalSearchController.search(
@@ -120,7 +123,7 @@ extension _HomeShellSearch on _HomeShellState {
         page,
         query: query,
       );
-      _setHomeState(() {
+      _setTitleSearchResultsState(() {
         final latest = _searchResults;
         _searchLoadingMore = false;
         if (latest == null) return;
@@ -132,8 +135,29 @@ extension _HomeShellSearch on _HomeShellState {
       });
     } catch (_) {
       if (!mounted || requestSerial != _searchRequestSerial) return;
-      _setHomeState(() => _searchLoadingMore = false);
+      _setTitleSearchResultsState(() => _searchLoadingMore = false);
     }
+  }
+
+  void _handleTitleSearchContextMenuOpenChanged(bool open) {
+    _titleSearchContextMenuOpen = open;
+    if (open) return;
+    final pending = _pendingTitleSearchContextMenuUpdate;
+    _pendingTitleSearchContextMenuUpdate = null;
+    if (pending == null || !mounted) return;
+    _setHomeState(pending);
+  }
+
+  void _setTitleSearchResultsState(VoidCallback update) {
+    if (!_titleSearchContextMenuOpen) {
+      _setHomeState(update);
+      return;
+    }
+    final pending = _pendingTitleSearchContextMenuUpdate;
+    _pendingTitleSearchContextMenuUpdate = () {
+      pending?.call();
+      update();
+    };
   }
 
   void _activateSearch() {
@@ -155,6 +179,7 @@ extension _HomeShellSearch on _HomeShellState {
   }
 
   void _clearSearchQuery() {
+    _pendingTitleSearchContextMenuUpdate = null;
     _titleSearchController.clear();
   }
 

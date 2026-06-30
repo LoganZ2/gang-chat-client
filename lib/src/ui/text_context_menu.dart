@@ -10,17 +10,20 @@ const double _contextMenuScreenPadding = 8;
 const double _contextMenuWidth = 184;
 const double _contextMenuMinItemHeight = 32;
 const double _contextMenuHorizontalPadding = 12;
+const Key _contextMenuPanelKey = ValueKey('text-context-menu-panel');
 const Key _contextMenuDividerKey = ValueKey('text-context-menu-divider');
 
 class TextFieldEditingShortcuts extends StatefulWidget {
   const TextFieldEditingShortcuts({
     super.key,
     this.controller,
+    this.focusNode,
     required this.undoController,
     required this.child,
   });
 
   final TextEditingController? controller;
+  final FocusNode? focusNode;
   final UndoHistoryController undoController;
   final Widget child;
 
@@ -31,6 +34,7 @@ class TextFieldEditingShortcuts extends StatefulWidget {
 
 class _TextFieldEditingShortcutsState extends State<TextFieldEditingShortcuts> {
   TextSelection? _secondaryClickSelection;
+  bool _secondaryClickHadFocus = false;
   int _secondaryClickRestoreGeneration = 0;
   bool _trackingGlobalPointers = false;
   bool _restoringSecondaryClickSelection = false;
@@ -39,21 +43,29 @@ class _TextFieldEditingShortcutsState extends State<TextFieldEditingShortcuts> {
   void initState() {
     super.initState();
     widget.controller?.addListener(_handleControllerSelectionChanged);
+    widget.focusNode?.addListener(_handleFocusChanged);
   }
 
   @override
   void didUpdateWidget(TextFieldEditingShortcuts oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller == widget.controller) return;
-    oldWidget.controller?.removeListener(_handleControllerSelectionChanged);
-    _clearSecondaryClickSelection();
-    widget.controller?.addListener(_handleControllerSelectionChanged);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller?.removeListener(_handleControllerSelectionChanged);
+      _clearSecondaryClickProtection();
+      widget.controller?.addListener(_handleControllerSelectionChanged);
+    }
+    if (oldWidget.focusNode != widget.focusNode) {
+      oldWidget.focusNode?.removeListener(_handleFocusChanged);
+      _clearSecondaryClickProtection();
+      widget.focusNode?.addListener(_handleFocusChanged);
+    }
   }
 
   @override
   void dispose() {
-    _clearSecondaryClickSelection();
+    _clearSecondaryClickProtection();
     widget.controller?.removeListener(_handleControllerSelectionChanged);
+    widget.focusNode?.removeListener(_handleFocusChanged);
     super.dispose();
   }
 
@@ -76,12 +88,12 @@ class _TextFieldEditingShortcutsState extends State<TextFieldEditingShortcuts> {
         child: widget.child,
       ),
     );
-    if (widget.controller == null) return child;
+    if (widget.controller == null && widget.focusNode == null) return child;
     return Listener(
       onPointerDown: _handlePointerDown,
       onPointerUp: _handlePointerUp,
       onPointerCancel: (_) {
-        _clearSecondaryClickSelection();
+        _clearSecondaryClickProtection();
       },
       child: child,
     );
@@ -89,25 +101,27 @@ class _TextFieldEditingShortcutsState extends State<TextFieldEditingShortcuts> {
 
   void _handlePointerDown(PointerDownEvent event) {
     if ((event.buttons & kSecondaryMouseButton) == 0) {
-      _clearSecondaryClickSelection();
+      _clearSecondaryClickProtection();
       return;
     }
-    _secondaryClickSelection = _nonCollapsedSelection(
-      widget.controller?.selection,
-    );
-    if (_secondaryClickSelection == null) {
-      _clearSecondaryClickSelection();
+    _secondaryClickSelection = _validSelection(widget.controller?.selection);
+    _secondaryClickHadFocus = widget.focusNode?.hasFocus ?? false;
+    if (!_hasSecondaryClickProtection) {
+      _clearSecondaryClickProtection();
       return;
     }
     final generation = _beginSecondaryClickSelectionProtection();
-    _restoreSecondaryClickSelection();
-    _scheduleSecondaryClickSelectionRestore(generation);
+    _restoreSecondaryClickEditingState();
+    _scheduleSecondaryClickEditingStateRestore(generation);
   }
 
   void _handlePointerUp(PointerUpEvent event) {
-    if (_secondaryClickSelection == null) return;
-    _restoreSecondaryClickSelection();
+    if (!_hasSecondaryClickProtection) return;
+    _restoreSecondaryClickEditingState();
   }
+
+  bool get _hasSecondaryClickProtection =>
+      _secondaryClickSelection != null || _secondaryClickHadFocus;
 
   int _beginSecondaryClickSelectionProtection() {
     final generation = ++_secondaryClickRestoreGeneration;
@@ -120,24 +134,28 @@ class _TextFieldEditingShortcutsState extends State<TextFieldEditingShortcuts> {
     return generation;
   }
 
-  void _scheduleSecondaryClickSelectionRestore(int generation) {
+  void _scheduleSecondaryClickEditingStateRestore(int generation) {
     scheduleMicrotask(
-      () => _restoreSecondaryClickSelectionIfCurrent(generation),
+      () => _restoreSecondaryClickEditingStateIfCurrent(generation),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _restoreSecondaryClickSelectionIfCurrent(generation);
+      _restoreSecondaryClickEditingStateIfCurrent(generation);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _restoreSecondaryClickEditingStateIfCurrent(generation);
+      });
     });
   }
 
   void _handleGlobalPointerEvent(PointerEvent event) {
     if (event is PointerDownEvent &&
         (event.buttons & kPrimaryMouseButton) != 0) {
-      _clearSecondaryClickSelection();
+      _clearSecondaryClickProtection();
     }
   }
 
-  void _clearSecondaryClickSelection() {
+  void _clearSecondaryClickProtection() {
     _secondaryClickSelection = null;
+    _secondaryClickHadFocus = false;
     _secondaryClickRestoreGeneration++;
     if (_trackingGlobalPointers) {
       GestureBinding.instance.pointerRouter.removeGlobalRoute(
@@ -147,9 +165,22 @@ class _TextFieldEditingShortcutsState extends State<TextFieldEditingShortcuts> {
     }
   }
 
-  void _restoreSecondaryClickSelectionIfCurrent(int generation) {
+  void _restoreSecondaryClickEditingStateIfCurrent(int generation) {
     if (!mounted || generation != _secondaryClickRestoreGeneration) return;
+    _restoreSecondaryClickEditingState();
+  }
+
+  void _restoreSecondaryClickEditingState() {
+    _restoreSecondaryClickFocus();
     _restoreSecondaryClickSelection();
+  }
+
+  void _restoreSecondaryClickFocus() {
+    final focusNode = widget.focusNode;
+    if (!_secondaryClickHadFocus || focusNode == null || focusNode.hasFocus) {
+      return;
+    }
+    if (focusNode.canRequestFocus) focusNode.requestFocus();
   }
 
   void _restoreSecondaryClickSelection() {
@@ -157,7 +188,7 @@ class _TextFieldEditingShortcutsState extends State<TextFieldEditingShortcuts> {
     final selection = _secondaryClickSelection;
     if (controller == null || selection == null) return;
     if (!_isSelectionValidFor(controller, selection)) {
-      _clearSecondaryClickSelection();
+      _clearSecondaryClickProtection();
       return;
     }
     final current = controller.selection;
@@ -178,10 +209,16 @@ class _TextFieldEditingShortcutsState extends State<TextFieldEditingShortcuts> {
     _restoreSecondaryClickSelection();
   }
 
-  TextSelection? _nonCollapsedSelection(TextSelection? selection) {
-    if (selection == null || !selection.isValid || selection.isCollapsed) {
-      return null;
+  void _handleFocusChanged() {
+    final focusNode = widget.focusNode;
+    if (!_secondaryClickHadFocus || focusNode == null || focusNode.hasFocus) {
+      return;
     }
+    scheduleMicrotask(_restoreSecondaryClickFocus);
+  }
+
+  TextSelection? _validSelection(TextSelection? selection) {
+    if (selection == null || !selection.isValid) return null;
     return selection;
   }
 
@@ -203,10 +240,14 @@ Widget buildTextFieldContextMenu(
   BuildContext context,
   EditableTextState editableTextState, {
   UndoHistoryController? undoController,
+  Object? tapRegionGroupId,
+  ValueChanged<bool>? onOpenChanged,
 }) {
   return _TextFieldContextMenu(
     editableTextState: editableTextState,
     undoController: undoController,
+    tapRegionGroupId: tapRegionGroupId,
+    onOpenChanged: onOpenChanged,
   );
 }
 
@@ -214,16 +255,22 @@ class _TextFieldContextMenu extends StatefulWidget {
   const _TextFieldContextMenu({
     required this.editableTextState,
     required this.undoController,
+    required this.tapRegionGroupId,
+    required this.onOpenChanged,
   });
 
   final EditableTextState editableTextState;
   final UndoHistoryController? undoController;
+  final Object? tapRegionGroupId;
+  final ValueChanged<bool>? onOpenChanged;
 
   @override
   State<_TextFieldContextMenu> createState() => _TextFieldContextMenuState();
 }
 
 class _TextFieldContextMenuState extends State<_TextFieldContextMenu> {
+  bool _openNotified = false;
+
   ClipboardStatusNotifier get _clipboardStatus =>
       widget.editableTextState.clipboardStatus;
 
@@ -234,6 +281,11 @@ class _TextFieldContextMenuState extends State<_TextFieldContextMenu> {
     super.initState();
     _clipboardStatus.addListener(_handleMenuStateChanged);
     _undoController?.addListener(_handleMenuStateChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _openNotified) return;
+      _openNotified = true;
+      widget.onOpenChanged?.call(true);
+    });
   }
 
   @override
@@ -253,6 +305,9 @@ class _TextFieldContextMenuState extends State<_TextFieldContextMenu> {
 
   @override
   void dispose() {
+    if (_openNotified) {
+      widget.onOpenChanged?.call(false);
+    }
     _clipboardStatus.removeListener(_handleMenuStateChanged);
     _undoController?.removeListener(_handleMenuStateChanged);
     super.dispose();
@@ -267,10 +322,16 @@ class _TextFieldContextMenuState extends State<_TextFieldContextMenu> {
     final sections = _sectionsFor(context);
     if (sections.isEmpty) return const SizedBox.shrink();
 
-    return _ContextMenuToolbar(
+    final menu = _ContextMenuToolbar(
       anchor: widget.editableTextState.contextMenuAnchors.primaryAnchor,
-      child: _ContextMenuPanel(sections: sections),
+      child: RepaintBoundary(
+        key: _contextMenuPanelKey,
+        child: _ContextMenuPanel(sections: sections),
+      ),
     );
+    final tapRegionGroupId = widget.tapRegionGroupId;
+    if (tapRegionGroupId == null) return menu;
+    return TapRegion(groupId: tapRegionGroupId, child: menu);
   }
 
   List<_ContextMenuSection> _sectionsFor(BuildContext context) {

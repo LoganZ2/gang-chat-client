@@ -201,6 +201,7 @@ class _InputState extends State<Input> {
       constraints: BoxConstraints(minHeight: widget.height),
       child: TextFieldEditingShortcuts(
         controller: _effectiveController,
+        focusNode: _effectiveFocusNode,
         undoController: _effectiveUndoController,
         child: TextField(
           controller: _effectiveController,

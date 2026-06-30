@@ -57,6 +57,7 @@ class _HomeNotificationsPaneState extends State<HomeNotificationsPane> {
   final TextEditingController _searchController = TextEditingController();
   RoomNotificationFilter _filter = RoomNotificationFilter.all;
   String _query = '';
+  String _lastSearchText = '';
 
   @override
   void initState() {
@@ -72,7 +73,10 @@ class _HomeNotificationsPaneState extends State<HomeNotificationsPane> {
   }
 
   void _handleSearchChanged() {
-    setState(() => _query = _searchController.text);
+    final text = _searchController.text;
+    if (text == _lastSearchText) return;
+    _lastSearchText = text;
+    setState(() => _query = text);
   }
 
   @override

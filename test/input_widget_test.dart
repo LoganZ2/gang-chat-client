@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:client/src/ui/input.dart';
+import 'package:client/src/ui/text_context_menu.dart';
 
 void main() {
   testWidgets('input clear button clears text and reports the change', (
@@ -182,6 +183,135 @@ void main() {
     expect(find.text('Ctrl+A'), findsOneWidget);
   });
 
+  testWidgets('input context menu item stays inside tap region', (
+    tester,
+  ) async {
+    _mockClipboardText(null);
+    final group = Object();
+    final controller = TextEditingController(text: 'hello');
+    final undoController = UndoHistoryController();
+    var outsideTapCount = 0;
+    addTearDown(controller.dispose);
+    addTearDown(undoController.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: TapRegion(
+              groupId: group,
+              onTapOutside: (_) => outsideTapCount++,
+              child: SizedBox(
+                width: 320,
+                child: TextFieldEditingShortcuts(
+                  controller: controller,
+                  undoController: undoController,
+                  child: TextField(
+                    controller: controller,
+                    undoController: undoController,
+                    contextMenuBuilder: (context, editableTextState) =>
+                        buildTextFieldContextMenu(
+                          context,
+                          editableTextState,
+                          undoController: undoController,
+                          tapRegionGroupId: group,
+                        ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await _showInputContextMenu(
+      tester,
+      selection: const TextSelection.collapsed(offset: 5),
+    );
+
+    await tester.tap(find.text('Ctrl+A'));
+    await tester.pump();
+
+    expect(outsideTapCount, 0);
+    expect(
+      controller.selection,
+      const TextSelection(baseOffset: 0, extentOffset: 5),
+    );
+  });
+
+  testWidgets('input context menu remains open through ancestor rebuild', (
+    tester,
+  ) async {
+    _mockClipboardText(null);
+    final controller = TextEditingController(text: 'hello');
+    final undoController = UndoHistoryController();
+    final openStates = <bool>[];
+    late StateSetter rebuildHost;
+    var generation = 0;
+    addTearDown(controller.dispose);
+    addTearDown(undoController.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            rebuildHost = setState;
+            return Scaffold(
+              body: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('generation $generation'),
+                    SizedBox(
+                      width: 320,
+                      child: TextFieldEditingShortcuts(
+                        controller: controller,
+                        undoController: undoController,
+                        child: TextField(
+                          controller: controller,
+                          undoController: undoController,
+                          contextMenuBuilder: (context, editableTextState) =>
+                              buildTextFieldContextMenu(
+                                context,
+                                editableTextState,
+                                undoController: undoController,
+                                onOpenChanged: openStates.add,
+                              ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    await _showInputContextMenu(
+      tester,
+      selection: const TextSelection.collapsed(offset: 5),
+    );
+
+    expect(
+      find.byKey(const ValueKey('text-context-menu-panel')),
+      findsOneWidget,
+    );
+    expect(openStates, [true]);
+
+    rebuildHost(() => generation++);
+    await tester.pump();
+
+    expect(find.text('generation 1'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('text-context-menu-panel')),
+      findsOneWidget,
+    );
+    expect(openStates, [true]);
+  });
+
   testWidgets('input secondary click on blank area keeps selected text', (
     tester,
   ) async {
@@ -294,6 +424,76 @@ void main() {
     expect(controller.selection, const TextSelection.collapsed(offset: 11));
   });
 
+  testWidgets('input secondary click restores focus and selection', (
+    tester,
+  ) async {
+    final controller = TextEditingController(text: 'hello world');
+    final focusNode = FocusNode();
+    addTearDown(controller.dispose);
+    addTearDown(focusNode.dispose);
+
+    await _pumpInput(tester, controller, focusNode: focusNode);
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+
+    const selectedText = TextSelection(baseOffset: 0, extentOffset: 5);
+    controller.selection = selectedText;
+    await tester.pump();
+
+    final fieldRect = tester.getRect(find.byType(TextField));
+    final location = Offset(fieldRect.right - 8, fieldRect.center.dy);
+    final gesture = await tester.createGesture(
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryMouseButton,
+    );
+    await gesture.addPointer(location: location);
+    await tester.pump();
+    await gesture.down(location);
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    focusNode.unfocus();
+    controller.selection = const TextSelection.collapsed(offset: 11);
+    await tester.pump();
+
+    expect(focusNode.hasFocus, isTrue);
+    expect(controller.selection, selectedText);
+  });
+
+  testWidgets('input secondary click does not turn caret into select all', (
+    tester,
+  ) async {
+    final controller = TextEditingController(text: 'hello world');
+    addTearDown(controller.dispose);
+
+    await _pumpInput(tester, controller);
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+
+    const caret = TextSelection.collapsed(offset: 5);
+    controller.selection = caret;
+    await tester.pump();
+
+    final fieldRect = tester.getRect(find.byType(TextField));
+    final location = Offset(fieldRect.left + 34, fieldRect.center.dy);
+    final gesture = await tester.createGesture(
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryMouseButton,
+    );
+    await gesture.addPointer(location: location);
+    await tester.pump();
+    await gesture.down(location);
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    controller.selection = const TextSelection(baseOffset: 0, extentOffset: 11);
+    await tester.pump();
+
+    expect(controller.selection, caret);
+  });
+
   testWidgets('input secondary click does not restore old selection', (
     tester,
   ) async {
@@ -389,6 +589,7 @@ void main() {
 Future<void> _pumpInput(
   WidgetTester tester,
   TextEditingController controller, {
+  FocusNode? focusNode,
   UndoHistoryController? undoController,
 }) {
   return tester.pumpWidget(
@@ -399,6 +600,7 @@ Future<void> _pumpInput(
             width: 320,
             child: Input(
               controller: controller,
+              focusNode: focusNode,
               undoController: undoController,
             ),
           ),

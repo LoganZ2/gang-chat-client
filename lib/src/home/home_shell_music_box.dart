@@ -20,6 +20,7 @@ extension _HomeShellMusicBox on _HomeShellState {
     if (_musicBoxSearchController.text.isNotEmpty) {
       _musicBoxSearchController.clear();
     }
+    _lastMusicBoxSearchText = _musicBoxSearchController.text;
   }
 
   /// Fetches the snapshot for [roomId]. Failures are swallowed (the entry stays
@@ -67,7 +68,9 @@ extension _HomeShellMusicBox on _HomeShellState {
     // The realtime client flattens the event envelope, merging the payload's
     // fields up alongside `room_id` (see LiveStreamClient._emit). The snapshot
     // therefore lives at the top level of [event], not under a `data` key.
-    _applyMusicBoxSnapshot(MusicBoxState.fromJson(event.cast<String, Object?>()));
+    _applyMusicBoxSnapshot(
+      MusicBoxState.fromJson(event.cast<String, Object?>()),
+    );
   }
 
   // --- Writes -----------------------------------------------------------
@@ -115,8 +118,11 @@ extension _HomeShellMusicBox on _HomeShellState {
   /// view (and shows a spinner) on the first keystroke, then debounces the
   /// actual network call.
   void _handleMusicBoxSearchChanged() {
+    final rawKeyword = _musicBoxSearchController.text;
+    if (rawKeyword == _lastMusicBoxSearchText) return;
+    _lastMusicBoxSearchText = rawKeyword;
     _musicBoxSearchDebounce?.cancel();
-    final keyword = _musicBoxSearchController.text.trim();
+    final keyword = rawKeyword.trim();
     if (keyword.isEmpty) {
       unawaited(_searchMusicBox(''));
       return;
