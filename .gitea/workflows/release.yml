@@ -229,36 +229,51 @@ jobs:
           $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
           flutter build windows --release --build-name="${{ needs.prepare.outputs.version }}"
 
-      - name: Package ZIP
-        id: zip
+      - name: Package NSIS installer
+        id: installer
         shell: powershell
         run: |
           $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
           $VERSION = "${{ needs.prepare.outputs.version }}"
           $SRC = "build\windows\x64\runner\Release"
           if (-not (Test-Path $SRC)) { Write-Error "build output not found at $SRC"; exit 1 }
-          $ZIP = "GangChat-$VERSION-windows.zip"
-          Compress-Archive -Path "$SRC\*" -DestinationPath $ZIP
+          $MAKENSIS = "C:\Program Files (x86)\NSIS\makensis.exe"
+          if (-not (Test-Path $MAKENSIS)) { Write-Error "makensis.exe not found at $MAKENSIS"; exit 1 }
+          if ($VERSION -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { Write-Error "version must be major.minor.patch: $VERSION"; exit 1 }
+          $VERSION_QUAD = "$VERSION.0"
+          $INSTALLER = "GangChat-$VERSION-windows-installer.exe"
+          $ROOT = (Resolve-Path ".").Path
+          $SRC_ABS = (Resolve-Path $SRC).Path
+          $OUT_ABS = Join-Path $ROOT $INSTALLER
+          & $MAKENSIS `
+            "/DAPP_VERSION=$VERSION" `
+            "/DAPP_VERSION_QUAD=$VERSION_QUAD" `
+            "/DPROJECT_ROOT=$ROOT" `
+            "/DSOURCE_DIR=$SRC_ABS" `
+            "/DOUTPUT_FILE=$OUT_ABS" `
+            "installer\windows\gang_chat.nsi"
+          if ($LASTEXITCODE -ne 0) { Write-Error "makensis failed"; exit 1 }
+          if (-not (Test-Path $INSTALLER)) { Write-Error "installer not created: $INSTALLER"; exit 1 }
           # 用 .NET 方法写入，避免 PS5 Out-File -Encoding utf8 带 BOM 导致 runner 解析失败
-          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "name=$ZIP`n")
-          Get-Item $ZIP | Select-Object Name, @{n='Size';e={'{0:N0} bytes' -f $_.Length}}
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "name=$INSTALLER`n")
+          Get-Item $INSTALLER | Select-Object Name, @{n='Size';e={'{0:N0} bytes' -f $_.Length}}
 
-      - name: Upload ZIP to release
+      - name: Upload Windows installer to release
         shell: powershell
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
-          $ZIP = "${{ steps.zip.outputs.name }}"
+          $INSTALLER = "${{ steps.installer.outputs.name }}"
           $API = "$env:GITHUB_SERVER_URL/api/v1/repos/$env:GITHUB_REPOSITORY"
           $RELEASE_ID = "${{ needs.prepare.outputs.release_id }}"
           # 用数组传参避免 PS 多行 backtick 续行解析问题
           $curlArgs = @('-fsS', '-X', 'POST',
-            "$API/releases/$RELEASE_ID/assets?name=$ZIP",
+            "$API/releases/$RELEASE_ID/assets?name=$INSTALLER",
             '-H', "Authorization: token $env:TOKEN",
-            '-F', "attachment=@$ZIP")
+            '-F', "attachment=@$INSTALLER")
           curl.exe @curlArgs
-          Write-Host "Uploaded $ZIP"
+          Write-Host "Uploaded $INSTALLER"
 
   release:
     runs-on: macos-arm64
