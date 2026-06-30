@@ -11,10 +11,12 @@ class _DeleteAccountDialog extends StatefulWidget {
 
 class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
   final _controller = TextEditingController();
+  final _undoController = UndoHistoryController();
 
   @override
   void dispose() {
     _controller.dispose();
+    _undoController.dispose();
     super.dispose();
   }
 
@@ -57,19 +59,29 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
                 ),
               ),
               const SizedBox(height: 14),
-              TextField(
+              TextFieldEditingShortcuts(
                 controller: _controller,
-                autofocus: true,
-                onChanged: (_) => setState(() {}),
-                cursorColor: _textSecondary,
-                contextMenuBuilder: buildTextFieldContextMenu,
-                style: const TextStyle(
-                  color: _textPrimary,
-                  fontWeight: FontWeight.w500,
-                ),
-                decoration: InputDecoration(
-                  isDense: true,
-                  hintText: spec.inputHint,
+                undoController: _undoController,
+                child: TextField(
+                  controller: _controller,
+                  autofocus: true,
+                  onChanged: (_) => setState(() {}),
+                  cursorColor: _textSecondary,
+                  undoController: _undoController,
+                  contextMenuBuilder: (context, editableTextState) =>
+                      buildTextFieldContextMenu(
+                        context,
+                        editableTextState,
+                        undoController: _undoController,
+                      ),
+                  style: const TextStyle(
+                    color: _textPrimary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: spec.inputHint,
+                  ),
                 ),
               ),
               const SizedBox(height: 18),

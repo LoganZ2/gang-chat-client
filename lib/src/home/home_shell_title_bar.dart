@@ -407,6 +407,7 @@ class _TitleSearchField extends StatefulWidget {
 
 class _TitleSearchFieldState extends State<_TitleSearchField> {
   final FocusNode _focusNode = FocusNode();
+  final UndoHistoryController _undoController = UndoHistoryController();
   bool _focused = false;
 
   @override
@@ -419,6 +420,7 @@ class _TitleSearchFieldState extends State<_TitleSearchField> {
   void dispose() {
     _focusNode.removeListener(_handleFocusChange);
     _focusNode.dispose();
+    _undoController.dispose();
     super.dispose();
   }
 
@@ -449,23 +451,34 @@ class _TitleSearchFieldState extends State<_TitleSearchField> {
           Icon(Icons.search, size: 16, color: accent),
           const SizedBox(width: 8),
           Expanded(
-            child: TextField(
+            child: TextFieldEditingShortcuts(
               controller: widget.controller,
-              focusNode: _focusNode,
-              maxLines: 1,
-              textInputAction: TextInputAction.search,
-              onTap: widget.onActivated,
-              cursorColor: UiColors.accent,
-              cursorWidth: 1.5,
-              style: UiTypography.body.copyWith(fontSize: 13, height: 1.2),
-              decoration: InputDecoration(
-                isCollapsed: true,
-                border: InputBorder.none,
-                hintText: '搜索',
-                hintStyle: UiTypography.body.copyWith(
-                  fontSize: 13,
-                  height: 1.2,
-                  color: UiColors.textMuted,
+              undoController: _undoController,
+              child: TextField(
+                controller: widget.controller,
+                focusNode: _focusNode,
+                maxLines: 1,
+                textInputAction: TextInputAction.search,
+                undoController: _undoController,
+                onTap: widget.onActivated,
+                cursorColor: UiColors.accent,
+                cursorWidth: 1.5,
+                style: UiTypography.body.copyWith(fontSize: 13, height: 1.2),
+                contextMenuBuilder: (context, editableTextState) =>
+                    buildTextFieldContextMenu(
+                      context,
+                      editableTextState,
+                      undoController: _undoController,
+                    ),
+                decoration: InputDecoration(
+                  isCollapsed: true,
+                  border: InputBorder.none,
+                  hintText: '搜索',
+                  hintStyle: UiTypography.body.copyWith(
+                    fontSize: 13,
+                    height: 1.2,
+                    color: UiColors.textMuted,
+                  ),
                 ),
               ),
             ),

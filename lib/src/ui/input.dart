@@ -37,6 +37,7 @@ class Input extends StatefulWidget {
     this.style = UiTypography.body,
     this.hintStyle = const TextStyle(color: UiColors.textMuted),
     this.height = defaultHeight,
+    this.undoController,
   });
 
   static const double defaultHeight = 40;
@@ -59,6 +60,7 @@ class Input extends StatefulWidget {
   final ValueChanged<String>? onChanged;
   final TextStyle style;
   final TextStyle hintStyle;
+  final UndoHistoryController? undoController;
 
   /// The collapsed (single-line) height of the field. Defaults to
   /// [defaultHeight]; callers can shrink it for tighter, denser layouts.
@@ -71,12 +73,16 @@ class Input extends StatefulWidget {
 class _InputState extends State<Input> {
   TextEditingController? _localController;
   FocusNode? _localFocusNode;
+  UndoHistoryController? _localUndoController;
   bool _hovered = false;
 
   TextEditingController get _effectiveController =>
       widget.controller ?? _localController!;
 
   FocusNode get _effectiveFocusNode => widget.focusNode ?? _localFocusNode!;
+
+  UndoHistoryController get _effectiveUndoController =>
+      widget.undoController ?? _localUndoController!;
 
   bool get _isSearchInput {
     final hintText = widget.hintText.trim();
@@ -104,6 +110,9 @@ class _InputState extends State<Input> {
         ? TextEditingController()
         : null;
     _localFocusNode = widget.focusNode == null ? FocusNode() : null;
+    _localUndoController = widget.undoController == null
+        ? UndoHistoryController()
+        : null;
     _effectiveController.addListener(_handleTextChanged);
     _effectiveFocusNode.addListener(_handleFocusChanged);
   }
@@ -144,6 +153,16 @@ class _InputState extends State<Input> {
       }
       _effectiveFocusNode.addListener(_handleFocusChanged);
     }
+
+    if (oldWidget.undoController != widget.undoController) {
+      if (oldWidget.undoController == null && widget.undoController != null) {
+        _localUndoController?.dispose();
+        _localUndoController = null;
+      } else if (oldWidget.undoController != null &&
+          widget.undoController == null) {
+        _localUndoController = UndoHistoryController();
+      }
+    }
   }
 
   @override
@@ -152,6 +171,7 @@ class _InputState extends State<Input> {
     _effectiveFocusNode.removeListener(_handleFocusChanged);
     _localController?.dispose();
     _localFocusNode?.dispose();
+    _localUndoController?.dispose();
     super.dispose();
   }
 
@@ -161,7 +181,9 @@ class _InputState extends State<Input> {
 
   void _handleHoverChanged(bool hovered) {
     if (_hovered == hovered) return;
-    setState(() => _hovered = hovered);
+    _hovered = hovered;
+    if (_effectiveFocusNode.hasFocus) return;
+    setState(() {});
   }
 
   void _clearText() {
@@ -177,76 +199,86 @@ class _InputState extends State<Input> {
     final suffix = _effectiveSuffix();
     final content = ConstrainedBox(
       constraints: BoxConstraints(minHeight: widget.height),
-      child: TextField(
+      child: TextFieldEditingShortcuts(
         controller: _effectiveController,
-        focusNode: _effectiveFocusNode,
-        enabled: widget.enabled,
-        obscureText: widget.obscureText,
-        autofillHints: widget.autofillHints,
-        keyboardType: widget.keyboardType,
-        textInputAction: _effectiveTextInputAction,
-        minLines: _effectiveMinLines,
-        maxLines: _effectiveMaxLines,
-        onSubmitted: widget.onSubmitted,
-        onChanged: widget.onChanged,
-        cursorColor: UiColors.accent,
-        mouseCursor: widget.enabled
-            ? SystemMouseCursors.text
-            : SystemMouseCursors.basic,
-        style: widget.style,
-        textAlignVertical: TextAlignVertical.center,
-        contextMenuBuilder: buildTextFieldContextMenu,
-        decoration: InputDecoration(
-          isDense: true,
-          hintText: widget.hintText,
-          hintStyle: widget.hintStyle,
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
-          disabledBorder: InputBorder.none,
-          contentPadding: _contentPaddingFor(context),
-          prefixIcon: widget.prefixIcon == null
-              ? null
-              : Padding(
-                  padding: const EdgeInsets.only(
-                    left: _inputHorizontalPadding,
-                    right: UiSpacing.sm,
-                  ),
-                  child: Transform.translate(
-                    offset: const Offset(0, _inputIconVerticalOffset),
-                    child: Icon(
-                      widget.prefixIcon,
-                      size: _inputIconSize,
-                      color: UiColors.textMuted,
+        undoController: _effectiveUndoController,
+        child: TextField(
+          controller: _effectiveController,
+          focusNode: _effectiveFocusNode,
+          enabled: widget.enabled,
+          obscureText: widget.obscureText,
+          autofillHints: widget.autofillHints,
+          keyboardType: widget.keyboardType,
+          textInputAction: _effectiveTextInputAction,
+          minLines: _effectiveMinLines,
+          maxLines: _effectiveMaxLines,
+          undoController: _effectiveUndoController,
+          onSubmitted: widget.onSubmitted,
+          onChanged: widget.onChanged,
+          cursorColor: UiColors.accent,
+          mouseCursor: widget.enabled
+              ? SystemMouseCursors.text
+              : SystemMouseCursors.basic,
+          style: widget.style,
+          textAlignVertical: TextAlignVertical.center,
+          contextMenuBuilder: (context, editableTextState) =>
+              buildTextFieldContextMenu(
+                context,
+                editableTextState,
+                undoController: _effectiveUndoController,
+              ),
+          decoration: InputDecoration(
+            isDense: true,
+            hintText: widget.hintText,
+            hintStyle: widget.hintStyle,
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            disabledBorder: InputBorder.none,
+            contentPadding: _contentPaddingFor(context),
+            prefixIcon: widget.prefixIcon == null
+                ? null
+                : Padding(
+                    padding: const EdgeInsets.only(
+                      left: _inputHorizontalPadding,
+                      right: UiSpacing.sm,
+                    ),
+                    child: Transform.translate(
+                      offset: const Offset(0, _inputIconVerticalOffset),
+                      child: Icon(
+                        widget.prefixIcon,
+                        size: _inputIconSize,
+                        color: UiColors.textMuted,
+                      ),
                     ),
                   ),
-                ),
-          prefixIconConstraints: const BoxConstraints(
-            minWidth: 0,
-            minHeight: 0,
-          ),
-          suffixIcon: suffix == null
-              ? null
-              : Padding(
-                  padding: const EdgeInsets.only(
-                    left: UiSpacing.sm,
-                    right: _inputHorizontalPadding,
+            prefixIconConstraints: const BoxConstraints(
+              minWidth: 0,
+              minHeight: 0,
+            ),
+            suffixIcon: suffix == null
+                ? null
+                : Padding(
+                    padding: const EdgeInsets.only(
+                      left: UiSpacing.sm,
+                      right: _inputHorizontalPadding,
+                    ),
+                    child: Transform.translate(
+                      offset: const Offset(0, _inputIconVerticalOffset),
+                      child: suffix,
+                    ),
                   ),
-                  child: Transform.translate(
-                    offset: const Offset(0, _inputIconVerticalOffset),
-                    child: suffix,
-                  ),
-                ),
-          suffixIconConstraints: const BoxConstraints(
-            minWidth: 0,
-            minHeight: 0,
+            suffixIconConstraints: const BoxConstraints(
+              minWidth: 0,
+              minHeight: 0,
+            ),
           ),
         ),
       ),
     );
 
     final enabled = widget.enabled;
-    final capTop = enabled && _hovered ? 0.0 : _inputVisualLift;
+    final capTop = enabled && (_hovered || focused) ? 0.0 : _inputVisualLift;
     final surfaceDepth = _inputVisualLift + _inputBaseDepth;
     final background = enabled
         ? focused
