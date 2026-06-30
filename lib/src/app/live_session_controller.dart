@@ -66,6 +66,9 @@ class LiveSessionController {
   bool get isConnected => session.isConnected;
   String? get roomName => session.roomName;
   Set<String> get speakingIdentities => session.speakingIdentities;
+  Set<String> get connectedParticipantIdentities =>
+      session.connectedParticipantIdentities;
+  Map<String, bool> get micMutedByIdentity => session.micMutedByIdentity;
   List<LiveVideoTrack> get videoTracks => session.videoTracks;
 
   LiveVideoTrack? cameraFor(String userId) => session.cameraFor(userId);

@@ -76,6 +76,67 @@ void main() {
     );
   });
 
+  test('visible live participants show joining users already in LiveKit', () {
+    final live = _liveWithParticipants([
+      _participant('alice', connectionState: 'joining'),
+      _participant('bob', connectionState: 'online'),
+    ]);
+
+    expect(
+      visibleLiveParticipantsForStage(
+        live.participants,
+        currentUserId: 'missing',
+        localParticipantReady: true,
+        connectedParticipantIds: {'alice'},
+        liveKitMicMutedByParticipantId: {'alice': false},
+      ).map((participant) => participant.user.id),
+      ['alice', 'bob'],
+    );
+  });
+
+  test(
+    'visible live participants keep connected muted placeholders hidden',
+    () {
+      final live = _liveWithParticipants([
+        _participant('alice', connectionState: 'joining', micMuted: true),
+        _participant('bob', connectionState: 'online'),
+      ]);
+
+      expect(
+        visibleLiveParticipantsForStage(
+          live.participants,
+          currentUserId: 'missing',
+          localParticipantReady: true,
+          connectedParticipantIds: {'alice'},
+          liveKitMicMutedByParticipantId: {'alice': true},
+        ).map((participant) => participant.user.id),
+        ['bob'],
+      );
+    },
+  );
+
+  test(
+    'live state detects connected LiveKit users missing from server state',
+    () {
+      final live = _live(['alice']);
+
+      expect(
+        liveStateMissingConnectedParticipants(
+          live,
+          connectedParticipantIds: {'alice'},
+        ),
+        isFalse,
+      );
+      expect(
+        liveStateMissingConnectedParticipants(
+          live,
+          connectedParticipantIds: {'alice', 'bob'},
+        ),
+        isTrue,
+      );
+    },
+  );
+
   test(
     'pickLiveStageShare prefers remote screen share then local fallback',
     () {
@@ -514,6 +575,26 @@ void main() {
       expect(state.highlighted, isTrue);
     },
   );
+
+  test('liveParticipantTileState can use confirmed LiveKit mic state', () {
+    final state = liveParticipantTileState(
+      _participant('alice', micMuted: true),
+      speaking: false,
+      liveKitMicMuted: false,
+    );
+
+    expect(state.micMutedForDisplay, isFalse);
+    expect(state.micActive, isFalse);
+
+    final moderated = liveParticipantTileState(
+      _participant('alice', micMuted: true, voiceBlocked: true),
+      speaking: true,
+      liveKitMicMuted: false,
+    );
+
+    expect(moderated.micMutedForDisplay, isTrue);
+    expect(moderated.micActive, isFalse);
+  });
 
   test('live control display helpers describe toggled states', () {
     final mutedMic = liveMicControlState(micMuted: true, voiceBlocked: false);

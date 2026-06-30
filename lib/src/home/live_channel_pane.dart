@@ -78,6 +78,8 @@ class LiveChannelPane extends StatefulWidget {
     required this.cameraOn,
     required this.screenSharing,
     required this.speakingUserIds,
+    required this.connectedParticipantIds,
+    required this.liveKitMicMutedByParticipantId,
     required this.videoTracks,
     required this.stageSelection,
     required this.onStageSelectionChanged,
@@ -138,6 +140,8 @@ class LiveChannelPane extends StatefulWidget {
   final bool cameraOn;
   final bool screenSharing;
   final Set<String> speakingUserIds;
+  final Set<String> connectedParticipantIds;
+  final Map<String, bool> liveKitMicMutedByParticipantId;
   final List<LiveVideoTrack> videoTracks;
   final LiveStageSelection? stageSelection;
   final ValueChanged<LiveStageSelection?> onStageSelectionChanged;
@@ -239,6 +243,8 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
           widget.live?.participants ?? const <LiveParticipant>[],
           currentUserId: widget.currentUser.id,
           localParticipantReady: widget.joined && !widget.joining,
+          connectedParticipantIds: widget.connectedParticipantIds,
+          liveKitMicMutedByParticipantId: widget.liveKitMicMutedByParticipantId,
         )
         .where((p) => p.user.id != musicBoxBotIdentity)
         .toList();
@@ -311,6 +317,8 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                                 participants: participants,
                                 currentUser: widget.currentUser,
                                 speakingUserIds: widget.speakingUserIds,
+                                liveKitMicMutedByParticipantId:
+                                    widget.liveKitMicMutedByParticipantId,
                                 videoTracks: widget.videoTracks,
                                 stageTrack: stageTrack,
                                 onSelectStage: _selectStage,

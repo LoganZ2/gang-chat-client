@@ -70,6 +70,17 @@ extension _HomeShellLiveActions on _HomeShellState {
 
   void _onLiveSessionChanged() {
     if (!mounted) return;
+    final joinedLiveRoomId = _joinedLiveRoomId;
+    final connectedParticipantIds =
+        _liveSessionController.connectedParticipantIdentities;
+    if (joinedLiveRoomId != null &&
+        joinedLiveRoomId == _selectedServerId &&
+        live_display.liveStateMissingConnectedParticipants(
+          _live ?? _selectedRoom?.live,
+          connectedParticipantIds: connectedParticipantIds,
+        )) {
+      unawaited(_syncLiveConnectedParticipants(joinedLiveRoomId));
+    }
     if (live_display.shouldPatchEndedLocalScreenShare(
       localScreenSharing: _screenSharing,
       sessionScreenSharing: _liveSessionController.isScreenSharing,
@@ -84,6 +95,16 @@ extension _HomeShellLiveActions on _HomeShellState {
       unawaited(_setSystemFullScreen(false));
     }
     _setHomeState(() {});
+  }
+
+  Future<void> _syncLiveConnectedParticipants(String roomId) async {
+    if (_syncingLiveConnectedParticipants) return;
+    _syncingLiveConnectedParticipants = true;
+    try {
+      await _refreshLiveSilently(roomId);
+    } finally {
+      if (mounted) _syncingLiveConnectedParticipants = false;
+    }
   }
 
   void _onForciblyRemovedFromLive() {
@@ -148,14 +169,6 @@ extension _HomeShellLiveActions on _HomeShellState {
     _voiceBlocked = patch.voiceBlocked;
     _live = patch.live;
     _servers = patch.rooms;
-  }
-
-  void _applyLiveStateUpdatePatch(LiveStateUpdatePatch patch) {
-    _micMuted = patch.micMuted;
-    _cameraOn = patch.cameraOn;
-    _screenSharing = patch.screenSharing;
-    _voiceBlocked = patch.voiceBlocked;
-    _live = patch.live;
   }
 
   LiveJoinResult _withCurrentRoomLiveDisplayNameInJoinResult(
@@ -858,13 +871,11 @@ extension _HomeShellLiveActions on _HomeShellState {
     bool syncLiveKitMic = true,
   }) async {
     final roomId = _joinedLiveRoomId;
-    if (roomId == null ||
-        !canPatchSelectedLiveState(
-          joinedLiveRoomId: roomId,
-          selectedRoomId: _selectedServerId,
-        )) {
-      return;
-    }
+    if (roomId == null) return;
+    final updateSelectedLive = canPatchSelectedLiveState(
+      joinedLiveRoomId: roomId,
+      selectedRoomId: _selectedServerId,
+    );
 
     try {
       final liveKitMicFuture = !syncLiveKitMic || micMuted == null
@@ -892,14 +903,17 @@ extension _HomeShellLiveActions on _HomeShellState {
         } catch (_) {}
       }
       if (!mounted) return;
-      _setHomeState(
-        () => _applyLiveStateUpdatePatch(
-          _liveController.patchStateUpdate(
-            live: _live,
-            participant: displayParticipant,
-          ),
-        ),
+      final patch = _liveController.patchStateUpdate(
+        live: updateSelectedLive ? _live : null,
+        participant: displayParticipant,
       );
+      _setHomeState(() {
+        _micMuted = patch.micMuted;
+        _cameraOn = patch.cameraOn;
+        _screenSharing = patch.screenSharing;
+        _voiceBlocked = patch.voiceBlocked;
+        if (updateSelectedLive) _live = patch.live;
+      });
     } catch (error) {
       if (!mounted || isBenignGoneLiveStatePatch(error)) return;
       _setHomeState(() => _roomError = error.toString());

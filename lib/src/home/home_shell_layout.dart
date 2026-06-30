@@ -119,6 +119,10 @@ extension _HomeShellLayout on _HomeShellState {
         cameraOn: _cameraOn,
         screenSharing: _screenSharing,
         speakingUserIds: _liveSessionController.speakingIdentities,
+        connectedParticipantIds:
+            _liveSessionController.connectedParticipantIdentities,
+        liveKitMicMutedByParticipantId:
+            _liveSessionController.micMutedByIdentity,
         videoTracks: _liveSessionController.videoTracks,
         stageSelection: _liveStageSelections[_selectedServerId],
         onStageSelectionChanged: _setLiveStageSelection,

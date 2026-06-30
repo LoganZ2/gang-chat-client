@@ -29,6 +29,7 @@ class _LiveMemberStage extends StatelessWidget {
     required this.participants,
     required this.currentUser,
     required this.speakingUserIds,
+    required this.liveKitMicMutedByParticipantId,
     required this.videoTracks,
     required this.stageTrack,
     required this.onSelectStage,
@@ -53,6 +54,7 @@ class _LiveMemberStage extends StatelessWidget {
   final List<LiveParticipant> participants;
   final CurrentUser currentUser;
   final Set<String> speakingUserIds;
+  final Map<String, bool> liveKitMicMutedByParticipantId;
   final List<LiveVideoTrack> videoTracks;
   final LiveVideoTrack? stageTrack;
   final ValueChanged<LiveVideoTrack> onSelectStage;
@@ -102,6 +104,8 @@ class _LiveMemberStage extends StatelessWidget {
                       currentUser: currentUser,
                       local: participant.user.id == currentUser.id,
                       speaking: speakingUserIds.contains(participant.user.id),
+                      liveKitMicMuted:
+                          liveKitMicMutedByParticipantId[participant.user.id],
                       screenShareFocused:
                           stageTrack?.identity == participant.user.id &&
                           stageTrack?.isScreenShare == true,
@@ -159,6 +163,7 @@ class _LiveMemberCard extends StatelessWidget {
     required this.currentUser,
     required this.local,
     required this.speaking,
+    required this.liveKitMicMuted,
     required this.screenShareFocused,
     required this.cameraFocused,
     required this.onSelectPreview,
@@ -186,6 +191,7 @@ class _LiveMemberCard extends StatelessWidget {
   final CurrentUser currentUser;
   final bool local;
   final bool speaking;
+  final bool? liveKitMicMuted;
   final bool screenShareFocused;
   final bool cameraFocused;
   final LiveVideoTrack? previewTrack;
@@ -214,6 +220,7 @@ class _LiveMemberCard extends StatelessWidget {
     final state = live_display.liveParticipantTileState(
       participant,
       speaking: speaking,
+      liveKitMicMuted: liveKitMicMuted,
     );
     final name = room_display.userPrimaryName(participant.user);
     final nameColor = _liveMemberNameColor(participant.user, local: local);

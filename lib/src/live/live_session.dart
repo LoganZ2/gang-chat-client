@@ -404,6 +404,21 @@ class LiveSession extends ChangeNotifier {
   }
 
   Set<String> get speakingIdentities => Set.unmodifiable(_speakingIdentities);
+  Set<String> get connectedParticipantIdentities {
+    final room = _room;
+    if (room == null) return const <String>{};
+    final identities = <String>{};
+    final localIdentity = room.localParticipant?.identity;
+    if (localIdentity != null && localIdentity.isNotEmpty) {
+      identities.add(localIdentity);
+    }
+    for (final participant in room.remoteParticipants.values) {
+      if (_isScreenAudioAux(participant.identity)) continue;
+      identities.add(participant.identity);
+    }
+    return Set.unmodifiable(identities);
+  }
+
   Map<String, bool> get micMutedByIdentity =>
       Map.unmodifiable(_micMutedByIdentity);
 

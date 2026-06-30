@@ -192,6 +192,7 @@ class _HomeShellState extends State<HomeShell> {
   bool _selectedRoomHasPendingJoinRequests = false;
   String? _joinedLiveRoomId;
   bool _joiningLive = false;
+  bool _syncingLiveConnectedParticipants = false;
   bool _micMuted = true;
   bool _headphonesMuted = false;
   double _lastInputVolumeBeforeMute = _defaultLiveVolumeRestore;

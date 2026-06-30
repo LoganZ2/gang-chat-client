@@ -111,11 +111,17 @@ List<LiveParticipant> visibleLiveParticipantsForStage(
   Iterable<LiveParticipant> participants, {
   required String currentUserId,
   required bool localParticipantReady,
+  Set<String> connectedParticipantIds = const <String>{},
+  Map<String, bool> liveKitMicMutedByParticipantId = const <String, bool>{},
 }) {
   return [
     for (final participant in participants)
-      if (liveParticipantConnectionReady(participant) &&
-          (localParticipantReady || participant.user.id != currentUserId))
+      if ((localParticipantReady || participant.user.id != currentUserId) &&
+          liveParticipantVisibleInRoster(
+            participant,
+            connectedParticipantIds: connectedParticipantIds,
+            liveKitMicMutedByParticipantId: liveKitMicMutedByParticipantId,
+          ))
         participant,
   ];
 }
@@ -125,15 +131,37 @@ bool liveParticipantConnectionReady(LiveParticipant participant) {
   return state == 'online' || state == 'connected' || state == 'joined';
 }
 
+bool liveParticipantVisibleInRoster(
+  LiveParticipant participant, {
+  Set<String> connectedParticipantIds = const <String>{},
+  Map<String, bool> liveKitMicMutedByParticipantId = const <String, bool>{},
+}) {
+  return liveParticipantConnectionReady(participant) ||
+      (connectedParticipantIds.contains(participant.user.id) &&
+          liveKitMicMutedByParticipantId[participant.user.id] == false);
+}
+
+bool liveStateMissingConnectedParticipants(
+  LiveState? live, {
+  required Set<String> connectedParticipantIds,
+}) {
+  if (live == null || connectedParticipantIds.isEmpty) return false;
+  final liveUserIds = {
+    for (final participant in live.participants) participant.user.id,
+  };
+  return connectedParticipantIds.any((id) => !liveUserIds.contains(id));
+}
+
 LiveParticipantTileState liveParticipantTileState(
   LiveParticipant participant, {
   required bool speaking,
+  bool? liveKitMicMuted,
 }) {
   final broadcasting = participant.cameraOn || participant.screenSharing;
   final micMutedForDisplay =
       participant.micBlocked ||
       participant.voiceBlocked ||
-      participant.micMuted;
+      (liveKitMicMuted ?? participant.micMuted);
   return LiveParticipantTileState(
     broadcasting: broadcasting,
     highlighted: speaking || broadcasting,

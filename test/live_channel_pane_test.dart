@@ -235,6 +235,46 @@ void main() {
     );
   });
 
+  testWidgets(
+    'joining remote member confirmed unmuted by LiveKit shows open mic',
+    (tester) async {
+      final searchController = TextEditingController();
+      addTearDown(searchController.dispose);
+      final remoteUser = _user('phabe', 'Phabe', roomRole: 'member');
+      final live = _liveState([
+        _participant(
+          id: 'live_phabe',
+          user: remoteUser,
+          micMuted: true,
+          connectionState: 'joining',
+        ),
+      ]);
+
+      await tester.pumpWidget(
+        _host(
+          searchController: searchController,
+          live: live,
+          connectedParticipantIds: const {'phabe'},
+          liveKitMicMutedByParticipantId: const {'phabe': false},
+        ),
+      );
+
+      final micButton = find.byKey(
+        const ValueKey<String>('live-member-status:mic:phabe'),
+      );
+      expect(find.text('Phabe'), findsOneWidget);
+      expect(micButton, findsOneWidget);
+      expect(
+        find.descendant(of: micButton, matching: find.byIcon(Icons.mic)),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: micButton, matching: find.byIcon(Icons.mic_off)),
+        findsNothing,
+      );
+    },
+  );
+
   testWidgets('live member avatar opens a profile card on tap and hover', (
     tester,
   ) async {
@@ -987,6 +1027,8 @@ Widget _host({
   required TextEditingController searchController,
   required LiveState live,
   Set<String> speakingUserIds = const {},
+  Set<String> connectedParticipantIds = const {},
+  Map<String, bool> liveKitMicMutedByParticipantId = const {},
   double width = 720,
   double height = 520,
   bool joined = true,
@@ -1036,6 +1078,8 @@ Widget _host({
             cameraOn: false,
             screenSharing: false,
             speakingUserIds: speakingUserIds,
+            connectedParticipantIds: connectedParticipantIds,
+            liveKitMicMutedByParticipantId: liveKitMicMutedByParticipantId,
             videoTracks: videoTracks,
             stageSelection: stageSelection ?? const LiveStageSelection.none(),
             onStageSelectionChanged: onStageSelectionChanged ?? (_) {},
@@ -1200,6 +1244,7 @@ LiveParticipant _participant({
   bool voiceBlocked = false,
   bool cameraOn = false,
   bool screenSharing = false,
+  String connectionState = 'connected',
 }) {
   return LiveParticipant(
     liveSessionId: id,
@@ -1213,7 +1258,7 @@ LiveParticipant _participant({
     voiceBlocked: voiceBlocked,
     cameraOn: cameraOn,
     screenSharing: screenSharing,
-    connectionState: 'connected',
+    connectionState: connectionState,
   );
 }
 
