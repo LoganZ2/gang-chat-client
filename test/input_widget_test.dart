@@ -177,10 +177,31 @@ void main() {
     expect(find.text('Ctrl+X'), findsOneWidget);
     expect(find.text('复制'), findsOneWidget);
     expect(find.text('Ctrl+C'), findsOneWidget);
+    expect(find.text('粘贴'), findsNothing);
+    expect(find.text('Ctrl+V'), findsNothing);
+    expect(find.text('全选'), findsOneWidget);
+    expect(find.text('Ctrl+A'), findsOneWidget);
+  });
+
+  testWidgets('input context menu shows paste for selection when pasteable', (
+    tester,
+  ) async {
+    _mockClipboardText('from clipboard');
+    final controller = TextEditingController(text: 'hello world');
+    controller.selection = const TextSelection(baseOffset: 0, extentOffset: 5);
+    addTearDown(controller.dispose);
+
+    await _pumpInput(tester, controller);
+    await _showInputContextMenu(
+      tester,
+      selection: const TextSelection(baseOffset: 0, extentOffset: 5),
+    );
+
+    expect(find.text('剪切'), findsOneWidget);
+    expect(find.text('复制'), findsOneWidget);
     expect(find.text('粘贴'), findsOneWidget);
     expect(find.text('Ctrl+V'), findsOneWidget);
     expect(find.text('全选'), findsOneWidget);
-    expect(find.text('Ctrl+A'), findsOneWidget);
   });
 
   testWidgets('input context menu item stays inside tap region', (

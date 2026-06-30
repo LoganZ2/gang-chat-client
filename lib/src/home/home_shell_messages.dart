@@ -535,6 +535,18 @@ extension _HomeShellMessages on _HomeShellState {
   /// something was staged, so the paste handler can suppress the default text
   /// paste — on macOS a copied file also exposes its name as plain text, which
   /// would otherwise land in the composer.
+  Future<bool> _canPasteAttachments() async {
+    if (_selectedRoom == null) return false;
+    try {
+      final paths = await _clipboardService.readFilePaths();
+      if (file_display.normalizedFilePaths(paths).isNotEmpty) return true;
+      final image = await _clipboardService.readImageFile();
+      return image != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<bool> _pasteAttachments() async {
     if (_selectedRoom == null) return false;
     try {

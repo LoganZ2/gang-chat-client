@@ -80,6 +80,7 @@ class ChatPane extends StatelessWidget {
     required this.onCancelVoice,
     required this.onPickFile,
     required this.onPasteFiles,
+    this.onCanPasteFiles,
     required this.onRemoveAttachment,
     required this.onRetryAttachment,
     required this.onRetry,
@@ -126,6 +127,7 @@ class ChatPane extends StatelessWidget {
   final VoidCallback onCancelVoice;
   final VoidCallback onPickFile;
   final Future<bool> Function() onPasteFiles;
+  final Future<bool> Function()? onCanPasteFiles;
   final ValueChanged<String> onRemoveAttachment;
   final ValueChanged<String> onRetryAttachment;
   final VoidCallback onRetry;
@@ -244,6 +246,7 @@ class ChatPane extends StatelessWidget {
                 onCancelVoice: onCancelVoice,
                 onPickFile: onPickFile,
                 onPasteFiles: onPasteFiles,
+                onCanPasteFiles: onCanPasteFiles,
                 onRemoveAttachment: onRemoveAttachment,
                 onRetryAttachment: onRetryAttachment,
                 dropKey: composerDropKey,

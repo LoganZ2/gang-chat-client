@@ -24,7 +24,6 @@ class ChatComposerController extends ChangeNotifier {
   void _consumeCloseRequest() => _closeRequested = false;
 }
 
-
 class ComposerAction {
   const ComposerAction({
     required this.id,
@@ -93,6 +92,7 @@ class ChatComposer extends StatefulWidget {
     this.onSubmitted,
     this.onChanged,
     this.onPasteFiles,
+    this.onCanPasteFiles,
     this.attachments,
   });
 
@@ -112,6 +112,12 @@ class ChatComposer extends StatefulWidget {
   /// the composer can skip the default text paste (a copied file also carries
   /// its name as plain text on macOS).
   final Future<bool> Function()? onPasteFiles;
+
+  /// Checks whether the clipboard currently contains files/images that
+  /// [onPasteFiles] can consume. Used to keep the context-menu paste action
+  /// visible for non-text clipboard contents without showing it for an empty
+  /// clipboard.
+  final Future<bool> Function()? onCanPasteFiles;
 
   /// Optional strip rendered above the input, used to show files staged for
   /// the next message. Null (or empty) leaves the composer unchanged.
@@ -303,6 +309,7 @@ class _ChatComposerState extends State<ChatComposer> {
                                 hintText: widget.hintText,
                                 minLines: widget.minLines,
                                 maxLines: widget.maxLines,
+                                canPasteNonText: widget.onCanPasteFiles,
                                 onSubmitted: widget.onSubmitted,
                                 onChanged: widget.onChanged,
                               ),
@@ -490,11 +497,11 @@ class _ComposerPasteAction extends Action<PasteTextIntent> {
   final Future<bool> Function() onPasteFiles;
 
   @override
-  bool get isActionEnabled => callingAction?.isActionEnabled ?? false;
+  bool get isActionEnabled => true;
 
   @override
   bool consumesKey(PasteTextIntent intent) =>
-      callingAction?.consumesKey(intent) ?? false;
+      callingAction?.consumesKey(intent) ?? true;
 
   @override
   Object? invoke(PasteTextIntent intent) {

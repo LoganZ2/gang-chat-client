@@ -242,12 +242,14 @@ Widget buildTextFieldContextMenu(
   UndoHistoryController? undoController,
   Object? tapRegionGroupId,
   ValueChanged<bool>? onOpenChanged,
+  Future<bool> Function()? canPasteNonText,
 }) {
   return _TextFieldContextMenu(
     editableTextState: editableTextState,
     undoController: undoController,
     tapRegionGroupId: tapRegionGroupId,
     onOpenChanged: onOpenChanged,
+    canPasteNonText: canPasteNonText,
   );
 }
 
@@ -257,12 +259,14 @@ class _TextFieldContextMenu extends StatefulWidget {
     required this.undoController,
     required this.tapRegionGroupId,
     required this.onOpenChanged,
+    required this.canPasteNonText,
   });
 
   final EditableTextState editableTextState;
   final UndoHistoryController? undoController;
   final Object? tapRegionGroupId;
   final ValueChanged<bool>? onOpenChanged;
+  final Future<bool> Function()? canPasteNonText;
 
   @override
   State<_TextFieldContextMenu> createState() => _TextFieldContextMenuState();
@@ -270,6 +274,8 @@ class _TextFieldContextMenu extends StatefulWidget {
 
 class _TextFieldContextMenuState extends State<_TextFieldContextMenu> {
   bool _openNotified = false;
+  bool _canPasteNonText = false;
+  int _canPasteNonTextGeneration = 0;
 
   ClipboardStatusNotifier get _clipboardStatus =>
       widget.editableTextState.clipboardStatus;
@@ -281,6 +287,7 @@ class _TextFieldContextMenuState extends State<_TextFieldContextMenu> {
     super.initState();
     _clipboardStatus.addListener(_handleMenuStateChanged);
     _undoController?.addListener(_handleMenuStateChanged);
+    _refreshCanPasteNonText();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _openNotified) return;
       _openNotified = true;
@@ -301,6 +308,9 @@ class _TextFieldContextMenuState extends State<_TextFieldContextMenu> {
       oldWidget.undoController?.removeListener(_handleMenuStateChanged);
       _undoController?.addListener(_handleMenuStateChanged);
     }
+    if (oldWidget.canPasteNonText != widget.canPasteNonText) {
+      _refreshCanPasteNonText();
+    }
   }
 
   @override
@@ -310,11 +320,33 @@ class _TextFieldContextMenuState extends State<_TextFieldContextMenu> {
     }
     _clipboardStatus.removeListener(_handleMenuStateChanged);
     _undoController?.removeListener(_handleMenuStateChanged);
+    _canPasteNonTextGeneration++;
     super.dispose();
   }
 
   void _handleMenuStateChanged() {
     if (mounted) setState(() {});
+    _refreshCanPasteNonText();
+  }
+
+  void _refreshCanPasteNonText() {
+    final checker = widget.canPasteNonText;
+    final generation = ++_canPasteNonTextGeneration;
+    if (checker == null) {
+      if (_canPasteNonText && mounted) setState(() => _canPasteNonText = false);
+      return;
+    }
+    checker()
+        .then((value) {
+          if (!mounted || generation != _canPasteNonTextGeneration) return;
+          if (_canPasteNonText == value) return;
+          setState(() => _canPasteNonText = value);
+        })
+        .catchError((_) {
+          if (!mounted || generation != _canPasteNonTextGeneration) return;
+          if (!_canPasteNonText) return;
+          setState(() => _canPasteNonText = false);
+        });
   }
 
   @override
@@ -338,6 +370,14 @@ class _TextFieldContextMenuState extends State<_TextFieldContextMenu> {
     final editItems = <_ContextMenuItemData>[];
     final selected = _hasSelection;
     final pasteItem = _itemOfType(ContextMenuButtonType.paste);
+    final canPasteText =
+        pasteItem?.onPressed != null &&
+        _clipboardStatus.value == ClipboardStatus.pasteable;
+    final canPasteNonText = _canPasteNonText && widget.canPasteNonText != null;
+    final canPaste = canPasteText || canPasteNonText;
+    final pasteAction = canPasteNonText
+        ? pasteItem?.onPressed ?? _pasteIntentAction()
+        : pasteItem?.onPressed;
     final selectAllItem = _itemOfType(ContextMenuButtonType.selectAll);
     final selectAllAction = selectAllItem?.onPressed ?? _selectAllFallback;
 
@@ -359,15 +399,14 @@ class _TextFieldContextMenuState extends State<_TextFieldContextMenu> {
             action: _itemOfType(ContextMenuButtonType.copy)?.onPressed,
           ),
         )
-        ..add(
-          _entry(
-            context,
-            label: '粘贴',
-            shortcut: _ShortcutKind.paste,
-            action: pasteItem?.onPressed,
-          ),
-        )
         ..addAll([
+          if (canPaste)
+            _entry(
+              context,
+              label: '粘贴',
+              shortcut: _ShortcutKind.paste,
+              action: pasteAction,
+            ),
           if (selectAllAction != null)
             _entry(
               context,
@@ -377,16 +416,13 @@ class _TextFieldContextMenuState extends State<_TextFieldContextMenu> {
             ),
         ]);
     } else {
-      final canPaste =
-          pasteItem?.onPressed != null &&
-          _clipboardStatus.value == ClipboardStatus.pasteable;
       if (canPaste) {
         editItems.add(
           _entry(
             context,
             label: '粘贴',
             shortcut: _ShortcutKind.paste,
-            action: pasteItem?.onPressed,
+            action: pasteAction,
           ),
         );
       }
@@ -458,6 +494,15 @@ class _TextFieldContextMenuState extends State<_TextFieldContextMenu> {
       if (item.type == type) return item;
     }
     return null;
+  }
+
+  VoidCallback _pasteIntentAction() {
+    return () {
+      Actions.maybeInvoke(
+        widget.editableTextState.context,
+        const PasteTextIntent(SelectionChangedCause.toolbar),
+      );
+    };
   }
 
   _ContextMenuItemData _entry(

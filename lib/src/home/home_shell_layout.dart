@@ -232,6 +232,7 @@ extension _HomeShellLayout on _HomeShellState {
       onCancelVoice: () => unawaited(_cancelVoiceRecording()),
       onPickFile: () => unawaited(_pickAttachments()),
       onPasteFiles: _pasteAttachments,
+      onCanPasteFiles: _canPasteAttachments,
       onRemoveAttachment: _removeAttachment,
       onRetryAttachment: _retryAttachment,
       onRetry: () => unawaited(_retryOpenSelectedRoom()),

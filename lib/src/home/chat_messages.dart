@@ -1624,29 +1624,97 @@ class _StickerBody extends StatelessWidget {
         ? previewUrl
         : (imageUrl != null && imageUrl.isNotEmpty ? imageUrl : null);
 
+    final preview = tappablePreviewUrl == null
+        ? image
+        : MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () => showChatImagePreview(
+                context,
+                imageUrl: tappablePreviewUrl,
+                suggestedName: message_display.stickerPreviewFilename(
+                  attachment,
+                ),
+                actions: imagePreviewActions,
+                stickerSource: attachment.stickerId != null
+                    ? (message: message, attachment: attachment)
+                    : null,
+              ),
+              child: image,
+            ),
+          );
+
     return Tooltip(
       message: name,
       waitDuration: const Duration(milliseconds: 350),
-      child: tappablePreviewUrl == null
-          ? image
-          : MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: GestureDetector(
-                onTap: () => showChatImagePreview(
-                  context,
-                  imageUrl: tappablePreviewUrl,
-                  suggestedName: message_display.stickerPreviewFilename(
-                    attachment,
-                  ),
-                  actions: imagePreviewActions,
-                  stickerSource: attachment.stickerId != null
-                      ? (message: message, attachment: attachment)
-                      : null,
-                ),
-                child: image,
-              ),
-            ),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onSecondaryTapDown: (details) =>
+            _showStickerContextMenu(context, details),
+        child: preview,
+      ),
     );
+  }
+
+  void _showStickerContextMenu(BuildContext context, TapDownDetails details) {
+    final stickerId = attachment.stickerId;
+    if (stickerId == null || stickerId.isEmpty) return;
+
+    final items = <UiContextMenuItem>[
+      if (imagePreviewActions.onSaveSticker != null)
+        UiContextMenuItem(
+          label: '添加到我的表情包',
+          onPressed: () => unawaited(
+            _runStickerContextAction(
+              context,
+              imagePreviewActions.onSaveSticker!,
+              successMessage: '已添加到我的表情包',
+            ),
+          ),
+        ),
+      if (imagePreviewActions.onSaveRoomSticker != null)
+        UiContextMenuItem(
+          label: '添加到房间表情包',
+          onPressed: () => unawaited(
+            _runStickerContextAction(
+              context,
+              imagePreviewActions.onSaveRoomSticker!,
+              successMessage: '已添加到房间表情包',
+            ),
+          ),
+        ),
+    ];
+    if (items.isEmpty) return;
+
+    unawaited(
+      showUiContextMenu(
+        context,
+        position: details.globalPosition,
+        sections: [UiContextMenuSection(items)],
+      ),
+    );
+  }
+
+  Future<void> _runStickerContextAction(
+    BuildContext context,
+    Future<void> Function(Message message, MessageAttachment attachment)
+    action, {
+    required String successMessage,
+  }) async {
+    try {
+      await action(message, attachment);
+      if (!context.mounted) return;
+      _showStickerContextNotice(context, successMessage);
+    } catch (error) {
+      if (!context.mounted) return;
+      _showStickerContextNotice(context, '$error');
+    }
+  }
+
+  void _showStickerContextNotice(BuildContext context, String message) {
+    ScaffoldMessenger.maybeOf(context)
+      ?..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
@@ -2253,6 +2321,7 @@ class MessageBubbleForTest extends StatelessWidget {
     super.key,
     required this.message,
     required this.downloadActions,
+    this.imagePreviewActions,
     this.outgoing = false,
     this.transfer,
     this.fileDownloads = const {},
@@ -2261,6 +2330,7 @@ class MessageBubbleForTest extends StatelessWidget {
 
   final Message message;
   final ChatFileDownloadActions downloadActions;
+  final ChatImagePreviewActions? imagePreviewActions;
   final bool outgoing;
   final FileTransferState? transfer;
   final Map<String, FileTransferState> fileDownloads;
@@ -2277,7 +2347,8 @@ class MessageBubbleForTest extends StatelessWidget {
         fileDownloads: fileDownloads,
         downloadActions: downloadActions,
         voicePlaybackActions: voicePlaybackActions,
-        imagePreviewActions: ChatImagePreviewActions.disabled(),
+        imagePreviewActions:
+            imagePreviewActions ?? ChatImagePreviewActions.disabled(),
       ),
     );
   }

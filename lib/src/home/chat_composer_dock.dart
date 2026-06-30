@@ -24,6 +24,7 @@ class _ComposerDock extends StatelessWidget {
     required this.onCancelVoice,
     required this.onPickFile,
     required this.onPasteFiles,
+    required this.onCanPasteFiles,
     required this.onRemoveAttachment,
     required this.onRetryAttachment,
     this.dropKey,
@@ -47,6 +48,7 @@ class _ComposerDock extends StatelessWidget {
   final VoidCallback onCancelVoice;
   final VoidCallback onPickFile;
   final Future<bool> Function() onPasteFiles;
+  final Future<bool> Function()? onCanPasteFiles;
   final ValueChanged<String> onRemoveAttachment;
   final ValueChanged<String> onRetryAttachment;
   final Key? dropKey;
@@ -86,6 +88,7 @@ class _ComposerDock extends StatelessWidget {
               maxLines: 5,
               onSubmitted: onSubmit,
               onPasteFiles: onPasteFiles,
+              onCanPasteFiles: onCanPasteFiles,
               attachments: attachments.isEmpty
                   ? null
                   : _ComposerAttachmentStrip(

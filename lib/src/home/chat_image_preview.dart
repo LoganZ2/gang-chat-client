@@ -62,7 +62,7 @@ class ImagePreviewActionCancelled implements Exception {
 /// Opens the full-screen image preview as an overlay route. [imageUrl] is the
 /// already-resolved absolute URL to display. [suggestedName] seeds the
 /// download/save-as filename. When [stickerSource] is non-null and
-/// [actions.onSaveSticker] is provided, a "保存到我的表情" action is shown.
+/// [actions.onSaveSticker] is provided, an "添加到我的表情包" action is shown.
 Future<void> showChatImagePreview(
   BuildContext context, {
   required String imageUrl,
@@ -348,7 +348,7 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
           const SizedBox(width: 10),
           ButtonIcon(
             icon: const Icon(Icons.add_reaction_outlined),
-            tooltip: '保存到我的表情',
+            tooltip: '添加到我的表情包',
             loading: _busy == _PreviewAction.saveSticker,
             onPressed: _busy == null
                 ? () {
@@ -359,7 +359,7 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
                         source.message,
                         source.attachment,
                       ),
-                      successMessage: '已保存到我的表情',
+                      successMessage: '已添加到我的表情包',
                     );
                   }
                 : null,
@@ -370,7 +370,7 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
           const SizedBox(width: 10),
           ButtonIcon(
             icon: const Icon(Icons.library_add_outlined),
-            tooltip: '加入房间表情包',
+            tooltip: '添加到房间表情包',
             loading: _busy == _PreviewAction.saveRoomSticker,
             onPressed: _busy == null
                 ? () {
@@ -381,7 +381,7 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
                         source.message,
                         source.attachment,
                       ),
-                      successMessage: '已加入房间表情包',
+                      successMessage: '已添加到房间表情包',
                     );
                   }
                 : null,

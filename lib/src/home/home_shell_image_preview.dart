@@ -2,13 +2,15 @@ part of 'home_shell.dart';
 
 /// Actions backing the full-screen image preview overlay (see
 /// [ChatImagePreviewActions]): download to the Downloads folder, save-as via a
-/// picker, copy the image to the clipboard, and save a sticker into the user's
+/// picker, copy the image to the clipboard, and add a sticker into the user's
 /// personal stickers.
 extension _HomeShellImagePreview on _HomeShellState {
   ChatImagePreviewActions get _imagePreviewActions {
-    // The "加入房间表情包" action only makes sense when the current user can
+    // The "添加到房间表情包" action only makes sense when the current user can
     // administer the room whose messages are on screen.
-    final canManageRoomStickers = _selectedRoom?.isAdmin ?? false;
+    final room = _selectedRoom;
+    final canManageRoomStickers =
+        room != null && (room.isAdmin || _currentUser.isSuperuser);
     return ChatImagePreviewActions(
       onDownload: _previewDownloadToDownloads,
       onSaveAs: _previewSaveAs,
@@ -92,7 +94,7 @@ extension _HomeShellImagePreview on _HomeShellState {
   ) async {
     final stickerId = attachment.stickerId;
     if (stickerId == null || stickerId.isEmpty) {
-      throw Exception('该表情无法保存');
+      throw Exception('该表情无法添加');
     }
     await _stickerPacksController.saveSticker(
       roomId: message.roomId,
@@ -108,10 +110,10 @@ extension _HomeShellImagePreview on _HomeShellState {
   ) async {
     final stickerId = attachment.stickerId;
     if (stickerId == null || stickerId.isEmpty) {
-      throw Exception('该表情无法保存');
+      throw Exception('该表情无法添加');
     }
     final room = _selectedRoom;
-    if (room == null || !room.isAdmin) {
+    if (room == null || (!room.isAdmin && !_currentUser.isSuperuser)) {
       throw Exception('没有权限管理房间表情');
     }
     await _stickerPacksController.saveSticker(

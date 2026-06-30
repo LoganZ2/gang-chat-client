@@ -981,6 +981,77 @@ void main() {
     expect(tester.widget<Tooltip>(find.byType(Tooltip)).message, 'wave');
   });
 
+  testWidgets('sticker context menu offers personal and room add actions', (
+    tester,
+  ) async {
+    var savedPersonal = false;
+    var savedRoom = false;
+    await tester.pumpWidget(
+      _host(
+        MessageBubbleForTest(
+          message: _stickerMessage(),
+          downloadActions: _downloadActions(),
+          imagePreviewActions: ChatImagePreviewActions(
+            onDownload: (_, _) async {},
+            onSaveAs: (_, _) async {},
+            onCopyToClipboard: (_) async {},
+            onSaveSticker: (message, attachment) async {
+              savedPersonal =
+                  message.id == 'message_1' &&
+                  attachment.stickerId == 'sticker_1';
+            },
+            onSaveRoomSticker: (message, attachment) async {
+              savedRoom =
+                  message.id == 'message_1' &&
+                  attachment.stickerId == 'sticker_1';
+            },
+          ),
+        ),
+      ),
+    );
+
+    await _secondaryClickSticker(tester);
+
+    expect(find.text('添加到我的表情包'), findsOneWidget);
+    expect(find.text('添加到房间表情包'), findsOneWidget);
+    final personalLabel = tester.widget<Text>(find.text('添加到我的表情包'));
+    expect(personalLabel.style?.fontWeight, FontWeight.w400);
+    expect(personalLabel.style?.decoration, TextDecoration.none);
+    expect(personalLabel.style?.inherit, isFalse);
+
+    await tester.tap(find.text('添加到房间表情包'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(savedPersonal, isFalse);
+    expect(savedRoom, isTrue);
+    expect(find.text('已添加到房间表情包'), findsOneWidget);
+  });
+
+  testWidgets('sticker context menu hides room action when unavailable', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        MessageBubbleForTest(
+          message: _stickerMessage(),
+          downloadActions: _downloadActions(),
+          imagePreviewActions: ChatImagePreviewActions(
+            onDownload: (_, _) async {},
+            onSaveAs: (_, _) async {},
+            onCopyToClipboard: (_) async {},
+            onSaveSticker: (_, _) async {},
+          ),
+        ),
+      ),
+    );
+
+    await _secondaryClickSticker(tester);
+
+    expect(find.text('添加到我的表情包'), findsOneWidget);
+    expect(find.text('添加到房间表情包'), findsNothing);
+  });
+
   testWidgets('image file attachment renders a resolved preview image', (
     tester,
   ) async {
@@ -1436,6 +1507,26 @@ Message _message({
   );
 }
 
+Message _stickerMessage() {
+  return _message(
+    type: 'sticker',
+    body: '[表情] wave',
+    attachments: const [
+      MessageAttachment(
+        type: 'sticker',
+        stickerId: 'sticker_1',
+        name: 'wave',
+        asset: UploadedAsset(
+          id: 'asset_sticker',
+          url: '/stickers/wave.webp',
+          thumbnailUrl: '/stickers/wave-thumb.webp',
+          mimeType: 'image/webp',
+        ),
+      ),
+    ],
+  );
+}
+
 Message _voiceMessage({required Duration duration}) {
   return _message(
     type: 'audio',
@@ -1456,6 +1547,20 @@ Message _voiceMessage({required Duration duration}) {
       ),
     ],
   );
+}
+
+Future<void> _secondaryClickSticker(WidgetTester tester) async {
+  final location = tester.getCenter(find.byType(Image));
+  final gesture = await tester.createGesture(
+    kind: PointerDeviceKind.mouse,
+    buttons: kSecondaryMouseButton,
+  );
+  await gesture.addPointer(location: location);
+  await tester.pump();
+  await gesture.down(location);
+  await tester.pump();
+  await gesture.up();
+  await tester.pumpAndSettle();
 }
 
 const _currentUser = CurrentUser(

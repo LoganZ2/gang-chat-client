@@ -73,6 +73,63 @@ void main() {
     expect(pasteAttempts, 1);
   });
 
+  testWidgets('chat composer context menu shows paste for clipboard files', (
+    tester,
+  ) async {
+    _mockClipboardText(null);
+    var pasteAttempts = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: Scaffold(
+          body: ui.ChatComposer(
+            onPasteFiles: () async {
+              pasteAttempts++;
+              return true;
+            },
+            onCanPasteFiles: () async => true,
+            actions: const [],
+          ),
+        ),
+      ),
+    );
+
+    await _showComposerContextMenu(tester);
+
+    expect(find.text('粘贴'), findsOneWidget);
+    expect(find.text('Ctrl+V'), findsOneWidget);
+
+    await tester.tap(find.text('粘贴'));
+    await tester.pumpAndSettle();
+
+    expect(pasteAttempts, 1);
+  });
+
+  testWidgets('chat composer context menu hides paste without text or files', (
+    tester,
+  ) async {
+    _mockClipboardText(null);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: Scaffold(
+          body: ui.ChatComposer(
+            onPasteFiles: () async => false,
+            onCanPasteFiles: () async => false,
+            actions: const [],
+          ),
+        ),
+      ),
+    );
+
+    await _showComposerContextMenu(tester);
+
+    expect(find.text('粘贴'), findsNothing);
+    expect(find.text('Ctrl+V'), findsNothing);
+  });
+
   testWidgets('chat composer sends focused input on Enter', (tester) async {
     final controller = TextEditingController(text: 'hello');
     addTearDown(controller.dispose);
@@ -261,5 +318,35 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(controller.text, 'hello world');
+  });
+}
+
+Future<void> _showComposerContextMenu(WidgetTester tester) async {
+  await tester.tap(find.byType(TextField));
+  await tester.pump();
+  final editableTextState = tester.state<EditableTextState>(
+    find.byType(EditableText),
+  );
+  expect(editableTextState.showToolbar(), isTrue);
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 100));
+}
+
+void _mockClipboardText(String? text) {
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        return switch (call.method) {
+          'Clipboard.getData' =>
+            text == null ? null : <String, dynamic>{'text': text},
+          'Clipboard.hasStrings' => <String, dynamic>{
+            'value': text != null && text.isNotEmpty,
+          },
+          'Clipboard.setData' => null,
+          _ => null,
+        };
+      });
+  addTearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, null);
   });
 }

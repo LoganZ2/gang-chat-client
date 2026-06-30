@@ -38,6 +38,7 @@ class Input extends StatefulWidget {
     this.hintStyle = const TextStyle(color: UiColors.textMuted),
     this.height = defaultHeight,
     this.undoController,
+    this.canPasteNonText,
   });
 
   static const double defaultHeight = 40;
@@ -61,6 +62,7 @@ class Input extends StatefulWidget {
   final TextStyle style;
   final TextStyle hintStyle;
   final UndoHistoryController? undoController;
+  final Future<bool> Function()? canPasteNonText;
 
   /// The collapsed (single-line) height of the field. Defaults to
   /// [defaultHeight]; callers can shrink it for tighter, denser layouts.
@@ -227,6 +229,7 @@ class _InputState extends State<Input> {
                 context,
                 editableTextState,
                 undoController: _effectiveUndoController,
+                canPasteNonText: widget.canPasteNonText,
               ),
           decoration: InputDecoration(
             isDense: true,
