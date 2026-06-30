@@ -18,12 +18,14 @@ class TextFieldEditingShortcuts extends StatefulWidget {
     super.key,
     this.controller,
     this.focusNode,
+    this.secondaryClickSelection,
     required this.undoController,
     required this.child,
   });
 
   final TextEditingController? controller;
   final FocusNode? focusNode;
+  final TextSelection? Function()? secondaryClickSelection;
   final UndoHistoryController undoController;
   final Widget child;
 
@@ -104,7 +106,9 @@ class _TextFieldEditingShortcutsState extends State<TextFieldEditingShortcuts> {
       _clearSecondaryClickProtection();
       return;
     }
-    _secondaryClickSelection = _validSelection(widget.controller?.selection);
+    _secondaryClickSelection =
+        _validSelection(widget.secondaryClickSelection?.call()) ??
+        _validSelection(widget.controller?.selection);
     _secondaryClickHadFocus = widget.focusNode?.hasFocus ?? false;
     if (!_hasSecondaryClickProtection) {
       _clearSecondaryClickProtection();
@@ -243,6 +247,8 @@ Widget buildTextFieldContextMenu(
   Object? tapRegionGroupId,
   ValueChanged<bool>? onOpenChanged,
   Future<bool> Function()? canPasteNonText,
+  bool readOnly = false,
+  bool showReadOnlySelectAll = true,
 }) {
   return _TextFieldContextMenu(
     editableTextState: editableTextState,
@@ -250,6 +256,8 @@ Widget buildTextFieldContextMenu(
     tapRegionGroupId: tapRegionGroupId,
     onOpenChanged: onOpenChanged,
     canPasteNonText: canPasteNonText,
+    readOnly: readOnly,
+    showReadOnlySelectAll: showReadOnlySelectAll,
   );
 }
 
@@ -260,6 +268,8 @@ class _TextFieldContextMenu extends StatefulWidget {
     required this.tapRegionGroupId,
     required this.onOpenChanged,
     required this.canPasteNonText,
+    required this.readOnly,
+    required this.showReadOnlySelectAll,
   });
 
   final EditableTextState editableTextState;
@@ -267,6 +277,8 @@ class _TextFieldContextMenu extends StatefulWidget {
   final Object? tapRegionGroupId;
   final ValueChanged<bool>? onOpenChanged;
   final Future<bool> Function()? canPasteNonText;
+  final bool readOnly;
+  final bool showReadOnlySelectAll;
 
   @override
   State<_TextFieldContextMenu> createState() => _TextFieldContextMenuState();
@@ -367,6 +379,8 @@ class _TextFieldContextMenuState extends State<_TextFieldContextMenu> {
   }
 
   List<_ContextMenuSection> _sectionsFor(BuildContext context) {
+    if (widget.readOnly) return _readOnlySectionsFor(context);
+
     final editItems = <_ContextMenuItemData>[];
     final selected = _hasSelection;
     final pasteItem = _itemOfType(ContextMenuButtonType.paste);
@@ -469,6 +483,37 @@ class _TextFieldContextMenuState extends State<_TextFieldContextMenu> {
     ];
   }
 
+  List<_ContextMenuSection> _readOnlySectionsFor(BuildContext context) {
+    final editItems = <_ContextMenuItemData>[];
+    if (_hasSelection) {
+      editItems.add(
+        _entry(
+          context,
+          label: '复制',
+          shortcut: _ShortcutKind.copy,
+          action:
+              _itemOfType(ContextMenuButtonType.copy)?.onPressed ??
+              _copySelectionFallback,
+        ),
+      );
+    }
+    if (widget.showReadOnlySelectAll) {
+      final selectAllItem = _itemOfType(ContextMenuButtonType.selectAll);
+      final selectAllAction = selectAllItem?.onPressed ?? _selectAllFallback;
+      if (selectAllAction != null) {
+        editItems.add(
+          _entry(
+            context,
+            label: '全选',
+            shortcut: _ShortcutKind.selectAll,
+            action: selectAllAction,
+          ),
+        );
+      }
+    }
+    return [if (editItems.isNotEmpty) _ContextMenuSection(editItems)];
+  }
+
   bool get _hasSelection {
     final selection = widget.editableTextState.textEditingValue.selection;
     return selection.isValid && !selection.isCollapsed;
@@ -486,6 +531,14 @@ class _TextFieldContextMenuState extends State<_TextFieldContextMenu> {
     if (start == 0 && end == value.text.length) return null;
     return () {
       widget.editableTextState.selectAll(SelectionChangedCause.toolbar);
+    };
+  }
+
+  VoidCallback? get _copySelectionFallback {
+    final value = widget.editableTextState.textEditingValue;
+    if (!value.selection.isValid || value.selection.isCollapsed) return null;
+    return () {
+      widget.editableTextState.copySelection(SelectionChangedCause.toolbar);
     };
   }
 

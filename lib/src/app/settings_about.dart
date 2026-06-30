@@ -1,10 +1,10 @@
 const gangChatClientVersion = String.fromEnvironment(
   'GANG_CHAT_VERSION',
-  defaultValue: '0.3.1',
+  defaultValue: '0.4.0',
 );
 
-const gangChatClientReleaseDate = '2026/06/29';
-const gangChatClientLastUpdateDate = '2026/06/29';
+const gangChatClientReleaseDate = '2026/06/30';
+const gangChatClientLastUpdateDate = '2026/06/30';
 const gangChatSupportEmail = 'gang-chat@outlook.com';
 const defaultAutoUpdatePromptEnabled = true;
 

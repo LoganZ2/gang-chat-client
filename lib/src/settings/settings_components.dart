@@ -166,24 +166,14 @@ class _CopyableField extends StatelessWidget {
       children: [
         _FieldLabel(label),
         const SizedBox(height: 8),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: _primaryDark,
-            border: Border.all(color: _borderColor),
-            borderRadius: BorderRadius.circular(UiRadii.md),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(13, 11, 13, 11),
-            child: Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: _textSecondary,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+        ReadOnlyTextBox(
+          value: value,
+          backgroundColor: _primaryDark,
+          borderColor: _borderColor,
+          style: const TextStyle(
+            color: _textSecondary,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],

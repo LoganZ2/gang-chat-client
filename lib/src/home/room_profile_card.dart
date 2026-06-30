@@ -293,10 +293,8 @@ class _UserProfileCard extends StatelessWidget {
                     Row(
                       children: [
                         Flexible(
-                          child: Text(
-                            name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          child: _ProfileIdentityText(
+                            value: name,
                             style: UiTypography.title.copyWith(fontSize: 16),
                           ),
                         ),
@@ -315,10 +313,9 @@ class _UserProfileCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      '@${user.username}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    _ProfileIdentityText(
+                      value: '@${user.username}',
+                      copyStartOffset: 1,
                       style: UiTypography.label.copyWith(
                         color: UiColors.textMuted,
                       ),
@@ -363,10 +360,9 @@ class _UserProfileCard extends StatelessWidget {
           ],
           if (uid != null && uid.isNotEmpty) ...[
             const SizedBox(height: UiSpacing.sm),
-            Text(
-              'UID: $uid',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            _ProfileIdentityText(
+              value: 'UID: $uid',
+              copyStartOffset: 'UID: '.length,
               style: UiTypography.label.copyWith(color: UiColors.textMuted),
             ),
           ],
@@ -385,6 +381,35 @@ class _UserProfileCard extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+class _ProfileIdentityText extends StatelessWidget {
+  const _ProfileIdentityText({
+    required this.value,
+    required this.style,
+    this.copyStartOffset = 0,
+  });
+
+  final String value;
+  final TextStyle style;
+  final int copyStartOffset;
+
+  @override
+  Widget build(BuildContext context) {
+    final hoverScope = HoverCardTapRegionScope.maybeOf(context);
+    final start = copyStartOffset.clamp(0, value.length);
+    return ReadOnlySelectableText(
+      value: value,
+      style: style,
+      secondaryClickSelection: TextSelection(
+        baseOffset: start,
+        extentOffset: value.length,
+      ),
+      showSelectAllInContextMenu: false,
+      contextMenuTapRegionGroupId: hoverScope?.tapRegionGroup,
+      onContextMenuOpenChanged: hoverScope?.onOverlayActivityChanged,
     );
   }
 }
@@ -560,10 +585,8 @@ class _RoomProfileCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      room.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    _ProfileIdentityText(
+                      value: room.name,
                       style: UiTypography.title.copyWith(fontSize: 16),
                     ),
                     const SizedBox(height: 2),
@@ -640,10 +663,9 @@ class _RoomProfileCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: UiSpacing.sm),
-          Text(
-            'RID: $rid',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          _ProfileIdentityText(
+            value: 'RID: $rid',
+            copyStartOffset: 'RID: '.length,
             style: UiTypography.label.copyWith(color: UiColors.textMuted),
           ),
           if (joined) ...[

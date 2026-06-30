@@ -2441,8 +2441,8 @@ void main() {
         }
         if (request.url.path == '/api/v1/app/version') {
           return _jsonResponse({
-            'latest_version': '0.3.1',
-            'minimum_supported_version': '0.3.1',
+            'latest_version': '0.4.0',
+            'minimum_supported_version': '0.4.0',
           });
         }
         return http.Response('unexpected request: ${request.url}', 404);
@@ -2457,7 +2457,7 @@ void main() {
           currentUser: CurrentUser.fromJson(_currentUserJson),
           api: api,
           apiBaseUrl: 'http://example.test/api/v1',
-          appVersion: '0.3.1',
+          appVersion: '0.4.0',
           feedbackMailService: _FakeFeedbackMailService(feedbackDrafts),
           autoUpdatePromptStore: _FakeAutoUpdatePromptStore(
             autoUpdateWrites,
@@ -2474,10 +2474,10 @@ void main() {
 
     expect(find.text('版本信息'), findsOneWidget);
     expect(find.text('版本编号'), findsOneWidget);
-    expect(find.text('0.3.1'), findsOneWidget);
+    expect(find.text('0.4.0'), findsOneWidget);
     expect(find.text('发行时间'), findsOneWidget);
     expect(find.text('上次更新时间'), findsOneWidget);
-    expect(find.text('2026/06/29'), findsNWidgets(2));
+    expect(find.text('2026/06/30'), findsNWidgets(2));
     expect(find.text('自动提示更新'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '检查更新'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '意见反馈'), findsOneWidget);
@@ -2506,7 +2506,7 @@ void main() {
     expect(feedbackDrafts, hasLength(1));
     expect(feedbackDrafts.single.from, 'kai@example.com');
     expect(feedbackDrafts.single.to, 'gang-chat@outlook.com');
-    expect(feedbackDrafts.single.subject, contains('v0.3.1'));
+    expect(feedbackDrafts.single.subject, contains('v0.4.0'));
   });
 
   testWidgets('settings audio sliders apply live mute coupling rules', (
@@ -2941,10 +2941,10 @@ void main() {
       isEmpty,
     );
     expect(find.text('房间 RID'), findsOneWidget);
-    final ridText = tester.widget<SelectableText>(
+    final ridText = tester.widget<TextField>(
       find.byKey(const ValueKey('room-settings-rid')),
     );
-    expect(ridText.data, 'server-alpha');
+    expect(ridText.controller?.text, 'server-alpha');
     expect(
       tester.getRect(find.byKey(const ValueKey('room-settings-rid'))).top,
       greaterThan(tester.getRect(descriptionField).bottom),

@@ -15,10 +15,12 @@ class HoverCardTapRegionScope extends InheritedWidget {
   const HoverCardTapRegionScope({
     super.key,
     required this.tapRegionGroup,
+    this.onOverlayActivityChanged,
     required super.child,
   });
 
   final Object tapRegionGroup;
+  final ValueChanged<bool>? onOverlayActivityChanged;
 
   static HoverCardTapRegionScope? maybeOf(BuildContext context) {
     return context
@@ -27,7 +29,8 @@ class HoverCardTapRegionScope extends InheritedWidget {
 
   @override
   bool updateShouldNotify(HoverCardTapRegionScope oldWidget) {
-    return tapRegionGroup != oldWidget.tapRegionGroup;
+    return tapRegionGroup != oldWidget.tapRegionGroup ||
+        onOverlayActivityChanged != oldWidget.onOverlayActivityChanged;
   }
 }
 
@@ -61,6 +64,7 @@ class _HoverCardAnchorState extends State<HoverCardAnchor> {
   final GlobalKey _cardKey = GlobalKey();
   final OverlayPortalController _portal = OverlayPortalController();
   final Object _rootTapRegionGroup = Object();
+  final Object _overlayActivityToken = Object();
 
   late final _HoverCardCoordinator _coordinator;
   _HoverCardCoordinator? _parentCoordinator;
@@ -265,6 +269,16 @@ class _HoverCardAnchorState extends State<HoverCardAnchor> {
     _syncParentActivity();
   }
 
+  void _handleOverlayActivityChanged(bool active) {
+    _coordinator.setDescendantActive(_overlayActivityToken, active);
+    if (active) {
+      _closeTimer?.cancel();
+    } else {
+      _scheduleClose();
+    }
+    _syncParentActivity();
+  }
+
   void _syncParentActivity() {
     final parent = _parentCoordinator;
     if (parent == null) return;
@@ -367,7 +381,12 @@ class _HoverCardAnchorState extends State<HoverCardAnchor> {
                         anchor: this,
                         coordinator: _coordinator,
                         tapRegionGroup: _tapRegionGroup,
-                        child: Builder(builder: widget.cardBuilder),
+                        child: HoverCardTapRegionScope(
+                          tapRegionGroup: _tapRegionGroup,
+                          onOverlayActivityChanged:
+                              _handleOverlayActivityChanged,
+                          child: Builder(builder: widget.cardBuilder),
+                        ),
                       ),
                     ),
                   ),

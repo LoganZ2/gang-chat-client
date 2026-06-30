@@ -5,6 +5,7 @@ import 'package:client/src/ui/ui.dart';
 import 'package:client/src/home/chat_pane.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _user = UserSummary(
@@ -181,6 +182,40 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     await tester.pumpAndSettle();
     expect(find.text('@logan'), findsOneWidget);
+  });
+
+  testWidgets('profile card identity text can be selected and copied', (
+    tester,
+  ) async {
+    final clipboardWrites = <String>[];
+    _mockClipboard(clipboardWrites);
+
+    await tester.pumpWidget(_host(const AvatarHoverCardForTest(user: _user)));
+
+    await _ensureUserProfileCardOpen(tester);
+    await _copyReadOnlyField(
+      tester,
+      _user.displayName,
+      clipboardWrites: clipboardWrites,
+    );
+    await _ensureUserProfileCardOpen(tester);
+    await _copyReadOnlyField(
+      tester,
+      '@${_user.username}',
+      copyStartOffset: 1,
+      expectedCopy: _user.username,
+      clipboardWrites: clipboardWrites,
+    );
+    await _ensureUserProfileCardOpen(tester);
+    await _copyReadOnlyField(
+      tester,
+      'UID: ${_user.uid}',
+      copyStartOffset: 'UID: '.length,
+      expectedCopy: _user.uid!,
+      clipboardWrites: clipboardWrites,
+    );
+
+    expect(clipboardWrites, [_user.displayName, _user.username, _user.uid]);
   });
 
   testWidgets('common room avatar opens a room profile card', (tester) async {
@@ -684,5 +719,91 @@ void main() {
     expect(find.text('@logan'), findsOneWidget);
     expect(find.text('在线'), findsOneWidget);
     expect(find.text('离线'), findsNothing);
+  });
+}
+
+Future<void> _ensureUserProfileCardOpen(WidgetTester tester) async {
+  final marker = find.text('@${_user.username}');
+  if (marker.evaluate().isEmpty) {
+    await tester.tap(find.byType(Avatar).first);
+    await tester.pumpAndSettle();
+  }
+  expect(marker, findsOneWidget);
+  expect(find.byType(ReadOnlySelectableText), findsWidgets);
+}
+
+Finder _readOnlyFieldWithText(String text) {
+  return find.byWidgetPredicate(
+    (widget) => widget is EditableText && widget.controller.text == text,
+  );
+}
+
+Future<void> _copyReadOnlyField(
+  WidgetTester tester,
+  String text, {
+  int copyStartOffset = 0,
+  String? expectedCopy,
+  required List<String> clipboardWrites,
+}) async {
+  final editableFinder = _readOnlyFieldWithText(text);
+  final editableValues = find
+      .byType(EditableText)
+      .evaluate()
+      .map((element) => (element.widget as EditableText).controller.text)
+      .toList();
+  final textFieldValues = find
+      .byType(TextField)
+      .evaluate()
+      .map((element) => (element.widget as TextField).controller?.text)
+      .toList();
+  final readOnlyCount = find.byType(ReadOnlySelectableText).evaluate().length;
+  expect(
+    editableFinder,
+    findsOneWidget,
+    reason:
+        'ReadOnlySelectableText count: $readOnlyCount, '
+        'TextField values: $textFieldValues, '
+        'EditableText values: $editableValues',
+  );
+
+  await tester.tap(editableFinder, buttons: kSecondaryMouseButton);
+  await tester.pumpAndSettle();
+  final editableTextState = tester.state<EditableTextState>(editableFinder);
+  expect(
+    editableTextState.textEditingValue.selection,
+    TextSelection(baseOffset: copyStartOffset, extentOffset: text.length),
+  );
+  expect(find.text('Ctrl+C'), findsOneWidget);
+  expect(find.text('Ctrl+A'), findsNothing);
+
+  final menuGesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+  await menuGesture.addPointer(location: tester.getCenter(editableFinder));
+  await menuGesture.moveTo(tester.getCenter(find.text('Ctrl+C')));
+  await tester.pump(const Duration(milliseconds: 200));
+  expect(editableFinder, findsOneWidget);
+  await menuGesture.removePointer();
+
+  await tester.tap(find.text('Ctrl+C'));
+  await tester.pumpAndSettle();
+  expect(clipboardWrites.last, expectedCopy ?? text);
+}
+
+void _mockClipboard(List<String> writes) {
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          writes.add(
+            (call.arguments as Map<Object?, Object?>)['text']! as String,
+          );
+          return null;
+        }
+        if (call.method == 'Clipboard.hasStrings') {
+          return const <String, dynamic>{'value': false};
+        }
+        return null;
+      });
+  addTearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, null);
   });
 }

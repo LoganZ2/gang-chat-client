@@ -13,6 +13,7 @@ export 'highlighted_text.dart';
 export 'input.dart';
 export 'member_presence_icons.dart';
 export 'navigation.dart';
+export 'read_only_text_box.dart';
 export 'role_badge.dart';
 export 'segmented_control.dart';
 export 'settings_scaffold.dart';

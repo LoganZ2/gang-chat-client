@@ -760,24 +760,10 @@ class _ReadOnlyRoomRid extends StatelessWidget {
       children: [
         const _RoomFieldLabel('房间 RID'),
         const SizedBox(height: 8),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: UiColors.surfaceLow,
-            border: Border.all(color: UiColors.border),
-            borderRadius: BorderRadius.circular(UiRadii.md),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(13, 11, 13, 11),
-            child: SelectableText(
-              value,
-              key: const ValueKey('room-settings-rid'),
-              maxLines: 1,
-              style: UiTypography.body.copyWith(
-                color: UiColors.text,
-                fontSize: 13,
-              ),
-            ),
-          ),
+        ReadOnlyTextBox(
+          value: value,
+          fieldKey: const ValueKey('room-settings-rid'),
+          style: UiTypography.body.copyWith(color: UiColors.text, fontSize: 13),
         ),
       ],
     );
