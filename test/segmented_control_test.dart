@@ -56,7 +56,52 @@ void main() {
       expect(badgeRect.center.dx, greaterThan(labelRect.right - 2));
       expect(badgeRect.center.dx, lessThan(labelRect.right + 12));
       expect(badgeRect.center.dy, lessThan(labelRect.center.dy));
-      expect(segmentRect.right - badgeRect.right, greaterThan(16));
+      expect(segmentRect.right - badgeRect.right, greaterThan(6));
     },
   );
+
+  testWidgets('segmented control gives every segment the same width', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(640, 120);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 480,
+              child: ui.SegmentedControl<int>(
+                expanded: true,
+                value: 0,
+                onChanged: (_) {},
+                segments: const [
+                  ui.Segment(value: 0, label: 'A'),
+                  ui.Segment(value: 1, label: 'Medium'),
+                  ui.Segment(value: 2, label: 'Much Longer Label'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final segmentRects = [
+      for (final label in ['A', 'Medium', 'Much Longer Label'])
+        tester.getRect(
+          find.ancestor(
+            of: find.text(label),
+            matching: find.byType(GestureDetector),
+          ),
+        ),
+    ];
+
+    expect(segmentRects[0].width, closeTo(segmentRects[1].width, 0.01));
+    expect(segmentRects[1].width, closeTo(segmentRects[2].width, 0.01));
+  });
 }

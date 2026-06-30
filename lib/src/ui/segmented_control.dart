@@ -70,11 +70,11 @@ class _SegmentedControlState<T> extends State<SegmentedControl<T>> {
           for (final segment in widget.segments)
             _measureSegmentWidth(context, segment),
         ];
-        final naturalContentWidth = naturalWidths.fold<double>(
+        final maxNaturalSegmentWidth = naturalWidths.fold<double>(
           0,
-          (sum, width) => sum + width,
+          (max, width) => width > max ? width : max,
         );
-        final naturalWidth = naturalContentWidth;
+        final naturalWidth = maxNaturalSegmentWidth * widget.segments.length;
         final constrained = constraints.maxWidth.isFinite;
         final width = widget.expanded && constrained
             ? constraints.maxWidth
@@ -82,11 +82,10 @@ class _SegmentedControlState<T> extends State<SegmentedControl<T>> {
             ? constraints.maxWidth
             : naturalWidth;
         final contentWidth = width;
-        final segmentWidths = _resolvedSegmentWidths(
-          naturalWidths: naturalWidths,
-          contentWidth: contentWidth,
-          expanded: widget.expanded,
-        );
+        final segmentWidth = contentWidth / widget.segments.length;
+        final segmentWidths = [
+          for (var i = 0; i < widget.segments.length; i++) segmentWidth,
+        ];
         final selectedIndex = _selectedIndex.clamp(
           0,
           widget.segments.length - 1,
@@ -181,25 +180,6 @@ class _SegmentedControlState<T> extends State<SegmentedControl<T>> {
     final iconWidth = segment.icon == null ? 0.0 : _iconSize + _iconGap;
     final badgeWidth = segment.showBadge ? 8.0 : 0.0;
     return painter.width + iconWidth + badgeWidth + (_segmentPadding * 2);
-  }
-
-  List<double> _resolvedSegmentWidths({
-    required List<double> naturalWidths,
-    required double contentWidth,
-    required bool expanded,
-  }) {
-    final naturalContentWidth = naturalWidths.fold<double>(
-      0,
-      (sum, width) => sum + width,
-    );
-    if (naturalContentWidth <= 0) return naturalWidths;
-    if (expanded && contentWidth > naturalContentWidth) {
-      final extra = (contentWidth - naturalContentWidth) / naturalWidths.length;
-      return [for (final width in naturalWidths) width + extra];
-    }
-    if (contentWidth >= naturalContentWidth) return naturalWidths;
-    final scale = contentWidth / naturalContentWidth;
-    return [for (final width in naturalWidths) width * scale];
   }
 }
 
