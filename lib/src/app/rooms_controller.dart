@@ -1032,6 +1032,14 @@ class RoomsController {
       final unread = _roomUnreadRank(a.room).compareTo(_roomUnreadRank(b.room));
       if (unread != 0) return unread;
 
+      final live = _roomLiveRank(a.room).compareTo(_roomLiveRank(b.room));
+      if (live != 0) return live;
+
+      final activity = _roomActivityTime(
+        b.room,
+      ).compareTo(_roomActivityTime(a.room));
+      if (activity != 0) return activity;
+
       return a.index.compareTo(b.index);
     });
     return [for (final item in indexed) item.room];
@@ -1049,6 +1057,18 @@ class RoomsController {
     if (policy == 'silent') return 1;
     if (policy == 'blocked') return 2;
     return 0;
+  }
+
+  int _roomLiveRank(RoomCard room) {
+    return room.liveParticipantCount > 0 ? 0 : 1;
+  }
+
+  DateTime _roomActivityTime(RoomCard room) {
+    if (room_display.normalizeRoomNotificationPolicy(room.notificationPolicy) ==
+        'blocked') {
+      return room.updatedAt;
+    }
+    return room.lastMessage?.createdAt ?? room.updatedAt;
   }
 
   RoomCardsPatch patchRoomCardsRefreshed({required List<RoomCard> rooms}) {

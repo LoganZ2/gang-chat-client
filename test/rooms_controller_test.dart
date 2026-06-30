@@ -1074,6 +1074,44 @@ void main() {
     expect(patch.rooms.single.unreadCount, 7);
   });
 
+  test('patchRoomUpdated reorders rooms by latest activity time', () {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        fail('Patch test should not call the API: ${request.url}');
+      }),
+    );
+    addTearDown(api.close);
+    final controller = RoomsController(api: api);
+
+    final patch = controller.patchRoomUpdated(
+      rooms: [
+        _roomCard(
+          'room_old',
+          unreadCount: 1,
+          lastMessageId: 'msg_old',
+          lastMessageAt: DateTime.utc(2026, 6, 4, 10),
+        ),
+        _roomCard(
+          'room_target',
+          unreadCount: 1,
+          lastMessageId: 'msg_previous',
+          lastMessageAt: DateTime.utc(2026, 6, 4, 9),
+        ),
+      ],
+      incoming: _roomCard(
+        'room_target',
+        lastMessageId: 'msg_new',
+        lastMessageAt: DateTime.utc(2026, 6, 4, 11),
+      ),
+      selectedRoom: _roomDetail('room_other'),
+    );
+
+    expect(patch.rooms.map((room) => room.id), ['room_target', 'room_old']);
+    expect(patch.rooms.first.unreadCount, 2);
+  });
+
   test('patchRoomUnreadCleared clears a single room count', () {
     final api = GangApiClient(
       baseUrl: 'http://example.test/api/v1',
@@ -1134,6 +1172,9 @@ RoomCard _roomCard(
   String notificationPolicy = 'all',
   bool isPinned = false,
   bool hasUnreadCount = false,
+  int liveParticipantCount = 0,
+  DateTime? lastMessageAt,
+  DateTime? updatedAt,
 }) {
   return RoomCard(
     id: id,
@@ -1144,7 +1185,7 @@ RoomCard _roomCard(
     isPinned: isPinned,
     memberCount: memberCount,
     onlineMemberCount: onlineMemberCount,
-    liveParticipantCount: 0,
+    liveParticipantCount: liveParticipantCount,
     liveAvatarPreview: const [],
     lastMessage: lastMessageId == null
         ? null
@@ -1153,11 +1194,11 @@ RoomCard _roomCard(
             type: 'text',
             senderDisplayName: 'Alice',
             bodyPreview: 'hello',
-            createdAt: DateTime.utc(2026, 6, 4),
+            createdAt: lastMessageAt ?? DateTime.utc(2026, 6, 4),
           ),
     unreadCount: unreadCount,
     hasUnreadCount: hasUnreadCount,
-    updatedAt: DateTime.utc(2026, 6, 4),
+    updatedAt: updatedAt ?? DateTime.utc(2026, 6, 4),
   );
 }
 

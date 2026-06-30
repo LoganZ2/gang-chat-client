@@ -140,7 +140,9 @@ extension _HomeShellLiveActions on _HomeShellState {
     LiveJoinPreviousRoomDisconnectedPatch patch,
   ) {
     _live = patch.live;
-    _servers = patch.rooms;
+    _servers = _roomsController
+        .patchRoomCardsRefreshed(rooms: patch.rooms)
+        .rooms;
     _joinedLiveRoomId = patch.joinedLiveRoomId;
     _joiningLive = patch.joiningLive;
     _contentMode = patch.livePanelOpen ? _ContentMode.live : _contentMode;
@@ -149,7 +151,9 @@ extension _HomeShellLiveActions on _HomeShellState {
 
   void _applyLiveLocalDeparturePatch(LiveLocalDeparturePatch patch) {
     _live = patch.live;
-    _servers = patch.rooms;
+    _servers = _roomsController
+        .patchRoomCardsRefreshed(rooms: patch.rooms)
+        .rooms;
     _joinedLiveRoomId = patch.joinedLiveRoomId;
     _joiningLive = patch.joiningLive;
     _cameraOn = patch.cameraOn;
@@ -168,7 +172,9 @@ extension _HomeShellLiveActions on _HomeShellState {
     _screenSharing = patch.screenSharing;
     _voiceBlocked = patch.voiceBlocked;
     _live = patch.live;
-    _servers = patch.rooms;
+    _servers = _roomsController
+        .patchRoomCardsRefreshed(rooms: patch.rooms)
+        .rooms;
   }
 
   LiveJoinResult _withCurrentRoomLiveDisplayNameInJoinResult(

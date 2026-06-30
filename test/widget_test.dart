@@ -3922,6 +3922,22 @@ void main() {
 
     expect(userSummaryRect.right - alphaCardRect.right, closeTo(0, 0.01));
     expect(find.byType(Scrollbar), findsNothing);
+    final rawScrollbarFinder = find.byType(RawScrollbar);
+    expect(rawScrollbarFinder, findsOneWidget);
+    final rawScrollbar = tester.widget<RawScrollbar>(rawScrollbarFinder);
+    expect(rawScrollbar.radius, const Radius.circular(999));
+    expect(rawScrollbar.controller, isNotNull);
+    expect(rawScrollbar.controller!.hasClients, isTrue);
+    expect(rawScrollbar.interactive, isTrue);
+    expect(
+      tester.getRect(rawScrollbarFinder).right - alphaCardRect.right,
+      closeTo(8, 0.01),
+    );
+    await tester.dragFrom(
+      tester.getRect(rawScrollbarFinder).topRight - const Offset(3, -30),
+      const Offset(0, 30),
+    );
+    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
 

@@ -12,6 +12,7 @@ const _serverCardHoverLift = 2.0;
 const _serverCardBaseDepth = 4.0;
 const _serverCardGap = 10.0;
 const _serverCardHorizontalPadding = 10.0;
+const _serverListScrollbarGutter = 8.0;
 const _footerButtonSize = 38.0;
 const _footerButtonGap = 8.0;
 const _footerButtonOuterHeight = _footerButtonSize + 3.0 + 5.0;
@@ -83,7 +84,7 @@ class HomeSidebar extends StatelessWidget {
           padding: EdgeInsets.fromLTRB(
             _sidebarHorizontalPadding,
             _sidebarTopPadding + topChromeOffset,
-            _sidebarHorizontalPadding,
+            _sidebarHorizontalPadding - _serverListScrollbarGutter,
             _sidebarBottomPadding,
           ),
           child: LayoutBuilder(
@@ -95,27 +96,37 @@ class HomeSidebar extends StatelessWidget {
               return Column(
                 children: [
                   if (showSummary) ...[
-                    _UserSummaryBar(
-                      user: currentUser,
-                      inLive: joinedLiveRoomId != null,
-                      reconnecting: realtimeReconnecting,
-                      logoutActive: logoutActive,
-                      onLogout: onLogout,
+                    Padding(
+                      padding: const EdgeInsets.only(
+                        right: _serverListScrollbarGutter,
+                      ),
+                      child: _UserSummaryBar(
+                        user: currentUser,
+                        inLive: joinedLiveRoomId != null,
+                        reconnecting: realtimeReconnecting,
+                        logoutActive: logoutActive,
+                        onLogout: onLogout,
+                      ),
                     ),
                     SizedBox(height: showFooter ? 14 : 10),
                   ],
-                  Expanded(child: _buildServerList()),
+                  Expanded(child: _buildServerList(context)),
                   if (showFooter) ...[
                     const SizedBox(height: 12),
-                    _SidebarFooter(
-                      settingsActive: settingsActive,
-                      createRoomActive: createRoomActive,
-                      notificationsActive: notificationsActive,
-                      hasPendingNotifications: hasPendingNotifications,
-                      pendingNotificationCount: pendingNotificationCount,
-                      onCreateRoom: onCreateRoom,
-                      onOpenNotifications: onOpenNotifications,
-                      onOpenSettings: onOpenSettings,
+                    Padding(
+                      padding: const EdgeInsets.only(
+                        right: _serverListScrollbarGutter,
+                      ),
+                      child: _SidebarFooter(
+                        settingsActive: settingsActive,
+                        createRoomActive: createRoomActive,
+                        notificationsActive: notificationsActive,
+                        hasPendingNotifications: hasPendingNotifications,
+                        pendingNotificationCount: pendingNotificationCount,
+                        onCreateRoom: onCreateRoom,
+                        onOpenNotifications: onOpenNotifications,
+                        onOpenSettings: onOpenSettings,
+                      ),
                     ),
                   ],
                 ],
@@ -127,7 +138,7 @@ class HomeSidebar extends StatelessWidget {
     );
   }
 
-  Widget _buildServerList() {
+  Widget _buildServerList(BuildContext context) {
     if (servers.isEmpty && loading) {
       return const Center(
         child: SizedBox.square(
@@ -146,21 +157,73 @@ class HomeSidebar extends StatelessWidget {
       );
     }
 
-    return ListView.separated(
-      padding: EdgeInsets.zero,
-      itemCount: servers.length,
-      separatorBuilder: (context, index) =>
-          const SizedBox(height: _serverCardGap),
-      itemBuilder: (context, index) {
-        final server = servers[index];
-        return _ServerCard(
-          server: server,
-          selected: server.id == selectedServerId,
-          voiceJoined: server.id == joinedLiveRoomId,
-          searchQuery: searchQuery,
-          onPressed: () => onServerSelected(server),
-        );
-      },
+    return _ServerList(
+      servers: servers,
+      selectedServerId: selectedServerId,
+      joinedLiveRoomId: joinedLiveRoomId,
+      searchQuery: searchQuery,
+      onServerSelected: onServerSelected,
+    );
+  }
+}
+
+class _ServerList extends StatefulWidget {
+  const _ServerList({
+    required this.servers,
+    required this.selectedServerId,
+    required this.joinedLiveRoomId,
+    required this.searchQuery,
+    required this.onServerSelected,
+  });
+
+  final List<RoomCard> servers;
+  final String? selectedServerId;
+  final String? joinedLiveRoomId;
+  final String searchQuery;
+  final ValueChanged<RoomCard> onServerSelected;
+
+  @override
+  State<_ServerList> createState() => _ServerListState();
+}
+
+class _ServerListState extends State<_ServerList> {
+  final ScrollController _controller = ScrollController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RawScrollbar(
+      controller: _controller,
+      interactive: true,
+      radius: const Radius.circular(999),
+      thickness: 7,
+      thumbColor: UiColors.textMuted.withValues(alpha: 0.82),
+      child: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+        child: ListView.separated(
+          controller: _controller,
+          primary: false,
+          padding: const EdgeInsets.only(right: _serverListScrollbarGutter),
+          itemCount: widget.servers.length,
+          separatorBuilder: (context, index) =>
+              const SizedBox(height: _serverCardGap),
+          itemBuilder: (context, index) {
+            final server = widget.servers[index];
+            return _ServerCard(
+              server: server,
+              selected: server.id == widget.selectedServerId,
+              voiceJoined: server.id == widget.joinedLiveRoomId,
+              searchQuery: widget.searchQuery,
+              onPressed: () => widget.onServerSelected(server),
+            );
+          },
+        ),
+      ),
     );
   }
 }
