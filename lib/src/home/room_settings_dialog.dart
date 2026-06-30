@@ -619,8 +619,8 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
               value: _visibility,
               enabled: _canManageRoom && !_saving,
               segments: const [
-                Segment(value: 'private', label: '私密'),
                 Segment(value: 'public', label: '公开'),
+                Segment(value: 'private', label: '私密'),
               ],
               onChanged: (value) => setState(() => _visibility = value),
             ),
