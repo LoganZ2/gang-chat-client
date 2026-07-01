@@ -40,15 +40,19 @@ class AppConfig {
   /// Returns `null` if [path] is null or empty.
   String? resolveAssetUrl(String? path) {
     if (path == null || path.isEmpty) return null;
-    final lower = path.toLowerCase();
-    if (lower.startsWith('http://') ||
-        lower.startsWith('https://') ||
-        lower.startsWith('data:')) {
-      return path;
-    }
     final normalizedBase = assetBaseUrl.endsWith('/')
         ? assetBaseUrl.substring(0, assetBaseUrl.length - 1)
         : assetBaseUrl;
+
+    final uri = Uri.tryParse(path);
+    if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+      if (uri.path.startsWith('/assets/')) {
+        return '$normalizedBase${uri.path}${uri.hasQuery ? '?${uri.query}' : ''}';
+      }
+      return path;
+    }
+    if (path.toLowerCase().startsWith('data:')) return path;
+
     final suffix = path.startsWith('/') ? path : '/$path';
     return '$normalizedBase$suffix';
   }
