@@ -16,7 +16,7 @@ const _unboundedWindowSize = Size(100000, 100000);
 const _minimumWindowSize = Size(1, 1);
 const _authWidgetWidth = 430.0;
 const _authBottomBreathingRoom = 24.0;
-const _authBrandTitleExtraHeight = 56.0;
+const _authBrandTitleExtraHeight = 53.0;
 const _loginWidgetHeight =
     291.0 + _authBrandTitleExtraHeight + _authBottomBreathingRoom;
 const _registerWidgetHeight =

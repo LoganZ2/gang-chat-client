@@ -33,8 +33,8 @@ const double _authBrandIconSize = 36;
 const double _authBrandGap = 10;
 const double _authFieldGap = 3;
 const double _authModeGap = 10;
-const double _authActionGap = 8;
-const double _authErrorHeight = 12;
+const double _authActionGap = 6;
+const double _authErrorHeight = 11;
 const double _authPasswordErrorGap = 4;
 const double _authErrorRememberGap = 0;
 const double _authRememberHeight = 28;
@@ -605,7 +605,7 @@ class _LoginPageState extends State<LoginPage> {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: UiColors.danger,
-                  fontSize: 10.5,
+                  fontSize: 10,
                   height: 1,
                   fontWeight: FontWeight.w500,
                 ),
