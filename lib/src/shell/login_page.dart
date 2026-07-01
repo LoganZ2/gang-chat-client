@@ -33,11 +33,12 @@ const double _authBrandIconSize = 36;
 const double _authBrandGap = 10;
 const double _authFieldGap = 3;
 const double _authModeGap = 10;
-const double _authActionGap = 14;
-const double _authErrorHeight = 16;
+const double _authActionGap = 8;
+const double _authErrorHeight = 12;
 const double _authPasswordErrorGap = 4;
-const double _authErrorRememberGap = 4;
+const double _authErrorRememberGap = 0;
 const double _authRememberHeight = 28;
+const double _authSubmitHeight = 32;
 const double _accountHistoryItemHeight = 38;
 const double _authSegmentedControlOuterHeight = 42;
 const double _authInputOuterHeight = Input.defaultHeight + 8;
@@ -460,20 +461,7 @@ class _LoginPageState extends State<LoginPage> {
                                           ? null
                                           : (_) => _submit(),
                                     ),
-                                    if (!_registering) ...[
-                                      const SizedBox(
-                                        height: _authPasswordErrorGap,
-                                      ),
-                                      _buildErrorSlot(),
-                                      const SizedBox(
-                                        height: _authErrorRememberGap,
-                                      ),
-                                      _RememberPasswordRow(
-                                        value: _rememberPassword,
-                                        enabled: !_submitState.busy,
-                                        onChanged: _setRememberPassword,
-                                      ),
-                                    ],
+                                    if (!_registering) ...[_buildLoginTail()],
                                     if (_registering) ...[
                                       const SizedBox(height: _authFieldGap),
                                       Input(
@@ -498,16 +486,13 @@ class _LoginPageState extends State<LoginPage> {
                                         maxLines: 1,
                                         onSubmitted: (_) => _submit(),
                                       ),
-                                      const SizedBox(
-                                        height: _authPasswordErrorGap,
-                                      ),
-                                      _buildErrorSlot(),
+                                      _buildRegisterTail(),
                                     ],
                                     const SizedBox(height: _authActionGap),
                                     Button(
                                       width: double.infinity,
                                       tone: ButtonTone.primary,
-                                      height: 32,
+                                      height: _authSubmitHeight,
                                       loading: _submitState.busy,
                                       onPressed: _submit,
                                       child: Text(_registering ? '创建账号' : '登录'),
@@ -556,6 +541,57 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
+  Widget _buildLoginTail() {
+    const errorTop = _authPasswordErrorGap;
+    const rememberTop = errorTop + _authErrorHeight + _authErrorRememberGap;
+    const height = rememberTop + _authRememberHeight;
+
+    return SizedBox(
+      height: height,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            top: rememberTop,
+            child: _RememberPasswordRow(
+              value: _rememberPassword,
+              enabled: !_submitState.busy,
+              onChanged: _setRememberPassword,
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            top: errorTop,
+            child: _buildErrorSlot(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRegisterTail() {
+    const errorTop = _authPasswordErrorGap;
+    const height = errorTop + _authErrorHeight;
+
+    return SizedBox(
+      height: height,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            top: errorTop,
+            child: _buildErrorSlot(),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildErrorSlot() {
     return SizedBox(
       key: const ValueKey('auth-error-slot'),
@@ -569,7 +605,8 @@ class _LoginPageState extends State<LoginPage> {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: UiColors.danger,
-                  fontSize: 12,
+                  fontSize: 10.5,
+                  height: 1,
                   fontWeight: FontWeight.w500,
                 ),
               )

@@ -224,7 +224,7 @@ void main() {
       MaterialApp(
         theme: ui.uiTheme(),
         home: LoginPage(
-          sizeForMode: (_, {showingError = false}) => const Size(416, 385),
+          sizeForMode: (_, {showingError = false}) => const Size(416, 371),
           consumeInitialWindowLock: () => true,
           lockAuthWindow:
               ({
@@ -266,7 +266,7 @@ void main() {
       MaterialApp(
         theme: ui.uiTheme().copyWith(platform: TargetPlatform.windows),
         home: LoginPage(
-          sizeForMode: (_, {showingError = false}) => const Size(430, 385),
+          sizeForMode: (_, {showingError = false}) => const Size(430, 371),
           consumeInitialWindowLock: () => true,
           lockAuthWindow:
               ({
@@ -310,7 +310,7 @@ void main() {
       MaterialApp(
         theme: ui.uiTheme(),
         home: LoginPage(
-          sizeForMode: (_, {showingError = false}) => const Size(430, 385),
+          sizeForMode: (_, {showingError = false}) => const Size(430, 371),
           consumeInitialWindowLock: () => true,
           lockAuthWindow:
               ({
@@ -422,7 +422,7 @@ void main() {
         MaterialApp(
           theme: ui.uiTheme(),
           home: LoginPage(
-            sizeForMode: (_, {showingError = false}) => const Size(430, 385),
+            sizeForMode: (_, {showingError = false}) => const Size(430, 371),
             consumeInitialWindowLock: () => true,
             lockAuthWindow:
                 ({
@@ -494,7 +494,7 @@ void main() {
       MaterialApp(
         theme: ui.uiTheme(),
         home: LoginPage(
-          sizeForMode: (_, {showingError = false}) => const Size(430, 291),
+          sizeForMode: (_, {showingError = false}) => const Size(430, 371),
           consumeInitialWindowLock: () => true,
           lockAuthWindow:
               ({
@@ -541,7 +541,7 @@ void main() {
       MaterialApp(
         theme: ui.uiTheme(),
         home: LoginPage(
-          sizeForMode: (_, {showingError = false}) => const Size(430, 291),
+          sizeForMode: (_, {showingError = false}) => const Size(430, 371),
           consumeInitialWindowLock: () => true,
           lockAuthWindow:
               ({
@@ -581,7 +581,7 @@ void main() {
       MaterialApp(
         theme: ui.uiTheme(),
         home: LoginPage(
-          sizeForMode: (_, {showingError = false}) => const Size(430, 385),
+          sizeForMode: (_, {showingError = false}) => const Size(430, 371),
           consumeInitialWindowLock: () => true,
           lockAuthWindow:
               ({
@@ -621,7 +621,7 @@ void main() {
         MaterialApp(
           theme: ui.uiTheme(),
           home: LoginPage(
-            sizeForMode: (_, {showingError = false}) => const Size(430, 385),
+            sizeForMode: (_, {showingError = false}) => const Size(430, 371),
             consumeInitialWindowLock: () => true,
             lockAuthWindow:
                 ({
