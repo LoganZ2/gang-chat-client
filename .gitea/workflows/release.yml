@@ -110,6 +110,13 @@ jobs:
       - name: UTF-8 encoding check
         run: dart tool/check_utf8.dart
 
+      - name: Update release metadata
+        run: |
+          RELEASE_DATE="$(date +%Y/%m/%d)"
+          dart tool/update_release_metadata.dart \
+            --version "${{ needs.prepare.outputs.version }}" \
+            --date "$RELEASE_DATE"
+
       - name: Build macOS (release)
         run: flutter build macos --release --build-name="${{ needs.prepare.outputs.version }}"
 
@@ -190,6 +197,13 @@ jobs:
         run: |
           $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
           dart tool/check_utf8.dart
+
+      - name: Update release metadata
+        shell: powershell
+        run: |
+          $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
+          $releaseDate = Get-Date -Format 'yyyy/MM/dd'
+          dart tool/update_release_metadata.dart --version "${{ needs.prepare.outputs.version }}" --date $releaseDate
 
       # flutter pub get 会重置 pub cache 目录，每次 build 前重新下载解压 libwebrtc
       # cmake 的 ZIP 解压在 Windows 上有 bug，用 PowerShell Expand-Archive 更可靠

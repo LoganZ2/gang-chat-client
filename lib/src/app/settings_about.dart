@@ -4,9 +4,20 @@ const gangChatClientVersion = String.fromEnvironment(
 );
 
 const gangChatClientReleaseDate = '2026/06/30';
-const gangChatClientLastUpdateDate = '2026/06/30';
+const gangChatClientLastUpdateDate = gangChatClientReleaseDate;
+const gangChatClientInstallInfoFileName = 'gang_chat_install_info.txt';
 const gangChatSupportEmail = 'gang-chat@outlook.com';
 const defaultAutoUpdatePromptEnabled = true;
+
+String normalizeAboutDate(
+  String? value, {
+  String fallback = gangChatClientLastUpdateDate,
+}) {
+  final normalized = value?.trim();
+  if (normalized == null || normalized.isEmpty) return fallback;
+  if (!RegExp(r'^\d{4}/\d{2}/\d{2}$').hasMatch(normalized)) return fallback;
+  return normalized;
+}
 
 String appVersionLabel(String version) {
   final normalized = version.trim();

@@ -43,4 +43,16 @@ void main() {
       contains('发件人（绑定邮箱）：user@example.test'),
     );
   });
+
+  test(
+    'normalizeAboutDate accepts installer dates and falls back otherwise',
+    () {
+      expect(normalizeAboutDate(' 2026/07/01 '), '2026/07/01');
+      expect(
+        normalizeAboutDate('2026-07-01', fallback: '2026/06/30'),
+        '2026/06/30',
+      );
+      expect(normalizeAboutDate('', fallback: '2026/06/30'), '2026/06/30');
+    },
+  );
 }

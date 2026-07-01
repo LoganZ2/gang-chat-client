@@ -49,6 +49,8 @@ VIAddVersionKey "ProductVersion" "${APP_VERSION}"
 VIAddVersionKey "LegalCopyright" "Copyright (C) 2026 ${APP_PUBLISHER}. All rights reserved."
 
 !include "MUI2.nsh"
+!include "FileFunc.nsh"
+!insertmacro GetTime
 
 !define MUI_ABORTWARNING
 !define MUI_ICON "${PROJECT_ROOT}\windows\runner\resources\app_icon.ico"
@@ -69,6 +71,10 @@ Section "Install"
 
   SetOutPath "$INSTDIR"
   File /r "${SOURCE_DIR}\*.*"
+  ${GetTime} "" "L" $0 $1 $2 $3 $4 $5 $6
+  FileOpen $7 "$INSTDIR\gang_chat_install_info.txt" w
+  FileWrite $7 "$2/$1/$0"
+  FileClose $7
 
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 

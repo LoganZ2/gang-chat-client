@@ -32,6 +32,7 @@ import '../protocol/sticker_pack_store.dart';
 import '../shell/clipboard_service.dart';
 import '../shell/file_selection_service.dart';
 import '../shell/feedback_mail_service.dart';
+import '../shell/install_info_service.dart';
 import '../shell/local_auto_update_prompt_store.dart';
 import '../shell/local_close_behavior_store.dart';
 import '../shell/local_audio_device_store.dart';
@@ -69,6 +70,7 @@ class SettingsPage extends StatefulWidget {
     this.fileSelectionService = const FileSelectionService(),
     this.feedbackMailService = const FeedbackMailService(),
     this.autoUpdatePromptStore = const LocalAutoUpdatePromptStore(),
+    this.installInfoService = const InstallInfoService(),
     this.closeBehaviorStore = const LocalCloseBehaviorStore(),
     this.languageStore = const LocalLanguagePreferenceStore(),
     this.appVersion = gangChatClientVersion,
@@ -95,6 +97,7 @@ class SettingsPage extends StatefulWidget {
   final FileSelectionService fileSelectionService;
   final FeedbackMailService feedbackMailService;
   final AutoUpdatePromptStore autoUpdatePromptStore;
+  final InstallInfoService installInfoService;
   final CloseBehaviorStore closeBehaviorStore;
   final LanguagePreferenceStore languageStore;
   final String appVersion;
@@ -166,6 +169,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _checkingAppVersion = false;
   bool _openingFeedbackMail = false;
   bool _autoPromptUpdates = defaultAutoUpdatePromptEnabled;
+  String _lastUpdateDate = gangChatClientLastUpdateDate;
   Timer? _usernameAvailabilityDebounce;
   int _usernameAvailabilityRequestId = 0;
   String? _usernameAvailabilityQuery;
@@ -227,6 +231,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _syncUserFields(widget.currentUser);
     unawaited(_loadCloseBehavior());
     unawaited(_loadAutoUpdatePrompt());
+    unawaited(_loadInstallDate());
     unawaited(_loadAccount());
   }
 
@@ -242,6 +247,9 @@ class _SettingsPageState extends State<SettingsPage> {
     }
     if (oldWidget.autoUpdatePromptStore != widget.autoUpdatePromptStore) {
       unawaited(_loadAutoUpdatePrompt());
+    }
+    if (oldWidget.installInfoService != widget.installInfoService) {
+      unawaited(_loadInstallDate());
     }
   }
 
@@ -500,6 +508,19 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!mounted) return;
       setState(() => _aboutError = '读取自动提示更新失败：$error');
     }
+  }
+
+  Future<void> _loadInstallDate() async {
+    var date = gangChatClientLastUpdateDate;
+    try {
+      date = normalizeAboutDate(
+        await widget.installInfoService.readInstalledAtDate(),
+      );
+    } catch (_) {
+      date = gangChatClientLastUpdateDate;
+    }
+    if (!mounted) return;
+    setState(() => _lastUpdateDate = date);
   }
 
   Future<void> _setAutoUpdatePrompt(bool value) async {
@@ -3438,10 +3459,7 @@ class _SettingsPageState extends State<SettingsPage> {
               value: gangChatClientReleaseDate,
             ),
             const SizedBox(height: 14),
-            const _CopyableField(
-              label: '上次更新时间',
-              value: gangChatClientLastUpdateDate,
-            ),
+            _CopyableField(label: '上次更新时间', value: _lastUpdateDate),
             const SizedBox(height: 14),
             _ToggleSetting(
               label: '自动提示更新',

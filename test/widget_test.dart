@@ -29,6 +29,7 @@ import 'package:client/src/protocol/models.dart';
 import 'package:client/src/settings/settings_page.dart';
 import 'package:client/src/shell/desktop_window_controller.dart';
 import 'package:client/src/shell/feedback_mail_service.dart';
+import 'package:client/src/shell/install_info_service.dart';
 import 'package:client/src/shell/login_page.dart';
 import 'package:client/src/ui/ui.dart' as ui;
 import 'package:client/src/home/hover_card_anchor.dart';
@@ -2530,6 +2531,7 @@ void main() {
             autoUpdateWrites,
             initialValue: true,
           ),
+          installInfoService: const _FakeInstallInfoService('2026/07/01'),
           systemAudioDevices: SystemAudioDevices(supported: false),
         ),
       ),
@@ -2544,7 +2546,8 @@ void main() {
     expect(find.text('0.4.0'), findsOneWidget);
     expect(find.text('发行时间'), findsOneWidget);
     expect(find.text('上次更新时间'), findsOneWidget);
-    expect(find.text('2026/06/30'), findsNWidgets(2));
+    expect(find.text('2026/06/30'), findsOneWidget);
+    expect(find.text('2026/07/01'), findsOneWidget);
     expect(find.text('自动提示更新'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '检查更新'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '意见反馈'), findsOneWidget);
@@ -7100,6 +7103,15 @@ class _FakeAutoUpdatePromptStore extends AutoUpdatePromptStore {
     value = enabled;
     writes.add(enabled);
   }
+}
+
+class _FakeInstallInfoService extends InstallInfoService {
+  const _FakeInstallInfoService(this.installedAtDate);
+
+  final String? installedAtDate;
+
+  @override
+  Future<String?> readInstalledAtDate() async => installedAtDate;
 }
 
 class _FakeAudioDeviceStore extends AudioDeviceStore {
