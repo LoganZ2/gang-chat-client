@@ -237,6 +237,7 @@ jobs:
           $VERSION = "${{ needs.prepare.outputs.version }}"
           $SRC = "build\windows\x64\runner\Release"
           if (-not (Test-Path $SRC)) { Write-Error "build output not found at $SRC"; exit 1 }
+          if (-not (Test-Path (Join-Path $SRC "client.exe"))) { Write-Error "build executable not found at $SRC\client.exe"; exit 1 }
           $MAKENSIS = "C:\Program Files (x86)\NSIS\makensis.exe"
           if (-not (Test-Path $MAKENSIS)) { Write-Error "makensis.exe not found at $MAKENSIS"; exit 1 }
           if ($VERSION -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { Write-Error "version must be major.minor.patch: $VERSION"; exit 1 }
@@ -266,6 +267,7 @@ jobs:
           $VERSION = "${{ needs.prepare.outputs.version }}"
           $SRC = "build\windows\x64\runner\Release"
           if (-not (Test-Path $SRC)) { Write-Error "build output not found at $SRC"; exit 1 }
+          if (-not (Test-Path (Join-Path $SRC "client.exe"))) { Write-Error "build executable not found at $SRC\client.exe"; exit 1 }
           $ZIP = "GangChat-$VERSION-windows.zip"
           if (Test-Path $ZIP) { Remove-Item -Force $ZIP }
           Compress-Archive -Path "$SRC\*" -DestinationPath $ZIP -Force

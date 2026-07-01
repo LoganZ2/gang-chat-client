@@ -24,6 +24,11 @@ Unicode true
 !define APP_PUBLISHER "Gang Chat"
 !define APP_EXE "client.exe"
 
+!if /FileExists "${SOURCE_DIR}\${APP_EXE}"
+!else
+!error "Missing Flutter Windows release build at ${SOURCE_DIR}."
+!endif
+
 Name "${APP_NAME}"
 OutFile "${OUTPUT_FILE}"
 InstallDir "$PROGRAMFILES64\Gang Chat"
@@ -62,8 +67,6 @@ VIAddVersionKey "LegalCopyright" "Copyright (C) 2026 ${APP_PUBLISHER}. All right
 Section "Install"
   SetShellVarContext all
 
-  IfFileExists "${SOURCE_DIR}\${APP_EXE}" 0 missing_build
-
   SetOutPath "$INSTDIR"
   File /r "${SOURCE_DIR}\*.*"
 
@@ -82,14 +85,6 @@ Section "Install"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gang Chat" "UninstallString" '"$INSTDIR\Uninstall.exe"'
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gang Chat" "NoModify" 1
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gang Chat" "NoRepair" 1
-
-  Goto done
-
-  missing_build:
-    MessageBox MB_ICONSTOP "Missing Flutter Windows release build at ${SOURCE_DIR}."
-    Abort
-
-  done:
 SectionEnd
 
 Section "Uninstall"
