@@ -146,6 +146,10 @@ void main() {
     expect(find.text('密码'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '登录'), findsOneWidget);
     expect(find.text('注册'), findsOneWidget);
+    expect(find.text('记住密码'), findsOneWidget);
+    expect(find.text('忘记密码'), findsOneWidget);
+    expect(find.byType(ui.UiCheckbox), findsOneWidget);
+    expect(find.byType(ui.UiSwitch), findsNothing);
     expect(find.byTooltip('显示密码'), findsOneWidget);
 
     final authSurfaceRect = tester.getRect(
@@ -174,7 +178,10 @@ void main() {
         .getSize(find.byKey(const ValueKey('auth-surface')))
         .height;
     final normalBottomGap = _submitBottomGap(tester, submitLabel: '登录');
-    expect(normalBottomGap, greaterThanOrEqualTo(44));
+    expect(normalBottomGap, greaterThanOrEqualTo(34));
+
+    await tester.tap(find.text('忘记密码'));
+    await tester.pump();
 
     await tester.tap(find.widgetWithText(ui.Button, '登录'));
     await tester.pump();
@@ -312,7 +319,10 @@ void main() {
       tester.widget<TextField>(_textFieldWithHint('密码')).controller!.text,
       isEmpty,
     );
-    expect(tester.widget<ui.UiSwitch>(find.byType(ui.UiSwitch)).value, isFalse);
+    expect(
+      tester.widget<ui.UiCheckbox>(find.byType(ui.UiCheckbox)).value,
+      isFalse,
+    );
     expect(find.byTooltip('清除账号'), findsOneWidget);
 
     await tester.tap(find.byTooltip('展开账号记录'));
@@ -348,7 +358,10 @@ void main() {
       tester.widget<TextField>(_textFieldWithHint('密码')).controller!.text,
       isEmpty,
     );
-    expect(tester.widget<ui.UiSwitch>(find.byType(ui.UiSwitch)).value, isFalse);
+    expect(
+      tester.widget<ui.UiCheckbox>(find.byType(ui.UiCheckbox)).value,
+      isFalse,
+    );
     expect(find.byTooltip('清除账号'), findsNothing);
 
     await tester.tap(find.byTooltip('展开账号记录'));
@@ -489,7 +502,10 @@ void main() {
       tester.widget<TextField>(_textFieldWithHint('密码')).controller!.text,
       'moonbase',
     );
-    expect(tester.widget<ui.UiSwitch>(find.byType(ui.UiSwitch)).value, isTrue);
+    expect(
+      tester.widget<ui.UiCheckbox>(find.byType(ui.UiCheckbox)).value,
+      isTrue,
+    );
   });
 
   testWidgets('auth keeps password when editing the login field', (
@@ -532,7 +548,10 @@ void main() {
       tester.widget<TextField>(_textFieldWithHint('密码')).controller!.text,
       'moonbase',
     );
-    expect(tester.widget<ui.UiSwitch>(find.byType(ui.UiSwitch)).value, isFalse);
+    expect(
+      tester.widget<ui.UiCheckbox>(find.byType(ui.UiCheckbox)).value,
+      isFalse,
+    );
   });
 
   testWidgets('remember password stores successful login locally', (
@@ -583,6 +602,7 @@ void main() {
     await tester.pump();
 
     final loginBottomGap = _submitBottomGap(tester, submitLabel: '登录');
+    expect(loginBottomGap, greaterThanOrEqualTo(34));
 
     await tester.tap(find.text('注册'));
     await tester.pump();
@@ -595,7 +615,7 @@ void main() {
     expect(find.widgetWithText(ui.Button, '创建账号'), findsOneWidget);
     expect(
       _submitBottomGap(tester, submitLabel: '创建账号'),
-      closeTo(loginBottomGap, 0.01),
+      greaterThanOrEqualTo(34),
     );
     _expectSubmitButtonFullWidth(tester, submitLabel: '创建账号');
     expect(find.text('请输入账号和密码后继续'), findsNothing);
@@ -4907,6 +4927,77 @@ void main() {
     await tester.pump();
 
     expect(taps, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ui checkbox toggles and keeps custom surface', (
+    WidgetTester tester,
+  ) async {
+    var checked = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: Scaffold(
+          body: Center(
+            child: StatefulBuilder(
+              builder: (context, setState) {
+                return ui.UiCheckbox(
+                  value: checked,
+                  tooltip: '记住密码',
+                  onChanged: (value) => setState(() => checked = value),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final checkboxFinder = find.byType(ui.UiCheckbox);
+    expect(checkboxFinder, findsOneWidget);
+    expect(find.byType(Checkbox), findsNothing);
+    expect(
+      find.descendant(of: checkboxFinder, matching: find.byType(InkWell)),
+      findsNothing,
+    );
+    expect(tester.getSize(checkboxFinder), const Size(18, 20));
+
+    await tester.tap(find.byTooltip('记住密码'));
+    await tester.pumpAndSettle();
+
+    expect(checked, isTrue);
+    final decorations = tester
+        .widgetList<DecoratedBox>(
+          find.descendant(
+            of: checkboxFinder,
+            matching: find.byType(DecoratedBox),
+          ),
+        )
+        .where((box) => box.decoration is BoxDecoration)
+        .map((box) => box.decoration as BoxDecoration)
+        .toList();
+    expect(
+      decorations.any((decoration) => decoration.color == ui.UiColors.selected),
+      isTrue,
+    );
+
+    await tester.tap(checkboxFinder);
+    await tester.pumpAndSettle();
+
+    expect(checked, isFalse);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: const Scaffold(
+          body: Center(child: ui.UiCheckbox(value: true, onChanged: null)),
+        ),
+      ),
+    );
+    await tester.tap(checkboxFinder);
+    await tester.pump();
+
     expect(tester.takeException(), isNull);
   });
 

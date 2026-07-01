@@ -33,10 +33,10 @@ const double _authTitleBarGap =
     _authWindowButtonInset - _authTitleBarTopInset - _authTitleBarHeight;
 const double _authFieldGap = 3;
 const double _authModeGap = 10;
-const double _authActionGap = 8;
+const double _authActionGap = 14;
 const double _authErrorHeight = 16;
 const double _authErrorGap = 4;
-const double _authRememberGap = 6;
+const double _authRememberGap = 10;
 const double _authRememberHeight = 28;
 const double _accountHistoryItemHeight = 38;
 const double _authSegmentedControlOuterHeight = 42;
@@ -643,12 +643,6 @@ class _RememberPasswordRow extends StatelessWidget {
       height: _authRememberHeight,
       child: Row(
         children: [
-          const Icon(
-            Icons.lock_clock_outlined,
-            size: 15,
-            color: UiColors.textMuted,
-          ),
-          const SizedBox(width: 7),
           const Text(
             '记住密码',
             style: TextStyle(
@@ -658,14 +652,90 @@ class _RememberPasswordRow extends StatelessWidget {
               letterSpacing: 0,
             ),
           ),
-          const Spacer(),
-          UiSwitch(
+          const SizedBox(width: 8),
+          UiCheckbox(
             value: value,
             enabled: enabled,
             tooltip: '记住密码',
             onChanged: enabled ? onChanged : null,
           ),
+          const Spacer(),
+          _AuthTextLink(
+            label: '忘记密码',
+            enabled: enabled,
+            onPressed: () {
+              // Placeholder until the password reset API is wired.
+            },
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _AuthTextLink extends StatefulWidget {
+  const _AuthTextLink({
+    required this.label,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  State<_AuthTextLink> createState() => _AuthTextLinkState();
+}
+
+class _AuthTextLinkState extends State<_AuthTextLink> {
+  bool _hovered = false;
+
+  bool get _interactive => widget.enabled;
+
+  void _setHovered(bool value) {
+    if (_hovered == value) return;
+    setState(() => _hovered = value);
+  }
+
+  void _handleTap() {
+    if (!_interactive) return;
+    widget.onPressed();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = !_interactive
+        ? UiColors.textMuted
+        : _hovered
+        ? UiColors.controlAccent
+        : UiColors.accent;
+    return Semantics(
+      button: true,
+      enabled: _interactive,
+      label: widget.label,
+      child: MouseRegion(
+        cursor: _interactive
+            ? SystemMouseCursors.click
+            : SystemMouseCursors.basic,
+        onEnter: (_) => _setHovered(true),
+        onExit: (_) => _setHovered(false),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _handleTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+            child: Text(
+              widget.label,
+              style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
