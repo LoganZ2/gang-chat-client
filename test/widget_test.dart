@@ -160,7 +160,9 @@ void main() {
       find.byWidgetPredicate((widget) => widget is ui.SegmentedControl),
     );
     final titleRect = tester.getRect(find.text('Gang Chat'));
-    expect(titleRect.height, lessThanOrEqualTo(16));
+    expect(titleRect.height, greaterThanOrEqualTo(20));
+    expect(titleRect.height, lessThanOrEqualTo(28));
+    expect(find.byKey(const ValueKey('auth-brand-icon')), findsOneWidget);
     expect(
       tester
           .widgetList<MouseRegion>(
@@ -172,13 +174,17 @@ void main() {
           .map((region) => region.cursor),
       contains(SystemMouseCursors.basic),
     );
-    expect(modeSwitchRect.top - authSurfaceRect.top, closeTo(36, 0.01));
+    expect(modeSwitchRect.top - authSurfaceRect.top, closeTo(82, 0.01));
     _expectSubmitButtonFullWidth(tester, submitLabel: '登录');
     expect(find.text('请输入账号和密码后继续'), findsNothing);
     final normalSurfaceHeight = tester
         .getSize(find.byKey(const ValueKey('auth-surface')))
         .height;
     final normalBottomGap = _submitBottomGap(tester, submitLabel: '登录');
+    final normalSubmitRect = tester.getRect(
+      find.widgetWithText(ui.Button, '登录'),
+    );
+    final normalRememberRect = tester.getRect(find.text('记住密码'));
     expect(normalBottomGap, greaterThanOrEqualTo(34));
 
     await tester.tap(find.text('忘记密码？'));
@@ -190,12 +196,22 @@ void main() {
     expect(find.text('请输入账号和密码后继续'), findsOneWidget);
     expect(
       tester.getSize(find.byKey(const ValueKey('auth-surface'))).height,
-      closeTo(normalSurfaceHeight + 20, 0.01),
+      closeTo(normalSurfaceHeight, 0.01),
     );
     expect(
       _submitBottomGap(tester, submitLabel: '登录'),
       closeTo(normalBottomGap, 0.01),
     );
+    _expectRectCloseTo(
+      tester.getRect(find.widgetWithText(ui.Button, '登录')),
+      normalSubmitRect,
+    );
+    _expectRectCloseTo(tester.getRect(find.text('记住密码')), normalRememberRect);
+    final passwordRect = tester.getRect(_textFieldWithHint('密码'));
+    final errorRect = tester.getRect(find.text('请输入账号和密码后继续'));
+    final rememberRect = tester.getRect(find.text('记住密码'));
+    expect(errorRect.top, greaterThan(passwordRect.bottom));
+    expect(errorRect.bottom, lessThan(rememberRect.top));
     expect(tester.takeException(), isNull);
   });
 
@@ -208,7 +224,7 @@ void main() {
       MaterialApp(
         theme: ui.uiTheme(),
         home: LoginPage(
-          sizeForMode: (_, {showingError = false}) => const Size(416, 284),
+          sizeForMode: (_, {showingError = false}) => const Size(416, 385),
           consumeInitialWindowLock: () => true,
           lockAuthWindow:
               ({
@@ -250,7 +266,7 @@ void main() {
       MaterialApp(
         theme: ui.uiTheme().copyWith(platform: TargetPlatform.windows),
         home: LoginPage(
-          sizeForMode: (_, {showingError = false}) => const Size(430, 291),
+          sizeForMode: (_, {showingError = false}) => const Size(430, 385),
           consumeInitialWindowLock: () => true,
           lockAuthWindow:
               ({
@@ -294,7 +310,7 @@ void main() {
       MaterialApp(
         theme: ui.uiTheme(),
         home: LoginPage(
-          sizeForMode: (_, {showingError = false}) => const Size(430, 291),
+          sizeForMode: (_, {showingError = false}) => const Size(430, 385),
           consumeInitialWindowLock: () => true,
           lockAuthWindow:
               ({
@@ -406,7 +422,7 @@ void main() {
         MaterialApp(
           theme: ui.uiTheme(),
           home: LoginPage(
-            sizeForMode: (_, {showingError = false}) => const Size(430, 291),
+            sizeForMode: (_, {showingError = false}) => const Size(430, 385),
             consumeInitialWindowLock: () => true,
             lockAuthWindow:
                 ({
@@ -565,7 +581,7 @@ void main() {
       MaterialApp(
         theme: ui.uiTheme(),
         home: LoginPage(
-          sizeForMode: (_, {showingError = false}) => const Size(430, 291),
+          sizeForMode: (_, {showingError = false}) => const Size(430, 385),
           consumeInitialWindowLock: () => true,
           lockAuthWindow:
               ({
@@ -605,7 +621,7 @@ void main() {
         MaterialApp(
           theme: ui.uiTheme(),
           home: LoginPage(
-            sizeForMode: (_, {showingError = false}) => const Size(430, 291),
+            sizeForMode: (_, {showingError = false}) => const Size(430, 385),
             consumeInitialWindowLock: () => true,
             lockAuthWindow:
                 ({
@@ -681,7 +697,7 @@ void main() {
     expect(find.text('请输入账号和密码后继续'), findsOneWidget);
     expect(
       tester.getSize(find.byKey(const ValueKey('auth-surface'))).height,
-      closeTo(normalSurfaceHeight + 20, 0.01),
+      closeTo(normalSurfaceHeight, 0.01),
     );
     expect(tester.takeException(), isNull);
   });

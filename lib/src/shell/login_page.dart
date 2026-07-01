@@ -26,17 +26,17 @@ typedef AuthSubmit =
 
 enum _AuthMode { login, register }
 
-const double _authWindowButtonInset = 36;
-const double _authTitleBarTopInset = 6;
-const double _authTitleBarHeight = 16;
-const double _authTitleBarGap =
-    _authWindowButtonInset - _authTitleBarTopInset - _authTitleBarHeight;
+const double _authTitleBarTopInset = 14;
+const double _authTitleBarHeight = 54;
+const double _authTitleBarGap = 14;
+const double _authBrandIconSize = 36;
+const double _authBrandGap = 10;
 const double _authFieldGap = 3;
 const double _authModeGap = 10;
 const double _authActionGap = 14;
 const double _authErrorHeight = 16;
-const double _authErrorGap = 4;
-const double _authRememberGap = 10;
+const double _authPasswordErrorGap = 4;
+const double _authErrorRememberGap = 4;
 const double _authRememberHeight = 28;
 const double _accountHistoryItemHeight = 38;
 const double _authSegmentedControlOuterHeight = 42;
@@ -49,9 +49,10 @@ const double _accountHistoryDropdownTop =
     _authInputOuterHeight +
     _authFieldGap;
 const _authTitleBarStyle = TextStyle(
-  color: UiColors.textSecondary,
-  fontSize: 12,
-  fontWeight: FontWeight.w600,
+  color: UiColors.text,
+  fontSize: 22,
+  fontWeight: FontWeight.w700,
+  height: 1,
   letterSpacing: 0,
 );
 
@@ -174,10 +175,6 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    if (_showingError) {
-      await _lockAuthSize(showingError: false);
-      if (!mounted) return;
-    }
     setState(() => _submitState = authSubmitStarted());
 
     try {
@@ -332,11 +329,6 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _showSubmitState(AuthSubmitState state) async {
-    final showingError = state.error != null && state.error!.isNotEmpty;
-    if (showingError) {
-      await _lockAuthSize(showingError: true);
-      if (!mounted) return;
-    }
     setState(() => _submitState = state);
   }
 
@@ -357,7 +349,7 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    final size = widget.sizeForMode(_registering, showingError: _showingError);
+    final size = widget.sizeForMode(_registering);
     final showWindowControls =
         widget.windowController != null &&
         Theme.of(context).platform == TargetPlatform.windows;
@@ -469,7 +461,13 @@ class _LoginPageState extends State<LoginPage> {
                                           : (_) => _submit(),
                                     ),
                                     if (!_registering) ...[
-                                      const SizedBox(height: _authRememberGap),
+                                      const SizedBox(
+                                        height: _authPasswordErrorGap,
+                                      ),
+                                      _buildErrorSlot(),
+                                      const SizedBox(
+                                        height: _authErrorRememberGap,
+                                      ),
                                       _RememberPasswordRow(
                                         value: _rememberPassword,
                                         enabled: !_submitState.busy,
@@ -500,27 +498,12 @@ class _LoginPageState extends State<LoginPage> {
                                         maxLines: 1,
                                         onSubmitted: (_) => _submit(),
                                       ),
+                                      const SizedBox(
+                                        height: _authPasswordErrorGap,
+                                      ),
+                                      _buildErrorSlot(),
                                     ],
                                     const SizedBox(height: _authActionGap),
-                                    if (_showingError) ...[
-                                      SizedBox(
-                                        height: _authErrorHeight,
-                                        child: Align(
-                                          alignment: Alignment.centerLeft,
-                                          child: Text(
-                                            _submitState.error!,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              color: UiColors.danger,
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(height: _authErrorGap),
-                                    ],
                                     Button(
                                       width: double.infinity,
                                       tone: ButtonTone.primary,
@@ -573,6 +556,28 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
+  Widget _buildErrorSlot() {
+    return SizedBox(
+      key: const ValueKey('auth-error-slot'),
+      height: _authErrorHeight,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: _showingError
+            ? Text(
+                _submitState.error!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: UiColors.danger,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              )
+            : const SizedBox.shrink(),
+      ),
+    );
+  }
+
   Widget _buildLoginInput() {
     return Input(
       controller: _login,
@@ -604,14 +609,28 @@ class _LoginPageState extends State<LoginPage> {
     final title = MouseRegion(
       cursor: SystemMouseCursors.basic,
       child: SelectionContainer.disabled(
-        child: const SizedBox(
+        child: SizedBox(
           height: _authTitleBarHeight,
           child: Center(
-            child: Text(
-              'Gang Chat',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: _authTitleBarStyle,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Image.asset(
+                  'assets/branding/auth_brand_icon.png',
+                  key: const ValueKey('auth-brand-icon'),
+                  width: _authBrandIconSize,
+                  height: _authBrandIconSize,
+                  fit: BoxFit.contain,
+                  filterQuality: FilterQuality.none,
+                ),
+                const SizedBox(width: _authBrandGap),
+                const Text(
+                  'Gang Chat',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _authTitleBarStyle,
+                ),
+              ],
             ),
           ),
         ),

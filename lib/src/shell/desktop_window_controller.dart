@@ -16,9 +16,11 @@ const _unboundedWindowSize = Size(100000, 100000);
 const _minimumWindowSize = Size(1, 1);
 const _authWidgetWidth = 430.0;
 const _authBottomBreathingRoom = 24.0;
-const _loginWidgetHeight = 291.0 + _authBottomBreathingRoom;
-const _registerWidgetHeight = 359.0 + _authBottomBreathingRoom;
-const _authErrorExtraHeight = 20.0;
+const _authBrandTitleExtraHeight = 70.0;
+const _loginWidgetHeight =
+    291.0 + _authBrandTitleExtraHeight + _authBottomBreathingRoom;
+const _registerWidgetHeight =
+    359.0 + _authBrandTitleExtraHeight + _authBottomBreathingRoom;
 const _loginWidgetSize = Size(_authWidgetWidth, _loginWidgetHeight);
 const _registerWidgetSize = Size(_authWidgetWidth, _registerWidgetHeight);
 const _loginWindowSize = _loginWidgetSize;
@@ -58,9 +60,7 @@ class DesktopWindowController {
   }
 
   Size authWidgetSize(bool registering, {bool showingError = false}) {
-    final baseSize = registering ? _registerWidgetSize : _loginWidgetSize;
-    if (!showingError) return baseSize;
-    return Size(baseSize.width, baseSize.height + _authErrorExtraHeight);
+    return registering ? _registerWidgetSize : _loginWidgetSize;
   }
 
   Future<void> prepareForLaunch({required bool authenticated}) async {
