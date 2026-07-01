@@ -79,15 +79,15 @@ Section "Install"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
   CreateDirectory "$SMPROGRAMS\Gang Chat"
-  CreateShortcut "$SMPROGRAMS\Gang Chat\Gang Chat.lnk" "$INSTDIR\${APP_EXE}"
-  CreateShortcut "$SMPROGRAMS\Gang Chat\Uninstall Gang Chat.lnk" "$INSTDIR\Uninstall.exe"
-  CreateShortcut "$DESKTOP\Gang Chat.lnk" "$INSTDIR\${APP_EXE}"
+  CreateShortcut "$SMPROGRAMS\Gang Chat\Gang Chat.lnk" "$INSTDIR\${APP_EXE}" "" "$INSTDIR\${APP_EXE}" 0
+  CreateShortcut "$SMPROGRAMS\Gang Chat\Uninstall Gang Chat.lnk" "$INSTDIR\Uninstall.exe" "" "$INSTDIR\Uninstall.exe" 0
+  CreateShortcut "$DESKTOP\Gang Chat.lnk" "$INSTDIR\${APP_EXE}" "" "$INSTDIR\${APP_EXE}" 0
 
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gang Chat" "DisplayName" "${APP_NAME}"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gang Chat" "DisplayVersion" "${APP_VERSION}"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gang Chat" "Publisher" "${APP_PUBLISHER}"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gang Chat" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gang Chat" "DisplayIcon" "$INSTDIR\${APP_EXE}"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gang Chat" "DisplayIcon" "$INSTDIR\${APP_EXE},0"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gang Chat" "UninstallString" '"$INSTDIR\Uninstall.exe"'
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gang Chat" "NoModify" 1
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gang Chat" "NoRepair" 1
