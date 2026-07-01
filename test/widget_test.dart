@@ -174,6 +174,7 @@ void main() {
         .getSize(find.byKey(const ValueKey('auth-surface')))
         .height;
     final normalBottomGap = _submitBottomGap(tester, submitLabel: '登录');
+    expect(normalBottomGap, greaterThanOrEqualTo(44));
 
     await tester.tap(find.widgetWithText(ui.Button, '登录'));
     await tester.pump();

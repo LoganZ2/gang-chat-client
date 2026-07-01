@@ -258,22 +258,44 @@ jobs:
           [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "name=$INSTALLER`n")
           Get-Item $INSTALLER | Select-Object Name, @{n='Size';e={'{0:N0} bytes' -f $_.Length}}
 
-      - name: Upload Windows installer to release
+      - name: Package Windows zip
+        id: windows_zip
+        shell: powershell
+        run: |
+          $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
+          $VERSION = "${{ needs.prepare.outputs.version }}"
+          $SRC = "build\windows\x64\runner\Release"
+          if (-not (Test-Path $SRC)) { Write-Error "build output not found at $SRC"; exit 1 }
+          $ZIP = "GangChat-$VERSION-windows.zip"
+          if (Test-Path $ZIP) { Remove-Item -Force $ZIP }
+          Compress-Archive -Path "$SRC\*" -DestinationPath $ZIP -Force
+          if (-not (Test-Path $ZIP)) { Write-Error "zip not created: $ZIP"; exit 1 }
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "name=$ZIP`n")
+          Get-Item $ZIP | Select-Object Name, @{n='Size';e={'{0:N0} bytes' -f $_.Length}}
+
+      - name: Upload Windows assets to release
         shell: powershell
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
-          $INSTALLER = "${{ steps.installer.outputs.name }}"
           $API = "$env:GITHUB_SERVER_URL/api/v1/repos/$env:GITHUB_REPOSITORY"
           $RELEASE_ID = "${{ needs.prepare.outputs.release_id }}"
-          # 用数组传参避免 PS 多行 backtick 续行解析问题
-          $curlArgs = @('-fsS', '-X', 'POST',
-            "$API/releases/$RELEASE_ID/assets?name=$INSTALLER",
-            '-H', "Authorization: token $env:TOKEN",
-            '-F', "attachment=@$INSTALLER")
-          curl.exe @curlArgs
-          Write-Host "Uploaded $INSTALLER"
+          $ASSETS = @(
+            "${{ steps.installer.outputs.name }}",
+            "${{ steps.windows_zip.outputs.name }}"
+          )
+          foreach ($ASSET in $ASSETS) {
+            if (-not (Test-Path $ASSET)) { Write-Error "asset not found: $ASSET"; exit 1 }
+            # 用数组传参避免 PS 多行 backtick 续行解析问题
+            $curlArgs = @('-fsS', '-X', 'POST',
+              "$API/releases/$RELEASE_ID/assets?name=$ASSET",
+              '-H', "Authorization: token $env:TOKEN",
+              '-F', "attachment=@$ASSET")
+            curl.exe @curlArgs
+            if ($LASTEXITCODE -ne 0) { Write-Error "upload failed: $ASSET"; exit 1 }
+            Write-Host "Uploaded $ASSET"
+          }
 
   release:
     runs-on: macos-arm64

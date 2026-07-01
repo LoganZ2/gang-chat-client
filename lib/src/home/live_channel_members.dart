@@ -222,7 +222,7 @@ class _LiveMemberCard extends StatelessWidget {
       speaking: speaking,
       liveKitMicMuted: liveKitMicMuted,
     );
-    final name = room_display.userPrimaryName(participant.user);
+    final name = live_display.liveUserDisplayName(participant.user);
     final nameColor = _liveMemberNameColor(participant.user, local: local);
     final previewTrack = this.previewTrack;
     final borderColor = state.highlighted

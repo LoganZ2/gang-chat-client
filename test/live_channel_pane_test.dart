@@ -195,11 +195,11 @@ void main() {
   ) async {
     final searchController = TextEditingController();
     addTearDown(searchController.dispose);
-    final remoteUser = _user(
-      'phabe',
-      'Phabe',
-      roomRole: 'member',
-    ).copyWith(defaultAvatarKey: 'green-2');
+    final remoteUser = _user('phabe', 'Phabe', roomRole: 'member').copyWith(
+      displayName: 'Global Phabe',
+      roomDisplayName: 'Room Phabe',
+      defaultAvatarKey: 'green-2',
+    );
     final live = _liveState([
       _participant(id: 'live_phabe', user: remoteUser, micMuted: true),
     ]);
@@ -211,11 +211,15 @@ void main() {
     final avatar = tester.widget<ui.Avatar>(
       find.byWidgetPredicate(
         (widget) =>
-            widget is ui.Avatar && widget.label == 'Phabe' && widget.size == 42,
+            widget is ui.Avatar &&
+            widget.label == 'Global Phabe' &&
+            widget.size == 42,
       ),
     );
 
     expect(avatar.defaultAvatarKey, 'green-2');
+    expect(find.text('Room Phabe'), findsOneWidget);
+    expect(find.text('Global Phabe'), findsNothing);
     final activityTag = find.byKey(
       const ValueKey<String>('live-member-activity:phabe'),
     );
