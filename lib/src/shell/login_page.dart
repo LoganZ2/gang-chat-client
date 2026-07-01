@@ -661,7 +661,7 @@ class _RememberPasswordRow extends StatelessWidget {
           ),
           const Spacer(),
           _AuthTextLink(
-            label: '忘记密码',
+            label: '忘记密码？',
             enabled: enabled,
             onPressed: () {
               // Placeholder until the password reset API is wired.
@@ -927,7 +927,7 @@ class _AccountHistoryDropdownState extends State<_AccountHistoryDropdown> {
             radius: const Radius.circular(999),
             thickness: scrollable ? 5 : null,
             thumbVisibility: scrollable,
-            trackVisibility: scrollable,
+            trackVisibility: false,
             child: ListView.builder(
               controller: _scrollController,
               padding: EdgeInsets.only(right: scrollable ? 7 : 0),

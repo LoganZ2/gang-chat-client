@@ -498,6 +498,75 @@ void main() {
     },
   );
 
+  test(
+    'patchModeratedParticipant keeps mic and headphones actions separate',
+    () {
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          fail('Reducer test should not call the API: ${request.url}');
+        }),
+      );
+      addTearDown(api.close);
+      final controller = LiveController(api: api);
+      final alice = _user('alice');
+      final initial = _participant(alice);
+
+      final headphonesMuted = controller
+          .patchModeratedParticipant(
+            live: _live('room_1', [initial]),
+            participant: initial,
+            action: LiveModerationAction.blockVoice,
+          )!
+          .participants
+          .single;
+      expect(headphonesMuted.micMuted, isFalse);
+      expect(headphonesMuted.micBlocked, isFalse);
+      expect(headphonesMuted.voiceBlocked, isFalse);
+      expect(headphonesMuted.headphonesMuted, isTrue);
+      expect(headphonesMuted.headphonesBlocked, isTrue);
+      expect(headphonesMuted.headphonesListening, isFalse);
+
+      final micRestored = controller
+          .patchModeratedParticipant(
+            live: _live('room_1', [headphonesMuted]),
+            participant: headphonesMuted.copyWith(
+              micMuted: true,
+              micBlocked: true,
+              voiceBlocked: true,
+            ),
+            action: LiveModerationAction.restoreVoice,
+          )!
+          .participants
+          .single;
+      expect(micRestored.micMuted, isFalse);
+      expect(micRestored.micBlocked, isFalse);
+      expect(micRestored.voiceBlocked, isFalse);
+      expect(micRestored.headphonesMuted, isTrue);
+      expect(micRestored.headphonesBlocked, isTrue);
+
+      final headphonesRestored = controller
+          .patchModeratedParticipant(
+            live: _live('room_1', [micRestored]),
+            participant: micRestored.copyWith(
+              micMuted: true,
+              micBlocked: true,
+              voiceBlocked: true,
+            ),
+            action: LiveModerationAction.restoreHeadphones,
+          )!
+          .participants
+          .single;
+      expect(headphonesRestored.micMuted, isTrue);
+      expect(headphonesRestored.micBlocked, isTrue);
+      expect(headphonesRestored.voiceBlocked, isTrue);
+      expect(headphonesRestored.headphonesMuted, isFalse);
+      expect(headphonesRestored.headphonesBlocked, isFalse);
+      expect(headphonesRestored.headphonesListening, isTrue);
+    },
+  );
+
   test('live kit mic sync is needed only when server changed mic state', () {
     expect(
       shouldSyncLiveKitMicAfterServerPatch(
@@ -617,6 +686,9 @@ LiveParticipant _participant(
   UserSummary user, {
   bool micMuted = false,
   bool micBlocked = false,
+  bool headphonesMuted = false,
+  bool headphonesBlocked = false,
+  bool headphonesListening = true,
   bool voiceBlocked = false,
   bool cameraOn = false,
   bool screenSharing = false,
@@ -627,7 +699,9 @@ LiveParticipant _participant(
     joinedAt: DateTime.utc(2026, 6, 5),
     micMuted: micMuted,
     micBlocked: micBlocked,
-    headphonesMuted: false,
+    headphonesMuted: headphonesMuted,
+    headphonesBlocked: headphonesBlocked,
+    headphonesListening: headphonesListening,
     voiceBlocked: voiceBlocked,
     cameraOn: cameraOn,
     screenSharing: screenSharing,

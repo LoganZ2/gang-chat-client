@@ -686,11 +686,9 @@ String _liveMemberMicTooltip({
   required bool moderationControls,
 }) {
   if (moderationControls) {
-    if (micModerated && headphonesModerated) return '解除隔离';
-    if (micModerated) return '取消禁言';
-    return '禁言';
+    return micModerated ? '取消麦克风静音' : '麦克风静音';
   }
-  if (micModerated) return '已被禁言';
+  if (micModerated) return '已被麦克风静音';
   return micMutedForDisplay ? '麦克风关闭' : '麦克风开启';
 }
 
@@ -700,9 +698,9 @@ String _liveMemberHeadphonesTooltip({
   required bool moderationControls,
 }) {
   if (moderationControls) {
-    return headphonesModerated ? '恢复耳机' : '隔离';
+    return headphonesModerated ? '取消耳机静音' : '耳机静音';
   }
-  if (headphonesModerated) return '已被隔离';
+  if (headphonesModerated) return '已被耳机静音';
   return listening ? '正在收听' : '已关闭收听';
 }
 

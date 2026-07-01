@@ -147,7 +147,7 @@ void main() {
     expect(find.widgetWithText(ui.Button, '登录'), findsOneWidget);
     expect(find.text('注册'), findsOneWidget);
     expect(find.text('记住密码'), findsOneWidget);
-    expect(find.text('忘记密码'), findsOneWidget);
+    expect(find.text('忘记密码？'), findsOneWidget);
     expect(find.byType(ui.UiCheckbox), findsOneWidget);
     expect(find.byType(ui.UiSwitch), findsNothing);
     expect(find.byTooltip('显示密码'), findsOneWidget);
@@ -180,7 +180,7 @@ void main() {
     final normalBottomGap = _submitBottomGap(tester, submitLabel: '登录');
     expect(normalBottomGap, greaterThanOrEqualTo(34));
 
-    await tester.tap(find.text('忘记密码'));
+    await tester.tap(find.text('忘记密码？'));
     await tester.pump();
 
     await tester.tap(find.widgetWithText(ui.Button, '登录'));
@@ -444,7 +444,7 @@ void main() {
       expect(dropdownRect.bottom, greaterThan(passwordRect.bottom));
       expect(dropdownRect.height, closeTo(4 * 38, 0.01));
       expect(scrollbar.thumbVisibility, isTrue);
-      expect(scrollbar.trackVisibility, isTrue);
+      expect(scrollbar.trackVisibility, isFalse);
 
       final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
       await gesture.addPointer(location: Offset.zero);
@@ -594,6 +594,51 @@ void main() {
     expect(store.records.single.login, 'kai');
     expect(store.records.single.password, 'secret123');
   });
+
+  testWidgets(
+    'unchecked remember password stays visually unchecked while busy',
+    (WidgetTester tester) async {
+      final submitCompleter = Completer<void>();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: LoginPage(
+            sizeForMode: (_, {showingError = false}) => const Size(430, 291),
+            consumeInitialWindowLock: () => true,
+            lockAuthWindow:
+                ({
+                  bool registering = false,
+                  bool moveWindow = false,
+                  bool centerWindow = false,
+                  Size? size,
+                }) async {},
+            onSubmit: (_, {required rememberPassword}) {
+              expect(rememberPassword, isFalse);
+              return submitCompleter.future;
+            },
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.enterText(_textFieldWithHint('用户名或邮箱地址'), 'kai');
+      await tester.enterText(_textFieldWithHint('密码'), 'secret123');
+      await tester.tap(find.widgetWithText(ui.Button, '登录'));
+      await tester.pump();
+
+      expect(
+        tester.widget<ui.UiCheckbox>(find.byType(ui.UiCheckbox)).value,
+        isFalse,
+      );
+      expect(_rememberPasswordCheckIcon(tester).color, Colors.transparent);
+
+      submitCompleter.complete();
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('register mode exposes full auth form', (
     WidgetTester tester,
@@ -1822,7 +1867,8 @@ void main() {
     expect(_liveControl('mic'), findsOneWidget);
     expect(_liveControl('leave'), findsOneWidget);
     expect(find.byTooltip('静音'), findsNothing);
-    expect(find.byTooltip('耳机静音'), findsNothing);
+    expect(find.byTooltip('麦克风静音'), findsOneWidget);
+    expect(find.byTooltip('耳机静音'), findsOneWidget);
     expect(find.byTooltip('关闭麦克风'), findsOneWidget);
     expect(find.byTooltip('关闭耳机'), findsOneWidget);
     expect(find.byTooltip('共享屏幕'), findsOneWidget);
@@ -1898,29 +1944,29 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(remoteMicButton);
     await tester.pumpAndSettle();
-    expect(find.text('禁言此用户'), findsOneWidget);
-    await tester.tap(find.widgetWithText(ui.Button, '禁言'));
+    expect(find.text('麦克风静音此用户'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ui.Button, '麦克风静音'));
     await tester.pumpAndSettle();
     expect(liveModerationActions.last, 'mute_mic');
 
     await tester.tap(remoteHeadphonesButton);
     await tester.pumpAndSettle();
-    expect(find.text('隔离此用户'), findsOneWidget);
-    await tester.tap(find.widgetWithText(ui.Button, '隔离'));
+    expect(find.text('耳机静音此用户'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ui.Button, '耳机静音'));
     await tester.pumpAndSettle();
     expect(liveModerationActions.last, 'block_voice');
 
     await tester.tap(remoteHeadphonesButton);
     await tester.pumpAndSettle();
-    expect(find.text('恢复耳机'), findsOneWidget);
-    await tester.tap(find.widgetWithText(ui.Button, '恢复'));
+    expect(find.widgetWithText(ui.Button, '取消耳机静音'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ui.Button, '取消耳机静音'));
     await tester.pumpAndSettle();
     expect(liveModerationActions.last, 'restore_headphones');
 
     await tester.tap(remoteMicButton);
     await tester.pumpAndSettle();
-    expect(find.text('取消禁言'), findsOneWidget);
-    await tester.tap(find.widgetWithText(ui.Button, '解除'));
+    expect(find.widgetWithText(ui.Button, '取消麦克风静音'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ui.Button, '取消麦克风静音'));
     await tester.pumpAndSettle();
     expect(liveModerationActions.last, 'restore_voice');
 
@@ -4991,10 +5037,22 @@ void main() {
       MaterialApp(
         theme: ui.uiTheme(),
         home: const Scaffold(
+          body: Center(child: ui.UiCheckbox(value: false, onChanged: null)),
+        ),
+      ),
+    );
+    expect(_rememberPasswordCheckIcon(tester).color, Colors.transparent);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: const Scaffold(
           body: Center(child: ui.UiCheckbox(value: true, onChanged: null)),
         ),
       ),
     );
+    expect(_rememberPasswordCheckIcon(tester).color, ui.UiColors.textMuted);
+
     await tester.tap(checkboxFinder);
     await tester.pump();
 
@@ -5797,6 +5855,15 @@ double _submitBottomGap(WidgetTester tester, {required String submitLabel}) {
     find.widgetWithText(ui.Button, submitLabel),
   );
   return surfaceRect.bottom - submitRect.bottom;
+}
+
+Icon _rememberPasswordCheckIcon(WidgetTester tester) {
+  return tester.widget<Icon>(
+    find.descendant(
+      of: find.byType(ui.UiCheckbox),
+      matching: find.byIcon(Icons.check_rounded),
+    ),
+  );
 }
 
 void _expectSubmitButtonFullWidth(

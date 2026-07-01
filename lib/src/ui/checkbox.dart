@@ -32,11 +32,11 @@ class UiCheckbox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final active = value;
-    final foreground = !_interactive
+    final foreground = !active
+        ? Colors.transparent
+        : !_interactive
         ? UiColors.textMuted
-        : active
-        ? UiColors.controlAccent
-        : Colors.transparent;
+        : UiColors.controlAccent;
     final background = active ? UiColors.selected : UiColors.surface;
     final border = active ? UiColors.selectedBorder : UiColors.border;
 

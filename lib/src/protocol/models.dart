@@ -1753,7 +1753,7 @@ class LiveParticipant {
   /// defaults to true for servers that omit it.
   final bool headphonesListening;
 
-  /// A persistent room-level voice ban set by an admin (`block_voice`). While
+  /// A persistent room-level microphone mute set by an admin (`mute_mic`). While
   /// true the participant's LiveKit publish permission is revoked: the mic is
   /// force-muted and self-unmute requests are rejected by the server. Survives
   /// reconnects until an admin runs `restore_voice`. Defaults to false for

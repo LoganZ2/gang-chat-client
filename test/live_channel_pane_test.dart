@@ -476,8 +476,8 @@ void main() {
       find.byKey(const ValueKey<String>('live-member-activity:phabe')),
       findsNothing,
     );
-    expect(find.text('已被禁言'), findsNothing);
-    expect(find.text('已被隔离'), findsNothing);
+    expect(find.text('已被麦克风静音'), findsNothing);
+    expect(find.text('已被耳机静音'), findsNothing);
     expect(
       tester
           .widget<Icon>(

@@ -348,7 +348,7 @@ class LiveSession extends ChangeNotifier {
   void Function()? onForciblyRemoved;
 
   /// Fired when LiveKit reports the local participant's publish permission
-  /// changed (an admin `block_voice` -> canPublish=false, or `restore_voice` ->
+  /// changed (an admin `mute_mic` -> canPublish=false, or `restore_voice` ->
   /// canPublish=true). [canPublish] is the new value. The UI reconciles the
   /// mic button: disabled while false, re-enabled (still muted) when restored.
   void Function(bool canPublish)? onPublishPermissionChanged;
@@ -369,7 +369,7 @@ class LiveSession extends ChangeNotifier {
   }
 
   /// Whether LiveKit currently grants the local participant publish rights.
-  /// False once an admin `block_voice` revokes it; LiveKit is the source of
+  /// False once an admin `mute_mic` revokes it; LiveKit is the source of
   /// truth here, not any locally-tracked flag.
   bool get canPublish => _canPublish;
   double get inputVolume => _inputVolume;
@@ -405,7 +405,7 @@ class LiveSession extends ChangeNotifier {
   /// Whether the local microphone is muted. With Option A muting keeps the
   /// LiveKit track live (capture never stops) and only silences the outgoing
   /// audio, so the track's own muted flag is not the source of truth — the
-  /// locally-tracked [_micMuted] is. An admin `block_voice` is reflected
+  /// locally-tracked [_micMuted] is. An admin `mute_mic` is reflected
   /// separately through [canPublish]. Returns true when not connected.
   bool get localMicMuted {
     if (_room?.localParticipant == null) return true;
@@ -1068,7 +1068,7 @@ class LiveSession extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    // An admin block_voice / restore_voice flips the local participant's
+    // An admin mute_mic / restore_voice flips the local participant's
     // publish permission server-side; LiveKit pushes it down here. Track only
     // the local participant — remote permission changes don't affect our UI.
     if (event is lk.ParticipantPermissionsUpdatedEvent) {

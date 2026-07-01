@@ -463,19 +463,13 @@ class LiveController {
         voiceBlocked: true,
       ),
       LiveModerationAction.blockVoice => participant.copyWith(
-        micMuted: true,
-        micBlocked: true,
         headphonesMuted: true,
         headphonesBlocked: true,
         headphonesListening: false,
-        voiceBlocked: true,
       ),
       LiveModerationAction.restoreVoice => participant.copyWith(
         micMuted: false,
         micBlocked: false,
-        headphonesMuted: false,
-        headphonesBlocked: false,
-        headphonesListening: true,
         voiceBlocked: false,
       ),
       LiveModerationAction.restoreHeadphones => participant.copyWith(
