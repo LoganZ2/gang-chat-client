@@ -1,0 +1,231 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version without v prefix, for example 1.2.0'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          if [ -z "$VERSION" ]; then echo "version is empty"; exit 1; fi
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "version must be major.minor.patch: $VERSION"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: $VERSION"
+
+  build-macos:
+    runs-on: macos-latest
+    needs: [prepare]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.44.0'
+          cache: false
+
+      - name: Flutter sanity check
+        run: flutter --version
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: UTF-8 encoding check
+        run: dart tool/check_utf8.dart
+
+      - name: Update release metadata
+        run: |
+          RELEASE_DATE="$(date +%Y/%m/%d)"
+          dart tool/update_release_metadata.dart \
+            --version "${{ needs.prepare.outputs.version }}" \
+            --date "$RELEASE_DATE"
+
+      - name: Build macOS (release)
+        run: flutter build macos --release --build-name="${{ needs.prepare.outputs.version }}"
+
+      - name: Package DMG
+        id: dmg
+        run: |
+          APP="build/macos/Build/Products/Release/client.app"
+          [ -d "$APP" ] || { echo "app bundle not found at $APP"; exit 1; }
+          DMG="GangChat-${{ needs.prepare.outputs.version }}-macos.dmg"
+          STAGING="$(mktemp -d)"
+          cp -R "$APP" "$STAGING/"
+          ln -s /Applications "$STAGING/Applications"
+          hdiutil create -volname "Gang Chat" -srcfolder "$STAGING" \
+            -ov -format UDZO "$DMG"
+          rm -rf "$STAGING"
+          echo "name=$DMG" >> "$GITHUB_OUTPUT"
+          ls -lh "$DMG"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: ${{ steps.dmg.outputs.name }}
+          if-no-files-found: error
+
+  build-windows:
+    runs-on: windows-latest
+    needs: [prepare]
+    steps:
+      - name: Enable long paths
+        shell: powershell
+        run: git config --global core.longpaths true
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.44.0'
+          cache: false
+
+      - name: Setup NSIS
+        shell: powershell
+        run: choco install nsis -y --no-progress
+
+      - name: Flutter sanity check
+        shell: powershell
+        run: flutter --version
+
+      - name: Get dependencies
+        shell: powershell
+        run: flutter pub get
+
+      - name: UTF-8 encoding check
+        shell: powershell
+        run: dart tool/check_utf8.dart
+
+      - name: Update release metadata
+        shell: powershell
+        run: |
+          $releaseDate = Get-Date -Format 'yyyy/MM/dd'
+          dart tool/update_release_metadata.dart --version "${{ needs.prepare.outputs.version }}" --date $releaseDate
+
+      - name: Build Windows (release)
+        shell: powershell
+        run: flutter build windows --release --build-name="${{ needs.prepare.outputs.version }}"
+
+      - name: Prepare Windows package files
+        id: windows_package
+        shell: powershell
+        run: |
+          $SRC = "build\windows\x64\runner\Release"
+          $STAGING = "build\windows\x64\runner\Package"
+          if (-not (Test-Path $SRC)) { Write-Error "build output not found at $SRC"; exit 1 }
+          if (-not (Test-Path (Join-Path $SRC "client.exe"))) { Write-Error "build executable not found at $SRC\client.exe"; exit 1 }
+          if (Test-Path $STAGING) { Remove-Item -Recurse -Force $STAGING }
+          New-Item -ItemType Directory -Force -Path $STAGING | Out-Null
+          Copy-Item -Path "$SRC\*" -Destination $STAGING -Recurse -Force
+
+          $excludePatterns = @("*.pdb", "*.ilk", "*.exp", "*.lib", "*.iobj", "*.ipdb")
+          foreach ($pattern in $excludePatterns) {
+            Get-ChildItem -Path $STAGING -Recurse -File -Filter $pattern | Remove-Item -Force
+          }
+          if (-not (Test-Path (Join-Path $STAGING "client.exe"))) { Write-Error "staged executable not found at $STAGING\client.exe"; exit 1 }
+
+          $totalBytes = (Get-ChildItem -Path $STAGING -Recurse -File | Measure-Object -Property Length -Sum).Sum
+          Write-Host ("Staged Windows runtime size: {0:N0} bytes" -f $totalBytes)
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "dir=$STAGING`n")
+
+      - name: Package NSIS installer
+        id: installer
+        shell: powershell
+        run: |
+          $VERSION = "${{ needs.prepare.outputs.version }}"
+          $SRC = "${{ steps.windows_package.outputs.dir }}"
+          if (-not (Test-Path $SRC)) { Write-Error "build output not found at $SRC"; exit 1 }
+          if (-not (Test-Path (Join-Path $SRC "client.exe"))) { Write-Error "build executable not found at $SRC"; exit 1 }
+          $MAKENSIS = "C:\Program Files (x86)\NSIS\makensis.exe"
+          if (-not (Test-Path $MAKENSIS)) { Write-Error "makensis.exe not found at $MAKENSIS"; exit 1 }
+          $VERSION_QUAD = "$VERSION.0"
+          $INSTALLER = "GangChat-$VERSION-windows-installer.exe"
+          $ROOT = (Resolve-Path ".").Path
+          $SRC_ABS = (Resolve-Path $SRC).Path
+          $OUT_ABS = Join-Path $ROOT $INSTALLER
+          & $MAKENSIS `
+            "/DAPP_VERSION=$VERSION" `
+            "/DAPP_VERSION_QUAD=$VERSION_QUAD" `
+            "/DPROJECT_ROOT=$ROOT" `
+            "/DSOURCE_DIR=$SRC_ABS" `
+            "/DOUTPUT_FILE=$OUT_ABS" `
+            "installer\windows\gang_chat.nsi"
+          if ($LASTEXITCODE -ne 0) { Write-Error "makensis failed"; exit 1 }
+          if (-not (Test-Path $INSTALLER)) { Write-Error "installer not created: $INSTALLER"; exit 1 }
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "name=$INSTALLER`n")
+          Get-Item $INSTALLER | Select-Object Name, @{n='Size';e={'{0:N0} bytes' -f $_.Length}}
+
+      - name: Package Windows zip
+        id: windows_zip
+        shell: powershell
+        run: |
+          $VERSION = "${{ needs.prepare.outputs.version }}"
+          $SRC = "${{ steps.windows_package.outputs.dir }}"
+          if (-not (Test-Path $SRC)) { Write-Error "build output not found at $SRC"; exit 1 }
+          if (-not (Test-Path (Join-Path $SRC "client.exe"))) { Write-Error "build executable not found at $SRC"; exit 1 }
+          $ZIP = "GangChat-$VERSION-windows.zip"
+          if (Test-Path $ZIP) { Remove-Item -Force $ZIP }
+          Compress-Archive -Path "$SRC\*" -DestinationPath $ZIP -Force
+          if (-not (Test-Path $ZIP)) { Write-Error "zip not created: $ZIP"; exit 1 }
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "name=$ZIP`n")
+          Get-Item $ZIP | Select-Object Name, @{n='Size';e={'{0:N0} bytes' -f $_.Length}}
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-assets
+          path: |
+            ${{ steps.installer.outputs.name }}
+            ${{ steps.windows_zip.outputs.name }}
+          if-no-files-found: error
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [prepare, build-macos, build-windows]
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: ${{ needs.prepare.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          draft: false
+          prerelease: false
+          files: release-assets/*
