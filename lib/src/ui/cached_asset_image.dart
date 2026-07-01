@@ -42,12 +42,17 @@ class CachedAssetImage extends StatefulWidget {
 }
 
 class _CachedAssetImageState extends State<CachedAssetImage> {
-  late Future<File> _file;
+  Future<File>? _file;
+  MediaCacheController? _scopeCache;
 
   @override
-  void initState() {
-    super.initState();
-    _file = _load();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final scopeCache = MediaCacheScope.of(context);
+    if (!identical(_scopeCache, scopeCache)) {
+      _scopeCache = scopeCache;
+      _file = _load();
+    }
   }
 
   @override
@@ -59,7 +64,7 @@ class _CachedAssetImageState extends State<CachedAssetImage> {
         oldWidget.expectedBytes != widget.expectedBytes ||
         oldWidget.namespace != widget.namespace ||
         !identical(oldWidget.cache, widget.cache)) {
-      _file = _load();
+      if (_scopeCache != null) _file = _load();
     }
   }
 
@@ -74,7 +79,7 @@ class _CachedAssetImageState extends State<CachedAssetImage> {
     if (request == null) {
       return Future<File>.error(StateError('图片地址无效'));
     }
-    final cache = widget.cache ?? MediaCacheScope.of(context);
+    final cache = widget.cache ?? _scopeCache ?? MediaCacheScope.of(context);
     return cache.getOrDownload(request: request);
   }
 
