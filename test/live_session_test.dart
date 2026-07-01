@@ -230,4 +230,42 @@ void main() {
     session.debugStartOutputRebinder();
     session.debugStopOutputRebinder();
   });
+
+  test(
+    'publish permission updates ignore headphone-only permission events',
+    () {
+      expect(
+        shouldApplyLivePublishPermissionUpdate(
+          currentCanPublish: true,
+          oldCanPublish: true,
+          nextCanPublish: true,
+        ),
+        isFalse,
+      );
+      expect(
+        shouldApplyLivePublishPermissionUpdate(
+          currentCanPublish: true,
+          oldCanPublish: true,
+          nextCanPublish: false,
+        ),
+        isTrue,
+      );
+      expect(
+        shouldApplyLivePublishPermissionUpdate(
+          currentCanPublish: false,
+          oldCanPublish: false,
+          nextCanPublish: true,
+        ),
+        isTrue,
+      );
+      expect(
+        shouldApplyLivePublishPermissionUpdate(
+          currentCanPublish: true,
+          oldCanPublish: false,
+          nextCanPublish: false,
+        ),
+        isFalse,
+      );
+    },
+  );
 }

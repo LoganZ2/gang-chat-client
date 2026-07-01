@@ -35,6 +35,16 @@ bool _isOwnScreenAudioAux(String identity, String? localIdentity) {
   return identity == '$localIdentity$_screenAudioAuxSuffix';
 }
 
+@visibleForTesting
+bool shouldApplyLivePublishPermissionUpdate({
+  required bool currentCanPublish,
+  required bool oldCanPublish,
+  required bool nextCanPublish,
+}) {
+  if (oldCanPublish == nextCanPublish) return false;
+  return currentCanPublish != nextCanPublish;
+}
+
 String _screenShareAudioOwnerIdentity(String identity) {
   if (!_isScreenAudioAux(identity)) return identity;
   return identity.substring(0, identity.length - _screenAudioAuxSuffix.length);
@@ -1068,14 +1078,18 @@ class LiveSession extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    // An admin mute_mic / restore_voice flips the local participant's
-    // publish permission server-side; LiveKit pushes it down here. Track only
-    // the local participant — remote permission changes don't affect our UI.
+    // An admin mute_mic / restore_voice flips the local participant's publish
+    // permission server-side. Headphone mute only changes canSubscribe, so
+    // ignore permission events where canPublish did not actually change.
     if (event is lk.ParticipantPermissionsUpdatedEvent) {
       final local = _room?.localParticipant;
       if (local != null && event.participant.identity == local.identity) {
         final next = event.permissions.canPublish;
-        if (next != _canPublish) {
+        if (shouldApplyLivePublishPermissionUpdate(
+          currentCanPublish: _canPublish,
+          oldCanPublish: event.oldPermissions.canPublish,
+          nextCanPublish: next,
+        )) {
           _canPublish = next;
           unawaited(_applyLocalMicrophoneState());
           notifyListeners();
