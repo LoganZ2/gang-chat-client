@@ -445,6 +445,45 @@ void main() {
     expect(controller.selection, const TextSelection.collapsed(offset: 11));
   });
 
+  testWidgets(
+    'input secondary click stops restoring selection after text edits',
+    (tester) async {
+      final controller = TextEditingController(text: 'hello world');
+      addTearDown(controller.dispose);
+
+      await _pumpInput(tester, controller);
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+
+      const selectedText = TextSelection(baseOffset: 0, extentOffset: 5);
+      controller.selection = selectedText;
+      await tester.pump();
+
+      final fieldRect = tester.getRect(find.byType(TextField));
+      final location = Offset(fieldRect.right - 8, fieldRect.center.dy);
+      final gesture = await tester.createGesture(
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryMouseButton,
+      );
+      await gesture.addPointer(location: location);
+      await tester.pump();
+      await gesture.down(location);
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+
+      const editedValue = TextEditingValue(
+        text: 'hello worlda',
+        selection: TextSelection.collapsed(offset: 12),
+      );
+      controller.value = editedValue;
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(controller.text, 'hello worlda');
+      expect(controller.selection, editedValue.selection);
+    },
+  );
+
   testWidgets('input secondary click restores focus and selection', (
     tester,
   ) async {

@@ -37,6 +37,7 @@ class TextFieldEditingShortcuts extends StatefulWidget {
 class _TextFieldEditingShortcutsState extends State<TextFieldEditingShortcuts> {
   TextSelection? _secondaryClickSelection;
   bool _secondaryClickHadFocus = false;
+  String? _lastControllerText;
   int _secondaryClickRestoreGeneration = 0;
   bool _trackingGlobalPointers = false;
   bool _restoringSecondaryClickSelection = false;
@@ -44,6 +45,7 @@ class _TextFieldEditingShortcutsState extends State<TextFieldEditingShortcuts> {
   @override
   void initState() {
     super.initState();
+    _lastControllerText = widget.controller?.text;
     widget.controller?.addListener(_handleControllerSelectionChanged);
     widget.focusNode?.addListener(_handleFocusChanged);
   }
@@ -54,6 +56,7 @@ class _TextFieldEditingShortcutsState extends State<TextFieldEditingShortcuts> {
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller?.removeListener(_handleControllerSelectionChanged);
       _clearSecondaryClickProtection();
+      _lastControllerText = widget.controller?.text;
       widget.controller?.addListener(_handleControllerSelectionChanged);
     }
     if (oldWidget.focusNode != widget.focusNode) {
@@ -207,6 +210,14 @@ class _TextFieldEditingShortcutsState extends State<TextFieldEditingShortcuts> {
   }
 
   void _handleControllerSelectionChanged() {
+    final controller = widget.controller;
+    final currentText = controller?.text;
+    final textChanged = currentText != _lastControllerText;
+    _lastControllerText = currentText;
+    if (textChanged && !_restoringSecondaryClickSelection) {
+      _clearSecondaryClickProtection();
+      return;
+    }
     if (_secondaryClickSelection == null || _restoringSecondaryClickSelection) {
       return;
     }
@@ -328,7 +339,12 @@ class _TextFieldContextMenuState extends State<_TextFieldContextMenu> {
   @override
   void dispose() {
     if (_openNotified) {
-      widget.onOpenChanged?.call(false);
+      final onOpenChanged = widget.onOpenChanged;
+      if (onOpenChanged != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          onOpenChanged(false);
+        });
+      }
     }
     _clipboardStatus.removeListener(_handleMenuStateChanged);
     _undoController?.removeListener(_handleMenuStateChanged);
