@@ -1589,34 +1589,21 @@ class _StickerBody extends StatelessWidget {
     // The preview shows the full-resolution sticker, not the thumbnail.
     final previewUrl = asset == null ? null : config.resolveAssetUrl(asset.url);
     final name = message_display.stickerAttachmentTitle(attachment);
-    final imageRequest = MediaCacheRequest.tryFromUrl(
-      url: imageUrl,
-      filename: asset?.filename ?? name,
-      mimeType: asset?.mimeType,
-      expectedBytes: asset?.sizeBytes,
-    );
     final image = imageUrl != null && imageUrl.isNotEmpty
         ? ClipRRect(
             borderRadius: BorderRadius.circular(UiRadii.md),
-            child:
-                imagePreviewActions.mediaCache != null && imageRequest != null
-                ? CachedMediaImage(
-                    cache: imagePreviewActions.mediaCache!,
-                    request: imageRequest,
-                    width: 132,
-                    height: 132,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) =>
-                        _StickerFallback(name: name),
-                  )
-                : Image.network(
-                    imageUrl,
-                    width: 132,
-                    height: 132,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) =>
-                        _StickerFallback(name: name),
-                  ),
+            child: CachedAssetImage(
+              url: imageUrl,
+              filename: asset?.filename ?? name,
+              mimeType: asset?.mimeType,
+              expectedBytes: asset?.sizeBytes,
+              cache: imagePreviewActions.mediaCache,
+              width: 132,
+              height: 132,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) =>
+                  _StickerFallback(name: name),
+            ),
           )
         : _StickerFallback(name: name);
 
@@ -2209,17 +2196,10 @@ class _FileImagePreview extends StatelessWidget {
   }
 
   Widget _filePreviewImage() {
-    final request = MediaCacheRequest.tryFromUrl(url: url, filename: title);
-    if (mediaCache != null && request != null) {
-      return CachedMediaImage(
-        cache: mediaCache!,
-        request: request,
-        fit: BoxFit.contain,
-        errorBuilder: (context, error, stackTrace) => _filePreviewFallback(),
-      );
-    }
-    return Image.network(
-      url,
+    return CachedAssetImage(
+      url: url,
+      filename: title,
+      cache: mediaCache,
       fit: BoxFit.contain,
       errorBuilder: (context, error, stackTrace) => _filePreviewFallback(),
     );

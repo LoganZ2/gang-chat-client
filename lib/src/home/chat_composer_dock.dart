@@ -288,8 +288,11 @@ class _StickerTile extends StatelessWidget {
                   color: UiColors.textMuted,
                   size: 20,
                 )
-              : Image.network(
-                  imageUrl,
+              : CachedAssetImage(
+                  url: imageUrl,
+                  filename: sticker.asset.filename,
+                  mimeType: sticker.asset.mimeType,
+                  expectedBytes: sticker.asset.sizeBytes,
                   fit: BoxFit.contain,
                   errorBuilder: (context, error, stackTrace) => const Icon(
                     Icons.broken_image_outlined,

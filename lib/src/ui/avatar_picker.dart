@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'avatar.dart';
 import 'button.dart';
+import 'cached_asset_image.dart';
 import 'tokens.dart';
 
 /// Shared color-swatch palette offered by every avatar picker. Mirrors the
@@ -170,8 +171,8 @@ class _AvatarPickerPreview extends StatelessWidget {
         child: ClipOval(
           child: url == null
               ? fallback
-              : Image.network(
-                  url,
+              : CachedAssetImage(
+                  url: url,
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) => fallback,
                 ),

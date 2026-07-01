@@ -3,16 +3,21 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../app/media_cache_controller.dart';
-import '../ui/ui.dart';
+import 'media_cache_scope.dart';
+import 'tokens.dart';
 
-typedef CachedMediaImageErrorBuilder =
+typedef CachedAssetImageErrorBuilder =
     Widget Function(BuildContext context, Object error, StackTrace? stackTrace);
 
-class CachedMediaImage extends StatefulWidget {
-  const CachedMediaImage({
+class CachedAssetImage extends StatefulWidget {
+  const CachedAssetImage({
     super.key,
-    required this.cache,
-    required this.request,
+    required this.url,
+    this.filename,
+    this.mimeType,
+    this.expectedBytes,
+    this.namespace = 'asset',
+    this.cache,
     this.width,
     this.height,
     this.fit,
@@ -20,34 +25,57 @@ class CachedMediaImage extends StatefulWidget {
     this.errorBuilder,
   });
 
-  final MediaCacheController cache;
-  final MediaCacheRequest request;
+  final String url;
+  final String? filename;
+  final String? mimeType;
+  final int? expectedBytes;
+  final String namespace;
+  final MediaCacheController? cache;
   final double? width;
   final double? height;
   final BoxFit? fit;
   final WidgetBuilder? loadingBuilder;
-  final CachedMediaImageErrorBuilder? errorBuilder;
+  final CachedAssetImageErrorBuilder? errorBuilder;
 
   @override
-  State<CachedMediaImage> createState() => _CachedMediaImageState();
+  State<CachedAssetImage> createState() => _CachedAssetImageState();
 }
 
-class _CachedMediaImageState extends State<CachedMediaImage> {
+class _CachedAssetImageState extends State<CachedAssetImage> {
   late Future<File> _file;
 
   @override
   void initState() {
     super.initState();
-    _file = widget.cache.getOrDownload(request: widget.request);
+    _file = _load();
   }
 
   @override
-  void didUpdateWidget(CachedMediaImage oldWidget) {
+  void didUpdateWidget(CachedAssetImage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.cache, widget.cache) ||
-        oldWidget.request.cacheKey != widget.request.cacheKey) {
-      _file = widget.cache.getOrDownload(request: widget.request);
+    if (oldWidget.url != widget.url ||
+        oldWidget.filename != widget.filename ||
+        oldWidget.mimeType != widget.mimeType ||
+        oldWidget.expectedBytes != widget.expectedBytes ||
+        oldWidget.namespace != widget.namespace ||
+        !identical(oldWidget.cache, widget.cache)) {
+      _file = _load();
     }
+  }
+
+  Future<File> _load() {
+    final request = MediaCacheRequest.tryFromUrl(
+      url: widget.url,
+      filename: widget.filename,
+      mimeType: widget.mimeType,
+      expectedBytes: widget.expectedBytes,
+      namespace: widget.namespace,
+    );
+    if (request == null) {
+      return Future<File>.error(StateError('图片地址无效'));
+    }
+    final cache = widget.cache ?? MediaCacheScope.of(context);
+    return cache.getOrDownload(request: request);
   }
 
   @override
@@ -72,13 +100,13 @@ class _CachedMediaImageState extends State<CachedMediaImage> {
                 error,
                 snapshot.stackTrace,
               ) ??
-              _DefaultCachedMediaError(
+              _DefaultCachedAssetImageError(
                 width: widget.width,
                 height: widget.height,
               );
         }
         return widget.loadingBuilder?.call(context) ??
-            _DefaultCachedMediaLoading(
+            _DefaultCachedAssetImageLoading(
               width: widget.width,
               height: widget.height,
             );
@@ -87,8 +115,8 @@ class _CachedMediaImageState extends State<CachedMediaImage> {
   }
 }
 
-class _DefaultCachedMediaLoading extends StatelessWidget {
-  const _DefaultCachedMediaLoading({this.width, this.height});
+class _DefaultCachedAssetImageLoading extends StatelessWidget {
+  const _DefaultCachedAssetImageLoading({this.width, this.height});
 
   final double? width;
   final double? height;
@@ -100,7 +128,7 @@ class _DefaultCachedMediaLoading extends StatelessWidget {
       height: height,
       child: const Center(
         child: SizedBox.square(
-          dimension: 22,
+          dimension: 18,
           child: CircularProgressIndicator(
             strokeWidth: 2,
             color: UiColors.textSecondary,
@@ -111,8 +139,8 @@ class _DefaultCachedMediaLoading extends StatelessWidget {
   }
 }
 
-class _DefaultCachedMediaError extends StatelessWidget {
-  const _DefaultCachedMediaError({this.width, this.height});
+class _DefaultCachedAssetImageError extends StatelessWidget {
+  const _DefaultCachedAssetImageError({this.width, this.height});
 
   final double? width;
   final double? height;
@@ -126,7 +154,7 @@ class _DefaultCachedMediaError extends StatelessWidget {
         child: Icon(
           Icons.broken_image_outlined,
           color: UiColors.textMuted,
-          size: 32,
+          size: 24,
         ),
       ),
     );

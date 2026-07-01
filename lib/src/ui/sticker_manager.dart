@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
 import '../app/sticker_display.dart';
+import '../app/media_cache_controller.dart';
 import '../app/sticker_management.dart';
 import '../app/sticker_ordering.dart' as sticker_ordering;
 import '../app/sticker_uploads.dart';
@@ -13,7 +15,9 @@ import '../protocol/models.dart';
 import '../shell/file_selection_service.dart';
 import 'app_config_scope.dart';
 import 'button.dart';
+import 'cached_asset_image.dart';
 import 'input.dart';
+import 'media_cache_scope.dart';
 import 'settings_scaffold.dart';
 import 'sticker_upload_adapter.dart';
 import 'surface.dart';
@@ -1460,8 +1464,11 @@ class _StickerThumbnail extends StatelessWidget {
         child: ClipRect(
           child: imageUrl == null
               ? fallback
-              : Image.network(
-                  imageUrl,
+              : CachedAssetImage(
+                  url: imageUrl,
+                  filename: asset.filename,
+                  mimeType: asset.mimeType,
+                  expectedBytes: asset.sizeBytes,
                   fit: BoxFit.contain,
                   errorBuilder: (_, _, _) => fallback,
                 ),
@@ -1989,8 +1996,11 @@ class _StickerPreviewDialogState extends State<StickerPreviewDialog> {
                       minScale: 0.5,
                       maxScale: 4,
                       child: Center(
-                        child: Image.network(
-                          widget.imageUrl,
+                        child: CachedAssetImage(
+                          url: widget.imageUrl,
+                          filename: asset.filename,
+                          mimeType: asset.mimeType,
+                          expectedBytes: asset.sizeBytes,
                           fit: BoxFit.contain,
                           errorBuilder: (_, _, _) => const Icon(
                             Icons.broken_image_outlined,
@@ -2126,14 +2136,22 @@ class _StickerDimensionsLine extends StatefulWidget {
 class _StickerDimensionsLineState extends State<_StickerDimensionsLine> {
   ImageStream? _stream;
   ImageStreamListener? _listener;
+  MediaCacheController? _cache;
   StickerImageDimensions? _resolvedDimensions;
   bool _resolving = false;
   bool _failed = false;
+  int _resolveSerial = 0;
 
   @override
-  void initState() {
-    super.initState();
-    _resolveIfNeeded();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final cache = MediaCacheScope.of(context);
+    if (!identical(_cache, cache)) {
+      _cache = cache;
+      _resolvedDimensions = null;
+      _failed = false;
+      _resolveIfNeeded();
+    }
   }
 
   @override
@@ -2154,6 +2172,7 @@ class _StickerDimensionsLineState extends State<_StickerDimensionsLine> {
   }
 
   void _resolveIfNeeded() {
+    final cache = _cache;
     if (widget.asset.width != null && widget.asset.height != null) {
       _removeListener();
       if (_resolving || _resolvedDimensions != null || _failed) {
@@ -2166,10 +2185,43 @@ class _StickerDimensionsLineState extends State<_StickerDimensionsLine> {
       return;
     }
     _removeListener();
-    _resolving = true;
-    final stream = NetworkImage(
-      widget.imageUrl,
-    ).resolve(ImageConfiguration.empty);
+    if (cache == null) return;
+    final request = MediaCacheRequest.tryFromUrl(
+      url: widget.imageUrl,
+      filename: widget.asset.filename,
+      mimeType: widget.asset.mimeType,
+      expectedBytes: widget.asset.sizeBytes,
+    );
+    if (request == null) {
+      setState(() {
+        _resolving = false;
+        _failed = true;
+      });
+      return;
+    }
+    final serial = ++_resolveSerial;
+    setState(() {
+      _resolving = true;
+      _failed = false;
+    });
+    cache
+        .getOrDownload(request: request)
+        .then((file) {
+          if (!mounted || serial != _resolveSerial) return;
+          _listenForDimensions(file);
+        })
+        .catchError((_) {
+          if (!mounted || serial != _resolveSerial) return;
+          setState(() {
+            _resolving = false;
+            _failed = true;
+          });
+        });
+  }
+
+  void _listenForDimensions(File file) {
+    _removeListener();
+    final stream = FileImage(file).resolve(ImageConfiguration.empty);
     final listener = ImageStreamListener(
       (image, _) {
         if (!mounted) return;

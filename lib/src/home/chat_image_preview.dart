@@ -246,27 +246,13 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
 
   Widget _previewImage() {
     final cache = widget.actions.mediaCache;
-    final request = MediaCacheRequest.tryFromUrl(
+    return CachedAssetImage(
       url: widget.imageUrl,
       filename: widget.suggestedName,
-    );
-    if (cache != null && request != null) {
-      return CachedMediaImage(
-        cache: cache,
-        request: request,
-        fit: BoxFit.contain,
-        loadingBuilder: (_) => _previewLoading(),
-        errorBuilder: (_, _, _) => _previewError(),
-      );
-    }
-    return Image.network(
-      widget.imageUrl,
+      cache: cache,
       fit: BoxFit.contain,
-      loadingBuilder: (context, child, progress) {
-        if (progress == null) return child;
-        return _previewLoading();
-      },
-      errorBuilder: (context, error, stackTrace) => _previewError(),
+      loadingBuilder: (_) => _previewLoading(),
+      errorBuilder: (_, _, _) => _previewError(),
     );
   }
 

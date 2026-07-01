@@ -17,7 +17,6 @@ import '../app/sticker_display.dart' as sticker_display;
 import '../app/voice_message_display.dart' as voice_display;
 import '../protocol/models.dart';
 import '../ui/ui.dart';
-import 'cached_media_image.dart';
 import 'room_profile_card.dart';
 
 part 'chat_header.dart';

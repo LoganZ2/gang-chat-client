@@ -435,119 +435,126 @@ class _HomeShellState extends State<HomeShell> {
       selectedRoom: _selectedRoom,
       rooms: _servers,
     );
-    return Scaffold(
-      backgroundColor: UiColors.background,
-      body: DecoratedBox(
-        decoration: BoxDecoration(border: Border.all(color: _windowEdgeBorder)),
-        child: LayoutBuilder(
-          builder: (context, shellConstraints) {
-            final showSearchOverlay = _homeTitleBarCanShowSearch(
-              context,
-              shellConstraints.maxWidth,
-            );
-            return Stack(
-              fit: StackFit.expand,
-              children: [
-                KeyedSubtree(
-                  key: ValueKey(widget.app.currentUser.id),
-                  child: Column(
-                    children: [
-                      _HomeTitleBar(
-                        windowController: widget.windowController,
-                        searchController: _titleSearchController,
-                        searchTapRegionGroup: _searchTapRegionGroup,
-                        liveRoom: joinedLiveRoom,
-                        micMuted: _micMuted,
-                        headphonesMuted: _headphonesMuted,
-                        voiceBlocked: _voiceBlocked,
-                        onActivateSearch: _activateSearch,
-                        onSearchTapOutside: _collapseSearch,
-                        onSearchContextMenuOpenChanged:
-                            _handleTitleSearchContextMenuOpenChanged,
-                        onClearSearchQuery: _clearSearchQuery,
-                        onOpenLiveRoom: () =>
-                            unawaited(_openJoinedLiveChannel()),
-                        onToggleMic: _voiceBlocked ? null : _toggleMicMute,
-                        onToggleHeadphones: _toggleHeadphonesMute,
-                        onLeaveLive: () => unawaited(_leaveLive()),
-                      ),
-                      Expanded(
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final narrow =
-                                constraints.maxWidth < narrowBreakpoint;
-                            if (narrow) {
-                              return _buildNarrowLayout(constraints.maxWidth);
-                            }
+    return MediaCacheScope(
+      cache: _mediaCacheController,
+      child: Scaffold(
+        backgroundColor: UiColors.background,
+        body: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border.all(color: _windowEdgeBorder),
+          ),
+          child: LayoutBuilder(
+            builder: (context, shellConstraints) {
+              final showSearchOverlay = _homeTitleBarCanShowSearch(
+                context,
+                shellConstraints.maxWidth,
+              );
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  KeyedSubtree(
+                    key: ValueKey(widget.app.currentUser.id),
+                    child: Column(
+                      children: [
+                        _HomeTitleBar(
+                          windowController: widget.windowController,
+                          searchController: _titleSearchController,
+                          searchTapRegionGroup: _searchTapRegionGroup,
+                          liveRoom: joinedLiveRoom,
+                          micMuted: _micMuted,
+                          headphonesMuted: _headphonesMuted,
+                          voiceBlocked: _voiceBlocked,
+                          onActivateSearch: _activateSearch,
+                          onSearchTapOutside: _collapseSearch,
+                          onSearchContextMenuOpenChanged:
+                              _handleTitleSearchContextMenuOpenChanged,
+                          onClearSearchQuery: _clearSearchQuery,
+                          onOpenLiveRoom: () =>
+                              unawaited(_openJoinedLiveChannel()),
+                          onToggleMic: _voiceBlocked ? null : _toggleMicMute,
+                          onToggleHeadphones: _toggleHeadphonesMute,
+                          onLeaveLive: () => unawaited(_leaveLive()),
+                        ),
+                        Expanded(
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final narrow =
+                                  constraints.maxWidth < narrowBreakpoint;
+                              if (narrow) {
+                                return _buildNarrowLayout(constraints.maxWidth);
+                              }
 
-                            return Row(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                _buildSidebar(
-                                  width: sidebarWidth,
-                                  openContentOnSelect: false,
-                                ),
-                                Expanded(child: _buildContentPane()),
-                              ],
-                            );
-                          },
+                              return Row(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  _buildSidebar(
+                                    width: sidebarWidth,
+                                    openContentOnSelect: false,
+                                  ),
+                                  Expanded(child: _buildContentPane()),
+                                ],
+                              );
+                            },
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                if (_hasSearchQuery && _searchExpanded && showSearchOverlay)
-                  Positioned(
-                    top: _homeTitleBarHeight - 1,
-                    left:
-                        (shellConstraints.maxWidth - _homeTitleBarSearchWidth) /
-                        2,
-                    width: _homeTitleBarSearchWidth,
-                    child: TapRegion(
-                      key: const ValueKey('home-title-search-results'),
-                      groupId: _searchTapRegionGroup,
-                      child: HoverCardTapRegionScope(
-                        tapRegionGroup: _searchTapRegionGroup,
-                        child: _TitleSearchResultsPanel(
-                          query: _searchQuery,
-                          results: _searchResults,
-                          loading: _searching,
-                          loadingMore: _searchLoadingMore,
-                          error: _searchError,
-                          currentUser: widget.app.currentUser,
-                          activeCategory: _activeSearchCategory,
-                          visibleCategories: _visibleSearchCategories,
-                          busyPublicRoomId: _busySearchPublicRoomId,
-                          pendingPublicRoomIds: _searchPendingPublicRoomIds,
-                          onCategorySelected: _selectSearchCategory,
-                          onLoadMore: () => unawaited(_loadMoreSearchResults()),
-                          onMyRoomSelected: _openSearchRoom,
-                          onProfileRoomSelected: _openSearchProfileRoom,
-                          onResolveRoomProfile: _resolveRoomProfile,
-                          onResolveRoomUserProfile: _resolveRoomUserProfile,
-                          onPublicRoomAction: (room) =>
-                              unawaited(_handlePublicRoomSearchAction(room)),
-                          onMessageSelected: _openMessageSearchResult,
-                          onFileSelected: _openMessageSearchResult,
+                  if (_hasSearchQuery && _searchExpanded && showSearchOverlay)
+                    Positioned(
+                      top: _homeTitleBarHeight - 1,
+                      left:
+                          (shellConstraints.maxWidth -
+                              _homeTitleBarSearchWidth) /
+                          2,
+                      width: _homeTitleBarSearchWidth,
+                      child: TapRegion(
+                        key: const ValueKey('home-title-search-results'),
+                        groupId: _searchTapRegionGroup,
+                        child: HoverCardTapRegionScope(
+                          tapRegionGroup: _searchTapRegionGroup,
+                          child: _TitleSearchResultsPanel(
+                            query: _searchQuery,
+                            results: _searchResults,
+                            loading: _searching,
+                            loadingMore: _searchLoadingMore,
+                            error: _searchError,
+                            currentUser: widget.app.currentUser,
+                            activeCategory: _activeSearchCategory,
+                            visibleCategories: _visibleSearchCategories,
+                            busyPublicRoomId: _busySearchPublicRoomId,
+                            pendingPublicRoomIds: _searchPendingPublicRoomIds,
+                            onCategorySelected: _selectSearchCategory,
+                            onLoadMore: () =>
+                                unawaited(_loadMoreSearchResults()),
+                            onMyRoomSelected: _openSearchRoom,
+                            onProfileRoomSelected: _openSearchProfileRoom,
+                            onResolveRoomProfile: _resolveRoomProfile,
+                            onResolveRoomUserProfile: _resolveRoomUserProfile,
+                            onPublicRoomAction: (room) =>
+                                unawaited(_handlePublicRoomSearchAction(room)),
+                            onMessageSelected: _openMessageSearchResult,
+                            onFileSelected: _openMessageSearchResult,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                if (fullScreenTrack != null)
-                  Positioned.fill(
-                    child: LiveFullScreenStage(
-                      track: fullScreenTrack,
-                      label: liveStageTrackLabel(_live, fullScreenTrack),
-                      screenShareVolume:
-                          _liveSessionController.screenShareVolume,
-                      onScreenShareVolumeChanged: _changeScreenShareVolume,
-                      onScreenShareMuteToggled: _toggleScreenShareAudioMute,
-                      onExit: _exitLiveFullScreen,
+                  if (fullScreenTrack != null)
+                    Positioned.fill(
+                      child: LiveFullScreenStage(
+                        track: fullScreenTrack,
+                        label: liveStageTrackLabel(_live, fullScreenTrack),
+                        screenShareVolume:
+                            _liveSessionController.screenShareVolume,
+                        onScreenShareVolumeChanged: _changeScreenShareVolume,
+                        onScreenShareMuteToggled: _toggleScreenShareAudioMute,
+                        onExit: _exitLiveFullScreen,
+                      ),
                     ),
-                  ),
-              ],
-            );
-          },
+                ],
+              );
+            },
+          ),
         ),
       ),
     );

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'cached_asset_image.dart';
 import 'tokens.dart';
 
 /// Fallback initials shown when an avatar has no image. Takes the first two
@@ -120,7 +121,7 @@ class Avatar extends StatelessWidget {
                         ),
                       )
                     : const SizedBox.expand()
-              : Image.network(imageUrl!, fit: BoxFit.cover),
+              : CachedAssetImage(url: imageUrl!, fit: BoxFit.cover),
         ),
       ),
     );
