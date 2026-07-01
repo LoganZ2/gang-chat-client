@@ -7,6 +7,7 @@
 #include <propsys.h>
 #include <shellapi.h>
 #include <wincodec.h>
+#include <windowsx.h>
 
 #include <cstdint>
 #include <cstring>
@@ -49,9 +50,40 @@ constexpr wchar_t kFileDropOriginalProcProp[] =
 constexpr DWORD kBiAlphaBitFields = 6;
 constexpr UINT kAudioDefaultDeviceChangedMessage = WM_APP + 0x4A2;
 constexpr UINT kTrayCallbackMessage = WM_APP + 0x4A3;
+constexpr UINT kTrayMenuCommandMessage = WM_APP + 0x4A4;
 constexpr UINT kTrayIconId = 1;
 constexpr UINT kTrayOpenCommand = 0x4A30;
 constexpr UINT kTrayExitCommand = 0x4A31;
+constexpr UINT kTraySeparatorCommand = 0x4A32;
+constexpr wchar_t kTrayPopupMenuClassName[] = L"GangChatTrayPopupMenu";
+constexpr int kTrayMenuWidth = 184;
+constexpr int kTrayMenuItemHeight = 32;
+constexpr int kTrayMenuSeparatorHeight = 10;
+constexpr int kTrayMenuHorizontalPadding = 12;
+constexpr int kTrayMenuVerticalPadding = 5;
+constexpr int kTrayMenuDividerInset = 8;
+constexpr int kTrayMenuDividerHeight = 2;
+constexpr int kTrayMenuFontSize = 13;
+constexpr int kTrayMenuCornerRadius = 8;
+
+struct TrayMenuItem {
+  UINT command;
+  const wchar_t* label;
+  bool separator;
+};
+
+const TrayMenuItem kTrayOpenMenuItem{kTrayOpenCommand,
+                                     L"\u6253\u5f00 Gang Chat", false};
+const TrayMenuItem kTraySeparatorMenuItem{kTraySeparatorCommand, L"", true};
+const TrayMenuItem kTrayExitMenuItem{kTrayExitCommand, L"\u9000\u51fa",
+                                     false};
+
+struct TrayPopupMenuState {
+  explicit TrayPopupMenuState(HWND owner_window) : owner(owner_window) {}
+
+  HWND owner = nullptr;
+  UINT hovered_command = 0;
+};
 
 template <typename T>
 void SafeRelease(T*& value) {
@@ -87,6 +119,294 @@ bool EnsureComInitialized(bool* initialized_here) {
     return true;
   }
   return result == RPC_E_CHANGED_MODE;
+}
+
+int ScaleForWindowDpi(HWND window, int value) {
+  const UINT dpi = window ? GetDpiForWindow(window) : USER_DEFAULT_SCREEN_DPI;
+  return MulDiv(value, dpi, USER_DEFAULT_SCREEN_DPI);
+}
+
+int TrayMenuPopupWidth(HWND window) {
+  return ScaleForWindowDpi(window, kTrayMenuWidth);
+}
+
+int TrayMenuPopupHeight(HWND window) {
+  return ScaleForWindowDpi(window, kTrayMenuVerticalPadding * 2 +
+                                       kTrayMenuItemHeight * 2 +
+                                       kTrayMenuSeparatorHeight);
+}
+
+RECT TrayMenuItemRect(HWND window, const TrayMenuItem& item) {
+  const int padding = ScaleForWindowDpi(window, kTrayMenuVerticalPadding);
+  const int item_height = ScaleForWindowDpi(window, kTrayMenuItemHeight);
+  const int separator_height =
+      ScaleForWindowDpi(window, kTrayMenuSeparatorHeight);
+  const int width = TrayMenuPopupWidth(window);
+
+  if (item.command == kTrayOpenCommand) {
+    return RECT{0, padding, width, padding + item_height};
+  }
+  if (item.command == kTraySeparatorCommand) {
+    return RECT{0, padding + item_height, width,
+                padding + item_height + separator_height};
+  }
+  return RECT{0, padding + item_height + separator_height, width,
+              padding + item_height + separator_height + item_height};
+}
+
+const TrayMenuItem* TrayMenuItemAtPoint(HWND window, POINT point) {
+  for (const TrayMenuItem* item :
+       {&kTrayOpenMenuItem, &kTraySeparatorMenuItem, &kTrayExitMenuItem}) {
+    if (item->separator) {
+      continue;
+    }
+    RECT item_rect = TrayMenuItemRect(window, *item);
+    if (PtInRect(&item_rect, point)) {
+      return item;
+    }
+  }
+  return nullptr;
+}
+
+void DrawTrayPopupMenu(HWND window, TrayPopupMenuState* state, HDC hdc) {
+  RECT client{};
+  GetClientRect(window, &client);
+  const int width = client.right - client.left;
+  const int height = client.bottom - client.top;
+  const int radius = ScaleForWindowDpi(window, kTrayMenuCornerRadius);
+  const int diameter = radius * 2;
+
+  HDC memory_dc = CreateCompatibleDC(hdc);
+  HBITMAP bitmap = CreateCompatibleBitmap(hdc, width, height);
+  HBITMAP old_bitmap = static_cast<HBITMAP>(SelectObject(memory_dc, bitmap));
+  const int saved = SaveDC(memory_dc);
+
+  HBRUSH white = CreateSolidBrush(RGB(255, 255, 255));
+  HPEN no_pen = static_cast<HPEN>(GetStockObject(NULL_PEN));
+  HPEN old_pen = static_cast<HPEN>(SelectObject(memory_dc, no_pen));
+  HBRUSH old_brush = static_cast<HBRUSH>(SelectObject(memory_dc, white));
+  RoundRect(memory_dc, 0, 0, width, height, diameter, diameter);
+  SelectObject(memory_dc, old_brush);
+  SelectObject(memory_dc, old_pen);
+
+  HRGN clip = CreateRoundRectRgn(0, 0, width + 1, height + 1, diameter,
+                                 diameter);
+  SelectClipRgn(memory_dc, clip);
+  DeleteObject(clip);
+
+  for (const TrayMenuItem* item :
+       {&kTrayOpenMenuItem, &kTraySeparatorMenuItem, &kTrayExitMenuItem}) {
+    RECT item_rect = TrayMenuItemRect(window, *item);
+    if (item->separator) {
+      RECT divider = item_rect;
+      const int inset = ScaleForWindowDpi(window, kTrayMenuDividerInset);
+      const int divider_height =
+          ScaleForWindowDpi(window, kTrayMenuDividerHeight);
+      divider.left += inset;
+      divider.right -= inset;
+      divider.top =
+          item_rect.top + (item_rect.bottom - item_rect.top - divider_height) /
+                              2;
+      divider.bottom = divider.top + divider_height;
+      HBRUSH accent = CreateSolidBrush(RGB(82, 160, 124));
+      FillRect(memory_dc, &divider, accent);
+      DeleteObject(accent);
+      continue;
+    }
+
+    if (state && state->hovered_command == item->command) {
+      HBRUSH selected = CreateSolidBrush(RGB(232, 245, 238));
+      FillRect(memory_dc, &item_rect, selected);
+      DeleteObject(selected);
+    }
+
+    const int horizontal_padding =
+        ScaleForWindowDpi(window, kTrayMenuHorizontalPadding);
+    RECT text_rect = item_rect;
+    text_rect.left += horizontal_padding;
+    text_rect.right -= horizontal_padding;
+
+    HFONT font = CreateFontW(
+        -ScaleForWindowDpi(window, kTrayMenuFontSize), 0, 0, 0, FW_NORMAL,
+        FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+        CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
+        L"Microsoft YaHei UI");
+    HFONT old_font = nullptr;
+    if (font) {
+      old_font = static_cast<HFONT>(SelectObject(memory_dc, font));
+    }
+    SetBkMode(memory_dc, TRANSPARENT);
+    SetTextColor(memory_dc, RGB(0, 0, 0));
+    DrawTextW(memory_dc, item->label, -1, &text_rect,
+              DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX);
+    if (old_font) {
+      SelectObject(memory_dc, old_font);
+    }
+    if (font) {
+      DeleteObject(font);
+    }
+  }
+
+  SelectClipRgn(memory_dc, nullptr);
+  HPEN border = CreatePen(PS_SOLID, ScaleForWindowDpi(window, 1),
+                          RGB(210, 216, 224));
+  HBRUSH hollow = static_cast<HBRUSH>(GetStockObject(HOLLOW_BRUSH));
+  old_pen = static_cast<HPEN>(SelectObject(memory_dc, border));
+  old_brush = static_cast<HBRUSH>(SelectObject(memory_dc, hollow));
+  RoundRect(memory_dc, 0, 0, width, height, diameter, diameter);
+  SelectObject(memory_dc, old_brush);
+  SelectObject(memory_dc, old_pen);
+  DeleteObject(border);
+  DeleteObject(white);
+
+  BitBlt(hdc, 0, 0, width, height, memory_dc, 0, 0, SRCCOPY);
+  RestoreDC(memory_dc, saved);
+  SelectObject(memory_dc, old_bitmap);
+  DeleteObject(bitmap);
+  DeleteDC(memory_dc);
+}
+
+LRESULT CALLBACK TrayPopupMenuWindowProc(HWND window, UINT message,
+                                         WPARAM wparam, LPARAM lparam) {
+  auto* state = reinterpret_cast<TrayPopupMenuState*>(
+      GetWindowLongPtrW(window, GWLP_USERDATA));
+
+  switch (message) {
+    case WM_NCCREATE: {
+      const auto* create = reinterpret_cast<const CREATESTRUCTW*>(lparam);
+      SetWindowLongPtrW(window, GWLP_USERDATA,
+                        reinterpret_cast<LONG_PTR>(create->lpCreateParams));
+      return TRUE;
+    }
+    case WM_ERASEBKGND:
+      return TRUE;
+    case WM_PAINT: {
+      PAINTSTRUCT paint{};
+      HDC hdc = BeginPaint(window, &paint);
+      DrawTrayPopupMenu(window, state, hdc);
+      EndPaint(window, &paint);
+      return 0;
+    }
+    case WM_MOUSEMOVE: {
+      if (!state) {
+        return 0;
+      }
+      POINT point{GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)};
+      const TrayMenuItem* item = TrayMenuItemAtPoint(window, point);
+      const UINT next_hovered = item ? item->command : 0;
+      if (state->hovered_command != next_hovered) {
+        state->hovered_command = next_hovered;
+        InvalidateRect(window, nullptr, FALSE);
+      }
+      return 0;
+    }
+    case WM_LBUTTONUP: {
+      POINT point{GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)};
+      const TrayMenuItem* item = TrayMenuItemAtPoint(window, point);
+      const HWND owner = state ? state->owner : nullptr;
+      DestroyWindow(window);
+      if (owner && item) {
+        PostMessageW(owner, kTrayMenuCommandMessage, item->command, 0);
+      }
+      return 0;
+    }
+    case WM_RBUTTONUP:
+    case WM_MBUTTONUP:
+    case WM_CANCELMODE:
+      DestroyWindow(window);
+      return 0;
+    case WM_KEYDOWN:
+      if (wparam == VK_ESCAPE) {
+        DestroyWindow(window);
+        return 0;
+      }
+      break;
+    case WM_ACTIVATE:
+      if (LOWORD(wparam) == WA_INACTIVE) {
+        DestroyWindow(window);
+        return 0;
+      }
+      break;
+    case WM_NCDESTROY:
+      if (GetCapture() == window) {
+        ReleaseCapture();
+      }
+      delete state;
+      SetWindowLongPtrW(window, GWLP_USERDATA, 0);
+      return 0;
+  }
+
+  return DefWindowProcW(window, message, wparam, lparam);
+}
+
+bool RegisterTrayPopupMenuClass(HINSTANCE instance) {
+  WNDCLASSEXW window_class{};
+  window_class.cbSize = sizeof(window_class);
+  window_class.style = CS_DROPSHADOW | CS_HREDRAW | CS_VREDRAW;
+  window_class.lpfnWndProc = TrayPopupMenuWindowProc;
+  window_class.hInstance = instance;
+  window_class.hCursor = LoadCursor(nullptr, IDC_ARROW);
+  window_class.lpszClassName = kTrayPopupMenuClassName;
+
+  if (RegisterClassExW(&window_class) != 0) {
+    return true;
+  }
+  return GetLastError() == ERROR_CLASS_ALREADY_EXISTS;
+}
+
+bool ShowTrayPopupMenu(HWND owner) {
+  HINSTANCE instance = GetModuleHandle(nullptr);
+  if (!RegisterTrayPopupMenuClass(instance)) {
+    return false;
+  }
+
+  const int width = TrayMenuPopupWidth(owner);
+  const int height = TrayMenuPopupHeight(owner);
+  POINT cursor{};
+  GetCursorPos(&cursor);
+
+  MONITORINFO monitor{};
+  monitor.cbSize = sizeof(monitor);
+  HMONITOR nearest_monitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST);
+  GetMonitorInfoW(nearest_monitor, &monitor);
+  RECT work_area = monitor.rcWork;
+  int x = cursor.x;
+  int y = cursor.y;
+  if (x + width > work_area.right) {
+    x = work_area.right - width;
+  }
+  if (y + height > work_area.bottom) {
+    y = cursor.y - height;
+  }
+  if (x < work_area.left) {
+    x = work_area.left;
+  }
+  if (y < work_area.top) {
+    y = work_area.top;
+  }
+
+  auto* state = new TrayPopupMenuState(owner);
+  HWND popup = CreateWindowExW(
+      WS_EX_TOPMOST | WS_EX_TOOLWINDOW, kTrayPopupMenuClassName, L"",
+      WS_POPUP, x, y, width, height, owner, nullptr, instance, state);
+  if (!popup) {
+    delete state;
+    return false;
+  }
+
+  const int radius = ScaleForWindowDpi(popup, kTrayMenuCornerRadius);
+  HRGN region =
+      CreateRoundRectRgn(0, 0, width + 1, height + 1, radius * 2, radius * 2);
+  if (region && SetWindowRgn(popup, region, FALSE) == 0) {
+    DeleteObject(region);
+  }
+
+  ShowWindow(popup, SW_SHOWNORMAL);
+  UpdateWindow(popup);
+  SetForegroundWindow(popup);
+  SetFocus(popup);
+  SetCapture(popup);
+  return true;
 }
 
 class ScopedComInitialization {
@@ -810,6 +1130,11 @@ void FlutterWindow::RemoveTrayIcon() {
 }
 
 void FlutterWindow::ShowTrayMenu() {
+  SetForegroundWindow(GetHandle());
+  if (ShowTrayPopupMenu(GetHandle())) {
+    return;
+  }
+
   HMENU menu = CreatePopupMenu();
   if (!menu) {
     return;
@@ -820,7 +1145,6 @@ void FlutterWindow::ShowTrayMenu() {
 
   POINT cursor{};
   GetCursorPos(&cursor);
-  SetForegroundWindow(GetHandle());
   const UINT command = TrackPopupMenu(
       menu, TPM_RIGHTBUTTON | TPM_RETURNCMD | TPM_NONOTIFY, cursor.x,
       cursor.y, 0, GetHandle(), nullptr);
@@ -1074,6 +1398,16 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                           : std::make_unique<flutter::EncodableValue>(
                                 change->device_id);
       audio_devices_channel_->InvokeMethod(method, std::move(argument));
+    }
+    return 0;
+  }
+
+  if (message == kTrayMenuCommandMessage) {
+    const UINT command = static_cast<UINT>(wparam);
+    if (command == kTrayOpenCommand) {
+      InvokeTrayMethod(kTrayOpenMethod);
+    } else if (command == kTrayExitCommand) {
+      InvokeTrayMethod(kTrayExitMethod);
     }
     return 0;
   }
