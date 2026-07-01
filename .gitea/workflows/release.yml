@@ -301,16 +301,59 @@ jobs:
             "${{ steps.installer.outputs.name }}",
             "${{ steps.windows_zip.outputs.name }}"
           )
+
+          function Test-ReleaseAssetExists {
+            param([string] $AssetName)
+            $listArgs = @('-fsS',
+              "$API/releases/$RELEASE_ID/assets",
+              '-H', "Authorization: token $env:TOKEN")
+            $body = curl.exe @listArgs 2>$null
+            if ($LASTEXITCODE -ne 0) { return $false }
+            $pattern = '"name"\s*:\s*"' + [regex]::Escape($AssetName) + '"'
+            return (($body -join "`n") -match $pattern)
+          }
+
+          function Upload-ReleaseAsset {
+            param([string] $AssetName)
+
+            if (-not (Test-Path $AssetName)) { Write-Error "asset not found: $AssetName"; exit 1 }
+            if (Test-ReleaseAssetExists $AssetName) {
+              Write-Host "Asset already exists, skip upload: $AssetName"
+              return
+            }
+
+            $maxAttempts = 5
+            for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+              Write-Host "Uploading $AssetName (attempt $attempt/$maxAttempts)..."
+              # 用数组传参避免 PS 多行 backtick 续行解析问题
+              $curlArgs = @('-fsS', '--connect-timeout', '30', '--max-time', '900', '-X', 'POST',
+                "$API/releases/$RELEASE_ID/assets?name=$AssetName",
+                '-H', "Authorization: token $env:TOKEN",
+                '-F', "attachment=@$AssetName")
+              curl.exe @curlArgs
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "Uploaded $AssetName"
+                return
+              }
+
+              $exitCode = $LASTEXITCODE
+              if (Test-ReleaseAssetExists $AssetName) {
+                Write-Host "Upload response failed with curl exit $exitCode, but release asset exists: $AssetName"
+                return
+              }
+              if ($attempt -lt $maxAttempts) {
+                $delaySeconds = 10 * $attempt
+                Write-Host "Upload failed with curl exit $exitCode; retrying in $delaySeconds seconds..."
+                Start-Sleep -Seconds $delaySeconds
+              } else {
+                Write-Error "upload failed after $maxAttempts attempts: $AssetName"
+                exit 1
+              }
+            }
+          }
+
           foreach ($ASSET in $ASSETS) {
-            if (-not (Test-Path $ASSET)) { Write-Error "asset not found: $ASSET"; exit 1 }
-            # 用数组传参避免 PS 多行 backtick 续行解析问题
-            $curlArgs = @('-fsS', '-X', 'POST',
-              "$API/releases/$RELEASE_ID/assets?name=$ASSET",
-              '-H', "Authorization: token $env:TOKEN",
-              '-F', "attachment=@$ASSET")
-            curl.exe @curlArgs
-            if ($LASTEXITCODE -ne 0) { Write-Error "upload failed: $ASSET"; exit 1 }
-            Write-Host "Uploaded $ASSET"
+            Upload-ReleaseAsset $ASSET
           }
 
   release:
