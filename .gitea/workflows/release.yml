@@ -243,13 +243,36 @@ jobs:
           $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
           flutter build windows --release --build-name="${{ needs.prepare.outputs.version }}"
 
+      - name: Prepare Windows package files
+        id: windows_package
+        shell: powershell
+        run: |
+          $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
+          $SRC = "build\windows\x64\runner\Release"
+          $STAGING = "build\windows\x64\runner\Package"
+          if (-not (Test-Path $SRC)) { Write-Error "build output not found at $SRC"; exit 1 }
+          if (-not (Test-Path (Join-Path $SRC "client.exe"))) { Write-Error "build executable not found at $SRC\client.exe"; exit 1 }
+          if (Test-Path $STAGING) { Remove-Item -Recurse -Force $STAGING }
+          New-Item -ItemType Directory -Force -Path $STAGING | Out-Null
+          Copy-Item -Path "$SRC\*" -Destination $STAGING -Recurse -Force
+
+          $excludePatterns = @("*.pdb", "*.ilk", "*.exp", "*.lib", "*.iobj", "*.ipdb")
+          foreach ($pattern in $excludePatterns) {
+            Get-ChildItem -Path $STAGING -Recurse -File -Filter $pattern | Remove-Item -Force
+          }
+          if (-not (Test-Path (Join-Path $STAGING "client.exe"))) { Write-Error "staged executable not found at $STAGING\client.exe"; exit 1 }
+
+          $totalBytes = (Get-ChildItem -Path $STAGING -Recurse -File | Measure-Object -Property Length -Sum).Sum
+          Write-Host ("Staged Windows runtime size: {0:N0} bytes" -f $totalBytes)
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "dir=$STAGING`n")
+
       - name: Package NSIS installer
         id: installer
         shell: powershell
         run: |
           $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
           $VERSION = "${{ needs.prepare.outputs.version }}"
-          $SRC = "build\windows\x64\runner\Release"
+          $SRC = "${{ steps.windows_package.outputs.dir }}"
           if (-not (Test-Path $SRC)) { Write-Error "build output not found at $SRC"; exit 1 }
           if (-not (Test-Path (Join-Path $SRC "client.exe"))) { Write-Error "build executable not found at $SRC\client.exe"; exit 1 }
           $MAKENSIS = "C:\Program Files (x86)\NSIS\makensis.exe"
@@ -279,7 +302,7 @@ jobs:
         run: |
           $env:Path = "C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\cmd;C:\Users\Administrator\flutter\bin;$env:Path"
           $VERSION = "${{ needs.prepare.outputs.version }}"
-          $SRC = "build\windows\x64\runner\Release"
+          $SRC = "${{ steps.windows_package.outputs.dir }}"
           if (-not (Test-Path $SRC)) { Write-Error "build output not found at $SRC"; exit 1 }
           if (-not (Test-Path (Join-Path $SRC "client.exe"))) { Write-Error "build executable not found at $SRC\client.exe"; exit 1 }
           $ZIP = "GangChat-$VERSION-windows.zip"
@@ -317,6 +340,8 @@ jobs:
             param([string] $AssetName)
 
             if (-not (Test-Path $AssetName)) { Write-Error "asset not found: $AssetName"; exit 1 }
+            $assetSize = (Get-Item $AssetName).Length
+            Write-Host ("Asset size: {0} = {1:N0} bytes" -f $AssetName, $assetSize)
             if (Test-ReleaseAssetExists $AssetName) {
               Write-Host "Asset already exists, skip upload: $AssetName"
               return
@@ -326,8 +351,9 @@ jobs:
             for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
               Write-Host "Uploading $AssetName (attempt $attempt/$maxAttempts)..."
               # 用数组传参避免 PS 多行 backtick 续行解析问题
-              $curlArgs = @('-fsS', '--connect-timeout', '30', '--max-time', '900', '-X', 'POST',
+              $curlArgs = @('-fsS', '--http1.1', '--connect-timeout', '30', '--max-time', '900', '-X', 'POST',
                 "$API/releases/$RELEASE_ID/assets?name=$AssetName",
+                '-H', 'Expect:',
                 '-H', "Authorization: token $env:TOKEN",
                 '-F', "attachment=@$AssetName")
               curl.exe @curlArgs
