@@ -148,6 +148,12 @@ class _ImagePreviewOverlay extends StatefulWidget {
 enum _PreviewAction { download, saveAs, copy, saveSticker, saveRoomSticker }
 
 class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
+  static const double _minImageScale = 0.5;
+  static const double _maxImageScale = 5.0;
+
+  final TransformationController _imageTransformController =
+      TransformationController();
+
   _PreviewAction? _busy;
   String? _notice;
   bool _noticeIsError = false;
@@ -192,6 +198,12 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
 
   void _close() {
     Navigator.of(context).maybePop();
+  }
+
+  @override
+  void dispose() {
+    _imageTransformController.dispose();
+    super.dispose();
   }
 
   @override
@@ -268,43 +280,133 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
   }
 
   Widget _buildImage() {
-    // Swallow taps on the image itself so they don't fall through to the
-    // dismiss-on-backdrop gesture behind it.
-    return GestureDetector(
-      onTap: () {},
-      child: InteractiveViewer(
-        maxScale: 5,
-        // Let the zoomed image pan freely and don't clip it to the viewport,
-        // so scaling isn't confined to the image's original on-screen edges.
-        boundaryMargin: const EdgeInsets.all(double.infinity),
-        clipBehavior: Clip.none,
-        child: _previewImage(),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final viewport = Size(
+          math.max(1.0, constraints.maxWidth),
+          math.max(1.0, constraints.maxHeight),
+        );
+        final contentRect = _previewContentRect(viewport);
+        // The gesture layer intentionally fills the whole preview area. If it
+        // only covers the painted image, a dragged image can move out from
+        // under the pointer and become difficult to grab again.
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapUp: (details) =>
+              _handlePreviewTap(details.localPosition, contentRect),
+          child: InteractiveViewer(
+            key: const ValueKey('chat-image-preview-viewer'),
+            transformationController: _imageTransformController,
+            minScale: _minImageScale,
+            maxScale: _maxImageScale,
+            boundaryMargin: EdgeInsets.zero,
+            clipBehavior: Clip.hardEdge,
+            onInteractionUpdate: (_) =>
+                _clampImageTransform(viewport, contentRect),
+            onInteractionEnd: (_) =>
+                _clampImageTransform(viewport, contentRect),
+            child: SizedBox(
+              width: viewport.width,
+              height: viewport.height,
+              child: _previewImage(viewport),
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _previewImage() {
+  void _handlePreviewTap(Offset position, Rect contentRect) {
+    final visibleContentRect = MatrixUtils.transformRect(
+      _imageTransformController.value,
+      contentRect,
+    );
+    if (!visibleContentRect.contains(position)) _close();
+  }
+
+  Rect _previewContentRect(Size viewport) {
     if (widget.forceSquare) {
-      final side = _squarePreviewSide();
-      return SizedBox.square(
-        dimension: side,
-        child: _cachedPreviewImage(
-          fit: BoxFit.cover,
-          width: side,
-          height: side,
+      final side = _squarePreviewSide(viewport);
+      return Rect.fromLTWH(
+        (viewport.width - side) / 2,
+        (viewport.height - side) / 2,
+        side,
+        side,
+      );
+    }
+    return Offset.zero & viewport;
+  }
+
+  void _clampImageTransform(Size viewport, Rect contentRect) {
+    final matrix = _imageTransformController.value;
+    final scale = matrix
+        .getMaxScaleOnAxis()
+        .clamp(_minImageScale, _maxImageScale)
+        .toDouble();
+    final translation = matrix.getTranslation();
+    final clampedX = _clampImageTranslationAxis(
+      viewportExtent: viewport.width,
+      contentStart: contentRect.left,
+      contentEnd: contentRect.right,
+      scale: scale,
+      translation: translation.x,
+    );
+    final clampedY = _clampImageTranslationAxis(
+      viewportExtent: viewport.height,
+      contentStart: contentRect.top,
+      contentEnd: contentRect.bottom,
+      scale: scale,
+      translation: translation.y,
+    );
+    if ((translation.x - clampedX).abs() < 0.01 &&
+        (translation.y - clampedY).abs() < 0.01 &&
+        (matrix.getMaxScaleOnAxis() - scale).abs() < 0.01) {
+      return;
+    }
+    _imageTransformController.value = Matrix4.diagonal3Values(scale, scale, 1)
+      ..setTranslationRaw(clampedX, clampedY, 0);
+  }
+
+  double _clampImageTranslationAxis({
+    required double viewportExtent,
+    required double contentStart,
+    required double contentEnd,
+    required double scale,
+    required double translation,
+  }) {
+    final scaledExtent = (contentEnd - contentStart) * scale;
+    if (scaledExtent <= viewportExtent) {
+      return (viewportExtent - scaledExtent) / 2 - contentStart * scale;
+    }
+    final minTranslation = viewportExtent - contentEnd * scale;
+    final maxTranslation = -contentStart * scale;
+    return translation.clamp(minTranslation, maxTranslation).toDouble();
+  }
+
+  Widget _previewImage(Size viewport) {
+    if (widget.forceSquare) {
+      final side = _squarePreviewSide(viewport);
+      return Center(
+        child: SizedBox.square(
+          dimension: side,
+          child: _cachedPreviewImage(
+            fit: BoxFit.cover,
+            width: side,
+            height: side,
+          ),
         ),
       );
     }
 
-    return _cachedPreviewImage(fit: BoxFit.contain);
+    return _cachedPreviewImage(
+      fit: BoxFit.contain,
+      width: viewport.width,
+      height: viewport.height,
+    );
   }
 
-  double _squarePreviewSide() {
-    final size = MediaQuery.sizeOf(context);
-    final availableWidth = math.max(0.0, size.width - 48);
-    final reservedHeight = widget.showActionBar ? 176.0 : 104.0;
-    final availableHeight = math.max(0.0, size.height - reservedHeight);
-    final availableSide = math.min(availableWidth, availableHeight);
+  double _squarePreviewSide(Size viewport) {
+    final availableSide = math.min(viewport.width, viewport.height);
     return math.max(160.0, math.min(360.0, availableSide * 0.72));
   }
 
