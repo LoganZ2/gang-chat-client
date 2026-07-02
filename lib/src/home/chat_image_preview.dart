@@ -1,4 +1,32 @@
-part of 'chat_pane.dart';
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
+
+import '../app/media_cache_controller.dart';
+import '../protocol/models.dart';
+import '../ui/ui.dart';
+
+class ChatImagePreviewActionsScope extends InheritedWidget {
+  const ChatImagePreviewActionsScope({
+    super.key,
+    required this.actions,
+    required super.child,
+  });
+
+  final ChatImagePreviewActions actions;
+
+  static ChatImagePreviewActions? maybeOf(BuildContext context) {
+    return context
+        .dependOnInheritedWidgetOfExactType<ChatImagePreviewActionsScope>()
+        ?.actions;
+  }
+
+  @override
+  bool updateShouldNotify(ChatImagePreviewActionsScope oldWidget) {
+    return !identical(actions, oldWidget.actions);
+  }
+}
 
 /// Callbacks for the full-screen image preview overlay, bundled so they can
 /// travel from [ChatPane] down to each image bubble without threading several
@@ -69,6 +97,8 @@ Future<void> showChatImagePreview(
   required String suggestedName,
   required ChatImagePreviewActions actions,
   ({Message message, MessageAttachment attachment})? stickerSource,
+  bool showActionBar = true,
+  bool forceSquare = false,
 }) {
   return Navigator.of(context, rootNavigator: true).push(
     PageRouteBuilder<void>(
@@ -83,6 +113,8 @@ Future<void> showChatImagePreview(
           suggestedName: suggestedName,
           actions: actions,
           stickerSource: stickerSource,
+          showActionBar: showActionBar,
+          forceSquare: forceSquare,
         );
       },
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -98,12 +130,16 @@ class _ImagePreviewOverlay extends StatefulWidget {
     required this.suggestedName,
     required this.actions,
     required this.stickerSource,
+    required this.showActionBar,
+    required this.forceSquare,
   });
 
   final String imageUrl;
   final String suggestedName;
   final ChatImagePreviewActions actions;
   final ({Message message, MessageAttachment attachment})? stickerSource;
+  final bool showActionBar;
+  final bool forceSquare;
 
   @override
   State<_ImagePreviewOverlay> createState() => _ImagePreviewOverlayState();
@@ -194,15 +230,18 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
                       child: Column(
                         children: [
                           Expanded(child: Center(child: _buildImage())),
-                          const SizedBox(height: 16),
                           if (_notice != null) ...[
+                            const SizedBox(height: 16),
                             _PreviewNotice(
                               message: _notice!,
                               isError: _noticeIsError,
                             ),
                             const SizedBox(height: 12),
                           ],
-                          _buildActionBar(),
+                          if (widget.showActionBar) ...[
+                            const SizedBox(height: 16),
+                            _buildActionBar(),
+                          ],
                         ],
                       ),
                     ),
@@ -245,12 +284,44 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
   }
 
   Widget _previewImage() {
+    if (widget.forceSquare) {
+      final side = _squarePreviewSide();
+      return SizedBox.square(
+        dimension: side,
+        child: _cachedPreviewImage(
+          fit: BoxFit.cover,
+          width: side,
+          height: side,
+        ),
+      );
+    }
+
+    return _cachedPreviewImage(fit: BoxFit.contain);
+  }
+
+  double _squarePreviewSide() {
+    final size = MediaQuery.sizeOf(context);
+    final availableWidth = math.max(0.0, size.width - 48);
+    final reservedHeight = widget.showActionBar ? 176.0 : 104.0;
+    final availableHeight = math.max(0.0, size.height - reservedHeight);
+    final availableSide = math.min(availableWidth, availableHeight);
+    return math.max(160.0, math.min(360.0, availableSide * 0.72));
+  }
+
+  Widget _cachedPreviewImage({
+    required BoxFit fit,
+    double? width,
+    double? height,
+  }) {
     final cache = widget.actions.mediaCache;
     return CachedAssetImage(
+      key: const ValueKey('chat-image-preview-url-image'),
       url: widget.imageUrl,
       filename: widget.suggestedName,
       cache: cache,
-      fit: BoxFit.contain,
+      width: width,
+      height: height,
+      fit: fit,
       loadingBuilder: (_) => _previewLoading(),
       errorBuilder: (_, _, _) => _previewError(),
     );

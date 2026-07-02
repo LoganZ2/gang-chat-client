@@ -42,9 +42,15 @@ const _currentUser = CurrentUser(
   createdAt: null,
 );
 
-Widget _host(Widget child) {
+Widget _host(Widget child, {ChatImagePreviewActions? imagePreviewActions}) {
+  final scaffold = Scaffold(body: Center(child: child));
   return MaterialApp(
-    home: Scaffold(body: Center(child: child)),
+    home: imagePreviewActions == null
+        ? scaffold
+        : ChatImagePreviewActionsScope(
+            actions: imagePreviewActions,
+            child: scaffold,
+          ),
   );
 }
 
@@ -192,13 +198,13 @@ void main() {
 
     await tester.pumpWidget(_host(const AvatarHoverCardForTest(user: _user)));
 
-    await _ensureUserProfileCardOpen(tester);
+    await _ensureUserProfileCardOpen(tester, settle: false);
     await _copyReadOnlyField(
       tester,
       _user.displayName,
       clipboardWrites: clipboardWrites,
     );
-    await _ensureUserProfileCardOpen(tester);
+    await _ensureUserProfileCardOpen(tester, settle: false);
     await _copyReadOnlyField(
       tester,
       '@${_user.username}',
@@ -216,6 +222,47 @@ void main() {
     );
 
     expect(clipboardWrites, [_user.displayName, _user.username, _user.uid]);
+  });
+
+  testWidgets('preset profile card avatar does not open image preview', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_host(const AvatarHoverCardForTest(user: _user)));
+
+    await _ensureUserProfileCardOpen(tester, settle: false);
+    await tester.tap(_profileCardAvatar());
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(
+      find.byKey(const ValueKey('chat-image-preview-url-image')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('uploaded profile card avatar opens the shared image preview', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        AvatarHoverCardForTest(
+          user: _user.copyWith(avatarUrl: 'https://example.com/avatar.png'),
+        ),
+        imagePreviewActions: _imagePreviewActions(),
+      ),
+    );
+
+    await _ensureUserProfileCardOpen(tester, settle: false);
+    await tester.tap(_profileCardAvatar());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(
+      find.byKey(const ValueKey('chat-image-preview-url-image')),
+      findsOneWidget,
+    );
+    expect(find.byIcon(Icons.download_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.save_alt_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.copy_rounded), findsOneWidget);
   });
 
   testWidgets('common room avatar opens a room profile card', (tester) async {
@@ -722,14 +769,36 @@ void main() {
   });
 }
 
-Future<void> _ensureUserProfileCardOpen(WidgetTester tester) async {
+Future<void> _ensureUserProfileCardOpen(
+  WidgetTester tester, {
+  bool settle = true,
+}) async {
   final marker = find.text('@${_user.username}');
   if (marker.evaluate().isEmpty) {
     await tester.tap(find.byType(Avatar).first);
-    await tester.pumpAndSettle();
+    if (settle) {
+      await tester.pumpAndSettle();
+    } else {
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+    }
   }
   expect(marker, findsOneWidget);
   expect(find.byType(ReadOnlySelectableText), findsWidgets);
+}
+
+Finder _profileCardAvatar() {
+  return find.byWidgetPredicate(
+    (widget) => widget is Avatar && widget.size == 48,
+  );
+}
+
+ChatImagePreviewActions _imagePreviewActions() {
+  return ChatImagePreviewActions(
+    onDownload: (_, _) async {},
+    onSaveAs: (_, _) async {},
+    onCopyToClipboard: (_) async {},
+  );
 }
 
 Finder _readOnlyFieldWithText(String text) {

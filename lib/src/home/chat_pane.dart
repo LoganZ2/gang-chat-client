@@ -4,7 +4,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart'
     show RenderAbstractViewport, ScrollCacheExtent;
-import 'package:flutter/services.dart' show LogicalKeyboardKey;
 
 import '../app/file_display.dart' as file_display;
 import '../app/file_transfer_state.dart';
@@ -17,13 +16,15 @@ import '../app/sticker_display.dart' as sticker_display;
 import '../app/voice_message_display.dart' as voice_display;
 import '../protocol/models.dart';
 import '../ui/ui.dart';
+import 'chat_image_preview.dart';
 import 'room_profile_card.dart';
+
+export 'chat_image_preview.dart';
 
 part 'chat_header.dart';
 part 'chat_messages.dart';
 part 'chat_composer_dock.dart';
 part 'chat_profile_card.dart';
-part 'chat_image_preview.dart';
 
 const _chatHeaderHeight = 111.0;
 const _chatHorizontalPadding = 18.0;

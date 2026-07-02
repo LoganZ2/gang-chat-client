@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app/room_display.dart' as room_display;
 import '../protocol/models.dart';
 import '../ui/ui.dart';
+import 'chat_image_preview.dart';
 import 'hover_card_anchor.dart';
 
 typedef RoomProfileResolver = Future<PublicRoom> Function(PublicRoom room);
@@ -262,6 +263,11 @@ class _UserProfileCard extends StatelessWidget {
     final bio = user.bio?.trim();
     final uid = user.uid?.trim();
     final commonRooms = user.commonRooms.where((r) => r.isUsable).toList();
+    final config = AppConfigScope.of(context);
+    final avatarUrl = config.resolveAssetUrl(user.avatarUrl);
+    final previewAvatarUrl = _nonEmpty(user.avatarUrl) == null
+        ? null
+        : _nonEmpty(avatarUrl);
 
     return Padding(
       padding: const EdgeInsets.all(UiSpacing.lg),
@@ -272,17 +278,21 @@ class _UserProfileCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Avatar(
-                label: room_display.userAvatarLabel(user),
-                imageUrl: AppConfigScope.of(
-                  context,
-                ).resolveAssetUrl(user.avatarUrl),
-                defaultAvatarKey: user.defaultAvatarKey,
-                size: 48,
-                active: online,
-                activeBorderWidth: 2,
-                activeBorderColor: inLive ? UiColors.presenceVoice : null,
-                paintBorderOnForeground: true,
+              _ProfileImagePreview(
+                key: const ValueKey('user-profile-card-avatar-preview'),
+                imageUrl: previewAvatarUrl,
+                suggestedName:
+                    '${room_display.userPrimaryName(user)}-avatar.png',
+                child: Avatar(
+                  label: room_display.userAvatarLabel(user),
+                  imageUrl: avatarUrl,
+                  defaultAvatarKey: user.defaultAvatarKey,
+                  size: 48,
+                  active: online,
+                  activeBorderWidth: 2,
+                  activeBorderColor: inLive ? UiColors.presenceVoice : null,
+                  paintBorderOnForeground: true,
+                ),
               ),
               const SizedBox(width: UiSpacing.md),
               Expanded(
@@ -380,6 +390,52 @@ class _UserProfileCard extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _ProfileImagePreview extends StatelessWidget {
+  const _ProfileImagePreview({
+    super.key,
+    required this.imageUrl,
+    required this.child,
+    required this.suggestedName,
+  });
+
+  final String? imageUrl;
+  final Widget child;
+  final String suggestedName;
+
+  Future<void> _openPreview(BuildContext context, String url) async {
+    final hoverScope = HoverCardTapRegionScope.maybeOf(context);
+    final previewActions = ChatImagePreviewActionsScope.maybeOf(context);
+    hoverScope?.onOverlayActivityChanged?.call(true);
+    try {
+      await showChatImagePreview(
+        context,
+        imageUrl: url,
+        suggestedName: suggestedName,
+        actions: previewActions ?? ChatImagePreviewActions.disabled(),
+        showActionBar: previewActions != null,
+        forceSquare: true,
+      );
+    } finally {
+      hoverScope?.onOverlayActivityChanged?.call(false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final url = _nonEmpty(imageUrl);
+    if (url == null) return child;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _openPreview(context, url),
+        child: child,
       ),
     );
   }
@@ -562,6 +618,10 @@ class _RoomProfileCard extends StatelessWidget {
     final myAvatarUrl = _myRoomAvatarUrl(room, currentUser);
     final myDefaultAvatarKey = _myRoomDefaultAvatarKey(room, currentUser);
     final myRole = _myRoomRoleLabel(room, currentUser);
+    final roomAvatarUrl = config.resolveAssetUrl(room.avatarUrl);
+    final previewRoomAvatarUrl = _nonEmpty(room.avatarUrl) == null
+        ? null
+        : _nonEmpty(roomAvatarUrl);
 
     return Padding(
       padding: const EdgeInsets.all(UiSpacing.lg),
@@ -572,12 +632,17 @@ class _RoomProfileCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Avatar(
-                label: room_display.publicRoomAvatarLabel(room),
-                imageUrl: config.resolveAssetUrl(room.avatarUrl),
-                defaultAvatarKey: room.defaultAvatarKey,
-                size: 48,
-                activeBorderWidth: 2,
+              _ProfileImagePreview(
+                key: const ValueKey('room-profile-card-icon-preview'),
+                imageUrl: previewRoomAvatarUrl,
+                suggestedName: '${room.name}-icon.png',
+                child: Avatar(
+                  label: room_display.publicRoomAvatarLabel(room),
+                  imageUrl: roomAvatarUrl,
+                  defaultAvatarKey: room.defaultAvatarKey,
+                  size: 48,
+                  activeBorderWidth: 2,
+                ),
               ),
               const SizedBox(width: UiSpacing.md),
               Expanded(

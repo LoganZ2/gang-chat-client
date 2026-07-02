@@ -1,4 +1,5 @@
 import 'package:client/src/app/room_notifications.dart';
+import 'package:client/src/home/chat_image_preview.dart';
 import 'package:client/src/home/room_profile_card.dart';
 import 'package:client/src/home/home_notifications.dart';
 import 'package:client/src/protocol/models.dart';
@@ -55,10 +56,16 @@ final _joinedRoom = PublicRoom(
   ),
 );
 
-Widget _host(Widget child) {
+Widget _host(Widget child, {ChatImagePreviewActions? imagePreviewActions}) {
+  final scaffold = Scaffold(body: Center(child: child));
   return MaterialApp(
     theme: uiTheme(),
-    home: Scaffold(body: Center(child: child)),
+    home: imagePreviewActions == null
+        ? scaffold
+        : ChatImagePreviewActionsScope(
+            actions: imagePreviewActions,
+            child: scaffold,
+          ),
   );
 }
 
@@ -131,13 +138,13 @@ void main() {
       _host(RoomHoverCardForTest(room: _joinedRoom, currentUser: _currentUser)),
     );
 
-    await _ensureRoomProfileCardOpen(tester);
+    await _ensureRoomProfileCardOpen(tester, settle: false);
     await _copyReadOnlyField(
       tester,
       _joinedRoom.name,
       clipboardWrites: clipboardWrites,
     );
-    await _ensureRoomProfileCardOpen(tester);
+    await _ensureRoomProfileCardOpen(tester, settle: false);
     await _copyReadOnlyField(
       tester,
       'RID: ${_joinedRoom.rid}',
@@ -147,6 +154,65 @@ void main() {
     );
 
     expect(clipboardWrites, [_joinedRoom.name, _joinedRoom.rid]);
+  });
+
+  testWidgets('preset room profile icon does not open image preview', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(RoomHoverCardForTest(room: _joinedRoom, currentUser: _currentUser)),
+    );
+
+    await _ensureRoomProfileCardOpen(tester);
+    await tester.tap(_roomProfileIcon());
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(
+      find.byKey(const ValueKey('chat-image-preview-url-image')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('uploaded room profile icon opens the shared image preview', (
+    tester,
+  ) async {
+    final roomWithIcon = PublicRoom(
+      id: _joinedRoom.id,
+      rid: _joinedRoom.rid,
+      name: _joinedRoom.name,
+      description: _joinedRoom.description,
+      avatarUrl: 'https://example.com/room.png',
+      defaultAvatarKey: _joinedRoom.defaultAvatarKey,
+      visibility: _joinedRoom.visibility,
+      joinPolicy: _joinedRoom.joinPolicy,
+      memberCount: _joinedRoom.memberCount,
+      onlineMemberCount: _joinedRoom.onlineMemberCount,
+      liveParticipantCount: _joinedRoom.liveParticipantCount,
+      joined: _joinedRoom.joined,
+      joinState: _joinedRoom.joinState,
+      createdBy: _joinedRoom.createdBy,
+      personalProfile: _joinedRoom.personalProfile,
+      myMembership: _joinedRoom.myMembership,
+    );
+    await tester.pumpWidget(
+      _host(
+        RoomHoverCardForTest(room: roomWithIcon, currentUser: _currentUser),
+        imagePreviewActions: _imagePreviewActions(),
+      ),
+    );
+
+    await _ensureRoomProfileCardOpen(tester, settle: false);
+    await tester.tap(_roomProfileIcon());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(
+      find.byKey(const ValueKey('chat-image-preview-url-image')),
+      findsOneWidget,
+    );
+    expect(find.byIcon(Icons.download_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.save_alt_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.copy_rounded), findsOneWidget);
   });
 
   testWidgets('room profile creator avatar opens a user profile card', (
@@ -551,14 +617,36 @@ void main() {
   });
 }
 
-Future<void> _ensureRoomProfileCardOpen(WidgetTester tester) async {
+Future<void> _ensureRoomProfileCardOpen(
+  WidgetTester tester, {
+  bool settle = true,
+}) async {
   final marker = find.text('RID: ${_joinedRoom.rid}');
   if (marker.evaluate().isEmpty) {
     await tester.tap(find.byType(Avatar).first);
-    await tester.pumpAndSettle();
+    if (settle) {
+      await tester.pumpAndSettle();
+    } else {
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+    }
   }
   expect(marker, findsOneWidget);
   expect(find.byType(ReadOnlySelectableText), findsWidgets);
+}
+
+Finder _roomProfileIcon() {
+  return find.byWidgetPredicate(
+    (widget) => widget is Avatar && widget.size == 48,
+  );
+}
+
+ChatImagePreviewActions _imagePreviewActions() {
+  return ChatImagePreviewActions(
+    onDownload: (_, _) async {},
+    onSaveAs: (_, _) async {},
+    onCopyToClipboard: (_) async {},
+  );
 }
 
 Finder _readOnlyFieldWithText(String text) {
