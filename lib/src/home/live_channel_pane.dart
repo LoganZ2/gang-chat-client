@@ -323,6 +323,8 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                               child: _LiveMemberStage(
                                 participants: participants,
                                 currentUser: widget.currentUser,
+                                localMicMuted: widget.micMuted,
+                                localHeadphonesMuted: widget.headphonesMuted,
                                 speakingUserIds: widget.speakingUserIds,
                                 liveKitMicMutedByParticipantId:
                                     widget.liveKitMicMutedByParticipantId,

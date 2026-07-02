@@ -45,6 +45,7 @@ void main() {
         _host(
           searchController: searchController,
           live: live,
+          headphonesMuted: true,
           speakingUserIds: const {'current_user'},
         ),
       );
@@ -143,6 +144,47 @@ void main() {
               'live-member-status:headphones:current_user',
             ),
           ),
+          matching: find.byIcon(Icons.headset_off),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'current user member card uses local audio mute state before snapshot',
+    (tester) async {
+      final searchController = TextEditingController();
+      addTearDown(searchController.dispose);
+      final user = _currentUser.toSummary().copyWith(
+        roomDisplayName: 'Room Me',
+        roomRole: 'member',
+      );
+      final live = _liveState([_participant(id: 'live_self', user: user)]);
+
+      await tester.pumpWidget(
+        _host(
+          searchController: searchController,
+          live: live,
+          micMuted: true,
+          headphonesMuted: true,
+          liveKitMicMutedByParticipantId: const {'current_user': false},
+        ),
+      );
+
+      final micButton = find.byKey(
+        const ValueKey<String>('live-member-status:mic:current_user'),
+      );
+      final headphonesButton = find.byKey(
+        const ValueKey<String>('live-member-status:headphones:current_user'),
+      );
+      expect(
+        find.descendant(of: micButton, matching: find.byIcon(Icons.mic_off)),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: headphonesButton,
           matching: find.byIcon(Icons.headset_off),
         ),
         findsOneWidget,
@@ -1083,6 +1125,8 @@ Widget _host({
   double height = 520,
   bool joined = true,
   bool joining = false,
+  bool micMuted = false,
+  bool headphonesMuted = false,
   VoidCallback? onJoin,
   VoidCallback? onToggleMic,
   VoidCallback? onToggleHeadphones,
@@ -1123,8 +1167,8 @@ Widget _host({
             loading: false,
             joined: joined,
             joining: joining,
-            micMuted: false,
-            headphonesMuted: false,
+            micMuted: micMuted,
+            headphonesMuted: headphonesMuted,
             voiceBlocked: false,
             cameraOn: false,
             screenSharing: false,

@@ -28,6 +28,8 @@ class _LiveMemberStage extends StatelessWidget {
   const _LiveMemberStage({
     required this.participants,
     required this.currentUser,
+    required this.localMicMuted,
+    required this.localHeadphonesMuted,
     required this.speakingUserIds,
     required this.liveKitMicMutedByParticipantId,
     required this.videoTracks,
@@ -53,6 +55,8 @@ class _LiveMemberStage extends StatelessWidget {
 
   final List<LiveParticipant> participants;
   final CurrentUser currentUser;
+  final bool localMicMuted;
+  final bool localHeadphonesMuted;
   final Set<String> speakingUserIds;
   final Map<String, bool> liveKitMicMutedByParticipantId;
   final List<LiveVideoTrack> videoTracks;
@@ -100,12 +104,21 @@ class _LiveMemberStage extends StatelessWidget {
                 children: [
                   for (final participant in participants)
                     _LiveMemberCard(
-                      participant: participant,
+                      participant: participant.user.id == currentUser.id
+                          ? participant.copyWith(
+                              micMuted: localMicMuted,
+                              headphonesMuted: localHeadphonesMuted,
+                              headphonesListening:
+                                  !localHeadphonesMuted &&
+                                  !participant.headphonesBlocked,
+                            )
+                          : participant,
                       currentUser: currentUser,
                       local: participant.user.id == currentUser.id,
                       speaking: speakingUserIds.contains(participant.user.id),
-                      liveKitMicMuted:
-                          liveKitMicMutedByParticipantId[participant.user.id],
+                      liveKitMicMuted: participant.user.id == currentUser.id
+                          ? localMicMuted
+                          : liveKitMicMutedByParticipantId[participant.user.id],
                       screenShareFocused:
                           stageTrack?.identity == participant.user.id &&
                           stageTrack?.isScreenShare == true,

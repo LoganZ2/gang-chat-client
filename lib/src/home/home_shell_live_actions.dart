@@ -285,6 +285,20 @@ extension _HomeShellLiveActions on _HomeShellState {
     final muteMic = muted && !_micMuted;
     if (!headphonesChanged && !muteMic) return;
 
+    _setHomeState(() {
+      if (muteMic) {
+        _micMuted = true;
+      }
+      if (headphonesChanged) {
+        _headphonesMuted = muted;
+      }
+    });
+
+    if (muteMic) {
+      _rememberInputVolume(_liveSessionController.inputVolume);
+      unawaited(_liveSessionController.setInputVolume(0));
+      unawaited(_liveSessionController.setMicMuted(true));
+    }
     if (headphonesChanged && syncVolume) {
       final volume = muted ? 0.0 : _restoredOutputVolume();
       if (muted) {
@@ -292,11 +306,7 @@ extension _HomeShellLiveActions on _HomeShellState {
       }
       unawaited(_liveSessionController.setOutputVolume(volume));
     }
-    if (muteMic) {
-      _setMicMutedLocally(true);
-    }
     if (headphonesChanged) {
-      _setHomeState(() => _headphonesMuted = muted);
       unawaited(_liveSessionController.setOutputMuted(muted));
     }
     // Report the headphone state to the server so other participants see it on
