@@ -41,10 +41,11 @@ dev_dependencies:
   flutter_lints: 6.0.0
 
 dependency_overrides:
-  # Pinned to 7.1.0 because connectivity_plus 7.1.1+ uses NWPath.isUltraConstrained,
+  # Pinned to 7.0.0 because connectivity_plus 7.1.0+ uses NWPath.isUltraConstrained,
   # an API only available in the macOS 26 SDK (Xcode 26). Our CI builds with Xcode
   # 16.4 (macOS 15.5 SDK), where that symbol does not exist and compilation fails.
-  connectivity_plus: 7.1.0
+  # 7.0.0 still satisfies livekit_client's ^7.0.0 constraint.
+  connectivity_plus: 7.0.0
   audioplayers_windows:
     path: third_party/audioplayers_windows
   flutter_webrtc:
