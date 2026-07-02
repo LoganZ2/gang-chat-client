@@ -215,13 +215,45 @@ void main() {
     await _ensureUserProfileCardOpen(tester);
     await _copyReadOnlyField(
       tester,
+      _user.bio!,
+      clipboardWrites: clipboardWrites,
+    );
+    await _ensureUserProfileCardOpen(tester, settle: false);
+    await _copyReadOnlyField(
+      tester,
       'UID: ${_user.uid}',
       copyStartOffset: 'UID: '.length,
       expectedCopy: _user.uid!,
       clipboardWrites: clipboardWrites,
     );
 
-    expect(clipboardWrites, [_user.displayName, _user.username, _user.uid]);
+    expect(clipboardWrites, [
+      _user.displayName,
+      _user.username,
+      _user.bio,
+      _user.uid,
+    ]);
+  });
+
+  testWidgets('profile card preserves an existing selection on right click', (
+    tester,
+  ) async {
+    final clipboardWrites = <String>[];
+    _mockClipboard(clipboardWrites);
+
+    await tester.pumpWidget(_host(const AvatarHoverCardForTest(user: _user)));
+
+    await _ensureUserProfileCardOpen(tester, settle: false);
+    await _copyReadOnlyField(
+      tester,
+      '@${_user.username}',
+      initialSelection: const TextSelection(baseOffset: 1, extentOffset: 4),
+      expectedSelection: const TextSelection(baseOffset: 1, extentOffset: 4),
+      expectedCopy: 'log',
+      clipboardWrites: clipboardWrites,
+    );
+
+    expect(clipboardWrites, ['log']);
   });
 
   testWidgets('preset profile card avatar does not open image preview', (
@@ -811,6 +843,8 @@ Future<void> _copyReadOnlyField(
   WidgetTester tester,
   String text, {
   int copyStartOffset = 0,
+  TextSelection? initialSelection,
+  TextSelection? expectedSelection,
   String? expectedCopy,
   required List<String> clipboardWrites,
 }) async {
@@ -835,12 +869,22 @@ Future<void> _copyReadOnlyField(
         'EditableText values: $editableValues',
   );
 
+  if (initialSelection != null) {
+    final editableTextState = tester.state<EditableTextState>(editableFinder);
+    editableTextState.userUpdateTextEditingValue(
+      editableTextState.textEditingValue.copyWith(selection: initialSelection),
+      SelectionChangedCause.toolbar,
+    );
+    await tester.pump();
+  }
+
   await tester.tap(editableFinder, buttons: kSecondaryMouseButton);
   await tester.pumpAndSettle();
   final editableTextState = tester.state<EditableTextState>(editableFinder);
   expect(
     editableTextState.textEditingValue.selection,
-    TextSelection(baseOffset: copyStartOffset, extentOffset: text.length),
+    expectedSelection ??
+        TextSelection(baseOffset: copyStartOffset, extentOffset: text.length),
   );
   expect(find.text('Ctrl+C'), findsOneWidget);
   expect(find.text('Ctrl+A'), findsNothing);

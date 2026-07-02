@@ -109,9 +109,11 @@ class _TextFieldEditingShortcutsState extends State<TextFieldEditingShortcuts> {
       _clearSecondaryClickProtection();
       return;
     }
+    final currentSelection = _validSelection(widget.controller?.selection);
     _secondaryClickSelection =
+        _nonCollapsedSelection(currentSelection) ??
         _validSelection(widget.secondaryClickSelection?.call()) ??
-        _validSelection(widget.controller?.selection);
+        currentSelection;
     _secondaryClickHadFocus = widget.focusNode?.hasFocus ?? false;
     if (!_hasSecondaryClickProtection) {
       _clearSecondaryClickProtection();
@@ -234,6 +236,11 @@ class _TextFieldEditingShortcutsState extends State<TextFieldEditingShortcuts> {
 
   TextSelection? _validSelection(TextSelection? selection) {
     if (selection == null || !selection.isValid) return null;
+    return selection;
+  }
+
+  TextSelection? _nonCollapsedSelection(TextSelection? selection) {
+    if (selection == null || selection.isCollapsed) return null;
     return selection;
   }
 

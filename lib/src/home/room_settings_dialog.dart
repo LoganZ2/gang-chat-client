@@ -17,6 +17,7 @@ class RoomSettingsDialog extends StatefulWidget {
     this.embedded = false,
     this.onClose,
     this.onResult,
+    this.stickerImagePreviewOpener,
     bool createMode = false,
   }) : _mode = createMode
            ? _RoomSettingsDialogMode.create
@@ -54,6 +55,7 @@ class RoomSettingsDialog extends StatefulWidget {
   final bool embedded;
   final VoidCallback? onClose;
   final ValueChanged<RoomManagementResult>? onResult;
+  final StickerImagePreviewOpener? stickerImagePreviewOpener;
   final _RoomSettingsDialogMode _mode;
 
   @override
@@ -570,6 +572,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
                   roomId: _room.id,
                   canManage: _canManageRoom,
                 ),
+                imagePreviewOpener: widget.stickerImagePreviewOpener,
                 title: '房间表情包',
                 unavailableText: '房间表情包需要登录后从服务端读取',
               ),

@@ -73,6 +73,7 @@ class SettingsPage extends StatefulWidget {
     this.installInfoService = const InstallInfoService(),
     this.closeBehaviorStore = const LocalCloseBehaviorStore(),
     this.languageStore = const LocalLanguagePreferenceStore(),
+    this.stickerImagePreviewOpener,
     this.appVersion = gangChatClientVersion,
     this.currentUser,
     this.onUserUpdated,
@@ -100,6 +101,7 @@ class SettingsPage extends StatefulWidget {
   final InstallInfoService installInfoService;
   final CloseBehaviorStore closeBehaviorStore;
   final LanguagePreferenceStore languageStore;
+  final StickerImagePreviewOpener? stickerImagePreviewOpener;
   final String appVersion;
   final CurrentUser? currentUser;
   final ValueChanged<CurrentUser>? onUserUpdated;
@@ -1918,6 +1920,7 @@ class _SettingsPageState extends State<SettingsPage> {
           onMoveUp: () => _moveStickerItem(item, -1),
           onMoveDown: () => _moveStickerItem(item, 1),
           onPin: () => _pinStickerItem(item),
+          imagePreviewOpener: widget.stickerImagePreviewOpener,
         ),
       ),
     );

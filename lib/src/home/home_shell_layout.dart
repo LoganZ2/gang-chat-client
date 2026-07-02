@@ -1,6 +1,19 @@
 part of 'home_shell.dart';
 
 extension _HomeShellLayout on _HomeShellState {
+  Future<void> _openStickerManagerImagePreview(
+    BuildContext context, {
+    required String imageUrl,
+    required String suggestedName,
+  }) {
+    return showChatImagePreview(
+      context,
+      imageUrl: imageUrl,
+      suggestedName: suggestedName,
+      actions: _imagePreviewActions,
+    );
+  }
+
   Widget _buildNarrowLayout(double width) {
     if (!_narrowContentOpen) {
       return _buildSidebar(width: width, openContentOnSelect: true);
@@ -19,6 +32,7 @@ extension _HomeShellLayout on _HomeShellState {
         closeBehaviorStore: widget.closeBehaviorStore,
         languageStore: widget.languageStore,
         stickerPackStore: widget.app.stickerPackStore,
+        stickerImagePreviewOpener: _openStickerManagerImagePreview,
         currentUser: _currentUser,
         onUserUpdated: _handleUserUpdated,
         onAccountDeleted: _logout,
@@ -102,6 +116,7 @@ extension _HomeShellLayout on _HomeShellState {
         embedded: true,
         onClose: _openChat,
         onResult: (result) => _handleRoomSettingsResult(room.id, result),
+        stickerImagePreviewOpener: _openStickerManagerImagePreview,
       );
     }
     if (_contentMode == _ContentMode.live) {

@@ -147,13 +147,23 @@ void main() {
     await _ensureRoomProfileCardOpen(tester, settle: false);
     await _copyReadOnlyField(
       tester,
+      _joinedRoom.description,
+      clipboardWrites: clipboardWrites,
+    );
+    await _ensureRoomProfileCardOpen(tester, settle: false);
+    await _copyReadOnlyField(
+      tester,
       'RID: ${_joinedRoom.rid}',
       copyStartOffset: 'RID: '.length,
       expectedCopy: _joinedRoom.rid,
       clipboardWrites: clipboardWrites,
     );
 
-    expect(clipboardWrites, [_joinedRoom.name, _joinedRoom.rid]);
+    expect(clipboardWrites, [
+      _joinedRoom.name,
+      _joinedRoom.description,
+      _joinedRoom.rid,
+    ]);
   });
 
   testWidgets('preset room profile icon does not open image preview', (

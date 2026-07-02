@@ -346,10 +346,9 @@ class _UserProfileCard extends StatelessWidget {
           ),
           if (bio != null && bio.isNotEmpty) ...[
             const SizedBox(height: UiSpacing.md),
-            Text(
-              bio,
+            _ProfileIdentityText(
+              value: bio,
               maxLines: 4,
-              overflow: TextOverflow.ellipsis,
               style: UiTypography.body.copyWith(color: UiColors.textSecondary),
             ),
           ],
@@ -446,11 +445,13 @@ class _ProfileIdentityText extends StatelessWidget {
     required this.value,
     required this.style,
     this.copyStartOffset = 0,
+    this.maxLines = 1,
   });
 
   final String value;
   final TextStyle style;
   final int copyStartOffset;
+  final int maxLines;
 
   @override
   Widget build(BuildContext context) {
@@ -459,6 +460,7 @@ class _ProfileIdentityText extends StatelessWidget {
     return ReadOnlySelectableText(
       value: value,
       style: style,
+      maxLines: maxLines,
       secondaryClickSelection: TextSelection(
         baseOffset: start,
         extentOffset: value.length,
@@ -686,10 +688,9 @@ class _RoomProfileCard extends StatelessWidget {
           ),
           if (description != null) ...[
             const SizedBox(height: UiSpacing.md),
-            Text(
-              description,
+            _ProfileIdentityText(
+              value: description,
               maxLines: 4,
-              overflow: TextOverflow.ellipsis,
               style: UiTypography.body.copyWith(color: UiColors.textSecondary),
             ),
           ],

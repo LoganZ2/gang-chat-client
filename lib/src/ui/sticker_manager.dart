@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../app/file_display.dart' as file_display;
 import '../app/sticker_display.dart';
 import '../app/media_cache_controller.dart';
 import '../app/sticker_management.dart';
@@ -22,6 +23,13 @@ import 'settings_scaffold.dart';
 import 'sticker_upload_adapter.dart';
 import 'surface.dart';
 import 'tokens.dart';
+
+typedef StickerImagePreviewOpener =
+    Future<void> Function(
+      BuildContext context, {
+      required String imageUrl,
+      required String suggestedName,
+    });
 
 const _stickerFileTypeGroups = [
   FileTypeGroup(
@@ -98,12 +106,14 @@ class StickerManagerPanel extends StatefulWidget {
     super.key,
     required this.backend,
     this.fileSelectionService = const FileSelectionService(),
+    this.imagePreviewOpener,
     this.title = '表情包管理',
     this.unavailableText = '表情包需要登录后从服务端读取',
   });
 
   final StickerManagerBackend backend;
   final FileSelectionService fileSelectionService;
+  final StickerImagePreviewOpener? imagePreviewOpener;
   final String title;
   final String unavailableText;
 
@@ -987,6 +997,7 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
           onMoveUp: () => _moveItem(item, -1),
           onMoveDown: () => _moveItem(item, 1),
           onPin: () => _pinItem(item),
+          imagePreviewOpener: widget.imagePreviewOpener,
         ),
       ),
     );
@@ -1748,6 +1759,247 @@ class _StickerPreviewActionRow extends StatelessWidget {
   }
 }
 
+class _StickerPreviewImage extends StatefulWidget {
+  const _StickerPreviewImage({
+    required this.imageUrl,
+    required this.asset,
+    required this.onOpenPreview,
+  });
+
+  final String imageUrl;
+  final UploadedAsset asset;
+  final VoidCallback? onOpenPreview;
+
+  @override
+  State<_StickerPreviewImage> createState() => _StickerPreviewImageState();
+}
+
+class _StickerPreviewImageState extends State<_StickerPreviewImage> {
+  ImageStream? _stream;
+  ImageStreamListener? _listener;
+  MediaCacheController? _cache;
+  Size? _resolvedSize;
+  bool _resolving = false;
+  bool _failed = false;
+  int _resolveSerial = 0;
+  bool _hovered = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final cache = MediaCacheScope.of(context);
+    if (!identical(_cache, cache)) {
+      _cache = cache;
+      _resolvedSize = _assetImageSize();
+      _failed = false;
+      _resolveIfNeeded();
+    }
+  }
+
+  @override
+  void didUpdateWidget(_StickerPreviewImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.asset != widget.asset ||
+        oldWidget.imageUrl != widget.imageUrl) {
+      _resolvedSize = _assetImageSize();
+      _failed = false;
+      _hovered = false;
+      _resolveIfNeeded();
+    }
+  }
+
+  @override
+  void dispose() {
+    _removeListener();
+    super.dispose();
+  }
+
+  Size? _assetImageSize() {
+    final width = widget.asset.width;
+    final height = widget.asset.height;
+    if (width == null || height == null || width <= 0 || height <= 0) {
+      return null;
+    }
+    return Size(width.toDouble(), height.toDouble());
+  }
+
+  void _resolveIfNeeded() {
+    final assetSize = _assetImageSize();
+    if (assetSize != null) {
+      _removeListener();
+      if (_resolvedSize != assetSize || _resolving || _failed) {
+        setState(() {
+          _resolvedSize = assetSize;
+          _resolving = false;
+          _failed = false;
+        });
+      }
+      return;
+    }
+
+    _removeListener();
+    final cache = _cache;
+    if (cache == null || _resolving || _failed) return;
+    final request = MediaCacheRequest.tryFromUrl(
+      url: widget.imageUrl,
+      filename: widget.asset.filename,
+      mimeType: widget.asset.mimeType,
+      expectedBytes: widget.asset.sizeBytes,
+    );
+    if (request == null) {
+      setState(() => _failed = true);
+      return;
+    }
+
+    final serial = ++_resolveSerial;
+    setState(() {
+      _resolving = true;
+      _failed = false;
+    });
+    cache
+        .getOrDownload(request: request)
+        .then((file) {
+          if (!mounted || serial != _resolveSerial) return;
+          _listenForDimensions(file);
+        })
+        .catchError((_) {
+          if (!mounted || serial != _resolveSerial) return;
+          setState(() {
+            _resolving = false;
+            _failed = true;
+          });
+        });
+  }
+
+  void _listenForDimensions(File file) {
+    _removeListener();
+    final stream = FileImage(file).resolve(ImageConfiguration.empty);
+    final listener = ImageStreamListener(
+      (image, _) {
+        if (!mounted) return;
+        setState(() {
+          _resolvedSize = Size(
+            image.image.width.toDouble(),
+            image.image.height.toDouble(),
+          );
+          _resolving = false;
+          _failed = false;
+        });
+      },
+      onError: (_, _) {
+        if (!mounted) return;
+        setState(() {
+          _resolving = false;
+          _failed = true;
+        });
+      },
+    );
+    _stream = stream;
+    _listener = listener;
+    stream.addListener(listener);
+  }
+
+  void _removeListener() {
+    final stream = _stream;
+    final listener = _listener;
+    if (stream != null && listener != null) {
+      stream.removeListener(listener);
+    }
+    _stream = null;
+    _listener = null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canOpen = widget.onOpenPreview != null;
+    return SizedBox(
+      height: 320,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final viewport = Size(constraints.maxWidth, constraints.maxHeight);
+          final sourceSize = _resolvedSize;
+          if (sourceSize == null) {
+            return _buildPlaceholder();
+          }
+          final imageRect = _imageRectFor(viewport, sourceSize);
+          final image = CachedAssetImage(
+            url: widget.imageUrl,
+            filename: widget.asset.filename,
+            mimeType: widget.asset.mimeType,
+            expectedBytes: widget.asset.sizeBytes,
+            width: imageRect.width,
+            height: imageRect.height,
+            fit: BoxFit.contain,
+            loadingBuilder: (_) => _buildPlaceholder(),
+            errorBuilder: (_, _, _) => _buildPlaceholder(error: true),
+          );
+
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              Positioned.fromRect(
+                rect: imageRect,
+                child: MouseRegion(
+                  cursor: canOpen
+                      ? SystemMouseCursors.click
+                      : MouseCursor.defer,
+                  onEnter: (_) {
+                    if (canOpen) setState(() => _hovered = true);
+                  },
+                  onExit: (_) {
+                    if (canOpen) setState(() => _hovered = false);
+                  },
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: widget.onOpenPreview,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        image,
+                        IgnorePointer(
+                          child: AnimatedOpacity(
+                            opacity: _hovered ? 1 : 0,
+                            duration: const Duration(milliseconds: 120),
+                            child: Center(
+                              child: Icon(
+                                Icons.search,
+                                color: Colors.white.withValues(alpha: 0.92),
+                                size: 36,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Rect _imageRectFor(Size viewport, Size sourceSize) {
+    final fitted = applyBoxFit(BoxFit.contain, sourceSize, viewport);
+    return Alignment.center.inscribe(
+      fitted.destination,
+      Offset.zero & viewport,
+    );
+  }
+
+  Widget _buildPlaceholder({bool error = false}) {
+    return Center(
+      child: Icon(
+        error ? Icons.broken_image_outlined : Icons.image_outlined,
+        color: UiColors.textMuted,
+        size: 42,
+      ),
+    );
+  }
+}
+
 /// 表情预览/编辑对话框。[onSetAvatar] 为空时隐藏“设为头像”(房间场景)。
 class StickerPreviewDialog extends StatefulWidget {
   const StickerPreviewDialog({
@@ -1767,6 +2019,7 @@ class StickerPreviewDialog extends StatefulWidget {
     required this.onMoveUp,
     required this.onMoveDown,
     required this.onPin,
+    this.imagePreviewOpener,
   });
 
   final ManagedSticker item;
@@ -1784,6 +2037,7 @@ class StickerPreviewDialog extends StatefulWidget {
   final Future<sticker_ordering.StickerPlacementData?> Function() onMoveUp;
   final Future<sticker_ordering.StickerPlacementData?> Function() onMoveDown;
   final Future<sticker_ordering.StickerPlacementData?> Function() onPin;
+  final StickerImagePreviewOpener? imagePreviewOpener;
 
   @override
   State<StickerPreviewDialog> createState() => _StickerPreviewDialogState();
@@ -1868,6 +2122,28 @@ class _StickerPreviewDialogState extends State<StickerPreviewDialog> {
         return true;
       },
     );
+  }
+
+  Future<void> _openImagePreview() async {
+    final opener = widget.imagePreviewOpener;
+    if (opener == null) return;
+    await opener(
+      context,
+      imageUrl: widget.imageUrl,
+      suggestedName: _previewSuggestedName,
+    );
+  }
+
+  String get _previewSuggestedName {
+    final asset = _sticker.asset;
+    final filename = asset.filename?.trim();
+    if (filename != null && filename.isNotEmpty) return filename;
+    final rawName = _sticker.name.trim();
+    final safeName = rawName
+        .replaceAll(RegExp(r'[\\/:*?"<>|\s]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_');
+    final stem = safeName.isEmpty || safeName == '_' ? 'sticker' : safeName;
+    return '$stem.${file_display.imageExtensionForMimeType(asset.mimeType)}';
   }
 
   Future<void> _delete() async {
@@ -1984,34 +2260,12 @@ class _StickerPreviewDialogState extends State<StickerPreviewDialog> {
                 ],
               ),
               const SizedBox(height: 16),
-              SizedBox(
-                height: 320,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: UiColors.background,
-                    border: Border.all(color: UiColors.border),
-                  ),
-                  child: ClipRect(
-                    child: InteractiveViewer(
-                      minScale: 0.5,
-                      maxScale: 4,
-                      child: Center(
-                        child: CachedAssetImage(
-                          url: widget.imageUrl,
-                          filename: asset.filename,
-                          mimeType: asset.mimeType,
-                          expectedBytes: asset.sizeBytes,
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, _, _) => const Icon(
-                            Icons.broken_image_outlined,
-                            color: UiColors.textMuted,
-                            size: 42,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+              _StickerPreviewImage(
+                imageUrl: widget.imageUrl,
+                asset: asset,
+                onOpenPreview: widget.imagePreviewOpener == null
+                    ? null
+                    : () => unawaited(_openImagePreview()),
               ),
               const SizedBox(height: 14),
               Input(
