@@ -656,6 +656,7 @@ extension _HomeShellLiveActions on _HomeShellState {
         return;
       }
       if (!mounted) return;
+      _syncWatchedLiveStageSelection(_liveStageSelections[room.id]);
       _setHomeState(
         () => _applyLiveJoinStatePatch(
           _liveController.patchJoinConnected(
@@ -740,6 +741,7 @@ extension _HomeShellLiveActions on _HomeShellState {
         return;
       }
       if (!mounted || _joinedLiveRoomId != roomId) return;
+      _syncWatchedLiveStageSelection(_liveStageSelections[roomId]);
 
       final canPublish = !joinPatch.voiceBlocked;
       await _restoreLiveParticipantState(

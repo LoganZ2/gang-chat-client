@@ -217,19 +217,26 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
   }
 
   void _selectStage(LiveVideoTrack track) {
-    widget.onStageSelectionChanged(LiveStageSelection.fromTrack(track));
+    _selectStageAndJoinIfNeeded(LiveStageSelection.fromTrack(track));
   }
 
   void _selectScreenShareStage(String identity) {
-    widget.onStageSelectionChanged(
+    _selectStageAndJoinIfNeeded(
       LiveStageSelection.track(identity: identity, isScreenShare: true),
     );
   }
 
   void _selectCameraStage(String identity) {
-    widget.onStageSelectionChanged(
+    _selectStageAndJoinIfNeeded(
       LiveStageSelection.track(identity: identity, isScreenShare: false),
     );
+  }
+
+  void _selectStageAndJoinIfNeeded(LiveStageSelection selection) {
+    widget.onStageSelectionChanged(selection);
+    if (!widget.joined && !widget.joining && !widget.loading) {
+      widget.onJoin();
+    }
   }
 
   void _exitStage() {

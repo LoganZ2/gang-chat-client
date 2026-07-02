@@ -581,6 +581,52 @@ void main() {
     },
   );
 
+  testWidgets('remote media thumbnail joins live room and selects stage', (
+    tester,
+  ) async {
+    final searchController = TextEditingController();
+    addTearDown(searchController.dispose);
+    var joinCalls = 0;
+    final selections = <LiveStageSelection?>[];
+
+    Future<void> pumpRemoteThumbnail({required bool screenShare}) async {
+      final user = _user('phabe', 'Room Phabe', roomRole: 'member');
+      await tester.pumpWidget(
+        _host(
+          searchController: searchController,
+          live: _liveState([
+            _participant(
+              id: 'live_phabe',
+              user: user,
+              cameraOn: !screenShare,
+              screenSharing: screenShare,
+            ),
+          ]),
+          joined: false,
+          onJoin: () => joinCalls += 1,
+          onStageSelectionChanged: selections.add,
+        ),
+      );
+      await tester.pump();
+    }
+
+    await pumpRemoteThumbnail(screenShare: true);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('live-member:screen-share-thumbnail')),
+    );
+    expect(joinCalls, 1);
+    expect(selections.single?.identity, 'phabe');
+    expect(selections.single?.isScreenShare, true);
+
+    await pumpRemoteThumbnail(screenShare: false);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('live-member:camera-thumbnail')),
+    );
+    expect(joinCalls, 2);
+    expect(selections.last?.identity, 'phabe');
+    expect(selections.last?.isScreenShare, false);
+  });
+
   testWidgets('focused screen share leaves member card in avatar layout', (
     tester,
   ) async {
@@ -1037,6 +1083,7 @@ Widget _host({
   double height = 520,
   bool joined = true,
   bool joining = false,
+  VoidCallback? onJoin,
   VoidCallback? onToggleMic,
   VoidCallback? onToggleHeadphones,
   VoidCallback? onToggleCamera,
@@ -1089,7 +1136,7 @@ Widget _host({
             onStageSelectionChanged: onStageSelectionChanged ?? (_) {},
             onEnterFullScreen: (_) {},
             onBackToChat: () {},
-            onJoin: () {},
+            onJoin: onJoin ?? () {},
             onLeave: () {},
             onToggleMic: onToggleMic ?? () {},
             onToggleHeadphones: onToggleHeadphones ?? () {},
