@@ -125,7 +125,7 @@ class ReadOnlyTextBox extends StatefulWidget {
 
   final String value;
   final Key? fieldKey;
-  final int maxLines;
+  final int? maxLines;
   final TextStyle? style;
   final Color backgroundColor;
   final Color borderColor;

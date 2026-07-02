@@ -592,12 +592,14 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
               label: '名称',
               controller: _nameController,
               enabled: _canManageRoom && !_saving,
+              readOnly: !_canManageRoom,
             ),
             _LabeledRoomInput(
               fieldKey: const ValueKey('room-settings-description-input'),
               label: '简介',
               controller: _descriptionController,
               enabled: _canManageRoom && !_saving,
+              readOnly: !_canManageRoom,
               maxLines: null,
             ),
             AvatarPicker(
@@ -777,6 +779,7 @@ class _LabeledRoomInput extends StatelessWidget {
     required this.controller,
     this.hintText = '',
     this.enabled = true,
+    this.readOnly = false,
     this.maxLines = 1,
   });
 
@@ -785,6 +788,7 @@ class _LabeledRoomInput extends StatelessWidget {
   final TextEditingController controller;
   final String hintText;
   final bool enabled;
+  final bool readOnly;
   final int? maxLines;
 
   @override
@@ -794,14 +798,25 @@ class _LabeledRoomInput extends StatelessWidget {
       children: [
         _RoomFieldLabel(label),
         const SizedBox(height: 8),
-        Input(
-          key: fieldKey,
-          controller: controller,
-          hintText: hintText,
-          enabled: enabled,
-          minLines: 1,
-          maxLines: maxLines,
-        ),
+        if (readOnly)
+          ReadOnlyTextBox(
+            key: fieldKey,
+            value: controller.text,
+            maxLines: maxLines,
+            style: UiTypography.body.copyWith(
+              color: UiColors.text,
+              fontSize: 13,
+            ),
+          )
+        else
+          Input(
+            key: fieldKey,
+            controller: controller,
+            hintText: hintText,
+            enabled: enabled,
+            minLines: 1,
+            maxLines: maxLines,
+          ),
       ],
     );
   }

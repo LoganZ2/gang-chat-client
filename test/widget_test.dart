@@ -3100,6 +3100,46 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('room settings info fields are read-only for regular members', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(currentRoomRole: 'member'),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('房间设置'));
+    await tester.pumpAndSettle();
+
+    final nameField = tester.widget<TextField>(_roomSettingsTextField('name'));
+    final descriptionField = tester.widget<TextField>(
+      _roomSettingsTextField('description'),
+    );
+
+    expect(nameField.readOnly, isTrue);
+    expect(nameField.enableInteractiveSelection, isTrue);
+    expect(nameField.controller?.text, 'Alpha Room');
+    expect(descriptionField.readOnly, isTrue);
+    expect(descriptionField.enableInteractiveSelection, isTrue);
+    expect(descriptionField.maxLines, isNull);
+    expect(descriptionField.controller?.text, isEmpty);
+    expect(
+      tester
+          .widget<ui.Button>(find.widgetWithText(ui.Button, '保存房间设置'))
+          .onPressed,
+      isNull,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'authenticated home shell hides member removal for regular users',
     (WidgetTester tester) async {
