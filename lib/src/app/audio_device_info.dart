@@ -32,3 +32,4 @@ class AudioDeviceInfo {
 String audioDeviceInfoKind(AudioDeviceInfo device) => device.kind;
 String audioDeviceInfoId(AudioDeviceInfo device) => device.deviceId;
 String audioDeviceInfoLabel(AudioDeviceInfo device) => device.label;
+String audioDeviceInfoGroupId(AudioDeviceInfo device) => device.groupId;

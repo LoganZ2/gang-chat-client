@@ -6,9 +6,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:livekit_client/livekit_client.dart' as lk;
 
-import '../app/audio_device_preferences.dart';
+import '../app/audio_device_info.dart';
+import '../app/audio_device_store.dart';
 import '../app/audio_levels.dart';
 import '../protocol/models.dart' show musicBoxBotIdentity;
+import 'audio_device_service.dart';
 import 'audio_output_rebinder.dart';
 import 'screen_share_quality.dart';
 import 'system_audio_devices.dart';
@@ -298,15 +300,20 @@ class LiveVideoTrack {
 /// protocol layer. The UI uses that as the join key.
 class LiveSession extends ChangeNotifier {
   /// [outputRebinderFactory] builds the recovery hook that re-routes WebRTC
-  /// audio output after macOS swaps the default endpoint (e.g. a Bluetooth
-  /// headset flipping its A2DP/HFP profile when the mic opens or closes). It
-  /// is started while connected and stopped on disconnect; null disables the
-  /// recovery (tests, non-macOS). The default wires a real macOS rebinder.
+  /// audio output after the OS rebuilds audio endpoints (for example a headset
+  /// being unplugged/replugged, or a Bluetooth profile flip). It is started
+  /// while connected and stopped on disconnect; null disables the recovery
+  /// (tests, unsupported platforms).
   LiveSession({
     AudioOutputRebinder? Function(LiveSession session)? outputRebinderFactory,
+    AudioDeviceStore? audioDeviceStore,
     ScreenAudioTokenProvider? screenAudioTokenProvider,
   }) : _outputRebinderFactory =
-           outputRebinderFactory ?? _defaultOutputRebinderFactory,
+           outputRebinderFactory ??
+           ((session) => _defaultOutputRebinderFactory(
+             session,
+             audioDeviceStore: audioDeviceStore,
+           )),
        _screenAudioTokenProvider = screenAudioTokenProvider;
 
   final AudioOutputRebinder? Function(LiveSession session)
@@ -1464,21 +1471,57 @@ class LiveSession extends ChangeNotifier {
   void debugStopOutputRebinder() => _stopOutputRebinder();
 }
 
-// Default macOS recovery for the Bluetooth A2DP/HFP profile flip: re-select the
-// current system default output on each WebRTC device-change so the CoreAudio
-// ADM rebuilds its playout unit against the live endpoint, then re-apply
-// volumes. Returns null off macOS, where the flip doesn't apply.
-AudioOutputRebinder? _defaultOutputRebinderFactory(LiveSession session) {
-  if (kIsWeb || !Platform.isMacOS) return null;
+// Default desktop recovery for output hotplug/profile flips: re-select the
+// user's stored output when it is available again; otherwise temporarily follow
+// the OS default. The re-select forces WebRTC's ADM to rebuild playout routing,
+// then volumes are re-applied.
+AudioOutputRebinder? _defaultOutputRebinderFactory(
+  LiveSession session, {
+  required AudioDeviceStore? audioDeviceStore,
+}) {
+  if (kIsWeb || !(Platform.isMacOS || Platform.isWindows)) return null;
   final systemAudio = SystemAudioDevices();
+  const audioDevices = LiveAudioDeviceService();
   return AudioOutputRebinder(
     deviceChanges: lk.Hardware.instance.onDeviceChange.stream.map((_) {}),
-    currentOutputDeviceId: systemAudio.currentOutputDeviceId,
+    currentOutputDeviceId: () => _preferredOutputDeviceId(
+      audioDeviceStore: audioDeviceStore,
+      audioDevices: audioDevices,
+      systemAudio: systemAudio,
+    ),
     selectOutput: (deviceId) async {
       await rtc.Helper.selectAudioOutput(deviceId);
     },
     onRebound: session._reapplyAudioRouting,
   );
+}
+
+Future<String?> _preferredOutputDeviceId({
+  required AudioDeviceStore? audioDeviceStore,
+  required LiveAudioDeviceService audioDevices,
+  required SystemAudioDevices systemAudio,
+}) async {
+  final systemDefaultOutputId = await systemAudio.currentOutputDeviceId();
+  if (audioDeviceStore == null) return systemDefaultOutputId;
+  try {
+    final stored = await audioDeviceStore.read();
+    final devices = await audioDevices.enumerateDevices();
+    final storedOutput = preferredStoredAudioDeviceFrom<AudioDeviceInfo>(
+      devices,
+      kind: 'audiooutput',
+      storedDeviceId: stored.outputDeviceId,
+      storedDeviceLabel: stored.outputDeviceLabel,
+      storedDeviceGroupId: stored.outputDeviceGroupId,
+      kindOf: audioDeviceInfoKind,
+      deviceIdOf: audioDeviceInfoId,
+      labelOf: audioDeviceInfoLabel,
+      groupIdOf: audioDeviceInfoGroupId,
+      systemDefaultDeviceId: systemDefaultOutputId,
+    );
+    return storedOutput?.deviceId ?? systemDefaultOutputId;
+  } catch (_) {
+    return systemDefaultOutputId;
+  }
 }
 
 class LiveSessionConnectException implements Exception {

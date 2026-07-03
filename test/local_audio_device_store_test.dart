@@ -29,8 +29,16 @@ void main() {
   test('writes round-trip through SharedPreferences', () async {
     final store = const LocalAudioDeviceStore();
 
-    await store.writeInputDeviceId('87');
-    await store.writeOutputDeviceId('54');
+    await store.writeInputDevicePreference(
+      deviceId: '87',
+      label: 'Desk Mic',
+      groupId: 'group_mic',
+    );
+    await store.writeOutputDevicePreference(
+      deviceId: '54',
+      label: 'USB Headset',
+      groupId: 'group_headset',
+    );
     await store.writeInputVolume(0.4);
     await store.writeOutputVolume(0.6);
     await store.writeMusicBoxVolume(0.2);
@@ -40,7 +48,11 @@ void main() {
 
     final stored = await store.read();
     expect(stored.inputDeviceId, '87');
+    expect(stored.inputDeviceLabel, 'Desk Mic');
+    expect(stored.inputDeviceGroupId, 'group_mic');
     expect(stored.outputDeviceId, '54');
+    expect(stored.outputDeviceLabel, 'USB Headset');
+    expect(stored.outputDeviceGroupId, 'group_headset');
     expect(stored.inputVolume, closeTo(0.4, 1e-9));
     expect(stored.outputVolume, closeTo(0.6, 1e-9));
     expect(stored.musicBoxVolume, closeTo(0.2, 1e-9));

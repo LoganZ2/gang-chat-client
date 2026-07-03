@@ -62,6 +62,59 @@ void main() {
   );
 
   test(
+    'preferredStoredAudioDeviceFrom restores hotplugged device signature',
+    () {
+      const devices = [
+        _Device('speaker_2', 'Desk Speaker', 'audiooutput', 'group_speaker'),
+        _Device('speaker_new', 'USB Headset', 'audiooutput', 'group_headset'),
+      ];
+
+      expect(
+        preferredStoredAudioDeviceFrom(
+          devices,
+          kind: 'audiooutput',
+          storedDeviceId: 'speaker_old',
+          storedDeviceLabel: 'USB Headset',
+          storedDeviceGroupId: 'group_headset',
+          systemDefaultDeviceId: 'speaker_2',
+          kindOf: _kindOf,
+          deviceIdOf: _deviceIdOf,
+          labelOf: _labelOf,
+          groupIdOf: _groupIdOf,
+        ),
+        devices[1],
+      );
+    },
+  );
+
+  test(
+    'preferredStoredAudioDeviceFrom avoids ambiguous label-only restoration',
+    () {
+      const devices = [
+        _Device('speaker_1', 'USB Headset', 'audiooutput'),
+        _Device('speaker_2', 'USB Headset', 'audiooutput'),
+        _Device('speaker_3', 'Desk Speaker', 'audiooutput'),
+      ];
+
+      expect(
+        preferredStoredAudioDeviceFrom(
+          devices,
+          kind: 'audiooutput',
+          storedDeviceId: 'speaker_old',
+          storedDeviceLabel: 'USB Headset',
+          storedDeviceGroupId: null,
+          systemDefaultDeviceId: 'speaker_3',
+          kindOf: _kindOf,
+          deviceIdOf: _deviceIdOf,
+          labelOf: _labelOf,
+          groupIdOf: _groupIdOf,
+        ),
+        devices[2],
+      );
+    },
+  );
+
+  test(
     'preferredStoredAudioDeviceFrom prefers stored, then system default, then '
     'synthetic default',
     () {
@@ -146,12 +199,15 @@ void main() {
 }
 
 class _Device {
-  const _Device(this.deviceId, this.label, this.kind);
+  const _Device(this.deviceId, this.label, this.kind, [this.groupId = '']);
 
   final String deviceId;
   final String label;
   final String kind;
+  final String groupId;
 }
 
 String _kindOf(_Device device) => device.kind;
 String _deviceIdOf(_Device device) => device.deviceId;
+String _labelOf(_Device device) => device.label;
+String _groupIdOf(_Device device) => device.groupId;

@@ -1,6 +1,7 @@
 typedef AudioDeviceKindOf<T> = String Function(T device);
 typedef AudioDeviceIdOf<T> = String Function(T device);
 typedef AudioDeviceLabelOf<T> = String Function(T device);
+typedef AudioDeviceGroupIdOf<T> = String Function(T device);
 
 String audioDeviceKey({required String kind, required String deviceId}) {
   return '$kind:$deviceId';

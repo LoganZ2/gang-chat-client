@@ -20,24 +20,33 @@ class LiveSessionController {
     ScreenAudioTokenProvider? screenAudioTokenProvider,
   }) : session =
            session ??
-           LiveSession(screenAudioTokenProvider: screenAudioTokenProvider),
+           LiveSession(
+             audioDeviceStore: audioDeviceStore,
+             screenAudioTokenProvider: screenAudioTokenProvider,
+           ),
        _audioDeviceRestorer =
            audioDeviceRestorer ??
            ((store) async {
              // On desktop the OS-selected mic is known via the native channel;
              // pass it so a room join follows the system default when the user
              // has not pinned a device. Unsupported platforms return null.
-             final systemDefaultInput = SystemAudioDevices();
+             final systemAudio = SystemAudioDevices();
              String? systemDefaultInputId;
+             String? systemDefaultOutputId;
              try {
-               systemDefaultInputId = await systemDefaultInput
-                   .currentInputDeviceId();
+               final ids = await Future.wait<String?>([
+                 systemAudio.currentInputDeviceId(),
+                 systemAudio.currentOutputDeviceId(),
+               ]);
+               systemDefaultInputId = ids[0];
+               systemDefaultOutputId = ids[1];
              } finally {
-               await systemDefaultInput.dispose();
+               await systemAudio.dispose();
              }
              final restored = await restoreStoredAudioDevices(
                store,
                systemDefaultInputId: systemDefaultInputId,
+               systemDefaultOutputId: systemDefaultOutputId,
              );
              // The device the published mic should capture from: the resolved
              // input (stored preference or system default), else null to leave

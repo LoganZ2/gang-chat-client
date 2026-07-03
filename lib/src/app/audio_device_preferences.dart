@@ -7,7 +7,11 @@ const defaultAudioVolume = 0.5;
 class StoredAudioDevices {
   const StoredAudioDevices({
     this.inputDeviceId,
+    this.inputDeviceLabel,
+    this.inputDeviceGroupId,
     this.outputDeviceId,
+    this.outputDeviceLabel,
+    this.outputDeviceGroupId,
     this.inputVolume = defaultAudioVolume,
     this.outputVolume = defaultAudioVolume,
     this.musicBoxVolume = defaultAudioVolume,
@@ -16,7 +20,11 @@ class StoredAudioDevices {
   });
 
   final String? inputDeviceId;
+  final String? inputDeviceLabel;
+  final String? inputDeviceGroupId;
   final String? outputDeviceId;
+  final String? outputDeviceLabel;
+  final String? outputDeviceGroupId;
   final double inputVolume;
   final double outputVolume;
 
@@ -35,7 +43,11 @@ class StoredAudioDevices {
 
   bool get isEmpty =>
       (inputDeviceId == null || inputDeviceId!.isEmpty) &&
+      (inputDeviceLabel == null || inputDeviceLabel!.isEmpty) &&
+      (inputDeviceGroupId == null || inputDeviceGroupId!.isEmpty) &&
       (outputDeviceId == null || outputDeviceId!.isEmpty) &&
+      (outputDeviceLabel == null || outputDeviceLabel!.isEmpty) &&
+      (outputDeviceGroupId == null || outputDeviceGroupId!.isEmpty) &&
       inputVolume == defaultAudioVolume &&
       outputVolume == defaultAudioVolume &&
       musicBoxVolume == defaultAudioVolume &&
@@ -56,14 +68,22 @@ T? preferredStoredAudioDeviceFrom<T>(
   required String? storedDeviceId,
   required AudioDeviceKindOf<T> kindOf,
   required AudioDeviceIdOf<T> deviceIdOf,
+  String? storedDeviceLabel,
+  String? storedDeviceGroupId,
+  AudioDeviceLabelOf<T>? labelOf,
+  AudioDeviceGroupIdOf<T>? groupIdOf,
   String? systemDefaultDeviceId,
 }) {
-  final storedDevice = storedAudioDeviceFrom(
+  final storedDevice = storedPreferredAudioDeviceFrom(
     devices,
     kind: kind,
-    deviceId: storedDeviceId,
+    storedDeviceId: storedDeviceId,
+    storedDeviceLabel: storedDeviceLabel,
+    storedDeviceGroupId: storedDeviceGroupId,
     kindOf: kindOf,
     deviceIdOf: deviceIdOf,
+    labelOf: labelOf,
+    groupIdOf: groupIdOf,
   );
   if (storedDevice != null) return storedDevice;
 
@@ -91,6 +111,37 @@ T? preferredStoredAudioDeviceFrom<T>(
   );
 }
 
+T? storedPreferredAudioDeviceFrom<T>(
+  List<T> devices, {
+  required String kind,
+  required String? storedDeviceId,
+  required String? storedDeviceLabel,
+  required String? storedDeviceGroupId,
+  required AudioDeviceKindOf<T> kindOf,
+  required AudioDeviceIdOf<T> deviceIdOf,
+  required AudioDeviceLabelOf<T>? labelOf,
+  required AudioDeviceGroupIdOf<T>? groupIdOf,
+}) {
+  final storedDevice = storedAudioDeviceFrom(
+    devices,
+    kind: kind,
+    deviceId: storedDeviceId,
+    kindOf: kindOf,
+    deviceIdOf: deviceIdOf,
+  );
+  if (storedDevice != null) return storedDevice;
+
+  return storedAudioDeviceBySignatureFrom(
+    devices,
+    kind: kind,
+    label: storedDeviceLabel,
+    groupId: storedDeviceGroupId,
+    kindOf: kindOf,
+    labelOf: labelOf,
+    groupIdOf: groupIdOf,
+  );
+}
+
 T? storedAudioDeviceFrom<T>(
   List<T> devices, {
   required String kind,
@@ -105,6 +156,45 @@ T? storedAudioDeviceFrom<T>(
     }
   }
   return null;
+}
+
+T? storedAudioDeviceBySignatureFrom<T>(
+  List<T> devices, {
+  required String kind,
+  required String? label,
+  required String? groupId,
+  required AudioDeviceKindOf<T> kindOf,
+  required AudioDeviceLabelOf<T>? labelOf,
+  required AudioDeviceGroupIdOf<T>? groupIdOf,
+}) {
+  final storedLabel = _normalizedAudioDeviceSignaturePart(label);
+  final storedGroupId = _normalizedAudioDeviceSignaturePart(groupId);
+  if (storedLabel == null && storedGroupId == null) return null;
+  if (storedLabel != null && labelOf == null) return null;
+  if (storedGroupId != null && groupIdOf == null) return null;
+
+  final matches = <T>[];
+  for (final device in devices) {
+    if (kindOf(device) != kind) continue;
+    final deviceLabel = labelOf == null
+        ? null
+        : _normalizedAudioDeviceSignaturePart(labelOf(device));
+    final deviceGroupId = groupIdOf == null
+        ? null
+        : _normalizedAudioDeviceSignaturePart(groupIdOf(device));
+    final labelMatches = storedLabel != null && deviceLabel == storedLabel;
+    final groupMatches =
+        storedGroupId != null && deviceGroupId == storedGroupId;
+
+    if (storedGroupId != null) {
+      if (groupMatches && (storedLabel == null || labelMatches)) {
+        matches.add(device);
+      }
+    } else if (labelMatches) {
+      matches.add(device);
+    }
+  }
+  return matches.length == 1 ? matches.single : null;
 }
 
 Future<T?> selectStoredAudioDeviceIfChanged<T>({
@@ -135,6 +225,11 @@ String? storedAudioDeviceIdFromStorageValue(String? value) {
   return trimmed == null || trimmed.isEmpty ? null : trimmed;
 }
 
+String? storedAudioDeviceSignatureFromStorageValue(String? value) {
+  final trimmed = value?.trim();
+  return trimmed == null || trimmed.isEmpty ? null : trimmed;
+}
+
 double storedAudioVolumeFromStorageValue(String? value) {
   final parsed = double.tryParse(value ?? '');
   if (parsed == null) return 1.0;
@@ -143,4 +238,10 @@ double storedAudioVolumeFromStorageValue(String? value) {
 
 String audioVolumeStorageString(double volume) {
   return normalizedAudioVolume(volume).toStringAsFixed(3);
+}
+
+String? _normalizedAudioDeviceSignaturePart(String? value) {
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty) return null;
+  return trimmed.toLowerCase();
 }

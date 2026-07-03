@@ -18,10 +18,26 @@ class AudioDeviceStore {
     );
   }
 
+  Future<void> writeInputDevicePreference({
+    required String deviceId,
+    String? label,
+    String? groupId,
+  }) {
+    return writeInputDeviceId(deviceId);
+  }
+
   Future<void> writeOutputDeviceId(String deviceId) {
     throw UnimplementedError(
       'AudioDeviceStore.writeOutputDeviceId must be implemented.',
     );
+  }
+
+  Future<void> writeOutputDevicePreference({
+    required String deviceId,
+    String? label,
+    String? groupId,
+  }) {
+    return writeOutputDeviceId(deviceId);
   }
 
   Future<void> writeInputVolume(double volume) {

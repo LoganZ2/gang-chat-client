@@ -2551,7 +2551,11 @@ class _SettingsPageState extends State<SettingsPage> {
     final didSelect = await _selectDevice(
       device,
       () => widget.audioDeviceService.selectAudioInput(device),
-      () => widget.audioDeviceStore.writeInputDeviceId(device.deviceId),
+      () => widget.audioDeviceStore.writeInputDevicePreference(
+        deviceId: device.deviceId,
+        label: device.label,
+        groupId: device.groupId,
+      ),
     );
     if (!didSelect) return;
     final effects = audioInputDeviceSelectedEffects(
@@ -2566,7 +2570,11 @@ class _SettingsPageState extends State<SettingsPage> {
     final didSelect = await _selectDevice(
       device,
       () => widget.audioDeviceService.selectAudioOutput(device),
-      () => widget.audioDeviceStore.writeOutputDeviceId(device.deviceId),
+      () => widget.audioDeviceStore.writeOutputDevicePreference(
+        deviceId: device.deviceId,
+        label: device.label,
+        groupId: device.groupId,
+      ),
     );
     if (!didSelect) return;
     final effects = audioOutputDeviceSelectedEffects();

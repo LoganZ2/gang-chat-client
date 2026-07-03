@@ -27,7 +27,7 @@ void main() {
       );
 
       final restored = await restoreStoredAudioDevices(
-        const _FakeAudioDeviceStore(),
+        _FakeAudioDeviceStore(),
         audioDevices: service,
       );
 
@@ -61,7 +61,7 @@ void main() {
       );
 
       final restored = await restoreStoredAudioDevices(
-        const _FakeAudioDeviceStore(outputDeviceId: 'missing_output'),
+        _FakeAudioDeviceStore(outputDeviceId: 'missing_output'),
         audioDevices: service,
         systemDefaultOutputId: 'speaker_2',
       );
@@ -71,19 +71,82 @@ void main() {
       expect(service.selectedOutput, speakerTwo);
     },
   );
+
+  test(
+    'restoreStoredAudioDevices restores output by signature after hotplug',
+    () async {
+      const speaker = AudioDeviceInfo(
+        deviceId: 'speaker_2',
+        label: 'Desk Speaker',
+        kind: 'audiooutput',
+        groupId: 'group_speaker',
+      );
+      const repluggedHeadset = AudioDeviceInfo(
+        deviceId: 'headset_new',
+        label: 'USB Headset',
+        kind: 'audiooutput',
+        groupId: 'group_headset',
+      );
+      final service = _FakeLiveAudioDeviceService(
+        devices: const [speaker, repluggedHeadset],
+        selectedOutput: speaker,
+      );
+
+      final store = _FakeAudioDeviceStore(
+        outputDeviceId: 'headset_old',
+        outputDeviceLabel: 'USB Headset',
+        outputDeviceGroupId: 'group_headset',
+      );
+
+      final restored = await restoreStoredAudioDevices(
+        store,
+        audioDevices: service,
+        systemDefaultOutputId: 'speaker_2',
+      );
+
+      expect(restored.output, repluggedHeadset);
+      expect(service.outputSelects, 1);
+      expect(service.selectedOutput, repluggedHeadset);
+      expect(store.writtenOutputDeviceId, 'headset_new');
+      expect(store.writtenOutputDeviceLabel, 'USB Headset');
+      expect(store.writtenOutputDeviceGroupId, 'group_headset');
+    },
+  );
 }
 
 class _FakeAudioDeviceStore extends AudioDeviceStore {
-  const _FakeAudioDeviceStore({this.outputDeviceId = 'speaker_1'});
+  _FakeAudioDeviceStore({
+    this.outputDeviceId = 'speaker_1',
+    this.outputDeviceLabel,
+    this.outputDeviceGroupId,
+  });
 
   final String? outputDeviceId;
+  final String? outputDeviceLabel;
+  final String? outputDeviceGroupId;
+  String? writtenOutputDeviceId;
+  String? writtenOutputDeviceLabel;
+  String? writtenOutputDeviceGroupId;
 
   @override
   Future<StoredAudioDevices> read() async {
     return StoredAudioDevices(
       inputDeviceId: 'missing_input',
       outputDeviceId: outputDeviceId,
+      outputDeviceLabel: outputDeviceLabel,
+      outputDeviceGroupId: outputDeviceGroupId,
     );
+  }
+
+  @override
+  Future<void> writeOutputDevicePreference({
+    required String deviceId,
+    String? label,
+    String? groupId,
+  }) async {
+    writtenOutputDeviceId = deviceId;
+    writtenOutputDeviceLabel = label;
+    writtenOutputDeviceGroupId = groupId;
   }
 }
 
