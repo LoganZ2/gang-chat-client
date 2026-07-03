@@ -497,6 +497,8 @@ class MainFlutterWindow: NSWindow {
         result(self.readClipboardFilePaths())
       case "readImageFile":
         result(self.readClipboardImageFile())
+      case "writeFilePaths":
+        result(self.writeClipboardFilePaths(call.arguments))
       case "writeImageFile":
         result(self.writeClipboardImageFile(call.arguments))
       default:
@@ -516,6 +518,23 @@ class MainFlutterWindow: NSWindow {
       return []
     }
     return urls.filter { $0.isFileURL }.map { $0.path }
+  }
+
+  private func writeClipboardFilePaths(_ arguments: Any?) -> Bool {
+    guard
+      let args = arguments as? [String: Any],
+      let paths = args["paths"] as? [String]
+    else {
+      return false
+    }
+    let urls = paths
+      .map { URL(fileURLWithPath: $0) }
+      .filter { FileManager.default.fileExists(atPath: $0.path) }
+    guard !urls.isEmpty else { return false }
+
+    let pasteboard = NSPasteboard.general
+    pasteboard.clearContents()
+    return pasteboard.writeObjects(urls as [NSURL])
   }
 
   private func readClipboardImageFile() -> [String: Any]? {

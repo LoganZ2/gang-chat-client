@@ -54,6 +54,325 @@ extension _HomeShellMessages on _HomeShellState {
     }
   }
 
+  ChatMessageActions get _chatMessageActions {
+    return ChatMessageActions(
+      onCopy: _copyChatMessage,
+      onDeleteForMe: _deleteMessageForMe,
+      onRecall: _recallChatMessage,
+      canRecall: _canRecallChatMessage,
+    );
+  }
+
+  List<Message> _visibleMessagesForMe(List<Message> messages) {
+    if (_locallyDeletedMessageKeys.isEmpty) return messages;
+    return [
+      for (final message in messages)
+        if (!_isMessageDeletedForMe(message)) message,
+    ];
+  }
+
+  int _visibleNewMessageCount(List<Message> visibleMessages) {
+    final count = _selectedRoomNewMessageCount;
+    if (count <= 0) return 0;
+    final firstUnreadIndex = _messages.length - count;
+    if (firstUnreadIndex <= 0) return visibleMessages.length;
+    var visibleUnread = 0;
+    for (var i = firstUnreadIndex; i < _messages.length; i++) {
+      if (!_isMessageDeletedForMe(_messages[i])) visibleUnread++;
+    }
+    return visibleUnread;
+  }
+
+  bool _isMessageDeletedForMe(Message message) {
+    return _locallyDeletedMessageKeys.contains(message.id) ||
+        _locallyDeletedMessageKeys.contains(message.clientMessageId);
+  }
+
+  Future<void> _copyChatMessage(BuildContext context, Message message) async {
+    if (message.isRemoved) return;
+    try {
+      await _copyChatMessageContents(context, message);
+      if (!context.mounted) return;
+      _showChatMessageActionNotice(context, '已复制');
+    } catch (error) {
+      if (!context.mounted) return;
+      _showChatMessageActionNotice(context, '$error');
+    }
+  }
+
+  Future<void> _copyChatMessageContents(
+    BuildContext context,
+    Message message,
+  ) async {
+    final attachments = _copyableMessageAttachments(message);
+    if (attachments.isNotEmpty) {
+      await _copyMessageAttachments(context, message, attachments);
+      return;
+    }
+    final text = message.body.trimRight();
+    if (text.isEmpty) {
+      throw Exception('这条消息没有可复制的内容');
+    }
+    await _clipboardService.writeText(text);
+  }
+
+  List<MessageAttachment> _copyableMessageAttachments(Message message) {
+    return [
+      for (final attachment in message.attachments)
+        if (attachment.asset != null &&
+            (attachment.type == 'file' ||
+                attachment.type == 'sticker' ||
+                attachment.type == 'audio'))
+          attachment,
+    ];
+  }
+
+  Future<void> _copyMessageAttachments(
+    BuildContext context,
+    Message message,
+    List<MessageAttachment> attachments,
+  ) async {
+    final config = AppConfigScope.of(context);
+    if (attachments.length == 1) {
+      final attachment = attachments.single;
+      final asset = attachment.asset;
+      final resolvedUrl = config.resolveAssetUrl(asset?.url);
+      if (resolvedUrl != null &&
+          resolvedUrl.isNotEmpty &&
+          file_display.isImageMimeType(asset?.mimeType)) {
+        try {
+          await _imagePreviewActions.onCopyToClipboard(resolvedUrl);
+          return;
+        } catch (_) {
+          // Fall through to file clipboard so platforms without image clipboard
+          // support can still paste the sticker/image as a file.
+        }
+      }
+    }
+
+    final paths = <String>[];
+    final fallbackLines = <String>[];
+    final body = message.body.trimRight();
+    if (body.isNotEmpty) fallbackLines.add(body);
+    for (final attachment in attachments) {
+      final asset = attachment.asset;
+      final resolvedUrl = config.resolveAssetUrl(asset?.url);
+      if (resolvedUrl == null || resolvedUrl.isEmpty || asset == null) {
+        continue;
+      }
+      fallbackLines.add(resolvedUrl);
+      final path = await _downloadAttachmentToClipboardFile(
+        url: resolvedUrl,
+        title: _attachmentClipboardFilename(attachment),
+        asset: asset,
+      );
+      if (path != null) paths.add(path);
+    }
+
+    if (paths.isNotEmpty && await _clipboardService.writeFilePaths(paths)) {
+      return;
+    }
+    if (fallbackLines.isNotEmpty) {
+      await _clipboardService.writeText(fallbackLines.join('\n'));
+      return;
+    }
+    throw Exception('这条消息没有可复制的内容');
+  }
+
+  Future<String?> _downloadAttachmentToClipboardFile({
+    required String url,
+    required String title,
+    required UploadedAsset asset,
+  }) async {
+    final baseDirectory = await getTemporaryDirectory();
+    final directory = Directory(
+      '${baseDirectory.path}${Platform.pathSeparator}gang-chat-clipboard',
+    );
+    await directory.create(recursive: true);
+    final filename = _safeClipboardFilename(title);
+    final path = _uniqueDestinationPath(
+      directory: directory.path,
+      filename: filename,
+    );
+    final request = MediaCacheRequest.tryFromUrl(
+      url: url,
+      filename: filename,
+      mimeType: asset.mimeType,
+      expectedBytes: asset.sizeBytes,
+      namespace: 'clipboard',
+    );
+    if (request != null) {
+      final cached = await _mediaCacheController.getOrDownload(
+        request: request,
+      );
+      await cached.copy(path);
+      return path;
+    }
+
+    final uri = Uri.tryParse(url);
+    if (uri == null) return null;
+    final client = http.Client();
+    try {
+      final response = await client.get(uri);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return null;
+      }
+      await File(path).writeAsBytes(response.bodyBytes, flush: true);
+      return path;
+    } finally {
+      client.close();
+    }
+  }
+
+  String _attachmentClipboardFilename(MessageAttachment attachment) {
+    if (attachment.type == 'sticker') {
+      return message_display.stickerPreviewFilename(attachment);
+    }
+    return file_display.fileAttachmentTitle(attachment);
+  }
+
+  String _safeClipboardFilename(String value) {
+    final basename = file_display.basename(value);
+    final safe = basename
+        .replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1F]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .trim();
+    return safe.isEmpty || safe == '_' ? 'file' : safe;
+  }
+
+  Future<void> _deleteMessageForMe(
+    BuildContext context,
+    Message message,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => DialogFrame(
+        title: '删除消息',
+        icon: Icons.delete_outline,
+        actions: [
+          Button(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          Button(
+            tone: ButtonTone.danger,
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+        child: Text('这只会从你的聊天记录中删除，其他人仍然可以看到这条消息。', style: UiTypography.body),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    _setHomeState(() {
+      _locallyDeletedMessageKeys
+        ..add(message.id)
+        ..add(message.clientMessageId);
+    });
+  }
+
+  Future<void> _recallChatMessage(BuildContext context, Message message) async {
+    if (!_canRecallChatMessage(message)) return;
+    final recallingOther = message.sender.id != _currentUser.id;
+    if (recallingOther) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => DialogFrame(
+          title: '撤回消息',
+          icon: Icons.undo_rounded,
+          actions: [
+            Button(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            Button(
+              tone: ButtonTone.danger,
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('撤回'),
+            ),
+          ],
+          child: Text(
+            '确认撤回 ${room_display.userPrimaryName(message.sender)} 的这条消息？',
+            style: UiTypography.body,
+          ),
+        ),
+      );
+      if (confirmed != true) return;
+    }
+
+    try {
+      final result = await _messagesController.recallMessage(
+        roomId: message.roomId,
+        messageId: message.id,
+      );
+      if (!mounted) return;
+      final recalled = result.message;
+      if (recalled != null) {
+        _setHomeState(() {
+          _messages = _messagesController.replaceByMessageId(
+            _messages,
+            recalled,
+          );
+        });
+        unawaited(_loadServers());
+        if (context.mounted) _showChatMessageActionNotice(context, '已撤回');
+        return;
+      }
+      if (result.isPending && context.mounted) {
+        _showChatMessageActionNotice(context, '已提交撤回申请');
+      }
+    } catch (error) {
+      if (!context.mounted) return;
+      _showChatMessageActionNotice(context, '$error');
+    }
+  }
+
+  bool _canRecallChatMessage(Message message) {
+    if (message.pending ||
+        message.failed ||
+        message.isRemoved ||
+        message.type == message_display.kSystemMessageType) {
+      return false;
+    }
+    if (message.sender.id == _currentUser.id) return true;
+    final room = _selectedRoom;
+    if (room == null || (!room.isAdmin && !_currentUser.isSuperuser)) {
+      return false;
+    }
+    return _currentUserRoomRank(room) > _messageSenderRoomRank(message.sender);
+  }
+
+  int _currentUserRoomRank(RoomDetail room) {
+    if (_currentUser.isSuperuser) return 4;
+    return _roomRoleRank(room.myMembership.role);
+  }
+
+  int _messageSenderRoomRank(UserSummary sender) {
+    if (sender.isSuperuser) return 4;
+    return _roomRoleRank(sender.roomRole);
+  }
+
+  int _roomRoleRank(String? role) {
+    switch ((role ?? '').toLowerCase()) {
+      case 'owner':
+      case 'creator':
+        return 3;
+      case 'admin':
+      case 'administrator':
+        return 2;
+      case 'member':
+        return 1;
+      default:
+        return 0;
+    }
+  }
+
+  void _showChatMessageActionNotice(BuildContext context, String message) {
+    ScaffoldMessenger.maybeOf(context)
+      ?..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
   Future<void> _sendText(String value) async {
     final body = value.trimRight();
     // When files are staged, the message goes out as a file message carrying

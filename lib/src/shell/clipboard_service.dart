@@ -60,10 +60,29 @@ class ClipboardService {
     return Clipboard.setData(ClipboardData(text: text));
   }
 
+  /// Writes file paths to the system clipboard so they can be pasted as files
+  /// in supported desktop apps. Returns false on unsupported platforms.
+  Future<bool> writeFilePaths(List<String> paths) async {
+    if (kIsWeb || !(Platform.isWindows || Platform.isMacOS)) return false;
+    final normalized = paths
+        .map((path) => path.trim())
+        .where((path) => path.isNotEmpty)
+        .toList(growable: false);
+    if (normalized.isEmpty) return false;
+    final result = await _clipboardFilesChannel.invokeMethod<bool>(
+      'writeFilePaths',
+      {'paths': normalized},
+    );
+    return result ?? false;
+  }
+
   /// Writes raw image [bytes] (with the given [mimeType]) to the system
   /// clipboard via the native runner so it can be pasted into other apps.
   /// No-op on platforms without a native handler. Returns true on success.
-  Future<bool> writeImage(Uint8List bytes, {String mimeType = 'image/png'}) async {
+  Future<bool> writeImage(
+    Uint8List bytes, {
+    String mimeType = 'image/png',
+  }) async {
     if (kIsWeb || !(Platform.isWindows || Platform.isMacOS)) return false;
     if (bytes.isEmpty) return false;
     final result = await _clipboardFilesChannel.invokeMethod<bool>(

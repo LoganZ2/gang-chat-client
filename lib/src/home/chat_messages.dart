@@ -87,6 +87,31 @@ class ChatVoicePlaybackActions {
   }
 }
 
+class ChatMessageActions {
+  const ChatMessageActions({
+    required this.onCopy,
+    required this.onDeleteForMe,
+    required this.onRecall,
+    required this.canRecall,
+  });
+
+  const ChatMessageActions.disabled()
+    : onCopy = _noop,
+      onDeleteForMe = _noop,
+      onRecall = _noop,
+      canRecall = _neverCanRecall;
+
+  final Future<void> Function(BuildContext context, Message message) onCopy;
+  final Future<void> Function(BuildContext context, Message message)
+  onDeleteForMe;
+  final Future<void> Function(BuildContext context, Message message) onRecall;
+  final bool Function(Message message) canRecall;
+
+  static Future<void> _noop(BuildContext context, Message message) async {}
+
+  static bool _neverCanRecall(Message message) => false;
+}
+
 class _MessageStage extends StatefulWidget {
   const _MessageStage({
     super.key,
@@ -104,6 +129,7 @@ class _MessageStage extends StatefulWidget {
     required this.downloadActions,
     required this.voicePlaybackActions,
     required this.imagePreviewActions,
+    required this.messageActions,
     required this.onRetry,
     required this.onViewedNewMessages,
     required this.bottomInset,
@@ -127,6 +153,7 @@ class _MessageStage extends StatefulWidget {
   final ChatFileDownloadActions downloadActions;
   final ChatVoicePlaybackActions voicePlaybackActions;
   final ChatImagePreviewActions imagePreviewActions;
+  final ChatMessageActions messageActions;
   final VoidCallback onRetry;
   final VoidCallback onViewedNewMessages;
   // Breathing room at the bottom of the list, between the last message and the
@@ -866,10 +893,24 @@ class _MessageStageState extends State<_MessageStage> {
             ],
             if (systemEvent != null)
               _SystemMessageRow(
+                message: message,
                 event: systemEvent,
                 currentUser: widget.currentUser,
                 ownerUserId: widget.ownerUserId,
                 live: widget.live,
+                messageActions: widget.messageActions,
+                onResolveSenderProfile: widget.onResolveSenderProfile,
+                onResolveRoomProfile: widget.onResolveRoomProfile,
+                onEnterProfileRoom: widget.onEnterProfileRoom,
+                profileActionBuilder: widget.senderProfileActionBuilder,
+              )
+            else if (message.isRemoved)
+              _RemovedMessageRow(
+                message: message,
+                currentUser: widget.currentUser,
+                ownerUserId: widget.ownerUserId,
+                live: widget.live,
+                messageActions: widget.messageActions,
                 onResolveSenderProfile: widget.onResolveSenderProfile,
                 onResolveRoomProfile: widget.onResolveRoomProfile,
                 onEnterProfileRoom: widget.onEnterProfileRoom,
@@ -886,6 +927,7 @@ class _MessageStageState extends State<_MessageStage> {
                 downloadActions: widget.downloadActions,
                 voicePlaybackActions: widget.voicePlaybackActions,
                 imagePreviewActions: widget.imagePreviewActions,
+                messageActions: widget.messageActions,
                 inLive: _userInLive(message.sender.id),
                 onResolveSenderProfile: widget.onResolveSenderProfile,
                 onResolveRoomProfile: widget.onResolveRoomProfile,
@@ -1058,25 +1100,55 @@ class _MessageTimeDivider extends StatelessWidget {
 
 class _SystemMessageRow extends StatelessWidget {
   const _SystemMessageRow({
+    required this.message,
     required this.event,
     required this.currentUser,
     required this.ownerUserId,
     required this.live,
+    required this.messageActions,
     this.onResolveSenderProfile,
     this.onResolveRoomProfile,
     this.onEnterProfileRoom,
     this.profileActionBuilder,
   });
 
+  final Message message;
   final message_display.SystemMessageEvent event;
   final CurrentUser currentUser;
   final String? ownerUserId;
   final LiveState? live;
+  final ChatMessageActions messageActions;
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
   final RoomProfileResolver? onResolveRoomProfile;
   final ValueChanged<PublicRoom>? onEnterProfileRoom;
   final UserProfileActionBuilder? profileActionBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    return _MessageContextMenuRegion(
+      message: message,
+      actions: messageActions,
+      child: _SystemMessageContainer(
+        children: _SystemMessageParts(
+          event: event,
+          currentUser: currentUser,
+          ownerUserId: ownerUserId,
+          live: live,
+          onResolveSenderProfile: onResolveSenderProfile,
+          onResolveRoomProfile: onResolveRoomProfile,
+          onEnterProfileRoom: onEnterProfileRoom,
+          profileActionBuilder: profileActionBuilder,
+        ).build(context),
+      ),
+    );
+  }
+}
+
+class _SystemMessageContainer extends StatelessWidget {
+  const _SystemMessageContainer({required this.children});
+
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
@@ -1096,24 +1168,165 @@ class _SystemMessageRow extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               spacing: 5,
               runSpacing: 5,
-              children: [
-                ..._SystemMessageParts(
-                  event: event,
-                  currentUser: currentUser,
-                  ownerUserId: ownerUserId,
-                  live: live,
-                  onResolveSenderProfile: onResolveSenderProfile,
-                  onResolveRoomProfile: onResolveRoomProfile,
-                  onEnterProfileRoom: onEnterProfileRoom,
-                  profileActionBuilder: profileActionBuilder,
-                ).build(context),
-              ],
+              children: children,
             ),
           ),
         ),
       ),
     );
   }
+}
+
+class _RemovedMessageRow extends StatelessWidget {
+  const _RemovedMessageRow({
+    required this.message,
+    required this.currentUser,
+    required this.ownerUserId,
+    required this.live,
+    required this.messageActions,
+    this.onResolveSenderProfile,
+    this.onResolveRoomProfile,
+    this.onEnterProfileRoom,
+    this.profileActionBuilder,
+  });
+
+  final Message message;
+  final CurrentUser currentUser;
+  final String? ownerUserId;
+  final LiveState? live;
+  final ChatMessageActions messageActions;
+  final Future<UserSummary> Function(UserSummary sender)?
+  onResolveSenderProfile;
+  final RoomProfileResolver? onResolveRoomProfile;
+  final ValueChanged<PublicRoom>? onEnterProfileRoom;
+  final UserProfileActionBuilder? profileActionBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    return _MessageContextMenuRegion(
+      message: message,
+      actions: messageActions,
+      child: _SystemMessageContainer(children: _buildParts()),
+    );
+  }
+
+  List<Widget> _buildParts() {
+    if (message.isForceDeleted) {
+      final actor = message.forceDeletedBy;
+      return [
+        if (actor != null) _userChip(actor),
+        _systemText(actor == null ? '消息已被删除' : '删除了一条消息'),
+      ];
+    }
+
+    final actor = message.recalledBy ?? message.sender;
+    final recalledOwnMessage = actor.id == message.sender.id;
+    return [
+      _userChip(actor),
+      if (recalledOwnMessage)
+        _systemText('撤回了一条消息')
+      else ...[
+        _systemText('撤回了一条来自'),
+        _userChip(message.sender),
+        _systemText('的消息'),
+      ],
+    ];
+  }
+
+  Widget _userChip(UserSummary user) {
+    return _SystemUserChip(
+      user: user,
+      currentUser: currentUser,
+      ownerUserId: ownerUserId,
+      onResolveProfile: onResolveSenderProfile,
+      onResolveRoomProfile: onResolveRoomProfile,
+      onEnterProfileRoom: onEnterProfileRoom,
+      profileActionBuilder: profileActionBuilder,
+      inLive: live_display.liveParticipantByUserId(live, user.id) != null,
+    );
+  }
+}
+
+class _MessageContextMenuRegion extends StatelessWidget {
+  const _MessageContextMenuRegion({
+    required this.message,
+    required this.actions,
+    required this.child,
+  });
+
+  final Message message;
+  final ChatMessageActions actions;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onSecondaryTapDown: (details) =>
+          _showMessageContextMenu(context, details.globalPosition),
+      child: child,
+    );
+  }
+
+  void _showMessageContextMenu(BuildContext context, Offset position) {
+    final sections = _messageContextMenuSections(
+      context: context,
+      message: message,
+      actions: actions,
+      includeCopy: !message.isRemoved,
+      includeDelete: true,
+      includeRecall: !message.isRemoved,
+    );
+    unawaited(
+      showUiContextMenu(context, position: position, sections: sections),
+    );
+  }
+}
+
+List<UiContextMenuSection> _messageContextMenuSections({
+  required BuildContext context,
+  required Message message,
+  required ChatMessageActions actions,
+  bool includeCopy = true,
+  bool includeDelete = true,
+  bool includeRecall = true,
+}) {
+  return [
+    if (includeCopy)
+      UiContextMenuSection([
+        UiContextMenuItem(
+          label: '复制',
+          shortcut: 'Ctrl+C',
+          onPressed: () => unawaited(actions.onCopy(context, message)),
+        ),
+      ]),
+    if (includeRecall && actions.canRecall(message))
+      UiContextMenuSection([
+        UiContextMenuItem(
+          label: '撤回',
+          onPressed: () => unawaited(actions.onRecall(context, message)),
+        ),
+      ]),
+    if (includeDelete)
+      UiContextMenuSection([
+        UiContextMenuItem(
+          label: '删除',
+          onPressed: () => unawaited(actions.onDeleteForMe(context, message)),
+        ),
+      ]),
+  ];
+}
+
+Widget _systemText(String value) {
+  return Text(
+    value,
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    style: UiTypography.label.copyWith(
+      color: UiColors.textSecondary,
+      fontSize: 12,
+    ),
+  );
 }
 
 class _SystemMessageParts {
@@ -1352,6 +1565,7 @@ class _MessageRow extends StatelessWidget {
     required this.downloadActions,
     required this.voicePlaybackActions,
     required this.imagePreviewActions,
+    required this.messageActions,
     required this.inLive,
     this.onResolveSenderProfile,
     this.onResolveRoomProfile,
@@ -1368,6 +1582,7 @@ class _MessageRow extends StatelessWidget {
   final ChatFileDownloadActions downloadActions;
   final ChatVoicePlaybackActions voicePlaybackActions;
   final ChatImagePreviewActions imagePreviewActions;
+  final ChatMessageActions messageActions;
   final bool inLive;
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
@@ -1418,6 +1633,7 @@ class _MessageRow extends StatelessWidget {
               downloadActions: downloadActions,
               voicePlaybackActions: voicePlaybackActions,
               imagePreviewActions: imagePreviewActions,
+              messageActions: messageActions,
             ),
           ),
         ],
@@ -1445,16 +1661,20 @@ class _MessageRow extends StatelessWidget {
       child: avatar,
     );
 
-    return Row(
-      mainAxisAlignment: outgoing
-          ? MainAxisAlignment.end
-          : MainAxisAlignment.start,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (!outgoing) ...[avatarHoverCard, const SizedBox(width: 10)],
-        bubble,
-        if (outgoing) ...[const SizedBox(width: 10), avatarHoverCard],
-      ],
+    return _MessageContextMenuRegion(
+      message: message,
+      actions: messageActions,
+      child: Row(
+        mainAxisAlignment: outgoing
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!outgoing) ...[avatarHoverCard, const SizedBox(width: 10)],
+          bubble,
+          if (outgoing) ...[const SizedBox(width: 10), avatarHoverCard],
+        ],
+      ),
     );
   }
 }
@@ -1468,6 +1688,7 @@ class _MessageBubble extends StatelessWidget {
     required this.downloadActions,
     required this.voicePlaybackActions,
     required this.imagePreviewActions,
+    required this.messageActions,
   });
 
   final Message message;
@@ -1477,6 +1698,7 @@ class _MessageBubble extends StatelessWidget {
   final ChatFileDownloadActions downloadActions;
   final ChatVoicePlaybackActions voicePlaybackActions;
   final ChatImagePreviewActions imagePreviewActions;
+  final ChatMessageActions messageActions;
 
   @override
   Widget build(BuildContext context) {
@@ -1502,6 +1724,7 @@ class _MessageBubble extends StatelessWidget {
                 message: message,
                 attachment: message.stickerAttachment!,
                 imagePreviewActions: imagePreviewActions,
+                messageActions: messageActions,
               ),
               message_display.MessageContentKind.voice => _VoiceBody(
                 message: message,
@@ -1573,11 +1796,13 @@ class _StickerBody extends StatelessWidget {
     required this.message,
     required this.attachment,
     required this.imagePreviewActions,
+    required this.messageActions,
   });
 
   final Message message;
   final MessageAttachment attachment;
   final ChatImagePreviewActions imagePreviewActions;
+  final ChatMessageActions messageActions;
 
   @override
   Widget build(BuildContext context) {
@@ -1645,9 +1870,8 @@ class _StickerBody extends StatelessWidget {
 
   void _showStickerContextMenu(BuildContext context, TapDownDetails details) {
     final stickerId = attachment.stickerId;
-    if (stickerId == null || stickerId.isEmpty) return;
 
-    final items = <UiContextMenuItem>[
+    final stickerItems = <UiContextMenuItem>[
       if (imagePreviewActions.onSaveSticker != null)
         UiContextMenuItem(
           label: '添加到我的表情包',
@@ -1671,13 +1895,40 @@ class _StickerBody extends StatelessWidget {
           ),
         ),
     ];
-    if (items.isEmpty) return;
+    final sections = [
+      ..._messageContextMenuSections(
+        context: context,
+        message: message,
+        actions: messageActions,
+        includeCopy: true,
+        includeDelete: false,
+        includeRecall: false,
+      ),
+      if (stickerId != null && stickerId.isNotEmpty && stickerItems.isNotEmpty)
+        UiContextMenuSection(stickerItems),
+      ..._messageContextMenuSections(
+        context: context,
+        message: message,
+        actions: messageActions,
+        includeCopy: false,
+        includeDelete: false,
+        includeRecall: true,
+      ),
+      ..._messageContextMenuSections(
+        context: context,
+        message: message,
+        actions: messageActions,
+        includeCopy: false,
+        includeDelete: true,
+        includeRecall: false,
+      ),
+    ];
 
     unawaited(
       showUiContextMenu(
         context,
         position: details.globalPosition,
-        sections: [UiContextMenuSection(items)],
+        sections: sections,
       ),
     );
   }
@@ -2306,6 +2557,7 @@ class MessageBubbleForTest extends StatelessWidget {
     this.transfer,
     this.fileDownloads = const {},
     this.voicePlaybackActions = const ChatVoicePlaybackActions.disabled(),
+    this.messageActions = const ChatMessageActions.disabled(),
   });
 
   final Message message;
@@ -2315,6 +2567,7 @@ class MessageBubbleForTest extends StatelessWidget {
   final FileTransferState? transfer;
   final Map<String, FileTransferState> fileDownloads;
   final ChatVoicePlaybackActions voicePlaybackActions;
+  final ChatMessageActions messageActions;
 
   @override
   Widget build(BuildContext context) {
@@ -2329,6 +2582,7 @@ class MessageBubbleForTest extends StatelessWidget {
         voicePlaybackActions: voicePlaybackActions,
         imagePreviewActions:
             imagePreviewActions ?? ChatImagePreviewActions.disabled(),
+        messageActions: messageActions,
       ),
     );
   }

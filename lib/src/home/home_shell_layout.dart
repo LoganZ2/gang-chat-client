@@ -191,13 +191,14 @@ extension _HomeShellLayout on _HomeShellState {
       );
     }
 
+    final visibleMessages = _visibleMessagesForMe(_messages);
     return ChatPane(
       currentUser: _currentUser,
       roomCard: _selectedServer,
       room: _selectedRoom,
       live: _live,
-      messages: _messages,
-      newMessageCount: _selectedRoomNewMessageCount,
+      messages: visibleMessages,
+      newMessageCount: _visibleNewMessageCount(visibleMessages),
       fileTransfers: _fileTransfers,
       fileDownloads: _fileDownloads,
       downloadActions: ChatFileDownloadActions(
@@ -215,6 +216,7 @@ extension _HomeShellLayout on _HomeShellState {
         onDismiss: _dismissDownload,
       ),
       imagePreviewActions: _imagePreviewActions,
+      messageActions: _chatMessageActions,
       voicePlaybackActions: ChatVoicePlaybackActions(
         activeMessageId: _voicePlayback.playing
             ? _voicePlayback.activeMessageId

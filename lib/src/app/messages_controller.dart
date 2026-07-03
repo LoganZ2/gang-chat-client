@@ -230,6 +230,18 @@ class MessagesController {
     );
   }
 
+  Future<MessageRecallResult> recallMessage({
+    required String roomId,
+    required String messageId,
+    String? reason,
+  }) {
+    return _client.recallMessage(
+      roomId: roomId,
+      messageId: messageId,
+      reason: reason,
+    );
+  }
+
   Future<Message> sendMessage({
     required String roomId,
     required String clientMessageId,
@@ -640,6 +652,17 @@ class MessagesController {
     return [...next, sent];
   }
 
+  List<Message> replaceByMessageId(List<Message> messages, Message updated) {
+    var replaced = false;
+    final next = messages.map((message) {
+      if (message.id != updated.id) return message;
+      replaced = true;
+      return updated;
+    }).toList();
+    if (replaced) return next;
+    return replaceByClientId(messages, updated);
+  }
+
   List<Message> appendLocalMessage(List<Message> messages, Message message) {
     return [...messages, message];
   }
@@ -690,6 +713,13 @@ class MessagesController {
       body: message.body,
       createdAt: message.createdAt,
       attachments: attachments ?? message.attachments,
+      mentions: message.mentions,
+      isRecalled: message.isRecalled,
+      recalledAt: message.recalledAt,
+      recalledBy: message.recalledBy,
+      isForceDeleted: message.isForceDeleted,
+      forceDeletedAt: message.forceDeletedAt,
+      forceDeletedBy: message.forceDeletedBy,
       pending: pending ?? message.pending,
       failed: failed ?? message.failed,
     );

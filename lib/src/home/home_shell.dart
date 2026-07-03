@@ -137,6 +137,7 @@ class _HomeShellState extends State<HomeShell> {
   RoomDetail? _selectedRoom;
   LiveState? _live;
   List<Message> _messages = const [];
+  final Set<String> _locallyDeletedMessageKeys = {};
   int _selectedRoomNewMessageCount = 0;
   Map<String, FileTransferState> _fileTransfers = const {};
   // Active file downloads, keyed by [file_display.fileDownloadKey]. Kept apart

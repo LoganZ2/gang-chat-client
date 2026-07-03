@@ -6,10 +6,12 @@
 #include <mmdeviceapi.h>
 #include <propsys.h>
 #include <shellapi.h>
+#include <shlobj_core.h>
 #include <wincodec.h>
 #include <windowsx.h>
 
 #include <cstdint>
+#include <cwchar>
 #include <cstring>
 #include <functional>
 #include <memory>
@@ -30,6 +32,7 @@ constexpr char kAudioDevicesChannelName[] = "gang_chat/audio_devices";
 constexpr char kTrayChannelName[] = "gang_chat/tray";
 constexpr char kReadFilePathsMethod[] = "readFilePaths";
 constexpr char kReadImageFileMethod[] = "readImageFile";
+constexpr char kWriteFilePathsMethod[] = "writeFilePaths";
 constexpr char kWriteImageFileMethod[] = "writeImageFile";
 constexpr char kDropFilesMethod[] = "dropFiles";
 constexpr char kEnumerateInputsMethod[] = "enumerateInputs";
@@ -107,6 +110,22 @@ std::string WideToUtf8(const wchar_t* value) {
   std::string result(size, '\0');
   WideCharToMultiByte(CP_UTF8, 0, value, -1, result.data(), size, nullptr,
                       nullptr);
+  result.pop_back();
+  return result;
+}
+
+std::wstring Utf8ToWide(const std::string& value) {
+  if (value.empty()) {
+    return {};
+  }
+
+  const int size = MultiByteToWideChar(CP_UTF8, 0, value.c_str(), -1, nullptr, 0);
+  if (size <= 1) {
+    return {};
+  }
+
+  std::wstring result(size, L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, value.c_str(), -1, result.data(), size);
   result.pop_back();
   return result;
 }
@@ -1034,6 +1053,59 @@ flutter::EncodableList ReadClipboardFilePaths(HWND owner) {
   return paths;
 }
 
+bool WriteClipboardFilePaths(HWND owner, const std::vector<std::string>& paths) {
+  std::vector<std::wstring> wide_paths;
+  size_t char_count = 1;  // Final extra NUL for CF_HDROP.
+  for (const auto& path : paths) {
+    auto wide = Utf8ToWide(path);
+    if (wide.empty()) {
+      continue;
+    }
+    char_count += wide.size() + 1;
+    wide_paths.push_back(std::move(wide));
+  }
+  if (wide_paths.empty()) {
+    return false;
+  }
+
+  const SIZE_T bytes = sizeof(DROPFILES) + char_count * sizeof(wchar_t);
+  HGLOBAL global = GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, bytes);
+  if (!global) {
+    return false;
+  }
+
+  auto* drop = static_cast<DROPFILES*>(GlobalLock(global));
+  if (!drop) {
+    GlobalFree(global);
+    return false;
+  }
+  drop->pFiles = sizeof(DROPFILES);
+  drop->fWide = TRUE;
+  auto* cursor = reinterpret_cast<wchar_t*>(
+      reinterpret_cast<BYTE*>(drop) + sizeof(DROPFILES));
+  for (const auto& path : wide_paths) {
+    std::wmemcpy(cursor, path.c_str(), path.size());
+    cursor += path.size() + 1;
+  }
+  *cursor = L'\0';
+  GlobalUnlock(global);
+
+  if (!OpenClipboard(owner)) {
+    GlobalFree(global);
+    return false;
+  }
+  bool success = false;
+  if (EmptyClipboard() && SetClipboardData(CF_HDROP, global)) {
+    success = true;
+    global = nullptr;  // Clipboard owns the memory after SetClipboardData.
+  }
+  CloseClipboard();
+  if (global) {
+    GlobalFree(global);
+  }
+  return success;
+}
+
 }  // namespace
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
@@ -1318,6 +1390,34 @@ bool FlutterWindow::OnCreate() {
           image_file[flutter::EncodableValue("bytes")] =
               flutter::EncodableValue(*bytes);
           result->Success(flutter::EncodableValue(image_file));
+          return;
+        }
+        if (call.method_name() == kWriteFilePathsMethod) {
+          const auto* args =
+              std::get_if<flutter::EncodableMap>(call.arguments());
+          if (!args) {
+            result->Success(flutter::EncodableValue(false));
+            return;
+          }
+          const auto it = args->find(flutter::EncodableValue("paths"));
+          if (it == args->end()) {
+            result->Success(flutter::EncodableValue(false));
+            return;
+          }
+          const auto* values =
+              std::get_if<flutter::EncodableList>(&it->second);
+          if (!values) {
+            result->Success(flutter::EncodableValue(false));
+            return;
+          }
+          std::vector<std::string> paths;
+          for (const auto& value : *values) {
+            if (const auto* path = std::get_if<std::string>(&value)) {
+              paths.push_back(*path);
+            }
+          }
+          const bool ok = WriteClipboardFilePaths(GetHandle(), paths);
+          result->Success(flutter::EncodableValue(ok));
           return;
         }
         if (call.method_name() == kWriteImageFileMethod) {

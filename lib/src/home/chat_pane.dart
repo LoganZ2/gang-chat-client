@@ -59,6 +59,7 @@ class ChatPane extends StatelessWidget {
     required this.downloadActions,
     required this.voicePlaybackActions,
     required this.imagePreviewActions,
+    this.messageActions = const ChatMessageActions.disabled(),
     required this.loading,
     required this.error,
     required this.sending,
@@ -106,6 +107,7 @@ class ChatPane extends StatelessWidget {
   final ChatFileDownloadActions downloadActions;
   final ChatVoicePlaybackActions voicePlaybackActions;
   final ChatImagePreviewActions imagePreviewActions;
+  final ChatMessageActions messageActions;
   final bool loading;
   final String? error;
   final bool sending;
@@ -211,6 +213,7 @@ class ChatPane extends StatelessWidget {
               downloadActions: downloadActions,
               voicePlaybackActions: voicePlaybackActions,
               imagePreviewActions: imagePreviewActions,
+              messageActions: messageActions,
               onRetry: onRetry,
               onViewedNewMessages: onViewedNewMessages,
               bottomInset: _messageListBottomInset,
