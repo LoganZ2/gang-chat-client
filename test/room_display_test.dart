@@ -122,6 +122,22 @@ void main() {
     expect(roomDraftPreview(null), isNull);
     expect(roomDraftPreview('   '), isNull);
     expect(roomDraftPreview(' hello\n  draft\tworld '), 'hello draft world');
+    expect(
+      roomDraftPreviewText(
+        text: 'typed text',
+        attachmentFilename: ' report final.pdf ',
+        attachmentMimeType: 'application/pdf',
+      ),
+      '[文件] report final.pdf',
+    );
+    expect(
+      roomDraftPreviewText(
+        text: null,
+        attachmentFilename: 'cat picture.png',
+        attachmentMimeType: 'image/png',
+      ),
+      '[图片] cat picture.png',
+    );
   });
 
   test('room identity display helpers provide stable fallbacks', () {

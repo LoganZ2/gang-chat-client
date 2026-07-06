@@ -96,6 +96,36 @@ String? roomDraftPreview(String? draft) {
   return normalized;
 }
 
+String roomAttachmentDraftPreview({
+  required String filename,
+  required String? mimeType,
+}) {
+  final normalized = filename
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .join(' ');
+  final label = (mimeType ?? '').toLowerCase().startsWith('image/')
+      ? '[图片]'
+      : '[文件]';
+  if (normalized.isEmpty) return label;
+  return '$label $normalized';
+}
+
+String? roomDraftPreviewText({
+  required String? text,
+  required String? attachmentFilename,
+  required String? attachmentMimeType,
+}) {
+  if (attachmentFilename != null) {
+    return roomAttachmentDraftPreview(
+      filename: attachmentFilename,
+      mimeType: attachmentMimeType,
+    );
+  }
+  return roomDraftPreview(text);
+}
+
 String _systemLastMessagePreview(LastMessagePreview last) {
   final sender = _nonEmpty(last.senderDisplayName);
   final body = _nonEmpty(last.bodyPreview);

@@ -291,6 +291,7 @@ class _HoverCardAnchorState extends State<HoverCardAnchor> {
   void _handleTapInside(PointerDownEvent event) {
     if (_parentAnchor != null) return;
     if (_openAnchorChainContains(event.position)) return;
+    if (_coordinator.hasActiveDescendants) return;
 
     final target = _deepestOpenCardAt(event.position);
     if (target == null) {

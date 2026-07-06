@@ -60,10 +60,13 @@ extension _HomeShellMessages on _HomeShellState {
   }
 
   void _storeSelectedComposerDraft() {
-    _saveComposerDraftValue(_composerController.text);
+    _setHomeState(_saveDraftInState);
   }
 
   void _restoreComposerDraftForRoom(String roomId) {
+    _stagedAttachments
+      ..clear()
+      ..addAll(_stagedAttachmentDrafts[roomId] ?? const []);
     _setComposerText(_messageDrafts[roomId] ?? '', saveDraft: false);
   }
 
@@ -85,28 +88,113 @@ extension _HomeShellMessages on _HomeShellState {
   }
 
   void _saveComposerDraftValue(String text) {
-    final roomId = _selectedServerId;
-    if (roomId == null) return;
-    final hasVisibleDraft = text.trim().isNotEmpty;
-    final current = _messageDrafts[roomId];
-    if (!hasVisibleDraft && current == null) return;
-    if (hasVisibleDraft && current == text) return;
-
-    _setHomeState(() {
-      final next = Map<String, String>.of(_messageDrafts);
-      if (hasVisibleDraft) {
-        next[roomId] = text;
-      } else {
-        next.remove(roomId);
-      }
-      _messageDrafts = Map.unmodifiable(next);
-    });
+    _setHomeState(() => _saveDraftInState(text: text));
   }
 
-  Map<String, String> _messageDraftsWithout(String roomId) {
-    if (!_messageDrafts.containsKey(roomId)) return _messageDrafts;
-    final next = Map<String, String>.of(_messageDrafts)..remove(roomId);
-    return Map.unmodifiable(next);
+  void _saveDraftInState({String? text}) {
+    final roomId = _selectedServerId;
+    if (roomId == null) return;
+    final draftText = text ?? _composerController.text;
+    final hasAttachments = _stagedAttachments.isNotEmpty;
+    final hasVisibleDraft = draftText.trim().isNotEmpty || hasAttachments;
+    final current = _messageDrafts[roomId];
+    final currentAttachments = _stagedAttachmentDrafts[roomId] ?? const [];
+    final sameText = current == draftText;
+    final sameAttachments = _sameStagedAttachments(
+      currentAttachments,
+      _stagedAttachments,
+    );
+    if (!hasVisibleDraft && current == null && currentAttachments.isEmpty) {
+      return;
+    }
+    if (hasVisibleDraft && sameText && sameAttachments) return;
+
+    final nextText = Map<String, String>.of(_messageDrafts);
+    final nextAttachments = Map<String, List<_StagedAttachment>>.of(
+      _stagedAttachmentDrafts,
+    );
+    if (hasVisibleDraft) {
+      nextText[roomId] = draftText;
+      nextAttachments[roomId] = List.unmodifiable(_stagedAttachments);
+    } else {
+      nextText.remove(roomId);
+      nextAttachments.remove(roomId);
+    }
+    _messageDrafts = Map.unmodifiable(nextText);
+    _stagedAttachmentDrafts = Map.unmodifiable(nextAttachments);
+  }
+
+  bool _sameStagedAttachments(
+    List<_StagedAttachment> a,
+    List<_StagedAttachment> b,
+  ) {
+    if (a.length != b.length) return false;
+    for (var index = 0; index < a.length; index++) {
+      if (!identical(a[index], b[index])) return false;
+    }
+    return true;
+  }
+
+  void _discardRoomDraftInState(String roomId, {bool cancelUploads = true}) {
+    final attachments = _stagedAttachmentDrafts[roomId] ?? const [];
+    if (cancelUploads) {
+      for (final entry in attachments) {
+        entry.uploadController.cancel();
+      }
+    }
+    if (_messageDrafts.containsKey(roomId)) {
+      final next = Map<String, String>.of(_messageDrafts)..remove(roomId);
+      _messageDrafts = Map.unmodifiable(next);
+    }
+    if (_stagedAttachmentDrafts.containsKey(roomId)) {
+      final next = Map<String, List<_StagedAttachment>>.of(
+        _stagedAttachmentDrafts,
+      )..remove(roomId);
+      _stagedAttachmentDrafts = Map.unmodifiable(next);
+    }
+  }
+
+  void _cancelAllDraftAttachments() {
+    final seen = <_StagedAttachment>{};
+    for (final entry in _stagedAttachments) {
+      if (seen.add(entry)) entry.uploadController.cancel();
+    }
+    for (final attachments in _stagedAttachmentDrafts.values) {
+      for (final entry in attachments) {
+        if (seen.add(entry)) entry.uploadController.cancel();
+      }
+    }
+  }
+
+  bool _isStagedAttachmentActive(_StagedAttachment entry) {
+    if (_stagedAttachments.contains(entry)) return true;
+    for (final attachments in _stagedAttachmentDrafts.values) {
+      if (attachments.contains(entry)) return true;
+    }
+    return false;
+  }
+
+  Map<String, String> get _sidebarRoomDrafts {
+    final roomIds = <String>{
+      ..._messageDrafts.keys,
+      ..._stagedAttachmentDrafts.keys,
+    };
+    final previews = <String, String>{};
+    for (final roomId in roomIds) {
+      final preview = _roomDraftPreviewFor(roomId);
+      if (preview != null) previews[roomId] = preview;
+    }
+    return Map.unmodifiable(previews);
+  }
+
+  String? _roomDraftPreviewFor(String roomId) {
+    final attachments = _stagedAttachmentDrafts[roomId] ?? const [];
+    final attachment = attachments.isEmpty ? null : attachments.first;
+    return room_display.roomDraftPreviewText(
+      text: _messageDrafts[roomId],
+      attachmentFilename: attachment?.file.name,
+      attachmentMimeType: attachment?.file.mimeType,
+    );
   }
 
   ChatMessageActions get _chatMessageActions {
@@ -1027,6 +1115,7 @@ extension _HomeShellMessages on _HomeShellState {
         _stagedAttachments.add(entry);
         fresh.add(entry);
       }
+      _saveDraftInState();
       _sendError = null;
     });
 
@@ -1038,7 +1127,7 @@ extension _HomeShellMessages on _HomeShellState {
   /// Upload (or re-upload) a single staged file, streaming progress into its
   /// chip. Safe to call again after a failure to retry.
   Future<void> _uploadStagedAttachment(_StagedAttachment entry) async {
-    if (!_stagedAttachments.contains(entry)) return;
+    if (!_isStagedAttachmentActive(entry)) return;
     _setHomeState(() {
       entry.status = composer_attachment.ComposerAttachmentStatus.uploading;
       entry.progress = null;
@@ -1049,21 +1138,21 @@ extension _HomeShellMessages on _HomeShellState {
     try {
       final bytes = await entry.file.readAsBytes();
       // Drop out if the chip was removed (or the room switched) while reading.
-      if (!_stagedAttachments.contains(entry)) return;
+      if (!_isStagedAttachmentActive(entry)) return;
       if (bytes.isEmpty) throw StateError(file_display.fileEmptyMessage());
       final asset = await _messagesController.uploadFileAsset(
         bytes: bytes,
         filename: entry.file.name,
         controller: entry.uploadController,
         onProgress: ({required sentBytes, required totalBytes}) {
-          if (!mounted || !_stagedAttachments.contains(entry)) return;
+          if (!mounted || !_isStagedAttachmentActive(entry)) return;
           _setHomeState(() {
             entry.sizeBytes = totalBytes;
             entry.progress = totalBytes > 0 ? sentBytes / totalBytes : null;
           });
         },
       );
-      if (!_stagedAttachments.contains(entry)) return;
+      if (!_isStagedAttachmentActive(entry)) return;
       _setHomeState(() {
         entry.asset = asset;
         entry.sizeBytes = asset.sizeBytes;
@@ -1073,7 +1162,7 @@ extension _HomeShellMessages on _HomeShellState {
     } on UploadCancelledException {
       // Cancellation means the chip was removed; nothing left to update.
     } catch (error) {
-      if (!mounted || !_stagedAttachments.contains(entry)) return;
+      if (!mounted || !_isStagedAttachmentActive(entry)) return;
       _setHomeState(() {
         entry.error = error;
         entry.errorMessage = _stagedAttachmentErrorMessage(error);
@@ -1095,7 +1184,10 @@ extension _HomeShellMessages on _HomeShellState {
     if (index < 0) return;
     final entry = _stagedAttachments[index];
     entry.uploadController.cancel();
-    _setHomeState(() => _stagedAttachments.removeAt(index));
+    _setHomeState(() {
+      _stagedAttachments.removeAt(index);
+      _saveDraftInState();
+    });
   }
 
   _StagedAttachment? _stagedAttachmentById(String id) {
@@ -1155,7 +1247,10 @@ extension _HomeShellMessages on _HomeShellState {
 
     // Hand off to the shared composed send (which owns the pending/sent/failed
     // bubble and the _sending flag).
-    _setHomeState(() => _stagedAttachments.clear());
+    _setHomeState(() {
+      _stagedAttachments.clear();
+      _discardRoomDraftInState(room.id, cancelUploads: false);
+    });
     await _sendComposed(
       body: body,
       type: 'file',

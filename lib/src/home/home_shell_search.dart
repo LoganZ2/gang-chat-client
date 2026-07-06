@@ -334,7 +334,8 @@ extension _HomeShellSearch on _HomeShellState {
     _setHomeState(() {
       _servers = patch.rooms;
       _selectedServerId = room.id;
-      _messageDrafts = _messageDraftsWithout(room.id);
+      _discardRoomDraftInState(room.id);
+      _stagedAttachments.clear();
       _setComposerText('', saveDraft: false);
       _selectedRoom = patch.selectedRoom;
       _live = room.live;
