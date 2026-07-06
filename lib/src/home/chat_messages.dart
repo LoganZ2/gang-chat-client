@@ -1250,13 +1250,12 @@ class _RemovedMessageRow extends StatelessWidget {
     return [
       _userChip(actor),
       if (recalledOwnMessage)
-        _systemText('撤回了一条消息')
+        _systemTextWithTrailingAction('撤回了一条消息', action)
       else ...[
         _systemText('撤回了一条来自'),
         _userChip(message.sender),
-        _systemText('的消息'),
+        _systemTextWithTrailingAction('的消息', action),
       ],
-      ?action,
     ];
   }
 
@@ -1318,7 +1317,7 @@ class _RemovedMessageInlineButton extends StatelessWidget {
           behavior: HitTestBehavior.opaque,
           onTap: onPressed,
           child: SizedBox.square(
-            dimension: 18,
+            dimension: 16,
             child: Icon(icon, size: 14, color: UiColors.accent),
           ),
         ),
@@ -1336,18 +1335,37 @@ class _SystemInfoButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return HoverCardAnchor(
       resetKey: message,
-      cardWidth: 244,
+      cardWidth: _systemInfoCardWidth(context, message),
       gap: 8,
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
         child: SizedBox.square(
-          dimension: 18,
+          dimension: 16,
           child: Icon(Icons.info_outline, size: 14, color: UiColors.accent),
         ),
       ),
       cardBuilder: (context) => _SystemInfoCard(message: message),
     );
   }
+}
+
+double _systemInfoCardWidth(BuildContext context, String message) {
+  const horizontalPadding = 24.0;
+  const minWidth = 112.0;
+  const maxWidth = 360.0;
+  final direction = Directionality.maybeOf(context) ?? TextDirection.ltr;
+  final style = UiTypography.body.copyWith(fontSize: 12, height: 1.38);
+  final lines = message.trimRight().split('\n');
+  var longestLineWidth = 0.0;
+  for (final line in lines) {
+    final painter = TextPainter(
+      text: TextSpan(text: line.isEmpty ? ' ' : line, style: style),
+      textDirection: direction,
+      maxLines: 1,
+    )..layout();
+    longestLineWidth = math.max(longestLineWidth, painter.width);
+  }
+  return (longestLineWidth + horizontalPadding).clamp(minWidth, maxWidth);
 }
 
 class _SystemInfoCard extends StatelessWidget {
@@ -1357,17 +1375,19 @@ class _SystemInfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hoverScope = HoverCardTapRegionScope.maybeOf(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      child: Text(
-        message,
+      child: ReadOnlySelectableText(
+        value: message,
         maxLines: 8,
-        overflow: TextOverflow.ellipsis,
         style: UiTypography.body.copyWith(
           color: UiColors.text,
           fontSize: 12,
           height: 1.38,
         ),
+        contextMenuTapRegionGroupId: hoverScope?.tapRegionGroup,
+        onContextMenuOpenChanged: hoverScope?.onOverlayActivityChanged,
       ),
     );
   }
@@ -1462,6 +1482,15 @@ Widget _systemText(String value) {
   );
 }
 
+Widget _systemTextWithTrailingAction(String value, Widget? action) {
+  if (action == null) return _systemText(value);
+  return Row(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.center,
+    children: [_systemText(value), action],
+  );
+}
+
 class _SystemMessageParts {
   const _SystemMessageParts({
     required this.event,
@@ -1528,8 +1557,7 @@ class _SystemMessageParts {
       case message_display.kSystemEventRoomNameChanged:
         final actor = event.actor ?? event.user;
         return [
-          _text('房间名称'),
-          _infoButton('原房间名称：${event.oldValue ?? ''}'),
+          _textWithInfoButton('房间名称', '原房间名称：${event.oldValue ?? ''}'),
           if (actor == null) ...[
             _text('修改为'),
           ] else ...[
@@ -1542,8 +1570,7 @@ class _SystemMessageParts {
       case message_display.kSystemEventRoomDescriptionChanged:
         final actor = event.actor ?? event.user;
         return [
-          _text('房间简介'),
-          _infoButton('原房间简介：${event.oldValue ?? ''}'),
+          _textWithInfoButton('房间简介', '原房间简介：${event.oldValue ?? ''}'),
           if (actor == null) ...[
             _text('修改为'),
           ] else ...[
@@ -1583,6 +1610,14 @@ class _SystemMessageParts {
         color: UiColors.textSecondary,
         fontSize: 12,
       ),
+    );
+  }
+
+  Widget _textWithInfoButton(String value, String info) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [_text(value), _infoButton(info)],
     );
   }
 
