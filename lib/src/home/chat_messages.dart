@@ -1126,52 +1126,67 @@ class _SystemMessageRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _MessageContextMenuRegion(
+    return _SystemMessageContainer(
       message: message,
       actions: messageActions,
-      child: _SystemMessageContainer(
-        children: _SystemMessageParts(
-          event: event,
-          currentUser: currentUser,
-          ownerUserId: ownerUserId,
-          live: live,
-          onResolveSenderProfile: onResolveSenderProfile,
-          onResolveRoomProfile: onResolveRoomProfile,
-          onEnterProfileRoom: onEnterProfileRoom,
-          profileActionBuilder: profileActionBuilder,
-        ).build(context),
-      ),
+      children: _SystemMessageParts(
+        event: event,
+        currentUser: currentUser,
+        ownerUserId: ownerUserId,
+        live: live,
+        onResolveSenderProfile: onResolveSenderProfile,
+        onResolveRoomProfile: onResolveRoomProfile,
+        onEnterProfileRoom: onEnterProfileRoom,
+        profileActionBuilder: profileActionBuilder,
+      ).build(context),
     );
   }
 }
 
 class _SystemMessageContainer extends StatelessWidget {
-  const _SystemMessageContainer({required this.children});
+  const _SystemMessageContainer({
+    required this.children,
+    this.message,
+    this.actions,
+  });
 
   final List<Widget> children;
+  final Message? message;
+  final ChatMessageActions? actions;
 
   @override
   Widget build(BuildContext context) {
+    final content = DecoratedBox(
+      decoration: BoxDecoration(
+        color: UiColors.surfacePressed.withValues(alpha: 0.82),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: UiColors.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 5,
+          runSpacing: 5,
+          children: children,
+        ),
+      ),
+    );
+    final menuMessage = message;
+    final menuActions = actions;
+    final wrappedContent = menuMessage == null || menuActions == null
+        ? content
+        : _MessageContextMenuRegion(
+            message: menuMessage,
+            actions: menuActions,
+            child: content,
+          );
+
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: _messageMaxWidth + 96),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: UiColors.surfacePressed.withValues(alpha: 0.82),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: UiColors.border),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            child: Wrap(
-              alignment: WrapAlignment.center,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 5,
-              runSpacing: 5,
-              children: children,
-            ),
-          ),
-        ),
+        child: wrappedContent,
       ),
     );
   }
@@ -1203,10 +1218,10 @@ class _RemovedMessageRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _MessageContextMenuRegion(
+    return _SystemMessageContainer(
       message: message,
       actions: messageActions,
-      child: _SystemMessageContainer(children: _buildParts()),
+      children: _buildParts(),
     );
   }
 
@@ -1262,25 +1277,32 @@ class _MessageContextMenuRegion extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
-      onSecondaryTapDown: (details) =>
-          _showMessageContextMenu(context, details.globalPosition),
+      onSecondaryTapDown: (details) => _showChatMessageContextMenu(
+        context: context,
+        position: details.globalPosition,
+        message: message,
+        actions: actions,
+      ),
       child: child,
     );
   }
+}
 
-  void _showMessageContextMenu(BuildContext context, Offset position) {
-    final sections = _messageContextMenuSections(
-      context: context,
-      message: message,
-      actions: actions,
-      includeCopy: !message.isRemoved,
-      includeDelete: true,
-      includeRecall: !message.isRemoved,
-    );
-    unawaited(
-      showUiContextMenu(context, position: position, sections: sections),
-    );
-  }
+void _showChatMessageContextMenu({
+  required BuildContext context,
+  required Offset position,
+  required Message message,
+  required ChatMessageActions actions,
+}) {
+  final sections = _messageContextMenuSections(
+    context: context,
+    message: message,
+    actions: actions,
+    includeCopy: true,
+    includeDelete: true,
+    includeRecall: !message.isRemoved,
+  );
+  unawaited(showUiContextMenu(context, position: position, sections: sections));
 }
 
 List<UiContextMenuSection> _messageContextMenuSections({
@@ -1661,25 +1683,21 @@ class _MessageRow extends StatelessWidget {
       child: avatar,
     );
 
-    return _MessageContextMenuRegion(
-      message: message,
-      actions: messageActions,
-      child: Row(
-        mainAxisAlignment: outgoing
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!outgoing) ...[avatarHoverCard, const SizedBox(width: 10)],
-          bubble,
-          if (outgoing) ...[const SizedBox(width: 10), avatarHoverCard],
-        ],
-      ),
+    return Row(
+      mainAxisAlignment: outgoing
+          ? MainAxisAlignment.end
+          : MainAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (!outgoing) ...[avatarHoverCard, const SizedBox(width: 10)],
+        bubble,
+        if (outgoing) ...[const SizedBox(width: 10), avatarHoverCard],
+      ],
     );
   }
 }
 
-class _MessageBubble extends StatelessWidget {
+class _MessageBubble extends StatefulWidget {
   const _MessageBubble({
     required this.message,
     required this.outgoing,
@@ -1701,94 +1719,288 @@ class _MessageBubble extends StatelessWidget {
   final ChatMessageActions messageActions;
 
   @override
-  Widget build(BuildContext context) {
-    final contentKind = message_display.messageContentKind(message);
-    final status = message_display.messageDeliveryStatusText(message);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: outgoing ? _outgoingBubble : _incomingBubble,
-        borderRadius: BorderRadius.circular(UiRadii.lg),
-        border: Border.all(
-          color: outgoing ? UiColors.accentBorder : UiColors.border,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            switch (contentKind) {
-              message_display.MessageContentKind.sticker => _StickerBody(
-                message: message,
-                attachment: message.stickerAttachment!,
-                imagePreviewActions: imagePreviewActions,
-                messageActions: messageActions,
-              ),
-              message_display.MessageContentKind.voice => _VoiceBody(
-                message: message,
-                attachment: voice_display.voiceMessageAttachment(message)!,
-                playbackActions: voicePlaybackActions,
-              ),
-              message_display.MessageContentKind.files => _FileBody(
-                message: message,
-                outgoing: outgoing,
-                transfer: transfer,
-                fileDownloads: fileDownloads,
-                downloadActions: downloadActions,
-                imagePreviewActions: imagePreviewActions,
-              ),
-              message_display.MessageContentKind.text => _TextBody(
-                body: message.body,
-              ),
-            },
-            if (status != null) ...[
-              const SizedBox(height: 7),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (message.pending && !message.failed) ...[
-                    const SizedBox.square(
-                      dimension: 11,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 1.6,
-                        color: UiColors.textMuted,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                  ],
-                  Text(
-                    status,
-                    style: UiTypography.label.copyWith(
-                      color: message.failed
-                          ? UiColors.danger
-                          : UiColors.textMuted,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
+  State<_MessageBubble> createState() => _MessageBubbleState();
 }
 
-class _TextBody extends StatelessWidget {
-  const _TextBody({required this.body});
-
-  final String body;
+class _MessageBubbleState extends State<_MessageBubble> {
+  bool _textSelectionActive = false;
 
   @override
   Widget build(BuildContext context) {
-    return SelectableText(
-      body,
-      style: UiTypography.body,
-      cursorColor: UiColors.accent,
+    final contentKind = message_display.messageContentKind(widget.message);
+    final status = message_display.messageDeliveryStatusText(widget.message);
+
+    return Listener(
+      onPointerDown: (event) => _handleBubblePointerDown(event, contentKind),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: widget.outgoing ? _outgoingBubble : _incomingBubble,
+          borderRadius: BorderRadius.circular(UiRadii.lg),
+          border: Border.all(
+            color: widget.outgoing ? UiColors.accentBorder : UiColors.border,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              switch (contentKind) {
+                message_display.MessageContentKind.sticker => _StickerBody(
+                  message: widget.message,
+                  attachment: widget.message.stickerAttachment!,
+                  imagePreviewActions: widget.imagePreviewActions,
+                ),
+                message_display.MessageContentKind.voice => _VoiceBody(
+                  message: widget.message,
+                  attachment: voice_display.voiceMessageAttachment(
+                    widget.message,
+                  )!,
+                  playbackActions: widget.voicePlaybackActions,
+                ),
+                message_display.MessageContentKind.files => _FileBody(
+                  message: widget.message,
+                  outgoing: widget.outgoing,
+                  transfer: widget.transfer,
+                  fileDownloads: widget.fileDownloads,
+                  downloadActions: widget.downloadActions,
+                  imagePreviewActions: widget.imagePreviewActions,
+                ),
+                message_display.MessageContentKind.text => _TextBody(
+                  message: widget.message,
+                  onSelectionActiveChanged: _handleTextSelectionActiveChanged,
+                ),
+              },
+              if (status != null) ...[
+                const SizedBox(height: 7),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (widget.message.pending && !widget.message.failed) ...[
+                      const SizedBox.square(
+                        dimension: 11,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.6,
+                          color: UiColors.textMuted,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    Text(
+                      status,
+                      style: UiTypography.label.copyWith(
+                        color: widget.message.failed
+                            ? UiColors.danger
+                            : UiColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
+
+  void _handleBubblePointerDown(
+    PointerDownEvent event,
+    message_display.MessageContentKind contentKind,
+  ) {
+    if ((event.buttons & kSecondaryMouseButton) == 0) return;
+    if (contentKind == message_display.MessageContentKind.text &&
+        _textSelectionActive) {
+      return;
+    }
+    if (contentKind == message_display.MessageContentKind.sticker) {
+      _showStickerContextMenu(
+        context: context,
+        position: event.position,
+        message: widget.message,
+        attachment: widget.message.stickerAttachment!,
+        imagePreviewActions: widget.imagePreviewActions,
+        messageActions: widget.messageActions,
+      );
+      return;
+    }
+    _showChatMessageContextMenu(
+      context: context,
+      position: event.position,
+      message: widget.message,
+      actions: widget.messageActions,
+    );
+  }
+
+  void _handleTextSelectionActiveChanged(bool active) {
+    if (_textSelectionActive == active) return;
+    setState(() => _textSelectionActive = active);
+  }
+}
+
+class _TextBody extends StatefulWidget {
+  const _TextBody({
+    required this.message,
+    required this.onSelectionActiveChanged,
+  });
+
+  final Message message;
+  final ValueChanged<bool> onSelectionActiveChanged;
+
+  @override
+  State<_TextBody> createState() => _TextBodyState();
+}
+
+class _TextBodyState extends State<_TextBody> {
+  late final TextEditingController _controller;
+  final FocusNode _focusNode = FocusNode();
+  final UndoHistoryController _undoController = UndoHistoryController();
+  final Object _tapRegionGroup = Object();
+  EditableTextState? _activeTextContextMenuState;
+  bool _textContextMenuOpen = false;
+  bool _textContextMenuActionPressed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.message.body);
+    _controller.addListener(_handleControllerChanged);
+  }
+
+  @override
+  void didUpdateWidget(_TextBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.message.body == widget.message.body) return;
+    final selection = _controller.selection;
+    _controller.value = TextEditingValue(
+      text: widget.message.body,
+      selection: _clampMessageTextSelection(
+        selection,
+        widget.message.body.length,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_handleControllerChanged);
+    widget.onSelectionActiveChanged(false);
+    _controller.dispose();
+    _focusNode.dispose();
+    _undoController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TapRegion(
+      groupId: _tapRegionGroup,
+      onTapOutside: _handleTapOutside,
+      child: TextFieldEditingShortcuts(
+        controller: _controller,
+        focusNode: _focusNode,
+        undoController: _undoController,
+        onGlobalPrimaryPointerDownDuringSecondaryClickProtection:
+            _handleGlobalPrimaryPointerDownDuringTextSelectionProtection,
+        child: IntrinsicWidth(
+          child: TextField(
+            controller: _controller,
+            focusNode: _focusNode,
+            readOnly: true,
+            showCursor: false,
+            enableInteractiveSelection: true,
+            minLines: 1,
+            maxLines: null,
+            mouseCursor: SystemMouseCursors.text,
+            style: UiTypography.body,
+            cursorColor: UiColors.accent,
+            undoController: _undoController,
+            contextMenuBuilder: (context, editableTextState) {
+              _activeTextContextMenuState = editableTextState;
+              return buildTextFieldContextMenu(
+                context,
+                editableTextState,
+                readOnly: true,
+                showReadOnlySelectAll: false,
+                tapRegionGroupId: _tapRegionGroup,
+                onOpenChanged: _handleTextContextMenuOpenChanged,
+                onActionPressed: _handleTextContextMenuActionPressed,
+              );
+            },
+            decoration: const InputDecoration(
+              isCollapsed: true,
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              disabledBorder: InputBorder.none,
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _handleControllerChanged() {
+    widget.onSelectionActiveChanged(_hasSelection);
+  }
+
+  void _handleTextContextMenuActionPressed() {
+    _textContextMenuActionPressed = true;
+  }
+
+  void _handleTextContextMenuOpenChanged(bool open) {
+    if (!mounted) return;
+    if (open) {
+      _textContextMenuOpen = true;
+      _textContextMenuActionPressed = false;
+      return;
+    }
+
+    final closedByOutsideClick =
+        _textContextMenuOpen && !_textContextMenuActionPressed;
+    _textContextMenuOpen = false;
+    _textContextMenuActionPressed = false;
+    _activeTextContextMenuState = null;
+    if (closedByOutsideClick) _collapseSelection();
+  }
+
+  bool get _hasSelection {
+    final selection = _controller.selection;
+    return selection.isValid && !selection.isCollapsed;
+  }
+
+  void _handleTapOutside(PointerDownEvent event) {
+    if ((event.buttons & kPrimaryMouseButton) == 0) return;
+    _collapseSelection(hideToolbar: true);
+  }
+
+  void _handleGlobalPrimaryPointerDownDuringTextSelectionProtection(
+    PointerDownEvent event,
+  ) {
+    if (isTextContextMenuPanelHit(event.position)) return;
+    _collapseSelection(hideToolbar: true);
+  }
+
+  void _collapseSelection({bool hideToolbar = false}) {
+    final selection = _controller.selection;
+    if (!selection.isValid || selection.isCollapsed) return;
+    final offset = selection.extentOffset.clamp(0, _controller.text.length);
+    _controller.selection = TextSelection.collapsed(offset: offset);
+    widget.onSelectionActiveChanged(false);
+    if (hideToolbar) _activeTextContextMenuState?.hideToolbar();
+  }
+}
+
+TextSelection _clampMessageTextSelection(TextSelection selection, int length) {
+  if (!selection.isValid) return TextSelection.collapsed(offset: length);
+  return TextSelection(
+    baseOffset: math.min(selection.baseOffset, length),
+    extentOffset: math.min(selection.extentOffset, length),
+    affinity: selection.affinity,
+    isDirectional: selection.isDirectional,
+  );
 }
 
 class _StickerBody extends StatelessWidget {
@@ -1796,13 +2008,11 @@ class _StickerBody extends StatelessWidget {
     required this.message,
     required this.attachment,
     required this.imagePreviewActions,
-    required this.messageActions,
   });
 
   final Message message;
   final MessageAttachment attachment;
   final ChatImagePreviewActions imagePreviewActions;
-  final ChatMessageActions messageActions;
 
   @override
   Widget build(BuildContext context) {
@@ -1859,101 +2069,102 @@ class _StickerBody extends StatelessWidget {
     return Tooltip(
       message: name,
       waitDuration: const Duration(milliseconds: 350),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onSecondaryTapDown: (details) =>
-            _showStickerContextMenu(context, details),
-        child: preview,
-      ),
+      child: preview,
     );
   }
+}
 
-  void _showStickerContextMenu(BuildContext context, TapDownDetails details) {
-    final stickerId = attachment.stickerId;
+void _showStickerContextMenu({
+  required BuildContext context,
+  required Offset position,
+  required Message message,
+  required MessageAttachment attachment,
+  required ChatImagePreviewActions imagePreviewActions,
+  required ChatMessageActions messageActions,
+}) {
+  final stickerId = attachment.stickerId;
 
-    final stickerItems = <UiContextMenuItem>[
-      if (imagePreviewActions.onSaveSticker != null)
-        UiContextMenuItem(
-          label: '添加到我的表情包',
-          onPressed: () => unawaited(
-            _runStickerContextAction(
-              context,
-              imagePreviewActions.onSaveSticker!,
-              successMessage: '已添加到我的表情包',
-            ),
+  final stickerItems = <UiContextMenuItem>[
+    if (imagePreviewActions.onSaveSticker != null)
+      UiContextMenuItem(
+        label: '添加到我的表情包',
+        onPressed: () => unawaited(
+          _runStickerContextAction(
+            context,
+            message,
+            attachment,
+            imagePreviewActions.onSaveSticker!,
+            successMessage: '已添加到我的表情包',
           ),
         ),
-      if (imagePreviewActions.onSaveRoomSticker != null)
-        UiContextMenuItem(
-          label: '添加到房间表情包',
-          onPressed: () => unawaited(
-            _runStickerContextAction(
-              context,
-              imagePreviewActions.onSaveRoomSticker!,
-              successMessage: '已添加到房间表情包',
-            ),
+      ),
+    if (imagePreviewActions.onSaveRoomSticker != null)
+      UiContextMenuItem(
+        label: '添加到房间表情包',
+        onPressed: () => unawaited(
+          _runStickerContextAction(
+            context,
+            message,
+            attachment,
+            imagePreviewActions.onSaveRoomSticker!,
+            successMessage: '已添加到房间表情包',
           ),
         ),
-    ];
-    final sections = [
-      ..._messageContextMenuSections(
-        context: context,
-        message: message,
-        actions: messageActions,
-        includeCopy: true,
-        includeDelete: false,
-        includeRecall: false,
       ),
-      if (stickerId != null && stickerId.isNotEmpty && stickerItems.isNotEmpty)
-        UiContextMenuSection(stickerItems),
-      ..._messageContextMenuSections(
-        context: context,
-        message: message,
-        actions: messageActions,
-        includeCopy: false,
-        includeDelete: false,
-        includeRecall: true,
-      ),
-      ..._messageContextMenuSections(
-        context: context,
-        message: message,
-        actions: messageActions,
-        includeCopy: false,
-        includeDelete: true,
-        includeRecall: false,
-      ),
-    ];
+  ];
+  final sections = [
+    ..._messageContextMenuSections(
+      context: context,
+      message: message,
+      actions: messageActions,
+      includeCopy: true,
+      includeDelete: false,
+      includeRecall: false,
+    ),
+    if (stickerId != null && stickerId.isNotEmpty && stickerItems.isNotEmpty)
+      UiContextMenuSection(stickerItems),
+    ..._messageContextMenuSections(
+      context: context,
+      message: message,
+      actions: messageActions,
+      includeCopy: false,
+      includeDelete: false,
+      includeRecall: true,
+    ),
+    ..._messageContextMenuSections(
+      context: context,
+      message: message,
+      actions: messageActions,
+      includeCopy: false,
+      includeDelete: true,
+      includeRecall: false,
+    ),
+  ];
 
-    unawaited(
-      showUiContextMenu(
-        context,
-        position: details.globalPosition,
-        sections: sections,
-      ),
-    );
-  }
+  unawaited(showUiContextMenu(context, position: position, sections: sections));
+}
 
-  Future<void> _runStickerContextAction(
-    BuildContext context,
-    Future<void> Function(Message message, MessageAttachment attachment)
-    action, {
-    required String successMessage,
-  }) async {
-    try {
-      await action(message, attachment);
-      if (!context.mounted) return;
-      _showStickerContextNotice(context, successMessage);
-    } catch (error) {
-      if (!context.mounted) return;
-      _showStickerContextNotice(context, '$error');
-    }
+Future<void> _runStickerContextAction(
+  BuildContext context,
+  Message message,
+  MessageAttachment attachment,
+  Future<void> Function(Message message, MessageAttachment attachment) action, {
+  required String successMessage,
+}) async {
+  try {
+    await action(message, attachment);
+    if (!context.mounted) return;
+    _showStickerContextNotice(context, successMessage);
+  } catch (error) {
+    if (!context.mounted) return;
+    _showStickerContextNotice(context, '$error');
   }
+}
 
-  void _showStickerContextNotice(BuildContext context, String message) {
-    ScaffoldMessenger.maybeOf(context)
-      ?..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
-  }
+void _showStickerContextNotice(BuildContext context, String message) {
+  ScaffoldMessenger.maybeOf(context)
+    ?..clearSnackBars()
+    ..showSnackBar(SnackBar(content: Text(message)));
 }
 
 class _StickerFallback extends StatelessWidget {

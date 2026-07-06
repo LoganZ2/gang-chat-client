@@ -202,6 +202,72 @@ bool systemMessageRoleChangeOmitsActor(SystemMessageEvent event) {
       event.toRole == 'admin';
 }
 
+String messageCopyText(Message message) {
+  if (message.isRemoved) return removedMessageCopyText(message);
+  final event = systemMessageEvent(message);
+  if (event != null) return systemMessageCopyText(event);
+  return message.body.trimRight();
+}
+
+String removedMessageCopyText(Message message) {
+  if (message.isForceDeleted) {
+    final actor = message.forceDeletedBy;
+    if (actor == null) return '消息已被删除';
+    return '${_systemUserLabel(actor)} 删除了一条消息';
+  }
+
+  final actor = message.recalledBy ?? message.sender;
+  if (actor.id == message.sender.id) {
+    return '${_systemUserLabel(actor)} 撤回了一条消息';
+  }
+  return '${_systemUserLabel(actor)} 撤回了一条来自 '
+      '${_systemUserLabel(message.sender)} 的消息';
+}
+
+String systemMessageCopyText(SystemMessageEvent event) {
+  final subject = event.subject;
+  switch (event.event) {
+    case kSystemEventRoomMemberJoined:
+      return '${_systemUserLabel(subject)} 加入了房间';
+    case kSystemEventRoomMemberLeft:
+      return '${_systemUserLabel(subject)} 离开了房间';
+    case kSystemEventRoomMemberRemoved:
+      final actor = event.actor;
+      if (actor == null) return '${_systemUserLabel(subject)} 被踢出了房间';
+      return '${_systemUserLabel(subject)} 被 ${_systemUserLabel(actor)} '
+          '踢出了房间';
+    case kSystemEventLiveJoined:
+      return '${_systemUserLabel(subject)} 进入了语音频道';
+    case kSystemEventLiveLeft:
+      return '${_systemUserLabel(subject)} 退出了语音频道';
+    case kSystemEventRoomRoleChanged:
+      final roleLabel = systemMessageRoleLabel(event.toRole);
+      final verb = systemMessageRoleVerb(event);
+      final omitActor = systemMessageRoleChangeOmitsActor(event);
+      final actor = event.actor;
+      final subjectPart = _systemUserLabel(subject);
+      if (!omitActor && actor != null) {
+        return '$subjectPart 被 ${_systemUserLabel(actor)} $verb $roleLabel';
+      }
+      return '$subjectPart $verb $roleLabel';
+    case kSystemEventRoomNameChanged:
+      final actor = event.actor ?? event.user;
+      final value = _systemChangedValueLabel(event.newValue);
+      if (actor == null) return '房间名称 修改为 $value';
+      return '房间名称 被 ${_systemUserLabel(actor)} 修改为 $value';
+    case kSystemEventRoomDescriptionChanged:
+      final actor = event.actor ?? event.user;
+      final value = _systemChangedValueLabel(event.newValue);
+      if (actor == null) return '房间简介 修改为\n$value';
+      return '房间简介 被 ${_systemUserLabel(actor)} 修改为\n$value';
+    default:
+      final fallback = event.message.body.trimRight();
+      final subjectPart = _systemUserLabel(subject);
+      if (fallback.isEmpty) return subjectPart;
+      return '$subjectPart $fallback';
+  }
+}
+
 int _roleRank(String? role) {
   return switch (role) {
     'owner' || 'creator' => 3,
@@ -209,6 +275,22 @@ int _roleRank(String? role) {
     'member' => 1,
     _ => 0,
   };
+}
+
+String _systemUserLabel(UserSummary user) {
+  final roomDisplayName = user.roomDisplayName?.trim();
+  if (roomDisplayName != null && roomDisplayName.isNotEmpty) {
+    return roomDisplayName;
+  }
+  final displayName = user.displayName.trim();
+  if (displayName.isNotEmpty) return displayName;
+  return user.username;
+}
+
+String _systemChangedValueLabel(String? value) {
+  final normalized = value ?? '';
+  if (normalized.isEmpty) return '（空）';
+  return normalized;
 }
 
 bool shouldShowFileAttachmentBody({

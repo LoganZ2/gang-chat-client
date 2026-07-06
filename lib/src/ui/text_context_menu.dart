@@ -12,6 +12,17 @@ const double _contextMenuMinItemHeight = 32;
 const double _contextMenuHorizontalPadding = 12;
 const Key _contextMenuPanelKey = ValueKey('text-context-menu-panel');
 const Key _contextMenuDividerKey = ValueKey('text-context-menu-divider');
+final GlobalKey _contextMenuPanelBoundsKey = GlobalKey(
+  debugLabel: 'text-context-menu-panel-bounds',
+);
+
+bool isTextContextMenuPanelHit(Offset globalPosition) {
+  final renderObject = _contextMenuPanelBoundsKey.currentContext
+      ?.findRenderObject();
+  if (renderObject is! RenderBox || !renderObject.hasSize) return false;
+  final topLeft = renderObject.localToGlobal(Offset.zero);
+  return (topLeft & renderObject.size).contains(globalPosition);
+}
 
 class TextFieldEditingShortcuts extends StatefulWidget {
   const TextFieldEditingShortcuts({
@@ -19,6 +30,7 @@ class TextFieldEditingShortcuts extends StatefulWidget {
     this.controller,
     this.focusNode,
     this.secondaryClickSelection,
+    this.onGlobalPrimaryPointerDownDuringSecondaryClickProtection,
     required this.undoController,
     required this.child,
   });
@@ -26,6 +38,8 @@ class TextFieldEditingShortcuts extends StatefulWidget {
   final TextEditingController? controller;
   final FocusNode? focusNode;
   final TextSelection? Function()? secondaryClickSelection;
+  final ValueChanged<PointerDownEvent>?
+  onGlobalPrimaryPointerDownDuringSecondaryClickProtection;
   final UndoHistoryController undoController;
   final Widget child;
 
@@ -158,6 +172,9 @@ class _TextFieldEditingShortcutsState extends State<TextFieldEditingShortcuts> {
   void _handleGlobalPointerEvent(PointerEvent event) {
     if (event is PointerDownEvent &&
         (event.buttons & kPrimaryMouseButton) != 0) {
+      widget.onGlobalPrimaryPointerDownDuringSecondaryClickProtection?.call(
+        event,
+      );
       _clearSecondaryClickProtection();
     }
   }
@@ -264,6 +281,7 @@ Widget buildTextFieldContextMenu(
   UndoHistoryController? undoController,
   Object? tapRegionGroupId,
   ValueChanged<bool>? onOpenChanged,
+  VoidCallback? onActionPressed,
   Future<bool> Function()? canPasteNonText,
   bool readOnly = false,
   bool showReadOnlySelectAll = true,
@@ -273,6 +291,7 @@ Widget buildTextFieldContextMenu(
     undoController: undoController,
     tapRegionGroupId: tapRegionGroupId,
     onOpenChanged: onOpenChanged,
+    onActionPressed: onActionPressed,
     canPasteNonText: canPasteNonText,
     readOnly: readOnly,
     showReadOnlySelectAll: showReadOnlySelectAll,
@@ -285,6 +304,7 @@ class _TextFieldContextMenu extends StatefulWidget {
     required this.undoController,
     required this.tapRegionGroupId,
     required this.onOpenChanged,
+    required this.onActionPressed,
     required this.canPasteNonText,
     required this.readOnly,
     required this.showReadOnlySelectAll,
@@ -294,6 +314,7 @@ class _TextFieldContextMenu extends StatefulWidget {
   final UndoHistoryController? undoController;
   final Object? tapRegionGroupId;
   final ValueChanged<bool>? onOpenChanged;
+  final VoidCallback? onActionPressed;
   final Future<bool> Function()? canPasteNonText;
   final bool readOnly;
   final bool showReadOnlySelectAll;
@@ -391,9 +412,12 @@ class _TextFieldContextMenuState extends State<_TextFieldContextMenu> {
 
     final menu = _ContextMenuToolbar(
       anchor: widget.editableTextState.contextMenuAnchors.primaryAnchor,
-      child: RepaintBoundary(
-        key: _contextMenuPanelKey,
-        child: _ContextMenuPanel(sections: sections),
+      child: KeyedSubtree(
+        key: _contextMenuPanelBoundsKey,
+        child: RepaintBoundary(
+          key: _contextMenuPanelKey,
+          child: _ContextMenuPanel(sections: sections),
+        ),
       ),
     );
     final tapRegionGroupId = widget.tapRegionGroupId;
@@ -593,6 +617,7 @@ class _TextFieldContextMenuState extends State<_TextFieldContextMenu> {
       onPressed: action == null
           ? null
           : () {
+              widget.onActionPressed?.call();
               action();
               widget.editableTextState.hideToolbar();
             },

@@ -89,7 +89,6 @@ extension _HomeShellMessages on _HomeShellState {
   }
 
   Future<void> _copyChatMessage(BuildContext context, Message message) async {
-    if (message.isRemoved) return;
     try {
       await _copyChatMessageContents(context, message);
       if (!context.mounted) return;
@@ -109,7 +108,7 @@ extension _HomeShellMessages on _HomeShellState {
       await _copyMessageAttachments(context, message, attachments);
       return;
     }
-    final text = message.body.trimRight();
+    final text = message_display.messageCopyText(message);
     if (text.isEmpty) {
       throw Exception('这条消息没有可复制的内容');
     }

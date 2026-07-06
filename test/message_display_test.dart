@@ -214,6 +214,77 @@ void main() {
     expect(event.newValue, 'New Room');
   });
 
+  test('messageCopyText renders structured system message text', () {
+    const actor = UserSummary(
+      id: 'user_actor',
+      username: 'owner',
+      displayName: 'Owner',
+      avatarUrl: null,
+      defaultAvatarKey: 'blue-3',
+      roomDisplayName: '房内Owner',
+    );
+    final nameChanged = _message(
+      type: 'system',
+      body: '房间名称修改为New Room',
+      attachments: const [
+        MessageAttachment(
+          type: 'system',
+          event: kSystemEventRoomNameChanged,
+          actor: actor,
+          oldValue: 'Old Room',
+          newValue: 'New Room',
+        ),
+      ],
+    );
+    final descriptionChanged = _message(
+      type: 'system',
+      body: '房间简介修改为Hello',
+      attachments: const [
+        MessageAttachment(
+          type: 'system',
+          event: kSystemEventRoomDescriptionChanged,
+          actor: actor,
+          oldValue: 'Old',
+          newValue: 'Hello',
+        ),
+      ],
+    );
+
+    expect(messageCopyText(nameChanged), '房间名称 被 房内Owner 修改为 New Room');
+    expect(messageCopyText(descriptionChanged), '房间简介 被 房内Owner 修改为\nHello');
+  });
+
+  test('messageCopyText renders removed message placeholders', () {
+    const sender = UserSummary(
+      id: 'user_sender',
+      username: 'logan',
+      displayName: 'Logan',
+      avatarUrl: null,
+      defaultAvatarKey: 'green-2',
+      roomDisplayName: '房内Logan',
+    );
+    const admin = UserSummary(
+      id: 'user_admin',
+      username: 'admin',
+      displayName: 'Admin',
+      avatarUrl: null,
+      defaultAvatarKey: 'blue-3',
+    );
+
+    expect(
+      messageCopyText(
+        _message(sender: sender, isRecalled: true, recalledBy: admin),
+      ),
+      'Admin 撤回了一条来自 房内Logan 的消息',
+    );
+    expect(
+      messageCopyText(
+        _message(sender: sender, isForceDeleted: true, forceDeletedBy: admin),
+      ),
+      'Admin 删除了一条消息',
+    );
+  });
+
   test('shouldShowFileAttachmentBody hides duplicate single-file body', () {
     const attachment = MessageAttachment(type: 'file', name: 'report.pdf');
 
@@ -342,24 +413,35 @@ Message _message({
   String type = 'text',
   String body = 'hello',
   List<MessageAttachment> attachments = const [],
+  UserSummary? sender,
+  bool isRecalled = false,
+  UserSummary? recalledBy,
+  bool isForceDeleted = false,
+  UserSummary? forceDeletedBy,
   bool pending = false,
   bool failed = false,
 }) {
   return Message(
     id: 'message_1',
     roomId: 'room_1',
-    sender: const UserSummary(
-      id: 'user_1',
-      username: 'logan',
-      displayName: 'Logan',
-      avatarUrl: null,
-      defaultAvatarKey: 'blue-3',
-    ),
+    sender:
+        sender ??
+        const UserSummary(
+          id: 'user_1',
+          username: 'logan',
+          displayName: 'Logan',
+          avatarUrl: null,
+          defaultAvatarKey: 'blue-3',
+        ),
     clientMessageId: 'client_1',
     type: type,
     body: body,
     createdAt: DateTime.utc(2026, 6, 4),
     attachments: attachments,
+    isRecalled: isRecalled,
+    recalledBy: recalledBy,
+    isForceDeleted: isForceDeleted,
+    forceDeletedBy: forceDeletedBy,
     pending: pending,
     failed: failed,
   );

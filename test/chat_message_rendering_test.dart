@@ -8,9 +8,11 @@ import 'package:client/src/home/chat_pane.dart';
 import 'package:client/src/home/room_profile_card.dart';
 import 'package:client/src/protocol/models.dart';
 import 'package:client/src/ui/app_config_scope.dart';
+import 'package:client/src/ui/cached_asset_image.dart';
 import 'package:client/src/ui/ui.dart' as ui;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -568,7 +570,143 @@ void main() {
       ),
     );
 
-    expect(find.widgetWithText(SelectableText, 'copy this'), findsOneWidget);
+    final field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.controller?.text, 'copy this');
+    expect(field.readOnly, isTrue);
+    expect(field.enableInteractiveSelection, isTrue);
+    expect(field.showCursor, isFalse);
+  });
+
+  testWidgets('selected text message context menu only copies selection', (
+    tester,
+  ) async {
+    final clipboardWrites = <String>[];
+    _mockClipboard(clipboardWrites);
+
+    await tester.pumpWidget(
+      _host(
+        MessageBubbleForTest(
+          message: _message(type: 'text', body: 'copy this'),
+          downloadActions: _downloadActions(),
+        ),
+      ),
+    );
+
+    await _showMessageTextContextMenu(
+      tester,
+      selection: const TextSelection(baseOffset: 0, extentOffset: 4),
+    );
+
+    expect(find.text('复制'), findsOneWidget);
+    expect(find.text('Ctrl+C'), findsOneWidget);
+    expect(find.text('全选'), findsNothing);
+    expect(find.text('Select all'), findsNothing);
+    expect(find.text('删除'), findsNothing);
+
+    await tester.tap(find.text('复制'));
+    await tester.pump();
+
+    expect(clipboardWrites, ['copy']);
+  });
+
+  testWidgets('unselected text message right click keeps message menu', (
+    tester,
+  ) async {
+    var copied = false;
+    var deleted = false;
+    await tester.pumpWidget(
+      _host(
+        MessageBubbleForTest(
+          message: _message(type: 'text', body: 'copy this'),
+          downloadActions: _downloadActions(),
+          messageActions: ChatMessageActions(
+            onCopy: (_, _) async => copied = true,
+            onDeleteForMe: (_, _) async => deleted = true,
+            onRecall: (_, _) async {},
+            canRecall: (_) => false,
+          ),
+        ),
+      ),
+    );
+
+    await _secondaryClickTextMessage(tester);
+
+    expect(find.text('复制'), findsOneWidget);
+    expect(find.text('删除'), findsOneWidget);
+    expect(find.text('全选'), findsNothing);
+
+    await tester.tap(find.text('复制'));
+    await tester.pump();
+    expect(copied, isTrue);
+    expect(deleted, isFalse);
+  });
+
+  testWidgets('text message bubble padding opens message menu', (tester) async {
+    var deleted = false;
+    await tester.pumpWidget(
+      _host(
+        MessageBubbleForTest(
+          message: _message(type: 'text', body: 'copy this'),
+          downloadActions: _downloadActions(),
+          messageActions: ChatMessageActions(
+            onCopy: (_, _) async {},
+            onDeleteForMe: (_, _) async => deleted = true,
+            onRecall: (_, _) async {},
+            canRecall: (_) => false,
+          ),
+        ),
+      ),
+    );
+
+    final textRect = tester.getRect(find.byType(TextField));
+    await _secondaryClickAt(
+      tester,
+      Offset(textRect.left - 6, textRect.center.dy),
+    );
+
+    expect(find.text('复制'), findsOneWidget);
+    expect(find.text('删除'), findsOneWidget);
+    expect(find.text('全选'), findsNothing);
+
+    await tester.tap(find.text('删除'));
+    await tester.pump();
+    expect(deleted, isTrue);
+  });
+
+  testWidgets('left click cancellation clears remembered text selection', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        MessageBubbleForTest(
+          message: _message(type: 'text', body: 'copy this'),
+          downloadActions: _downloadActions(),
+          messageActions: ChatMessageActions(
+            onCopy: (_, _) async {},
+            onDeleteForMe: (_, _) async {},
+            onRecall: (_, _) async {},
+            canRecall: (_) => false,
+          ),
+        ),
+      ),
+    );
+
+    final editableTextState = await _selectMessageText(
+      tester,
+      const TextSelection(baseOffset: 0, extentOffset: 4),
+    );
+    await _secondaryClickTextMessage(tester);
+    expect(find.text('删除'), findsNothing);
+
+    await tester.tapAt(const Offset(4, 4));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(editableTextState.textEditingValue.selection.isCollapsed, isTrue);
+
+    await _secondaryClickTextMessage(tester);
+
+    expect(find.text('复制'), findsOneWidget);
+    expect(find.text('删除'), findsOneWidget);
+    expect(find.text('全选'), findsNothing);
   });
 
   testWidgets('pending message shows a spinner beside the 发送中 label', (
@@ -976,7 +1114,13 @@ void main() {
       ),
     );
 
-    expect(find.byType(Image), findsOneWidget);
+    final image = tester.widget<CachedAssetImage>(
+      find.byType(CachedAssetImage),
+    );
+    expect(image.url, 'https://assets.test/stickers/wave-thumb.webp');
+    expect(image.width, 132);
+    expect(image.height, 132);
+    expect(image.fit, BoxFit.contain);
     expect(find.text('wave'), findsNothing);
     expect(tester.widget<Tooltip>(find.byType(Tooltip)).message, 'wave');
   });
@@ -1052,6 +1196,33 @@ void main() {
     expect(find.text('添加到房间表情包'), findsNothing);
   });
 
+  testWidgets('sticker bubble padding opens sticker menu', (tester) async {
+    await tester.pumpWidget(
+      _host(
+        MessageBubbleForTest(
+          message: _stickerMessage(),
+          downloadActions: _downloadActions(),
+          imagePreviewActions: ChatImagePreviewActions(
+            onDownload: (_, _) async {},
+            onSaveAs: (_, _) async {},
+            onCopyToClipboard: (_) async {},
+            onSaveSticker: (_, _) async {},
+          ),
+        ),
+      ),
+    );
+
+    final imageRect = tester.getRect(find.byType(CachedAssetImage));
+    await _secondaryClickAt(
+      tester,
+      Offset(imageRect.left - 6, imageRect.center.dy),
+    );
+
+    expect(find.text('复制'), findsOneWidget);
+    expect(find.text('添加到我的表情包'), findsOneWidget);
+    expect(find.text('删除'), findsOneWidget);
+  });
+
   testWidgets('image file attachment renders a resolved preview image', (
     tester,
   ) async {
@@ -1083,14 +1254,12 @@ void main() {
       ),
     );
 
-    final image = tester.widget<Image>(find.byType(Image));
-    expect(image.fit, BoxFit.contain);
-    expect(image.image, isA<NetworkImage>());
-    expect(
-      (image.image as NetworkImage).url,
-      'https://assets.test/uploads/photo-thumb.png',
+    final image = tester.widget<CachedAssetImage>(
+      find.byType(CachedAssetImage),
     );
-    expect(tester.getSize(find.byType(Image)), const Size(320, 180));
+    expect(image.fit, BoxFit.contain);
+    expect(image.url, 'https://assets.test/uploads/photo-thumb.png');
+    expect(tester.getSize(find.byType(CachedAssetImage)), const Size(320, 180));
   });
 
   testWidgets('non-image file attachment keeps the file tile without preview', (
@@ -1122,7 +1291,7 @@ void main() {
       ),
     );
 
-    expect(find.byType(Image), findsNothing);
+    expect(find.byType(CachedAssetImage), findsNothing);
     expect(find.byIcon(Icons.picture_as_pdf_outlined), findsOneWidget);
     expect(find.byTooltip('report.pdf'), findsOneWidget);
   });
@@ -1549,8 +1718,34 @@ Message _voiceMessage({required Duration duration}) {
   );
 }
 
-Future<void> _secondaryClickSticker(WidgetTester tester) async {
-  final location = tester.getCenter(find.byType(Image));
+Future<void> _showMessageTextContextMenu(
+  WidgetTester tester, {
+  required TextSelection selection,
+}) async {
+  final editableTextState = await _selectMessageText(tester, selection);
+  expect(editableTextState.showToolbar(), isTrue);
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 100));
+}
+
+Future<EditableTextState> _selectMessageText(
+  WidgetTester tester,
+  TextSelection selection,
+) async {
+  await tester.tap(find.byType(TextField));
+  await tester.pump();
+  final editableTextState = tester.state<EditableTextState>(
+    find.byType(EditableText),
+  );
+  editableTextState.userUpdateTextEditingValue(
+    editableTextState.textEditingValue.copyWith(selection: selection),
+    SelectionChangedCause.toolbar,
+  );
+  await tester.pump();
+  return editableTextState;
+}
+
+Future<void> _secondaryClickAt(WidgetTester tester, Offset location) async {
   final gesture = await tester.createGesture(
     kind: PointerDeviceKind.mouse,
     buttons: kSecondaryMouseButton,
@@ -1560,7 +1755,39 @@ Future<void> _secondaryClickSticker(WidgetTester tester) async {
   await gesture.down(location);
   await tester.pump();
   await gesture.up();
-  await tester.pumpAndSettle();
+  await gesture.removePointer();
+  await tester.pump(const Duration(milliseconds: 100));
+}
+
+Future<void> _secondaryClickTextMessage(WidgetTester tester) async {
+  await _secondaryClickAt(tester, tester.getCenter(find.byType(TextField)));
+}
+
+Future<void> _secondaryClickSticker(WidgetTester tester) async {
+  await _secondaryClickAt(
+    tester,
+    tester.getCenter(find.byType(CachedAssetImage)),
+  );
+}
+
+void _mockClipboard(List<String> writes) {
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          writes.add(
+            (call.arguments as Map<Object?, Object?>)['text']! as String,
+          );
+          return null;
+        }
+        if (call.method == 'Clipboard.hasStrings') {
+          return const <String, dynamic>{'value': false};
+        }
+        return null;
+      });
+  addTearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, null);
+  });
 }
 
 const _currentUser = CurrentUser(
