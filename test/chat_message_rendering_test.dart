@@ -778,7 +778,7 @@ void main() {
   });
 
   testWidgets(
-    'system room profile change messages highlight values and tooltip labels',
+    'system room profile change messages show original values from info buttons',
     (tester) async {
       final controller = TextEditingController();
       addTearDown(controller.dispose);
@@ -825,7 +825,12 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('房间名称'), findsOneWidget);
-      expect(find.byTooltip('原房间名称：Old Room'), findsOneWidget);
+      final nameInfo = find.byKey(
+        const ValueKey(
+          'system-info-client_room_name_changed-room_name_changed',
+        ),
+      );
+      expect(nameInfo, findsOneWidget);
       expect(find.text('New Room'), findsOneWidget);
       expect(
         find.ancestor(
@@ -836,7 +841,12 @@ void main() {
       );
 
       expect(find.text('房间简介'), findsOneWidget);
-      expect(find.byTooltip('原房间简介：Old intro'), findsOneWidget);
+      final descriptionInfo = find.byKey(
+        const ValueKey(
+          'system-info-client_room_description_changed-room_description_changed',
+        ),
+      );
+      expect(descriptionInfo, findsOneWidget);
       expect(find.text('New intro\nline 2'), findsOneWidget);
       expect(
         find.ancestor(
@@ -846,17 +856,26 @@ void main() {
         findsNothing,
       );
 
-      final actorAvatar = find.byWidgetPredicate(
-        (widget) => widget is ui.Avatar && widget.label == 'Owner',
-      );
-      expect(actorAvatar, findsWidgets);
       final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
       await gesture.addPointer(location: Offset.zero);
       addTearDown(gesture.removePointer);
-      await gesture.moveTo(tester.getCenter(actorAvatar.first));
-      await tester.pumpAndSettle();
 
-      expect(find.text('@owner'), findsOneWidget);
+      await gesture.moveTo(tester.getCenter(nameInfo));
+      await tester.pumpAndSettle();
+      expect(find.text('原房间名称：Old Room'), findsOneWidget);
+
+      await gesture.moveTo(Offset.zero);
+      await tester.pump(const Duration(milliseconds: 180));
+      await tester.tap(descriptionInfo);
+      await tester.pumpAndSettle();
+      expect(find.text('原房间简介：Old intro'), findsOneWidget);
+
+      expect(
+        find.byWidgetPredicate(
+          (widget) => widget is ui.Avatar && widget.label == 'Owner',
+        ),
+        findsWidgets,
+      );
     },
   );
 
@@ -1085,6 +1104,107 @@ void main() {
     expect(find.text('Logan'), findsWidgets);
     expect(find.text('进入了语音频道'), findsOneWidget);
     expect(find.text('hello after live join'), findsOneWidget);
+  });
+
+  testWidgets('own recalled text message can be re-edited', (tester) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    Message? reeditedMessage;
+
+    await tester.pumpWidget(
+      _host(
+        _chatPane(
+          controller: controller,
+          room: _roomDetail,
+          messages: [
+            _message(
+              type: 'text',
+              body: 'bring this back',
+              sender: _currentUser.toSummary(),
+              isRecalled: true,
+              recalledBy: _currentUser.toSummary(),
+            ),
+          ],
+          messageActions: _messageActions(
+            onReeditRecalledText: (message) => reeditedMessage = message,
+            canReeditRecalledText: (_) => true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final button = find.byKey(const ValueKey('message-reedit-message_1'));
+    expect(button, findsOneWidget);
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await gesture.moveTo(tester.getCenter(button));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(find.text('重新编辑'), findsOneWidget);
+
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    expect(reeditedMessage?.body, 'bring this back');
+  });
+
+  testWidgets('permitted recalled text message exposes content info card', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      _host(
+        _chatPane(
+          controller: controller,
+          room: _roomDetail,
+          messages: [
+            _message(
+              type: 'text',
+              body: 'moderated secret',
+              sender: const UserSummary(
+                id: 'user_member',
+                username: 'member',
+                displayName: 'Member',
+                avatarUrl: null,
+                defaultAvatarKey: 'blue-3',
+                roomRole: 'member',
+              ),
+              isRecalled: true,
+              recalledBy: const UserSummary(
+                id: 'user_admin',
+                username: 'admin',
+                displayName: 'Admin',
+                avatarUrl: null,
+                defaultAvatarKey: 'blue-3',
+                roomRole: 'admin',
+              ),
+            ),
+          ],
+          messageActions: _messageActions(canInspectRecalledText: (_) => true),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final button = find.byKey(const ValueKey('message-info-message_1'));
+    expect(button, findsOneWidget);
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await gesture.moveTo(tester.getCenter(button));
+    await tester.pumpAndSettle();
+    expect(find.text('moderated secret'), findsOneWidget);
+
+    await gesture.moveTo(Offset.zero);
+    await tester.pump(const Duration(milliseconds: 180));
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    expect(find.text('moderated secret'), findsOneWidget);
   });
 
   testWidgets('sticker bubble exposes the sticker name only as a tooltip', (
@@ -1589,6 +1709,7 @@ Widget _chatPane({
   Future<UserSummary> Function(UserSummary sender)? onResolveSenderProfile,
   ValueChanged<PublicRoom>? onEnterProfileRoom,
   UserProfileActionBuilder? senderProfileActionBuilder,
+  ChatMessageActions messageActions = const ChatMessageActions.disabled(),
   VoidCallback? onViewedNewMessages,
 }) {
   return ChatPane(
@@ -1603,6 +1724,7 @@ Widget _chatPane({
     downloadActions: _downloadActions(),
     voicePlaybackActions: const ChatVoicePlaybackActions.disabled(),
     imagePreviewActions: _imagePreviewActions(),
+    messageActions: messageActions,
     loading: loading,
     error: null,
     sending: false,
@@ -1655,6 +1777,10 @@ Message _message({
   DateTime? createdAt,
   String clientMessageId = 'client_1',
   bool pending = false,
+  bool isRecalled = false,
+  UserSummary? recalledBy,
+  bool isForceDeleted = false,
+  UserSummary? forceDeletedBy,
   UserSummary sender = const UserSummary(
     id: 'user_1',
     username: 'logan',
@@ -1672,6 +1798,10 @@ Message _message({
     body: body,
     createdAt: createdAt ?? DateTime.utc(2026, 6, 11),
     attachments: attachments,
+    isRecalled: isRecalled,
+    recalledBy: recalledBy,
+    isForceDeleted: isForceDeleted,
+    forceDeletedBy: forceDeletedBy,
     pending: pending,
   );
 }
@@ -1877,6 +2007,22 @@ RoomDetail _roomDetailFor(String id) {
     ),
     createdAt: DateTime.utc(2026, 6, 4),
     updatedAt: DateTime.utc(2026, 6, 4),
+  );
+}
+
+ChatMessageActions _messageActions({
+  void Function(Message message)? onReeditRecalledText,
+  bool Function(Message message)? canReeditRecalledText,
+  bool Function(Message message)? canInspectRecalledText,
+}) {
+  return ChatMessageActions(
+    onCopy: (_, _) async {},
+    onDeleteForMe: (_, _) async {},
+    onRecall: (_, _) async {},
+    canRecall: (_) => false,
+    onReeditRecalledText: onReeditRecalledText ?? ((_) {}),
+    canReeditRecalledText: canReeditRecalledText ?? ((_) => false),
+    canInspectRecalledText: canInspectRecalledText ?? ((_) => false),
   );
 }
 

@@ -19,6 +19,7 @@ import '../app/voice_message_display.dart' as voice_display;
 import '../protocol/models.dart';
 import '../ui/ui.dart';
 import 'chat_image_preview.dart';
+import 'hover_card_anchor.dart';
 import 'room_profile_card.dart';
 
 export 'chat_image_preview.dart';

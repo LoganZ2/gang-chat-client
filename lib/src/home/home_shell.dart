@@ -137,6 +137,8 @@ class _HomeShellState extends State<HomeShell> {
   RoomDetail? _selectedRoom;
   LiveState? _live;
   List<Message> _messages = const [];
+  Map<String, String> _messageDrafts = const {};
+  bool _updatingComposerFromDraft = false;
   final Set<String> _locallyDeletedMessageKeys = {};
   int _selectedRoomNewMessageCount = 0;
   Map<String, FileTransferState> _fileTransfers = const {};
@@ -256,6 +258,7 @@ class _HomeShellState extends State<HomeShell> {
   void initState() {
     super.initState();
     _currentUser = widget.app.currentUser;
+    _composerController.addListener(_handleComposerDraftChanged);
     _titleSearchController.addListener(_handleTitleSearchChanged);
     _musicBoxSearchController.addListener(_handleMusicBoxSearchChanged);
     _voicePlaybackService.state.addListener(_handleVoicePlaybackChanged);
@@ -296,6 +299,7 @@ class _HomeShellState extends State<HomeShell> {
     _titleSearchContextMenuOpen = false;
     _pendingTitleSearchContextMenuUpdate = null;
     _titleSearchController.addListener(_handleTitleSearchChanged);
+    _setComposerText('', saveDraft: false);
     setState(() {
       _currentUser = widget.app.currentUser;
       _servers = const [];
@@ -304,6 +308,7 @@ class _HomeShellState extends State<HomeShell> {
       _selectedRoom = null;
       _live = null;
       _messages = const [];
+      _messageDrafts = const {};
       _selectedRoomNewMessageCount = 0;
       _fileTransfers = const {};
       _fileDownloads = const {};
@@ -374,6 +379,7 @@ class _HomeShellState extends State<HomeShell> {
     _searchDebounce?.cancel();
     _titleSearchController.removeListener(_handleTitleSearchChanged);
     _titleSearchController.dispose();
+    _composerController.removeListener(_handleComposerDraftChanged);
     _composerController.dispose();
     _composerPanelController.dispose();
     _voicePlaybackService.state.removeListener(_handleVoicePlaybackChanged);

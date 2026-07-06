@@ -25,6 +25,7 @@ class HomeSidebar extends StatelessWidget {
     required this.width,
     required this.currentUser,
     required this.servers,
+    this.roomDrafts = const {},
     required this.selectedServerId,
     required this.joinedLiveRoomId,
     required this.realtimeReconnecting,
@@ -48,6 +49,7 @@ class HomeSidebar extends StatelessWidget {
   final double width;
   final CurrentUser currentUser;
   final List<RoomCard> servers;
+  final Map<String, String> roomDrafts;
   final String? selectedServerId;
   final String? joinedLiveRoomId;
   final bool realtimeReconnecting;
@@ -159,6 +161,7 @@ class HomeSidebar extends StatelessWidget {
 
     return _ServerList(
       servers: servers,
+      roomDrafts: roomDrafts,
       selectedServerId: selectedServerId,
       joinedLiveRoomId: joinedLiveRoomId,
       searchQuery: searchQuery,
@@ -170,6 +173,7 @@ class HomeSidebar extends StatelessWidget {
 class _ServerList extends StatefulWidget {
   const _ServerList({
     required this.servers,
+    required this.roomDrafts,
     required this.selectedServerId,
     required this.joinedLiveRoomId,
     required this.searchQuery,
@@ -177,6 +181,7 @@ class _ServerList extends StatefulWidget {
   });
 
   final List<RoomCard> servers;
+  final Map<String, String> roomDrafts;
   final String? selectedServerId;
   final String? joinedLiveRoomId;
   final String searchQuery;
@@ -216,6 +221,7 @@ class _ServerListState extends State<_ServerList> {
             final server = widget.servers[index];
             return _ServerCard(
               server: server,
+              draft: widget.roomDrafts[server.id],
               selected: server.id == widget.selectedServerId,
               voiceJoined: server.id == widget.joinedLiveRoomId,
               searchQuery: widget.searchQuery,
@@ -484,6 +490,7 @@ class _FlatIconButton extends StatelessWidget {
 class _ServerCard extends StatelessWidget {
   const _ServerCard({
     required this.server,
+    required this.draft,
     required this.selected,
     required this.voiceJoined,
     required this.searchQuery,
@@ -491,6 +498,7 @@ class _ServerCard extends StatelessWidget {
   });
 
   final RoomCard server;
+  final String? draft;
   final bool selected;
   final bool voiceJoined;
   final String searchQuery;
@@ -499,6 +507,7 @@ class _ServerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lastMessageTime = room_display.roomSidebarLastMessageTime(server);
+    final draftPreview = room_display.roomDraftPreview(draft);
     return PressableSurface(
       key: ValueKey('home-sidebar-room-${server.id}'),
       width: double.infinity,
@@ -565,17 +574,43 @@ class _ServerCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    HighlightedText(
-                      text: room_display.roomSidebarSubtitle(server),
-                      query: searchQuery,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: UiTypography.label.copyWith(
-                        color: selected
-                            ? UiColors.textSecondary
-                            : UiColors.textMuted,
+                    if (draftPreview == null)
+                      HighlightedText(
+                        text: room_display.roomSidebarSubtitle(server),
+                        query: searchQuery,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: UiTypography.label.copyWith(
+                          color: selected
+                              ? UiColors.textSecondary
+                              : UiColors.textMuted,
+                        ),
+                      )
+                    else
+                      Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text: '[草稿] ',
+                              style: UiTypography.label.copyWith(
+                                color: UiColors.accent,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            TextSpan(
+                              text: draftPreview,
+                              style: UiTypography.label.copyWith(
+                                color: selected
+                                    ? UiColors.textSecondary
+                                    : UiColors.textMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                        key: ValueKey('home-sidebar-room-draft-${server.id}'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
                   ],
                 ),
               ),

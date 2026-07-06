@@ -86,6 +86,16 @@ String roomSidebarSubtitle(RoomCard room) {
   return parts.join(' · ');
 }
 
+String? roomDraftPreview(String? draft) {
+  final normalized = draft
+      ?.trim()
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .join(' ');
+  if (normalized == null || normalized.isEmpty) return null;
+  return normalized;
+}
+
 String _systemLastMessagePreview(LastMessagePreview last) {
   final sender = _nonEmpty(last.senderDisplayName);
   final body = _nonEmpty(last.bodyPreview);

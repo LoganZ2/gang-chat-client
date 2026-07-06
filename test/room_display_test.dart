@@ -118,6 +118,12 @@ void main() {
     );
   });
 
+  test('room draft preview normalizes visible draft text', () {
+    expect(roomDraftPreview(null), isNull);
+    expect(roomDraftPreview('   '), isNull);
+    expect(roomDraftPreview(' hello\n  draft\tworld '), 'hello draft world');
+  });
+
   test('room identity display helpers provide stable fallbacks', () {
     expect(roomIdentifier(_roomDetail(rid: 'R001')), 'R001');
     expect(roomIdentifier(_roomDetail()), 'room_1');

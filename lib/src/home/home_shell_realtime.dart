@@ -217,6 +217,7 @@ extension _HomeShellRealtime on _HomeShellState {
     );
     if (patch == null || !mounted) return;
     _setHomeState(() {
+      _messageDrafts = _messageDraftsWithout(patch.roomId);
       _servers = patch.rooms;
       _selectedServerId = patch.selectedRoomId;
       _selectedRoom = patch.selectedRoom;
@@ -230,6 +231,7 @@ extension _HomeShellRealtime on _HomeShellState {
           : _ContentMode.chat;
       _joinedLiveRoomId = patch.joinedLiveRoomId;
       if (patch.wasSelected) {
+        _setComposerText('', saveDraft: false);
         _selectedRoomNewMessageCount = 0;
         _fileTransfers = const {};
         _roomError = null;

@@ -326,6 +326,7 @@ extension _HomeShellSearch on _HomeShellState {
   }
 
   void _applyJoinedSearchRoom(RoomDetail room) {
+    _storeSelectedComposerDraft();
     final patch = _roomsController.patchRoomDetailApplied(
       rooms: _servers,
       detail: room,
@@ -333,6 +334,8 @@ extension _HomeShellSearch on _HomeShellState {
     _setHomeState(() {
       _servers = patch.rooms;
       _selectedServerId = room.id;
+      _messageDrafts = _messageDraftsWithout(room.id);
+      _setComposerText('', saveDraft: false);
       _selectedRoom = patch.selectedRoom;
       _live = room.live;
       _messages = const [];

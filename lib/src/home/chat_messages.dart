@@ -93,21 +93,31 @@ class ChatMessageActions {
     required this.onDeleteForMe,
     required this.onRecall,
     required this.canRecall,
+    this.onReeditRecalledText = _syncNoop,
+    this.canReeditRecalledText = _neverCanRecall,
+    this.canInspectRecalledText = _neverCanRecall,
   });
 
   const ChatMessageActions.disabled()
     : onCopy = _noop,
       onDeleteForMe = _noop,
       onRecall = _noop,
-      canRecall = _neverCanRecall;
+      canRecall = _neverCanRecall,
+      onReeditRecalledText = _syncNoop,
+      canReeditRecalledText = _neverCanRecall,
+      canInspectRecalledText = _neverCanRecall;
 
   final Future<void> Function(BuildContext context, Message message) onCopy;
   final Future<void> Function(BuildContext context, Message message)
   onDeleteForMe;
   final Future<void> Function(BuildContext context, Message message) onRecall;
   final bool Function(Message message) canRecall;
+  final void Function(Message message) onReeditRecalledText;
+  final bool Function(Message message) canReeditRecalledText;
+  final bool Function(Message message) canInspectRecalledText;
 
   static Future<void> _noop(BuildContext context, Message message) async {}
+  static void _syncNoop(Message message) {}
 
   static bool _neverCanRecall(Message message) => false;
 }
@@ -1236,6 +1246,7 @@ class _RemovedMessageRow extends StatelessWidget {
 
     final actor = message.recalledBy ?? message.sender;
     final recalledOwnMessage = actor.id == message.sender.id;
+    final action = _removedTextAction();
     return [
       _userChip(actor),
       if (recalledOwnMessage)
@@ -1245,6 +1256,7 @@ class _RemovedMessageRow extends StatelessWidget {
         _userChip(message.sender),
         _systemText('的消息'),
       ],
+      ?action,
     ];
   }
 
@@ -1258,6 +1270,105 @@ class _RemovedMessageRow extends StatelessWidget {
       onEnterProfileRoom: onEnterProfileRoom,
       profileActionBuilder: profileActionBuilder,
       inLive: live_display.liveParticipantByUserId(live, user.id) != null,
+    );
+  }
+
+  Widget? _removedTextAction() {
+    if (!message.isRecalled || message.type != 'text') return null;
+    if (message.body.isEmpty) return null;
+    if (messageActions.canReeditRecalledText(message)) {
+      return _RemovedMessageInlineButton(
+        key: ValueKey('message-reedit-${message.id}'),
+        icon: Icons.edit_outlined,
+        tooltip: '重新编辑',
+        onPressed: () => messageActions.onReeditRecalledText(message),
+      );
+    }
+    if (messageActions.canInspectRecalledText(message)) {
+      return _SystemInfoButton(
+        key: ValueKey('message-info-${message.id}'),
+        message: message.body,
+      );
+    }
+    return null;
+  }
+}
+
+class _RemovedMessageInlineButton extends StatelessWidget {
+  const _RemovedMessageInlineButton({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onPressed != null;
+    return Tooltip(
+      message: tooltip,
+      waitDuration: const Duration(milliseconds: 350),
+      child: MouseRegion(
+        cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onPressed,
+          child: SizedBox.square(
+            dimension: 18,
+            child: Icon(icon, size: 14, color: UiColors.accent),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SystemInfoButton extends StatelessWidget {
+  const _SystemInfoButton({super.key, required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return HoverCardAnchor(
+      resetKey: message,
+      cardWidth: 244,
+      gap: 8,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: SizedBox.square(
+          dimension: 18,
+          child: Icon(Icons.info_outline, size: 14, color: UiColors.accent),
+        ),
+      ),
+      cardBuilder: (context) => _SystemInfoCard(message: message),
+    );
+  }
+}
+
+class _SystemInfoCard extends StatelessWidget {
+  const _SystemInfoCard({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Text(
+        message,
+        maxLines: 8,
+        overflow: TextOverflow.ellipsis,
+        style: UiTypography.body.copyWith(
+          color: UiColors.text,
+          fontSize: 12,
+          height: 1.38,
+        ),
+      ),
     );
   }
 }
@@ -1417,7 +1528,8 @@ class _SystemMessageParts {
       case message_display.kSystemEventRoomNameChanged:
         final actor = event.actor ?? event.user;
         return [
-          _textWithTooltip('房间名称', '原房间名称：${event.oldValue ?? ''}'),
+          _text('房间名称'),
+          _infoButton('原房间名称：${event.oldValue ?? ''}'),
           if (actor == null) ...[
             _text('修改为'),
           ] else ...[
@@ -1430,7 +1542,8 @@ class _SystemMessageParts {
       case message_display.kSystemEventRoomDescriptionChanged:
         final actor = event.actor ?? event.user;
         return [
-          _textWithTooltip('房间简介', '原房间简介：${event.oldValue ?? ''}'),
+          _text('房间简介'),
+          _infoButton('原房间简介：${event.oldValue ?? ''}'),
           if (actor == null) ...[
             _text('修改为'),
           ] else ...[
@@ -1473,8 +1586,13 @@ class _SystemMessageParts {
     );
   }
 
-  Widget _textWithTooltip(String value, String tooltip) {
-    return Tooltip(message: tooltip, child: _text(value));
+  Widget _infoButton(String value) {
+    return _SystemInfoButton(
+      key: ValueKey(
+        'system-info-${event.message.clientMessageId}-${event.event}',
+      ),
+      message: value,
+    );
   }
 
   Widget _highlightText(String value, {int maxLines = 1}) {

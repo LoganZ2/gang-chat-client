@@ -273,6 +273,7 @@ extension _HomeShellLayout on _HomeShellState {
       width: width,
       currentUser: _currentUser,
       servers: _sidebarServers,
+      roomDrafts: _messageDrafts,
       selectedServerId: _selectedServerId,
       joinedLiveRoomId: _joinedLiveRoomId,
       realtimeReconnecting:

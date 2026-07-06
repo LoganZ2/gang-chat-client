@@ -54,12 +54,70 @@ extension _HomeShellMessages on _HomeShellState {
     }
   }
 
+  void _handleComposerDraftChanged() {
+    if (_updatingComposerFromDraft) return;
+    _saveComposerDraftValue(_composerController.text);
+  }
+
+  void _storeSelectedComposerDraft() {
+    _saveComposerDraftValue(_composerController.text);
+  }
+
+  void _restoreComposerDraftForRoom(String roomId) {
+    _setComposerText(_messageDrafts[roomId] ?? '', saveDraft: false);
+  }
+
+  void _setComposerText(String text, {required bool saveDraft}) {
+    final nextValue = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    if (_composerController.value == nextValue) {
+      if (saveDraft) _saveComposerDraftValue(text);
+      return;
+    }
+
+    final previousUpdating = _updatingComposerFromDraft;
+    _updatingComposerFromDraft = true;
+    _composerController.value = nextValue;
+    _updatingComposerFromDraft = previousUpdating;
+    if (saveDraft) _saveComposerDraftValue(text);
+  }
+
+  void _saveComposerDraftValue(String text) {
+    final roomId = _selectedServerId;
+    if (roomId == null) return;
+    final hasVisibleDraft = text.trim().isNotEmpty;
+    final current = _messageDrafts[roomId];
+    if (!hasVisibleDraft && current == null) return;
+    if (hasVisibleDraft && current == text) return;
+
+    _setHomeState(() {
+      final next = Map<String, String>.of(_messageDrafts);
+      if (hasVisibleDraft) {
+        next[roomId] = text;
+      } else {
+        next.remove(roomId);
+      }
+      _messageDrafts = Map.unmodifiable(next);
+    });
+  }
+
+  Map<String, String> _messageDraftsWithout(String roomId) {
+    if (!_messageDrafts.containsKey(roomId)) return _messageDrafts;
+    final next = Map<String, String>.of(_messageDrafts)..remove(roomId);
+    return Map.unmodifiable(next);
+  }
+
   ChatMessageActions get _chatMessageActions {
     return ChatMessageActions(
       onCopy: _copyChatMessage,
       onDeleteForMe: _deleteMessageForMe,
       onRecall: _recallChatMessage,
       canRecall: _canRecallChatMessage,
+      onReeditRecalledText: _reeditRecalledTextMessage,
+      canReeditRecalledText: _canReeditRecalledTextMessage,
+      canInspectRecalledText: _canInspectRecalledTextMessage,
     );
   }
 
@@ -341,6 +399,40 @@ extension _HomeShellMessages on _HomeShellState {
     return _currentUserRoomRank(room) > _messageSenderRoomRank(message.sender);
   }
 
+  void _reeditRecalledTextMessage(Message message) {
+    if (!_canReeditRecalledTextMessage(message)) return;
+    _setComposerText(message.body, saveDraft: true);
+    _composerPanelController.closePanel();
+    if (_contentMode != _ContentMode.chat) {
+      _setHomeState(() => _contentMode = _ContentMode.chat);
+    }
+  }
+
+  bool _canReeditRecalledTextMessage(Message message) {
+    if (!message.isRecalled ||
+        message.isForceDeleted ||
+        message.type != 'text' ||
+        message.body.isEmpty) {
+      return false;
+    }
+    if (message.sender.id != _currentUser.id) return false;
+    final actor = message.recalledBy ?? message.sender;
+    return actor.id == _currentUser.id;
+  }
+
+  bool _canInspectRecalledTextMessage(Message message) {
+    if (!message.isRecalled ||
+        message.isForceDeleted ||
+        message.type != 'text' ||
+        message.body.isEmpty ||
+        message.sender.id == _currentUser.id) {
+      return false;
+    }
+    final room = _selectedRoom;
+    if (room == null) return false;
+    return _currentUserRoomRank(room) > _messageSenderRoomRank(message.sender);
+  }
+
   int _currentUserRoomRank(RoomDetail room) {
     if (_currentUser.isSuperuser) return 4;
     return _roomRoleRank(room.myMembership.role);
@@ -437,8 +529,8 @@ extension _HomeShellMessages on _HomeShellState {
               messages: _messages,
               pending: pending,
             );
-            if (clearComposer) _composerController.clear();
           });
+          if (clearComposer) _setComposerText('', saveDraft: true);
         },
       );
       if (!mounted || _selectedServerId != room.id) return;

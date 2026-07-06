@@ -57,7 +57,10 @@ extension _HomeShellRoomActions on _HomeShellState {
         _loadingServers = false;
         if (_selectedServerId != null &&
             !_servers.any((server) => server.id == _selectedServerId)) {
-          final shouldDisconnectLive = _joinedLiveRoomId == _selectedServerId;
+          final removedRoomId = _selectedServerId!;
+          final shouldDisconnectLive = _joinedLiveRoomId == removedRoomId;
+          _messageDrafts = _messageDraftsWithout(removedRoomId);
+          _setComposerText('', saveDraft: false);
           _selectedServerId = null;
           _selectedRoom = null;
           _live = null;
@@ -89,6 +92,7 @@ extension _HomeShellRoomActions on _HomeShellState {
 
   Future<void> _openRoom(RoomCard server, {required bool openContent}) async {
     if (_loadingRoom && _selectedServerId == server.id) return;
+    _storeSelectedComposerDraft();
 
     // Abort any in-flight attachment uploads before dropping their chips.
     for (final entry in _stagedAttachments) {
@@ -97,6 +101,7 @@ extension _HomeShellRoomActions on _HomeShellState {
     _setHomeState(() {
       _clearDeferredRoomNotificationVisualMarkersInState();
       _selectedServerId = server.id;
+      _restoreComposerDraftForRoom(server.id);
       _selectedRoomNewMessageCount = server.unreadCount;
       _clearRoomUnreadCount(server.id);
       _settingsOpen = false;
@@ -437,12 +442,14 @@ extension _HomeShellRoomActions on _HomeShellState {
     RoomCard server,
     RoomOpenSnapshot snapshot,
   ) {
+    _storeSelectedComposerDraft();
     for (final entry in _stagedAttachments) {
       entry.uploadController.cancel();
     }
 
     _setHomeState(() {
       _selectedServerId = server.id;
+      _restoreComposerDraftForRoom(server.id);
       _selectedRoomNewMessageCount = server.unreadCount;
       _clearRoomUnreadCount(server.id);
       _settingsOpen = false;
@@ -553,12 +560,15 @@ extension _HomeShellRoomActions on _HomeShellState {
   }
 
   void _applyCreatedRoom(RoomDetail room) {
+    _storeSelectedComposerDraft();
     final patch = _roomsController.patchRoomDetailApplied(
       rooms: _servers,
       detail: room,
     );
     _setHomeState(() {
       _selectedServerId = room.id;
+      _messageDrafts = _messageDraftsWithout(room.id);
+      _setComposerText('', saveDraft: false);
       _selectedRoom = patch.selectedRoom;
       _servers = patch.rooms;
       _live = room.live;
@@ -595,8 +605,10 @@ extension _HomeShellRoomActions on _HomeShellState {
 
   void _applyManagedRoomRemoved(String roomId) {
     _setHomeState(() {
+      _messageDrafts = _messageDraftsWithout(roomId);
       _servers = _roomsController.removeRoomCard(_servers, roomId);
       if (_selectedServerId == roomId) {
+        _setComposerText('', saveDraft: false);
         _selectedServerId = null;
         _selectedRoom = null;
         _live = null;
