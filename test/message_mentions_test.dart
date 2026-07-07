@@ -68,6 +68,18 @@ void main() {
     ]);
   });
 
+  test('messageMentionRanges can use known labels containing spaces', () {
+    final ranges = messageMentionRanges(
+      'hi @Panel Member and @other',
+      labels: const ['Panel Member'],
+    );
+
+    expect(ranges.map((range) => [range.start, range.end]), [
+      [3, 16],
+      [21, 27],
+    ]);
+  });
+
   test('messageMentionOptions filters by room display name and role', () {
     final owner = _member('1', 'owner', 'Panel Owner', role: 'owner');
     final admin = _member('2', 'admin', 'Panel Admin', role: 'admin');
@@ -110,6 +122,69 @@ void main() {
     );
 
     expect(options.map((option) => option.label), ['Panel Member']);
+  });
+
+  test('messageMentionOptions places special mentions first', () {
+    final member = _member('1', 'member', 'Panel Member');
+
+    final options = messageMentionOptions(
+      members: [member],
+      query: '',
+      ownerUserId: null,
+    );
+
+    expect(options.map((option) => option.label).take(3), [
+      '所有人',
+      '管理员',
+      'Panel Member',
+    ]);
+    expect(options[0].kind, MessageMentionKind.everyone);
+    expect(options[1].kind, MessageMentionKind.admins);
+  });
+
+  test('messageMentionDescriptors includes special and user mentions', () {
+    final member = _member('1', 'member', 'Panel Member');
+
+    final mentions = messageMentionDescriptors(
+      text: '@所有人 @管理员 @Panel Member @Panel Member',
+      members: [member],
+      confirmedLabels: const ['所有人', '管理员', 'Panel Member', 'Panel Member'],
+    );
+
+    expect(mentions, [
+      {'type': 'all', 'label': '所有人'},
+      {'type': 'admins', 'label': '管理员'},
+      {'type': 'user', 'user_id': '1', 'label': 'Panel Member'},
+    ]);
+  });
+
+  test('messageMentionsUser matches all admins and direct users', () {
+    final admin = _member('1', 'admin', 'Panel Admin', role: 'admin').user;
+    final member = _member('2', 'member', 'Panel Member').user;
+
+    expect(
+      messageMentionsUser(text: '@管理员', user: admin, ownerUserId: null),
+      isTrue,
+    );
+    expect(
+      messageMentionsUser(text: '@管理员', user: member, ownerUserId: null),
+      isFalse,
+    );
+    expect(
+      messageMentionsUser(
+        text: '',
+        mentions: [
+          {'type': 'user', 'user_id': '2'},
+        ],
+        user: member,
+        ownerUserId: null,
+      ),
+      isTrue,
+    );
+    expect(
+      messageMentionsUser(text: '@所有人', user: member, ownerUserId: null),
+      isTrue,
+    );
   });
 }
 

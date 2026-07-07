@@ -665,6 +665,13 @@ class _MentionTextEditingController extends TextEditingController {
     if (notify) notifyListeners();
   }
 
+  List<String> confirmedMentionLabels() {
+    return [
+      for (final mention in _validConfirmedMentions())
+        mention.text.substring(1),
+    ];
+  }
+
   bool hasConfirmedMention({required int start, required int end}) {
     for (final mention in _validConfirmedMentions()) {
       if (mention.start == start && mention.end == end) return true;

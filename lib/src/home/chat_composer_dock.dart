@@ -405,13 +405,13 @@ class _ComposerMentionPanelState extends State<_ComposerMentionPanel> {
                         const SizedBox(height: _mentionPanelTileGap),
                     itemBuilder: (context, index) {
                       final option = rows[index];
-                      final user = option.member.user;
-                      final nameColor = roleBadgeForegroundColorForLabel(
-                        option.roleLabel,
-                      );
+                      final user = option.member?.user;
+                      final nameColor = option.isUser
+                          ? roleBadgeForegroundColorForLabel(option.roleLabel)
+                          : UiColors.accent;
                       return _ComposerMentionTile(
                         option: option,
-                        avatarUrl: config.resolveAssetUrl(user.avatarUrl),
+                        avatarUrl: config.resolveAssetUrl(user?.avatarUrl),
                         nameColor: nameColor,
                         highlighted: selectedIndex == index,
                         onHover: () => widget.onHighlight?.call(index),
@@ -486,7 +486,6 @@ class _ComposerMentionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user = option.member.user;
     return MouseRegion(
       onEnter: (_) => onHover(),
       child: GestureDetector(
@@ -507,13 +506,7 @@ class _ComposerMentionTile extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Avatar(
-                label: room_display.userAvatarLabel(user),
-                imageUrl: avatarUrl,
-                defaultAvatarKey: user.defaultAvatarKey,
-                size: 30,
-                showBorder: false,
-              ),
+              _ComposerMentionTileLeading(option: option, avatarUrl: avatarUrl),
               const SizedBox(width: 10),
               Flexible(
                 child: Text(
@@ -529,6 +522,47 @@ class _ComposerMentionTile extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ComposerMentionTileLeading extends StatelessWidget {
+  const _ComposerMentionTileLeading({
+    required this.option,
+    required this.avatarUrl,
+  });
+
+  final message_mentions.MessageMentionOption option;
+  final String? avatarUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final user = option.member?.user;
+    if (user != null) {
+      return Avatar(
+        label: room_display.userAvatarLabel(user),
+        imageUrl: avatarUrl,
+        defaultAvatarKey: user.defaultAvatarKey,
+        size: 30,
+        showBorder: false,
+      );
+    }
+    final icon = switch (option.kind) {
+      message_mentions.MessageMentionKind.everyone => Icons.campaign_outlined,
+      message_mentions.MessageMentionKind.admins =>
+        Icons.admin_panel_settings_outlined,
+      message_mentions.MessageMentionKind.user => Icons.alternate_email,
+    };
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: UiColors.selected,
+        shape: BoxShape.circle,
+        border: Border.all(color: UiColors.selectedBorder),
+      ),
+      child: SizedBox.square(
+        dimension: 30,
+        child: Icon(icon, color: UiColors.accent, size: 17),
       ),
     );
   }

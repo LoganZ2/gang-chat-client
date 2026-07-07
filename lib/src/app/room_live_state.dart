@@ -29,6 +29,9 @@ RoomCard roomCardWithLive(RoomCard room, LiveState live) {
     liveAvatarPreview: preview,
     lastMessage: room.lastMessage,
     unreadCount: room.unreadCount,
+    hasUnreadCount: room.hasUnreadCount,
+    unreadMentionCount: room.unreadMentionCount,
+    hasUnreadMentionCount: room.hasUnreadMentionCount,
     updatedAt: room.updatedAt,
   );
 }

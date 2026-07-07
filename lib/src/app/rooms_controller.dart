@@ -1149,6 +1149,8 @@ class RoomsController {
                 lastMessage: existing.lastMessage,
                 unreadCount: existing.unreadCount,
                 hasUnreadCount: existing.hasUnreadCount,
+                unreadMentionCount: existing.unreadMentionCount,
+                hasUnreadMentionCount: existing.hasUnreadMentionCount,
                 updatedAt: card.updatedAt,
               ),
       ),
@@ -1160,11 +1162,12 @@ class RoomsController {
     required String roomId,
   }) {
     final idx = rooms.indexWhere((room) => room.id == roomId);
-    if (idx < 0 || rooms[idx].unreadCount == 0) {
+    if (idx < 0 ||
+        (rooms[idx].unreadCount == 0 && rooms[idx].unreadMentionCount == 0)) {
       return RoomCardsPatch(rooms: rooms);
     }
     final next = [...rooms];
-    next[idx] = next[idx].copyWith(unreadCount: 0);
+    next[idx] = next[idx].copyWith(unreadCount: 0, unreadMentionCount: 0);
     return RoomCardsPatch(rooms: orderedRoomCards(next));
   }
 
@@ -1268,7 +1271,15 @@ class RoomsController {
     final unreadCount = clearUnread
         ? 0
         : _mergedUnreadCount(existing: existing, incoming: incoming);
-    next[idx] = _mergeRoomCard(existing, incoming, unreadCount: unreadCount);
+    final unreadMentionCount = clearUnread
+        ? 0
+        : _mergedUnreadMentionCount(existing: existing, incoming: incoming);
+    next[idx] = _mergeRoomCard(
+      existing,
+      incoming,
+      unreadCount: unreadCount,
+      unreadMentionCount: unreadMentionCount,
+    );
     return orderedRoomCards(next);
   }
 
@@ -1291,10 +1302,19 @@ class RoomsController {
     return existing.unreadCount + 1;
   }
 
+  int _mergedUnreadMentionCount({
+    required RoomCard existing,
+    required RoomCard incoming,
+  }) {
+    if (incoming.hasUnreadMentionCount) return incoming.unreadMentionCount;
+    return existing.unreadMentionCount;
+  }
+
   RoomCard _mergeRoomCard(
     RoomCard existing,
     RoomCard incoming, {
     required int unreadCount,
+    required int unreadMentionCount,
   }) {
     return RoomCard(
       id: incoming.id,
@@ -1314,6 +1334,8 @@ class RoomsController {
       lastMessage: incoming.lastMessage,
       unreadCount: unreadCount,
       hasUnreadCount: true,
+      unreadMentionCount: unreadMentionCount,
+      hasUnreadMentionCount: true,
       updatedAt: incoming.updatedAt,
     );
   }
@@ -1388,6 +1410,8 @@ class RoomsController {
         lastMessage: existing.lastMessage,
         unreadCount: existing.unreadCount,
         hasUnreadCount: existing.hasUnreadCount,
+        unreadMentionCount: existing.unreadMentionCount,
+        hasUnreadMentionCount: existing.hasUnreadMentionCount,
         updatedAt: existing.updatedAt,
       );
       nextRooms = orderedRoomCards(nextRooms);

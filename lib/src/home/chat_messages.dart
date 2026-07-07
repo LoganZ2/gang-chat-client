@@ -127,12 +127,15 @@ class _MessageStage extends StatefulWidget {
     super.key,
     required this.roomId,
     required this.currentUser,
+    required this.currentUserRoomDisplayName,
+    required this.currentUserRoomRole,
     required this.ownerUserId,
     required this.roomReady,
     required this.loading,
     required this.error,
     required this.messages,
     required this.newMessageCount,
+    required this.mentionMembers,
     required this.fileTransfers,
     required this.fileDownloads,
     required this.live,
@@ -152,12 +155,15 @@ class _MessageStage extends StatefulWidget {
 
   final String? roomId;
   final CurrentUser currentUser;
+  final String currentUserRoomDisplayName;
+  final String? currentUserRoomRole;
   final String? ownerUserId;
   final bool roomReady;
   final bool loading;
   final String? error;
   final List<Message> messages;
   final int newMessageCount;
+  final List<RoomMember> mentionMembers;
   final Map<String, FileTransferState> fileTransfers;
   final Map<String, FileTransferState> fileDownloads;
   final LiveState? live;
@@ -197,6 +203,9 @@ class _MessageStageState extends State<_MessageStage> {
   final GlobalKey _oldestMessageKey = GlobalKey();
   final GlobalKey _firstNewMessageKey = GlobalKey();
   final Map<String, GlobalKey> _messageRowKeys = {};
+  final Set<String> _viewedUnreadMentionClientIds = {};
+  String? _highlightedMentionClientId;
+  Timer? _highlightedMentionTimer;
   double _underflowBottomSpacer = 0;
   bool _underflowAlignmentScheduled = false;
   bool _newMessageJumpVisibilityScheduled = false;
@@ -235,6 +244,10 @@ class _MessageStageState extends State<_MessageStage> {
       _showLatestButton = false;
       _showNewMessageJumpButton = false;
       _newMessageJumpDismissed = false;
+      _viewedUnreadMentionClientIds.clear();
+      _highlightedMentionClientId = null;
+      _highlightedMentionTimer?.cancel();
+      _highlightedMentionTimer = null;
       _incomingUnreadWaitingForUserScroll = false;
       _restoringIncomingViewport = false;
       _clearRetainedNewMessageAnchor();
@@ -263,9 +276,13 @@ class _MessageStageState extends State<_MessageStage> {
       _showNewMessageJumpButton = false;
       if (widget.newMessageCount > 0) {
         _newMessageJumpDismissed = false;
+        _viewedUnreadMentionClientIds.removeWhere(
+          (id) => !_currentUnreadMentionClientIds.contains(id),
+        );
         _captureNewMessageAnchorFromWidget();
       } else {
         _incomingUnreadWaitingForUserScroll = false;
+        _viewedUnreadMentionClientIds.clear();
       }
     }
     if (oldWidget.messages.length != widget.messages.length ||
@@ -293,6 +310,7 @@ class _MessageStageState extends State<_MessageStage> {
   @override
   void dispose() {
     _rememberScrollPosition();
+    _highlightedMentionTimer?.cancel();
     _scrollController.removeListener(_handleScrollChanged);
     _scrollController.dispose();
     super.dispose();
@@ -391,6 +409,13 @@ class _MessageStageState extends State<_MessageStage> {
 
   bool _userInLive(String userId) {
     return live_display.liveParticipantByUserId(widget.live, userId) != null;
+  }
+
+  UserSummary get _currentUserMentionIdentity {
+    return widget.currentUser.toSummary().copyWith(
+      roomDisplayName: widget.currentUserRoomDisplayName,
+      roomRole: widget.currentUserRoomRole,
+    );
   }
 
   void _handleScrollChanged() {
@@ -725,8 +750,10 @@ class _MessageStageState extends State<_MessageStage> {
 
   int get _newMessageLabelCount {
     final widgetCount = _effectiveWidgetNewMessageCount;
-    if (widgetCount > 0) return _newMessageLabelCountFromWidget;
-    return _retainedNewMessageLabelCount;
+    final raw = widgetCount > 0
+        ? _newMessageLabelCountFromWidget
+        : _retainedNewMessageLabelCount;
+    return math.max(0, raw - _viewedUnreadMentionClientIds.length);
   }
 
   int? get _retainedNewMessageIndex {
@@ -744,14 +771,78 @@ class _MessageStageState extends State<_MessageStage> {
     return _retainedNewMessageIndex;
   }
 
+  List<int> get _unreadMentionIndexes {
+    final firstIndex = _firstNewMessageIndex;
+    if (firstIndex == null) return const [];
+    final indexes = <int>[];
+    final currentUser = _currentUserMentionIdentity;
+    for (var index = firstIndex; index < widget.messages.length; index++) {
+      final message = widget.messages[index];
+      if (_viewedUnreadMentionClientIds.contains(message.clientMessageId)) {
+        continue;
+      }
+      if (message.pending || message.isRemoved) continue;
+      if (message.sender.id == widget.currentUser.id) continue;
+      if (message_mentions.messageMentionsUser(
+        text: message.body,
+        mentions: message.mentions,
+        user: currentUser,
+        ownerUserId: widget.ownerUserId,
+      )) {
+        indexes.add(index);
+      }
+    }
+    return indexes;
+  }
+
+  Set<String> get _currentUnreadMentionClientIds {
+    return {
+      for (final index in _unreadMentionIndexes)
+        widget.messages[index].clientMessageId,
+    };
+  }
+
+  int? get _nextUnreadMentionIndex {
+    final indexes = _unreadMentionIndexes;
+    if (indexes.isEmpty) return null;
+    return indexes.last;
+  }
+
   void _markNewMessagesViewed() {
     if (_newMessageJumpDismissed) return;
     setState(() {
       _newMessageJumpDismissed = true;
       _showNewMessageJumpButton = false;
       _incomingUnreadWaitingForUserScroll = false;
+      _viewedUnreadMentionClientIds.clear();
     });
     widget.onViewedNewMessages();
+  }
+
+  void _markUnreadMentionViewed(Message message) {
+    _viewedUnreadMentionClientIds.add(message.clientMessageId);
+  }
+
+  void _scrollToNextUnreadMention() {
+    final index = _nextUnreadMentionIndex;
+    if (index == null || index < 0 || index >= widget.messages.length) {
+      _scrollToFirstNewMessage();
+      return;
+    }
+    final message = widget.messages[index];
+    setState(() {
+      _highlightedMentionClientId = message.clientMessageId;
+      _markUnreadMentionViewed(message);
+      _showNewMessageJumpButton = _shouldShowNewMessageJumpButton();
+    });
+    _highlightedMentionTimer?.cancel();
+    _highlightedMentionTimer = Timer(const Duration(milliseconds: 2600), () {
+      if (!mounted || _highlightedMentionClientId != message.clientMessageId) {
+        return;
+      }
+      setState(() => _highlightedMentionClientId = null);
+    });
+    _ensureMessageVisible(message);
   }
 
   void _scrollToFirstNewMessage() {
@@ -797,6 +888,17 @@ class _MessageStageState extends State<_MessageStage> {
       alignment: 0.12,
     );
     return true;
+  }
+
+  void _ensureMessageVisible(Message message) {
+    final context = _messageRowKeys[message.clientMessageId]?.currentContext;
+    if (context == null) return;
+    Scrollable.ensureVisible(
+      context,
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      alignment: 0.18,
+    );
   }
 
   void _toggleDetailedTimestamps() {
@@ -850,6 +952,12 @@ class _MessageStageState extends State<_MessageStage> {
         firstNewMessageIndex != null &&
         !_newMessageJumpDismissed &&
         _showNewMessageJumpButton;
+    final nextUnreadMentionIndex = _nextUnreadMentionIndex;
+    final showMentionJump =
+        showNewMessageJump && nextUnreadMentionIndex != null;
+    final newMessageJumpTooltip = showMentionJump
+        ? '${widget.currentUserRoomDisplayName}@我'
+        : '查看 $_newMessageLabelCount 条未读消息';
     _scheduleNewMessageJumpVisibilitySync();
     final list = ListView.separated(
       key: _messageListKey,
@@ -933,19 +1041,24 @@ class _MessageStageState extends State<_MessageStage> {
                 message: message,
                 outgoing: message.sender.id == widget.currentUser.id,
                 currentUser: widget.currentUser,
+                currentUserMentionIdentity: _currentUserMentionIdentity,
                 ownerUserId: widget.ownerUserId,
+                mentionMembers: widget.mentionMembers,
                 transfer: widget.fileTransfers[message.clientMessageId],
                 fileDownloads: widget.fileDownloads,
                 downloadActions: widget.downloadActions,
                 voicePlaybackActions: widget.voicePlaybackActions,
                 imagePreviewActions: widget.imagePreviewActions,
                 messageActions: widget.messageActions,
+                mentionHighlighted:
+                    message.clientMessageId == _highlightedMentionClientId,
                 inLive: _userInLive(message.sender.id),
                 onResolveSenderProfile: widget.onResolveSenderProfile,
                 onResolveRoomProfile: widget.onResolveRoomProfile,
                 onEnterProfileRoom: widget.onEnterProfileRoom,
                 profileActionBuilder: widget.senderProfileActionBuilder,
                 onMentionUser: widget.onMentionUser,
+                isUserInLive: _userInLive,
               ),
           ],
         );
@@ -1024,8 +1137,10 @@ class _MessageStageState extends State<_MessageStage> {
                     pressedBackgroundColor: const Color(0xFF14211B),
                     borderColor: UiColors.selectedBorder,
                     selectedBorderColor: UiColors.selectedBorder,
-                    tooltip: '查看 $_newMessageLabelCount 条未读消息',
-                    onPressed: _scrollToFirstNewMessage,
+                    tooltip: newMessageJumpTooltip,
+                    onPressed: showMentionJump
+                        ? _scrollToNextUnreadMention
+                        : _scrollToFirstNewMessage,
                     child: const Center(
                       child: Icon(
                         Icons.keyboard_arrow_up_rounded,
@@ -1771,31 +1886,38 @@ class _MessageRow extends StatelessWidget {
     required this.message,
     required this.outgoing,
     required this.currentUser,
+    required this.currentUserMentionIdentity,
     required this.ownerUserId,
+    required this.mentionMembers,
     required this.transfer,
     required this.fileDownloads,
     required this.downloadActions,
     required this.voicePlaybackActions,
     required this.imagePreviewActions,
     required this.messageActions,
+    required this.mentionHighlighted,
     required this.inLive,
     this.onResolveSenderProfile,
     this.onResolveRoomProfile,
     this.onEnterProfileRoom,
     this.profileActionBuilder,
     this.onMentionUser,
+    this.isUserInLive,
   });
 
   final Message message;
   final bool outgoing;
   final CurrentUser currentUser;
+  final UserSummary currentUserMentionIdentity;
   final String? ownerUserId;
+  final List<RoomMember> mentionMembers;
   final FileTransferState? transfer;
   final Map<String, FileTransferState> fileDownloads;
   final ChatFileDownloadActions downloadActions;
   final ChatVoicePlaybackActions voicePlaybackActions;
   final ChatImagePreviewActions imagePreviewActions;
   final ChatMessageActions messageActions;
+  final bool mentionHighlighted;
   final bool inLive;
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
@@ -1803,6 +1925,7 @@ class _MessageRow extends StatelessWidget {
   final ValueChanged<PublicRoom>? onEnterProfileRoom;
   final UserProfileActionBuilder? profileActionBuilder;
   final ValueChanged<UserSummary>? onMentionUser;
+  final bool Function(String userId)? isUserInLive;
 
   @override
   Widget build(BuildContext context) {
@@ -1848,6 +1971,16 @@ class _MessageRow extends StatelessWidget {
               voicePlaybackActions: voicePlaybackActions,
               imagePreviewActions: imagePreviewActions,
               messageActions: messageActions,
+              mentionHighlighted: mentionHighlighted,
+              currentUser: currentUser,
+              currentUserMentionIdentity: currentUserMentionIdentity,
+              ownerUserId: ownerUserId,
+              mentionMembers: mentionMembers,
+              onResolveSenderProfile: onResolveSenderProfile,
+              onResolveRoomProfile: onResolveRoomProfile,
+              onEnterProfileRoom: onEnterProfileRoom,
+              profileActionBuilder: profileActionBuilder,
+              isUserInLive: isUserInLive,
             ),
           ),
         ],
@@ -1943,6 +2076,16 @@ class _MessageBubble extends StatefulWidget {
     required this.voicePlaybackActions,
     required this.imagePreviewActions,
     required this.messageActions,
+    required this.mentionHighlighted,
+    required this.currentUser,
+    required this.currentUserMentionIdentity,
+    required this.ownerUserId,
+    required this.mentionMembers,
+    this.onResolveSenderProfile,
+    this.onResolveRoomProfile,
+    this.onEnterProfileRoom,
+    this.profileActionBuilder,
+    this.isUserInLive,
   });
 
   final Message message;
@@ -1953,6 +2096,17 @@ class _MessageBubble extends StatefulWidget {
   final ChatVoicePlaybackActions voicePlaybackActions;
   final ChatImagePreviewActions imagePreviewActions;
   final ChatMessageActions messageActions;
+  final bool mentionHighlighted;
+  final CurrentUser currentUser;
+  final UserSummary currentUserMentionIdentity;
+  final String? ownerUserId;
+  final List<RoomMember> mentionMembers;
+  final Future<UserSummary> Function(UserSummary sender)?
+  onResolveSenderProfile;
+  final RoomProfileResolver? onResolveRoomProfile;
+  final ValueChanged<PublicRoom>? onEnterProfileRoom;
+  final UserProfileActionBuilder? profileActionBuilder;
+  final bool Function(String userId)? isUserInLive;
 
   @override
   State<_MessageBubble> createState() => _MessageBubbleState();
@@ -1970,8 +2124,12 @@ class _MessageBubbleState extends State<_MessageBubble> {
     final backgroundColor = widget.outgoing ? _outgoingBubble : _incomingBubble;
     final highlightColor = contextMenuActive
         ? UiColors.selected
+        : widget.mentionHighlighted
+        ? UiColors.selected.withValues(alpha: 0.86)
         : backgroundColor;
     final borderColor = contextMenuActive
+        ? UiColors.selectedBorder
+        : widget.mentionHighlighted
         ? UiColors.selectedBorder
         : widget.outgoing
         ? UiColors.accentBorder
@@ -2023,6 +2181,16 @@ class _MessageBubbleState extends State<_MessageBubble> {
                   ),
                   message_display.MessageContentKind.text => _TextBody(
                     message: widget.message,
+                    profileCurrentUser: widget.currentUser,
+                    currentUser: widget.currentUserMentionIdentity,
+                    ownerUserId: widget.ownerUserId,
+                    mentionMembers: widget.mentionMembers,
+                    mentionHighlighted: widget.mentionHighlighted,
+                    onResolveSenderProfile: widget.onResolveSenderProfile,
+                    onResolveRoomProfile: widget.onResolveRoomProfile,
+                    onEnterProfileRoom: widget.onEnterProfileRoom,
+                    profileActionBuilder: widget.profileActionBuilder,
+                    isUserInLive: widget.isUserInLive,
                     onSelectionActiveChanged: _handleTextSelectionActiveChanged,
                   ),
                 },
@@ -2115,11 +2283,32 @@ class _MessageBubbleState extends State<_MessageBubble> {
 class _TextBody extends StatefulWidget {
   const _TextBody({
     required this.message,
+    required this.profileCurrentUser,
+    required this.currentUser,
+    required this.ownerUserId,
+    required this.mentionMembers,
+    required this.mentionHighlighted,
     required this.onSelectionActiveChanged,
+    this.onResolveSenderProfile,
+    this.onResolveRoomProfile,
+    this.onEnterProfileRoom,
+    this.profileActionBuilder,
+    this.isUserInLive,
   });
 
   final Message message;
+  final CurrentUser profileCurrentUser;
+  final UserSummary currentUser;
+  final String? ownerUserId;
+  final List<RoomMember> mentionMembers;
+  final bool mentionHighlighted;
   final ValueChanged<bool> onSelectionActiveChanged;
+  final Future<UserSummary> Function(UserSummary sender)?
+  onResolveSenderProfile;
+  final RoomProfileResolver? onResolveRoomProfile;
+  final ValueChanged<PublicRoom>? onEnterProfileRoom;
+  final UserProfileActionBuilder? profileActionBuilder;
+  final bool Function(String userId)? isUserInLive;
 
   @override
   State<_TextBody> createState() => _TextBodyState();
@@ -2131,6 +2320,7 @@ class _TextBodyState extends State<_TextBody> {
   final UndoHistoryController _undoController = UndoHistoryController();
   final Object _tapRegionGroup = Object();
   EditableTextState? _activeTextContextMenuState;
+  Offset? _lastPointerDownPosition;
   bool _textContextMenuOpen = false;
   bool _textContextMenuActionPressed = false;
 
@@ -2139,6 +2329,12 @@ class _TextBodyState extends State<_TextBody> {
     super.initState();
     _controller = _MessageTextController(
       text: widget.message.body,
+      currentUser: widget.currentUser,
+      ownerUserId: widget.ownerUserId,
+      mentions: widget.message.mentions,
+      mentionMembers: widget.mentionMembers,
+      mentionHighlighted: widget.mentionHighlighted,
+      onOpenMentionUser: _handleOpenMentionUser,
       onOpenLink: _handleOpenLink,
     );
     _controller.addListener(_handleControllerChanged);
@@ -2147,15 +2343,24 @@ class _TextBodyState extends State<_TextBody> {
   @override
   void didUpdateWidget(_TextBody oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.message.body == widget.message.body) return;
-    final selection = _controller.selection;
-    _controller.value = TextEditingValue(
-      text: widget.message.body,
-      selection: _clampMessageTextSelection(
-        selection,
-        widget.message.body.length,
-      ),
+    _controller.updateMentionContext(
+      currentUser: widget.currentUser,
+      ownerUserId: widget.ownerUserId,
+      mentions: widget.message.mentions,
+      mentionMembers: widget.mentionMembers,
+      mentionHighlighted: widget.mentionHighlighted,
+      onOpenMentionUser: _handleOpenMentionUser,
     );
+    if (oldWidget.message.body != widget.message.body) {
+      final selection = _controller.selection;
+      _controller.value = TextEditingValue(
+        text: widget.message.body,
+        selection: _clampMessageTextSelection(
+          selection,
+          widget.message.body.length,
+        ),
+      );
+    }
   }
 
   @override
@@ -2173,44 +2378,47 @@ class _TextBodyState extends State<_TextBody> {
     return TapRegion(
       groupId: _tapRegionGroup,
       onTapOutside: _handleTapOutside,
-      child: TextFieldEditingShortcuts(
-        controller: _controller,
-        focusNode: _focusNode,
-        undoController: _undoController,
-        onGlobalPrimaryPointerDownDuringSecondaryClickProtection:
-            _handleGlobalPrimaryPointerDownDuringTextSelectionProtection,
-        child: IntrinsicWidth(
-          child: TextField(
-            controller: _controller,
-            focusNode: _focusNode,
-            readOnly: true,
-            showCursor: false,
-            enableInteractiveSelection: true,
-            minLines: 1,
-            maxLines: null,
-            mouseCursor: SystemMouseCursors.text,
-            style: UiTypography.body,
-            cursorColor: UiColors.accent,
-            undoController: _undoController,
-            contextMenuBuilder: (context, editableTextState) {
-              _activeTextContextMenuState = editableTextState;
-              return buildTextFieldContextMenu(
-                context,
-                editableTextState,
-                readOnly: true,
-                showReadOnlySelectAll: false,
-                tapRegionGroupId: _tapRegionGroup,
-                onOpenChanged: _handleTextContextMenuOpenChanged,
-                onActionPressed: _handleTextContextMenuActionPressed,
-              );
-            },
-            decoration: const InputDecoration(
-              isCollapsed: true,
-              border: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              focusedBorder: InputBorder.none,
-              disabledBorder: InputBorder.none,
-              contentPadding: EdgeInsets.zero,
+      child: Listener(
+        onPointerDown: _handlePointerDown,
+        child: TextFieldEditingShortcuts(
+          controller: _controller,
+          focusNode: _focusNode,
+          undoController: _undoController,
+          onGlobalPrimaryPointerDownDuringSecondaryClickProtection:
+              _handleGlobalPrimaryPointerDownDuringTextSelectionProtection,
+          child: IntrinsicWidth(
+            child: TextField(
+              controller: _controller,
+              focusNode: _focusNode,
+              readOnly: true,
+              showCursor: false,
+              enableInteractiveSelection: true,
+              minLines: 1,
+              maxLines: null,
+              mouseCursor: SystemMouseCursors.text,
+              style: UiTypography.body,
+              cursorColor: UiColors.accent,
+              undoController: _undoController,
+              contextMenuBuilder: (context, editableTextState) {
+                _activeTextContextMenuState = editableTextState;
+                return buildTextFieldContextMenu(
+                  context,
+                  editableTextState,
+                  readOnly: true,
+                  showReadOnlySelectAll: false,
+                  tapRegionGroupId: _tapRegionGroup,
+                  onOpenChanged: _handleTextContextMenuOpenChanged,
+                  onActionPressed: _handleTextContextMenuActionPressed,
+                );
+              },
+              decoration: const InputDecoration(
+                isCollapsed: true,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+              ),
             ),
           ),
         ),
@@ -2220,6 +2428,12 @@ class _TextBodyState extends State<_TextBody> {
 
   void _handleControllerChanged() {
     widget.onSelectionActiveChanged(_hasSelection);
+  }
+
+  void _handlePointerDown(PointerDownEvent event) {
+    if ((event.buttons & kPrimaryMouseButton) != 0) {
+      _lastPointerDownPosition = event.position;
+    }
   }
 
   void _handleTextContextMenuActionPressed() {
@@ -2272,6 +2486,30 @@ class _TextBodyState extends State<_TextBody> {
     unawaited(_openLink(uri));
   }
 
+  void _handleOpenMentionUser(UserSummary user) {
+    final position = _lastPointerDownPosition ?? _fallbackProfilePosition();
+    unawaited(
+      showUserProfileCardAtPosition(
+        context,
+        position: position,
+        user: user,
+        currentUser: widget.profileCurrentUser,
+        onResolveProfile: widget.onResolveSenderProfile,
+        onResolveRoomProfile: widget.onResolveRoomProfile,
+        onEnterCommonRoom: widget.onEnterProfileRoom,
+        profileActionBuilder: widget.profileActionBuilder,
+        inLive: widget.isUserInLive?.call(user.id) ?? false,
+        showRoomRole: true,
+      ),
+    );
+  }
+
+  Offset _fallbackProfilePosition() {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return Offset.zero;
+    return box.localToGlobal(Offset(box.size.width / 2, box.size.height));
+  }
+
   Future<void> _openLink(Uri uri) async {
     try {
       await const ExternalUriLauncher().open(uri);
@@ -2283,11 +2521,59 @@ class _TextBodyState extends State<_TextBody> {
 }
 
 class _MessageTextController extends TextEditingController {
-  _MessageTextController({required String text, required this.onOpenLink})
-    : super(text: text);
+  _MessageTextController({
+    required String text,
+    required UserSummary currentUser,
+    required String? ownerUserId,
+    required List<Map<String, Object?>> mentions,
+    required List<RoomMember> mentionMembers,
+    required bool mentionHighlighted,
+    required this.onOpenMentionUser,
+    required this.onOpenLink,
+  }) : _currentUser = currentUser,
+       _ownerUserId = ownerUserId,
+       _mentions = mentions,
+       _mentionMembers = mentionMembers,
+       _mentionHighlighted = mentionHighlighted,
+       super(text: text);
 
   final ValueChanged<Uri> onOpenLink;
+  ValueChanged<UserSummary> onOpenMentionUser;
   Map<String, TapGestureRecognizer> _linkRecognizers = {};
+  Map<String, TapGestureRecognizer> _mentionRecognizers = {};
+  UserSummary _currentUser;
+  String? _ownerUserId;
+  List<Map<String, Object?>> _mentions;
+  List<RoomMember> _mentionMembers;
+  bool _mentionHighlighted;
+
+  void updateMentionContext({
+    required UserSummary currentUser,
+    required String? ownerUserId,
+    required List<Map<String, Object?>> mentions,
+    required List<RoomMember> mentionMembers,
+    required bool mentionHighlighted,
+    required ValueChanged<UserSummary> onOpenMentionUser,
+  }) {
+    final changed =
+        _currentUser.id != currentUser.id ||
+        _currentUser.displayName != currentUser.displayName ||
+        _currentUser.username != currentUser.username ||
+        _currentUser.uid != currentUser.uid ||
+        _currentUser.roomDisplayName != currentUser.roomDisplayName ||
+        _currentUser.roomRole != currentUser.roomRole ||
+        _ownerUserId != ownerUserId ||
+        !identical(_mentions, mentions) ||
+        !identical(_mentionMembers, mentionMembers) ||
+        _mentionHighlighted != mentionHighlighted;
+    _currentUser = currentUser;
+    _ownerUserId = ownerUserId;
+    _mentions = mentions;
+    _mentionMembers = mentionMembers;
+    _mentionHighlighted = mentionHighlighted;
+    this.onOpenMentionUser = onOpenMentionUser;
+    if (changed) notifyListeners();
+  }
 
   @override
   TextSpan buildTextSpan({
@@ -2297,12 +2583,14 @@ class _MessageTextController extends TextEditingController {
   }) {
     final linkMatches = _messageLinkMatches(text).toList(growable: false);
     final mentionMatches = message_mentions
-        .messageMentionRanges(text)
+        .messageMentionRanges(text, labels: _knownMentionLabels)
         .where((range) => !_overlapsAnyLink(range, linkMatches))
         .toList(growable: false);
     if (linkMatches.isEmpty && mentionMatches.isEmpty) {
       _disposeStaleLinkRecognizers(_linkRecognizers);
       _linkRecognizers = {};
+      _disposeStaleLinkRecognizers(_mentionRecognizers);
+      _mentionRecognizers = {};
       return TextSpan(text: text, style: style);
     }
 
@@ -2317,6 +2605,13 @@ class _MessageTextController extends TextEditingController {
       fontWeight: FontWeight.w600,
       decoration: TextDecoration.none,
     );
+    final ownMentionStyle = mentionStyle.copyWith(
+      color: UiColors.accent,
+      fontWeight: FontWeight.w800,
+      backgroundColor: _mentionHighlighted
+          ? UiColors.accent.withValues(alpha: 0.22)
+          : UiColors.accent.withValues(alpha: 0.12),
+    );
     final segments = <_MessageInlineSegment>[
       for (final match in linkMatches) _MessageInlineSegment.link(match),
       for (final match in mentionMatches) _MessageInlineSegment.mention(match),
@@ -2326,6 +2621,10 @@ class _MessageTextController extends TextEditingController {
       _linkRecognizers,
     );
     final nextRecognizers = <String, TapGestureRecognizer>{};
+    final staleMentionRecognizers = Map<String, TapGestureRecognizer>.of(
+      _mentionRecognizers,
+    );
+    final nextMentionRecognizers = <String, TapGestureRecognizer>{};
     var cursor = 0;
     for (final segment in segments) {
       if (segment.start < cursor) continue;
@@ -2348,10 +2647,36 @@ class _MessageTextController extends TextEditingController {
           ),
         );
       } else {
+        final range = segment.mention!;
+        final label = text.substring(range.start + 1, range.end);
+        final isOwnMention = message_mentions.isMessageMentionRangeForUser(
+          text: text,
+          range: range,
+          mentions: _mentions,
+          user: _currentUser,
+          ownerUserId: _ownerUserId,
+        );
+        final mentionMember =
+            message_mentions.messageMentionKindForLabel(label) ==
+                message_mentions.MessageMentionKind.user
+            ? message_mentions.resolveMessageMentionMember(
+                label: label,
+                members: _mentionMembers,
+              )
+            : null;
+        TapGestureRecognizer? recognizer;
+        if (mentionMember != null) {
+          final key = '${range.start}:${range.end}:${mentionMember.user.id}';
+          recognizer =
+              staleMentionRecognizers.remove(key) ?? TapGestureRecognizer();
+          recognizer.onTap = () => onOpenMentionUser(mentionMember.user);
+          nextMentionRecognizers[key] = recognizer;
+        }
         children.add(
           TextSpan(
-            text: text.substring(segment.start, segment.end),
-            style: mentionStyle,
+            text: text.substring(range.start, range.end),
+            style: isOwnMention ? ownMentionStyle : mentionStyle,
+            recognizer: recognizer,
           ),
         );
       }
@@ -2362,6 +2687,8 @@ class _MessageTextController extends TextEditingController {
     }
     _disposeStaleLinkRecognizers(staleRecognizers);
     _linkRecognizers = nextRecognizers;
+    _disposeStaleLinkRecognizers(staleMentionRecognizers);
+    _mentionRecognizers = nextMentionRecognizers;
     return TextSpan(style: baseStyle, children: children);
   }
 
@@ -2369,6 +2696,8 @@ class _MessageTextController extends TextEditingController {
   void dispose() {
     _disposeStaleLinkRecognizers(_linkRecognizers);
     _linkRecognizers = {};
+    _disposeStaleLinkRecognizers(_mentionRecognizers);
+    _mentionRecognizers = {};
     super.dispose();
   }
 
@@ -2377,6 +2706,13 @@ class _MessageTextController extends TextEditingController {
   ) {
     for (final recognizer in recognizers.values) {
       recognizer.dispose();
+    }
+  }
+
+  Iterable<String> get _knownMentionLabels sync* {
+    for (final mention in _mentions) {
+      final label = mention['label'] as String?;
+      if (label != null && label.trim().isNotEmpty) yield label;
     }
   }
 }
@@ -3250,6 +3586,11 @@ class MessageBubbleForTest extends StatelessWidget {
         imagePreviewActions:
             imagePreviewActions ?? ChatImagePreviewActions.disabled(),
         messageActions: messageActions,
+        mentionHighlighted: false,
+        currentUser: _avatarHoverCardTestCurrentUser,
+        currentUserMentionIdentity: _avatarHoverCardTestCurrentUser.toSummary(),
+        ownerUserId: null,
+        mentionMembers: const [],
       ),
     );
   }

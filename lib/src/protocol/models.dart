@@ -632,6 +632,8 @@ class RoomCard {
     this.isPinned = false,
     this.onlineMemberCount = 0,
     this.hasUnreadCount = false,
+    this.unreadMentionCount = 0,
+    this.hasUnreadMentionCount = false,
   });
 
   final String id;
@@ -651,10 +653,13 @@ class RoomCard {
   final LastMessagePreview? lastMessage;
   final int unreadCount;
   final bool hasUnreadCount;
+  final int unreadMentionCount;
+  final bool hasUnreadMentionCount;
   final DateTime updatedAt;
 
   factory RoomCard.fromJson(Map<String, Object?> json) {
     final hasUnreadCount = json.containsKey('unread_count');
+    final hasUnreadMentionCount = json.containsKey('unread_mention_count');
     return RoomCard(
       id: json['id']! as String,
       name: json['name']! as String,
@@ -685,6 +690,8 @@ class RoomCard {
           : LastMessagePreview.fromJson(_nullableMap(json['last_message'])!),
       unreadCount: json['unread_count'] as int? ?? 0,
       hasUnreadCount: hasUnreadCount,
+      unreadMentionCount: json['unread_mention_count'] as int? ?? 0,
+      hasUnreadMentionCount: hasUnreadMentionCount,
       updatedAt: DateTime.parse(json['updated_at']! as String),
     );
   }
@@ -699,7 +706,13 @@ class RoomCard {
   /// server-pushed public snapshot (room_updated) over an existing card: the
   /// snapshot carries no per-user fields, so the caller re-supplies the local
   /// [unreadCount] to keep it from being reset to 0.
-  RoomCard copyWith({int? unreadCount, bool? isPinned, bool? hasUnreadCount}) {
+  RoomCard copyWith({
+    int? unreadCount,
+    int? unreadMentionCount,
+    bool? isPinned,
+    bool? hasUnreadCount,
+    bool? hasUnreadMentionCount,
+  }) {
     return RoomCard(
       id: id,
       name: name,
@@ -718,6 +731,9 @@ class RoomCard {
       lastMessage: lastMessage,
       unreadCount: unreadCount ?? this.unreadCount,
       hasUnreadCount: hasUnreadCount ?? this.hasUnreadCount,
+      unreadMentionCount: unreadMentionCount ?? this.unreadMentionCount,
+      hasUnreadMentionCount:
+          hasUnreadMentionCount ?? this.hasUnreadMentionCount,
       updatedAt: updatedAt,
     );
   }
@@ -1688,6 +1704,7 @@ class Message {
     required String body,
     String type = 'text',
     List<MessageAttachment> attachments = const [],
+    List<Map<String, Object?>> mentions = const [],
   }) {
     return Message(
       id: clientMessageId,
@@ -1698,6 +1715,7 @@ class Message {
       body: body,
       createdAt: DateTime.now().toUtc(),
       attachments: attachments,
+      mentions: mentions,
       pending: true,
     );
   }

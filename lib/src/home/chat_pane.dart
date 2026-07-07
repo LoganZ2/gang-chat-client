@@ -82,6 +82,7 @@ class ChatPane extends StatelessWidget {
     required this.composerAttachments,
     required this.fileActionHighlighted,
     this.mentionOptions = const [],
+    this.mentionMembers = const [],
     this.mentionLoading = false,
     this.mentionSelectedIndex = 0,
     this.onSelectMention,
@@ -139,6 +140,7 @@ class ChatPane extends StatelessWidget {
   final List<composer_attachment.ComposerAttachmentView> composerAttachments;
   final bool fileActionHighlighted;
   final List<message_mentions.MessageMentionOption> mentionOptions;
+  final List<RoomMember> mentionMembers;
   final bool mentionLoading;
   final int mentionSelectedIndex;
   final ValueChanged<message_mentions.MessageMentionOption>? onSelectMention;
@@ -231,12 +233,18 @@ class ChatPane extends StatelessWidget {
               key: stageKey,
               roomId: room?.id ?? roomCard?.id,
               currentUser: currentUser,
+              currentUserRoomDisplayName: _currentUserRoomDisplayName(
+                currentUser,
+                room,
+              ),
+              currentUserRoomRole: room?.myMembership.role,
               ownerUserId: room?.createdBy?.id,
               roomReady: roomReady,
               loading: loading,
               error: error,
               messages: messages,
               newMessageCount: newMessageCount,
+              mentionMembers: mentionMembers,
               fileTransfers: fileTransfers,
               fileDownloads: fileDownloads,
               live: live,
@@ -298,6 +306,14 @@ class ChatPane extends StatelessWidget {
       ),
     );
   }
+}
+
+String _currentUserRoomDisplayName(CurrentUser currentUser, RoomDetail? room) {
+  final roomName = room?.personalProfile.displayName?.trim();
+  if (roomName != null && roomName.isNotEmpty) return roomName;
+  final displayName = currentUser.displayName.trim();
+  if (displayName.isNotEmpty) return displayName;
+  return currentUser.username;
 }
 
 String _roomTitle(RoomDetail? room, RoomCard? card) {

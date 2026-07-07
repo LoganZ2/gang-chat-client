@@ -90,6 +90,7 @@ class MessagesController {
     required String body,
     String type = 'text',
     List<MessageAttachment> attachments = const [],
+    List<Map<String, Object?>> mentions = const [],
   }) {
     final clientMessageId = newClientId('cmsg');
     return PendingMessage(
@@ -101,6 +102,7 @@ class MessagesController {
         type: type,
         body: body,
         attachments: attachments,
+        mentions: mentions,
       ),
     );
   }
@@ -248,6 +250,7 @@ class MessagesController {
     required String body,
     String type = 'text',
     List<MessageAttachment> attachments = const [],
+    List<Map<String, Object?>> mentions = const [],
   }) {
     return _client.sendMessage(
       roomId: roomId,
@@ -255,6 +258,7 @@ class MessagesController {
       body: body,
       type: type,
       attachments: attachments,
+      mentions: mentions,
       idempotencyKey: newUuid(),
     );
   }
@@ -265,6 +269,7 @@ class MessagesController {
     required String body,
     String type = 'text',
     List<MessageAttachment> attachments = const [],
+    List<Map<String, Object?>> mentions = const [],
     PendingMessageHandler? onPending,
   }) {
     final pending = createPendingMessage(
@@ -273,6 +278,7 @@ class MessagesController {
       body: body,
       type: type,
       attachments: attachments,
+      mentions: mentions,
     );
     onPending?.call(pending);
     return sendMessage(
@@ -281,6 +287,7 @@ class MessagesController {
       body: body,
       type: type,
       attachments: attachments,
+      mentions: mentions,
     );
   }
 

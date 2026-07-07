@@ -239,6 +239,9 @@ extension _HomeShellLayout on _HomeShellState {
       fileActionHighlighted:
           _pickingAttachments || _stagedAttachments.isNotEmpty,
       mentionOptions: _composerMentionOptions,
+      mentionMembers: _composerMentionMembersRoomId == _selectedServerId
+          ? _composerMentionMembers
+          : const [],
       mentionLoading:
           _composerMentionQuery != null && _loadingComposerMentionMembers,
       mentionSelectedIndex: _composerMentionSelectedIndex,

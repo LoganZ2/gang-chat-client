@@ -539,6 +539,8 @@ class LiveController {
       lastMessage: existing.lastMessage,
       unreadCount: existing.unreadCount,
       hasUnreadCount: existing.hasUnreadCount,
+      unreadMentionCount: existing.unreadMentionCount,
+      hasUnreadMentionCount: existing.hasUnreadMentionCount,
       updatedAt: existing.updatedAt,
     );
     return next;

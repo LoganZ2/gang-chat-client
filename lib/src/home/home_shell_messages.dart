@@ -919,6 +919,8 @@ extension _HomeShellMessages on _HomeShellState {
     });
 
     try {
+      final confirmedMentionLabels = _composerController
+          .confirmedMentionLabels();
       final sent = await _messagesController.sendComposedMessage(
         roomId: room.id,
         sender: _currentUser.toSummary().copyWith(
@@ -927,6 +929,15 @@ extension _HomeShellMessages on _HomeShellState {
         body: body,
         type: type,
         attachments: attachments,
+        mentions:
+            _composerMentionMembersRoomId == room.id &&
+                confirmedMentionLabels.isNotEmpty
+            ? message_mentions.messageMentionDescriptors(
+                text: body,
+                members: _composerMentionMembers,
+                confirmedLabels: confirmedMentionLabels,
+              )
+            : const [],
         onPending: (pending) {
           clientMessageId = pending.clientMessageId;
           if (!mounted) return;

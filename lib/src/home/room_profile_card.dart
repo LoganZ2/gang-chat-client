@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../app/room_display.dart' as room_display;
@@ -141,6 +143,33 @@ class UserHoverCard extends StatefulWidget {
   State<UserHoverCard> createState() => _UserHoverCardState();
 }
 
+Future<void> showUserProfileCardAtPosition(
+  BuildContext context, {
+  required Offset position,
+  required UserSummary user,
+  CurrentUser? currentUser,
+  UserProfileResolver? onResolveProfile,
+  RoomProfileResolver? onResolveRoomProfile,
+  ValueChanged<PublicRoom>? onEnterCommonRoom,
+  UserProfileActionBuilder? profileActionBuilder,
+  bool inLive = false,
+  bool showRoomRole = false,
+}) {
+  return Navigator.of(context, rootNavigator: true).push(
+    _UserProfileCardPopupRoute(
+      position: position,
+      user: user,
+      currentUser: currentUser,
+      onResolveProfile: onResolveProfile,
+      onResolveRoomProfile: onResolveRoomProfile,
+      onEnterCommonRoom: onEnterCommonRoom,
+      profileActionBuilder: profileActionBuilder,
+      inLive: inLive,
+      showRoomRole: showRoomRole,
+    ),
+  );
+}
+
 class _UserHoverCardState extends State<UserHoverCard> {
   UserSummary? _resolved;
   Future<void>? _resolveFuture;
@@ -223,6 +252,169 @@ class _UserHoverCardState extends State<UserHoverCard> {
         action: widget.profileActionBuilder?.call(_displayUser),
       ),
       child: widget.child,
+    );
+  }
+}
+
+class _UserProfileCardPopupRoute extends PopupRoute<void> {
+  _UserProfileCardPopupRoute({
+    required this.position,
+    required this.user,
+    required this.currentUser,
+    required this.onResolveProfile,
+    required this.onResolveRoomProfile,
+    required this.onEnterCommonRoom,
+    required this.profileActionBuilder,
+    required this.inLive,
+    required this.showRoomRole,
+  });
+
+  final Offset position;
+  final UserSummary user;
+  final CurrentUser? currentUser;
+  final UserProfileResolver? onResolveProfile;
+  final RoomProfileResolver? onResolveRoomProfile;
+  final ValueChanged<PublicRoom>? onEnterCommonRoom;
+  final UserProfileActionBuilder? profileActionBuilder;
+  final bool inLive;
+  final bool showRoomRole;
+
+  @override
+  Color? get barrierColor => Colors.transparent;
+
+  @override
+  bool get barrierDismissible => true;
+
+  @override
+  String? get barrierLabel => '关闭用户名片';
+
+  @override
+  Duration get transitionDuration => const Duration(milliseconds: 110);
+
+  @override
+  Widget buildPage(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+  ) {
+    return CustomSingleChildLayout(
+      delegate: _UserProfileCardPopupLayoutDelegate(position),
+      child: FadeTransition(
+        opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+        child: AnchoredPanel(
+          width: hoverCardDefaultWidth,
+          child: _ResolvingUserProfileCard(
+            user: user,
+            currentUser: currentUser,
+            onResolveProfile: onResolveProfile,
+            onResolveRoomProfile: onResolveRoomProfile,
+            onEnterCommonRoom: onEnterCommonRoom,
+            profileActionBuilder: profileActionBuilder,
+            inLive: inLive,
+            showRoomRole: showRoomRole,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UserProfileCardPopupLayoutDelegate extends SingleChildLayoutDelegate {
+  const _UserProfileCardPopupLayoutDelegate(this.anchor);
+
+  static const double _screenPadding = 8;
+  static const double _gap = 10;
+
+  final Offset anchor;
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) {
+    final maxX = math.max(
+      _screenPadding,
+      size.width - childSize.width - _screenPadding,
+    );
+    final x = anchor.dx.clamp(_screenPadding, maxX).toDouble();
+    var y = anchor.dy + _gap;
+    if (y + childSize.height + _screenPadding > size.height) {
+      y = anchor.dy - childSize.height - _gap;
+    }
+    final maxY = math.max(
+      _screenPadding,
+      size.height - childSize.height - _screenPadding,
+    );
+    y = y.clamp(_screenPadding, maxY).toDouble();
+    return Offset(x, y);
+  }
+
+  @override
+  bool shouldRelayout(_UserProfileCardPopupLayoutDelegate oldDelegate) {
+    return anchor != oldDelegate.anchor;
+  }
+}
+
+class _ResolvingUserProfileCard extends StatefulWidget {
+  const _ResolvingUserProfileCard({
+    required this.user,
+    required this.currentUser,
+    required this.onResolveProfile,
+    required this.onResolveRoomProfile,
+    required this.onEnterCommonRoom,
+    required this.profileActionBuilder,
+    required this.inLive,
+    required this.showRoomRole,
+  });
+
+  final UserSummary user;
+  final CurrentUser? currentUser;
+  final UserProfileResolver? onResolveProfile;
+  final RoomProfileResolver? onResolveRoomProfile;
+  final ValueChanged<PublicRoom>? onEnterCommonRoom;
+  final UserProfileActionBuilder? profileActionBuilder;
+  final bool inLive;
+  final bool showRoomRole;
+
+  @override
+  State<_ResolvingUserProfileCard> createState() =>
+      _ResolvingUserProfileCardState();
+}
+
+class _ResolvingUserProfileCardState extends State<_ResolvingUserProfileCard> {
+  UserSummary? _resolved;
+
+  UserSummary get _displayUser => _resolved ?? widget.user;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolve();
+  }
+
+  Future<void> _resolve() async {
+    final resolver = widget.onResolveProfile;
+    if (resolver == null) return;
+    final requestedUser = widget.user;
+    try {
+      final profile = await resolver(requestedUser);
+      if (!mounted || widget.user.id != requestedUser.id) return;
+      setState(() => _resolved = profile);
+    } catch (_) {
+      if (!mounted || widget.user.id != requestedUser.id) return;
+      setState(() => _resolved = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = _displayUser;
+    return _UserProfileCard(
+      user: user,
+      currentUser: widget.currentUser,
+      onResolveUserProfile: widget.onResolveProfile,
+      onResolveRoomProfile: widget.onResolveRoomProfile,
+      onEnterCommonRoom: widget.onEnterCommonRoom,
+      inLive: widget.inLive,
+      showRoomRole: widget.showRoomRole,
+      action: widget.profileActionBuilder?.call(user),
     );
   }
 }

@@ -23,16 +23,22 @@ class MessageMentionRange {
   final int end;
 }
 
+enum MessageMentionKind { user, everyone, admins }
+
 class MessageMentionOption {
   const MessageMentionOption({
-    required this.member,
+    this.member,
     required this.label,
     required this.roleLabel,
+    this.kind = MessageMentionKind.user,
   });
 
-  final RoomMember member;
+  final RoomMember? member;
   final String label;
   final String roleLabel;
+  final MessageMentionKind kind;
+
+  bool get isUser => kind == MessageMentionKind.user && member != null;
 }
 
 MessageMentionQuery? activeMessageMentionQuery({
@@ -60,8 +66,11 @@ MessageMentionQuery? activeMessageMentionQuery({
   return MessageMentionQuery(start: atIndex, end: cursorOffset, query: query);
 }
 
-List<MessageMentionRange> messageMentionRanges(String text) {
-  final ranges = <MessageMentionRange>[];
+List<MessageMentionRange> messageMentionRanges(
+  String text, {
+  Iterable<String> labels = const [],
+}) {
+  final ranges = _messageMentionRangesForKnownLabels(text, labels);
   var index = 0;
   while (index < text.length) {
     final atIndex = text.indexOf('@', index);
@@ -75,11 +84,13 @@ List<MessageMentionRange> messageMentionRanges(String text) {
       index = end <= atIndex ? atIndex + 1 : end;
       continue;
     }
-    if (end > atIndex + 1) {
-      ranges.add(MessageMentionRange(start: atIndex, end: end));
+    final range = MessageMentionRange(start: atIndex, end: end);
+    if (end > atIndex + 1 && !_overlapsAnyMentionRange(range, ranges)) {
+      ranges.add(range);
     }
     index = end <= atIndex ? atIndex + 1 : end;
   }
+  ranges.sort((a, b) => a.start.compareTo(b.start));
   return ranges;
 }
 
@@ -91,6 +102,10 @@ List<MessageMentionOption> messageMentionOptions({
   int limit = defaultMessageMentionOptionLimit,
 }) {
   final normalizedQuery = query.trim().toLowerCase();
+  final specialOptions = _specialMentionOptions(normalizedQuery);
+  if (specialOptions.length >= limit) {
+    return specialOptions.take(limit).toList();
+  }
   final ranked = <_RankedMentionOption>[];
   for (final member in members) {
     if (excludedUserId != null && member.user.id == excludedUserId) {
@@ -125,11 +140,272 @@ List<MessageMentionOption> messageMentionOptions({
     if (roleCompare != 0) return roleCompare;
     return a.option.label.toLowerCase().compareTo(b.option.label.toLowerCase());
   });
-  return ranked.take(limit).map((entry) => entry.option).toList();
+  return [
+    ...specialOptions,
+    ...ranked
+        .take((limit - specialOptions.length).clamp(0, limit).toInt())
+        .map((entry) => entry.option),
+  ];
 }
 
 String messageMentionInsertText(MessageMentionOption option) =>
     '@${option.label} ';
+
+List<Map<String, Object?>> messageMentionDescriptors({
+  required String text,
+  required Iterable<RoomMember> members,
+  Iterable<String> confirmedLabels = const [],
+}) {
+  final out = <Map<String, Object?>>[];
+  final seen = <String>{};
+  final labels = confirmedLabels
+      .map((label) => label.trim())
+      .where((label) => label.isNotEmpty)
+      .toList(growable: false);
+  if (labels.isNotEmpty) {
+    for (final label in labels) {
+      _addMentionDescriptorForLabel(
+        out: out,
+        seen: seen,
+        label: label,
+        members: members,
+      );
+    }
+    return out;
+  }
+  for (final range in messageMentionRanges(text)) {
+    _addMentionDescriptorForLabel(
+      out: out,
+      seen: seen,
+      label: text.substring(range.start + 1, range.end),
+      members: members,
+    );
+  }
+  return out;
+}
+
+void _addMentionDescriptorForLabel({
+  required List<Map<String, Object?>> out,
+  required Set<String> seen,
+  required String label,
+  required Iterable<RoomMember> members,
+}) {
+  final kind = messageMentionKindForLabel(label);
+  switch (kind) {
+    case MessageMentionKind.everyone:
+      if (seen.add('kind:all')) out.add({'type': 'all', 'label': label});
+      break;
+    case MessageMentionKind.admins:
+      if (seen.add('kind:admins')) {
+        out.add({'type': 'admins', 'label': label});
+      }
+      break;
+    case MessageMentionKind.user:
+      final member = resolveMessageMentionMember(
+        label: label,
+        members: members,
+      );
+      if (member != null && seen.add('user:${member.user.id}')) {
+        out.add({'type': 'user', 'user_id': member.user.id, 'label': label});
+      }
+      break;
+  }
+}
+
+bool messageMentionsUser({
+  required String text,
+  List<Map<String, Object?>> mentions = const [],
+  required UserSummary user,
+  required String? ownerUserId,
+}) {
+  for (final mention in mentions) {
+    final type = (mention['type'] as String? ?? '').trim().toLowerCase();
+    switch (type) {
+      case 'all':
+        return true;
+      case 'admins':
+        if (_userIsAdminLike(user, ownerUserId: ownerUserId)) return true;
+        break;
+      case 'user':
+        final userId = mention['user_id'] as String?;
+        final uid = mention['uid'] as String?;
+        if (userId != null && userId == user.id) return true;
+        if (uid != null && uid == user.uid) return true;
+        break;
+    }
+  }
+  return messageMentionRanges(text).any((range) {
+    final label = text.substring(range.start + 1, range.end);
+    return messageMentionLabelTargetsUser(
+      label: label,
+      user: user,
+      ownerUserId: ownerUserId,
+    );
+  });
+}
+
+bool messageMentionLabelTargetsUser({
+  required String label,
+  required UserSummary user,
+  required String? ownerUserId,
+}) {
+  final kind = messageMentionKindForLabel(label);
+  switch (kind) {
+    case MessageMentionKind.everyone:
+      return true;
+    case MessageMentionKind.admins:
+      return _userIsAdminLike(user, ownerUserId: ownerUserId);
+    case MessageMentionKind.user:
+      final normalized = _normalizeMentionLabel(label);
+      return _mentionLabelsForUser(
+        user,
+      ).map(_normalizeMentionLabel).any((candidate) => candidate == normalized);
+  }
+}
+
+MessageMentionKind messageMentionKindForLabel(String label) {
+  final normalized = _normalizeMentionLabel(label);
+  if (normalized == _normalizeMentionLabel(kMentionEveryoneLabel)) {
+    return MessageMentionKind.everyone;
+  }
+  if (normalized == _normalizeMentionLabel(kMentionAdminsLabel)) {
+    return MessageMentionKind.admins;
+  }
+  return MessageMentionKind.user;
+}
+
+RoomMember? resolveMessageMentionMember({
+  required String label,
+  required Iterable<RoomMember> members,
+}) {
+  final normalized = _normalizeMentionLabel(label);
+  for (final member in members) {
+    final labels = _mentionLabelsForMember(member).map(_normalizeMentionLabel);
+    if (labels.any((candidate) => candidate == normalized)) return member;
+  }
+  return null;
+}
+
+bool isMessageMentionRangeForUser({
+  required String text,
+  required MessageMentionRange range,
+  List<Map<String, Object?>> mentions = const [],
+  required UserSummary user,
+  required String? ownerUserId,
+}) {
+  if (range.start < 0 || range.end > text.length || range.start >= range.end) {
+    return false;
+  }
+  final label = text.substring(range.start + 1, range.end);
+  for (final mention in mentions) {
+    final mentionLabel = mention['label'] as String?;
+    if (mentionLabel == null ||
+        _normalizeMentionLabel(mentionLabel) != _normalizeMentionLabel(label)) {
+      continue;
+    }
+    final type = (mention['type'] as String? ?? '').trim().toLowerCase();
+    switch (type) {
+      case 'all':
+        return true;
+      case 'admins':
+        if (_userIsAdminLike(user, ownerUserId: ownerUserId)) return true;
+        break;
+      case 'user':
+        final userId = mention['user_id'] as String?;
+        final uid = mention['uid'] as String?;
+        if (userId != null && userId == user.id) return true;
+        if (uid != null && uid == user.uid) return true;
+        break;
+    }
+  }
+  return messageMentionLabelTargetsUser(
+    label: label,
+    user: user,
+    ownerUserId: ownerUserId,
+  );
+}
+
+const kMentionEveryoneLabel = '所有人';
+const kMentionAdminsLabel = '管理员';
+
+List<MessageMentionOption> _specialMentionOptions(String normalizedQuery) {
+  final options = <MessageMentionOption>[];
+  void addIfMatches({required String label, required MessageMentionKind kind}) {
+    if (!_specialMentionMatches(label, normalizedQuery)) return;
+    options.add(MessageMentionOption(label: label, roleLabel: '', kind: kind));
+  }
+
+  addIfMatches(label: kMentionEveryoneLabel, kind: MessageMentionKind.everyone);
+  addIfMatches(label: kMentionAdminsLabel, kind: MessageMentionKind.admins);
+  return options;
+}
+
+bool _specialMentionMatches(String label, String normalizedQuery) {
+  if (normalizedQuery.isEmpty) return true;
+  final normalizedLabel = _normalizeMentionLabel(label);
+  if (normalizedLabel.contains(normalizedQuery)) return true;
+  if (label == kMentionEveryoneLabel) {
+    return 'all'.contains(normalizedQuery) ||
+        'everyone'.contains(normalizedQuery);
+  }
+  if (label == kMentionAdminsLabel) {
+    return 'admin'.contains(normalizedQuery) ||
+        'admins'.contains(normalizedQuery);
+  }
+  return false;
+}
+
+List<MessageMentionRange> _messageMentionRangesForKnownLabels(
+  String text,
+  Iterable<String> labels,
+) {
+  final knownLabels =
+      labels
+          .map((label) => label.trim())
+          .where((label) => label.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort((a, b) => b.length.compareTo(a.length));
+  if (knownLabels.isEmpty) return <MessageMentionRange>[];
+
+  final ranges = <MessageMentionRange>[];
+  var index = 0;
+  while (index < text.length) {
+    final atIndex = text.indexOf('@', index);
+    if (atIndex < 0) break;
+    MessageMentionRange? matched;
+    for (final label in knownLabels) {
+      final end = atIndex + 1 + label.length;
+      if (end > text.length) continue;
+      if (text.substring(atIndex + 1, end) != label) continue;
+      if (!_isKnownMentionBoundary(text, end)) continue;
+      matched = MessageMentionRange(start: atIndex, end: end);
+      break;
+    }
+    if (matched != null) {
+      ranges.add(matched);
+      index = matched.end;
+    } else {
+      index = atIndex + 1;
+    }
+  }
+  return ranges;
+}
+
+bool _overlapsAnyMentionRange(
+  MessageMentionRange range,
+  List<MessageMentionRange> ranges,
+) {
+  for (final existing in ranges) {
+    if (range.start < existing.end && range.end > existing.start) return true;
+  }
+  return false;
+}
+
+bool _isKnownMentionBoundary(String text, int end) {
+  if (end >= text.length) return true;
+  return _isMentionTerminator(text.codeUnitAt(end));
+}
 
 int? _mentionSearchRank(
   RoomMember member,
@@ -162,6 +438,57 @@ int? _mentionSearchRank(
     }
   }
   return bestRank == 1 << 30 ? null : bestRank;
+}
+
+Iterable<String> _mentionLabelsForMember(RoomMember member) sync* {
+  final label = member_filter.roomMemberDisplayName(member).trim();
+  if (label.isNotEmpty) yield label;
+  final values = [
+    member.roomDisplayName,
+    member.remarkName,
+    member.user.roomDisplayName,
+    member.user.displayName,
+    member.user.username,
+    member.user.uid,
+    member.user.id,
+  ];
+  for (final value in values) {
+    final text = value?.trim();
+    if (text != null && text.isNotEmpty) yield text;
+  }
+}
+
+Iterable<String> _mentionLabelsForUser(UserSummary user) sync* {
+  final values = [
+    user.roomDisplayName,
+    user.displayName,
+    user.username,
+    user.uid,
+    user.id,
+  ];
+  for (final value in values) {
+    final text = value?.trim();
+    if (text != null && text.isNotEmpty) yield text;
+  }
+}
+
+String _normalizeMentionLabel(String value) {
+  return value.trim().toLowerCase();
+}
+
+bool _userIsAdminLike(UserSummary user, {required String? ownerUserId}) {
+  if (user.isSuperuser || (ownerUserId != null && user.id == ownerUserId)) {
+    return true;
+  }
+  switch ((user.roomRole ?? '').toLowerCase()) {
+    case 'owner':
+    case 'creator':
+    case 'admin':
+    case 'administrator':
+      return true;
+    default:
+      return false;
+  }
 }
 
 bool _isMentionTerminator(int codeUnit) =>

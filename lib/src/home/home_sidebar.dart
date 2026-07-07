@@ -508,6 +508,8 @@ class _ServerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final lastMessageTime = room_display.roomSidebarLastMessageTime(server);
     final draftPreview = room_display.roomDraftPreview(draft);
+    final subtitle = room_display.roomSidebarSubtitle(server);
+    final hasUnreadMention = server.unreadMentionCount > 0;
     return PressableSurface(
       key: ValueKey('home-sidebar-room-${server.id}'),
       width: double.infinity,
@@ -575,17 +577,44 @@ class _ServerCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     if (draftPreview == null)
-                      HighlightedText(
-                        text: room_display.roomSidebarSubtitle(server),
-                        query: searchQuery,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: UiTypography.label.copyWith(
-                          color: selected
-                              ? UiColors.textSecondary
-                              : UiColors.textMuted,
-                        ),
-                      )
+                      hasUnreadMention
+                          ? Text.rich(
+                              TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: '[@我] ',
+                                    style: UiTypography.label.copyWith(
+                                      color: UiColors.accent,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: subtitle,
+                                    style: UiTypography.label.copyWith(
+                                      color: selected
+                                          ? UiColors.textSecondary
+                                          : UiColors.textMuted,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              key: ValueKey(
+                                'home-sidebar-room-mention-${server.id}',
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            )
+                          : HighlightedText(
+                              text: subtitle,
+                              query: searchQuery,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: UiTypography.label.copyWith(
+                                color: selected
+                                    ? UiColors.textSecondary
+                                    : UiColors.textMuted,
+                              ),
+                            )
                     else
                       Text.rich(
                         TextSpan(

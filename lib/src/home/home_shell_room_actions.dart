@@ -134,6 +134,7 @@ extension _HomeShellRoomActions on _HomeShellState {
         _roomError = null;
       });
       unawaited(_markRoomReadFromMessages(server.id, snapshot.messages));
+      unawaited(_ensureComposerMentionMembers(server.id));
       unawaited(_refreshSelectedJoinRequestBadge(snapshot.detail));
       unawaited(_loadMusicBox(server.id));
     } catch (error) {
