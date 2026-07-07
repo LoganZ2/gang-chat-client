@@ -1340,6 +1340,8 @@ class RoomEventNotification {
     this.actorExists = true,
     this.fromRole,
     this.toRole,
+    this.messageId,
+    this.messagePreview,
     this.readAt,
   });
 
@@ -1352,6 +1354,8 @@ class RoomEventNotification {
   final bool actorExists;
   final String? fromRole;
   final String? toRole;
+  final String? messageId;
+  final String? messagePreview;
   final DateTime? readAt;
 
   bool get isUnread => readAt == null;
@@ -1367,6 +1371,8 @@ class RoomEventNotification {
       actorExists: actorExists,
       fromRole: fromRole,
       toRole: toRole,
+      messageId: messageId,
+      messagePreview: messagePreview,
       readAt: readAt,
     );
   }
@@ -1386,6 +1392,8 @@ class RoomEventNotification {
       actorExists: json['actor_exists'] as bool? ?? actor != null,
       fromRole: _stringFromJson(json, const ['from_role']),
       toRole: _stringFromJson(json, const ['to_role']),
+      messageId: _stringFromJson(json, const ['message_id']),
+      messagePreview: _stringFromJson(json, const ['message_preview']),
       readAt: _parseDateTime(json['read_at']),
     );
   }

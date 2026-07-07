@@ -403,6 +403,18 @@ void main() {
       type: kRoomEventNotificationMemberRemoved,
       createdAt: DateTime.utc(2026, 6, 8, 8),
     );
+    final mentioned = _roomEvent(
+      'mentioned',
+      type: kRoomEventNotificationMentioned,
+      roomName: 'Mention Room',
+      actor: _user(
+        'actor_mentioned',
+        displayName: 'Casey Admin',
+        roomRole: 'admin',
+      ),
+      messageId: 'msg-mentioned',
+      messagePreview: '@Morgan Admin hello',
+    );
 
     final roomEventsOnly = roomNotificationsForView(
       invites: [_invite('invite_1')],
@@ -438,6 +450,16 @@ void main() {
         filter: RoomNotificationFilter.all,
       ).single.roomEvent,
       promoted,
+    );
+    expect(
+      roomNotificationsForView(
+        invites: const [],
+        applications: const [],
+        roomEvents: [mentioned],
+        query: '@Morgan',
+        filter: RoomNotificationFilter.all,
+      ).single.roomEvent,
+      mentioned,
     );
     expect(
       roomNotificationsForView(
@@ -685,6 +707,8 @@ RoomEventNotification _roomEvent(
   bool roomExists = true,
   String fromRole = 'owner',
   String toRole = 'admin',
+  String? messageId,
+  String? messagePreview,
   DateTime? readAt,
 }) {
   return RoomEventNotification(
@@ -710,6 +734,8 @@ RoomEventNotification _roomEvent(
     roomExists: roomExists,
     fromRole: fromRole,
     toRole: toRole,
+    messageId: messageId,
+    messagePreview: messagePreview,
     readAt: readAt,
   );
 }

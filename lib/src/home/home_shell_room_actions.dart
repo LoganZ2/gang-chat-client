@@ -90,11 +90,25 @@ extension _HomeShellRoomActions on _HomeShellState {
     }
   }
 
-  void _selectServer(RoomCard server, {required bool openContent}) {
-    unawaited(_openRoom(server, openContent: openContent));
+  void _selectServer(
+    RoomCard server, {
+    required bool openContent,
+    String? focusMessageId,
+  }) {
+    unawaited(
+      _openRoom(
+        server,
+        openContent: openContent,
+        focusMessageId: focusMessageId,
+      ),
+    );
   }
 
-  Future<void> _openRoom(RoomCard server, {required bool openContent}) async {
+  Future<void> _openRoom(
+    RoomCard server, {
+    required bool openContent,
+    String? focusMessageId,
+  }) async {
     if (_loadingRoom && _selectedServerId == server.id) return;
     _storeSelectedComposerDraft();
 
@@ -110,6 +124,7 @@ extension _HomeShellRoomActions on _HomeShellState {
       _selectedRoom = null;
       _live = null;
       _messages = const [];
+      _focusedMessageId = null;
       _fileTransfers = const {};
       _fileDownloads = const {};
       _membersInitialSearchQuery = '';
@@ -126,14 +141,24 @@ extension _HomeShellRoomActions on _HomeShellState {
     try {
       final snapshot = await _roomsController.openRoom(server.id);
       if (!mounted || _selectedServerId != server.id) return;
+      var messages = snapshot.messages;
+      if (focusMessageId != null &&
+          !messages.any((message) => message.id == focusMessageId)) {
+        messages = await _messagesController.loadMessagesUntil(
+          roomId: server.id,
+          messageId: focusMessageId,
+        );
+        if (!mounted || _selectedServerId != server.id) return;
+      }
       _setHomeState(() {
         _selectedRoom = snapshot.detail;
         _live = snapshot.live;
-        _messages = snapshot.messages;
+        _messages = messages;
+        _focusedMessageId = focusMessageId;
         _loadingRoom = false;
         _roomError = null;
       });
-      unawaited(_markRoomReadFromMessages(server.id, snapshot.messages));
+      unawaited(_markRoomReadFromMessages(server.id, messages));
       unawaited(_ensureComposerMentionMembers(server.id));
       unawaited(_refreshSelectedJoinRequestBadge(snapshot.detail));
       unawaited(_loadMusicBox(server.id));

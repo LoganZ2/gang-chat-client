@@ -7079,6 +7079,8 @@ Map<String, Object?> _roomEventNotificationJson({
     'actor_exists': true,
     'from_role': 'member',
     'to_role': 'admin',
+    'message_id': 'msg-room-event-alpha',
+    'message_preview': '@Morgan Admin hello',
     'room': {
       ..._roomCardJson(
         id: 'server-alpha',

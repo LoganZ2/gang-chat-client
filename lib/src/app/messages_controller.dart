@@ -222,6 +222,30 @@ class MessagesController {
     return page.messages;
   }
 
+  Future<List<Message>> loadMessagesUntil({
+    required String roomId,
+    required String messageId,
+    int pageLimit = 100,
+    int maxPages = 20,
+  }) async {
+    final messages = <Message>[];
+    String? before;
+    for (var pageIndex = 0; pageIndex < maxPages; pageIndex++) {
+      final page = await _client.listMessages(
+        roomId: roomId,
+        limit: pageLimit,
+        before: before,
+      );
+      messages.insertAll(0, page.messages);
+      if (messages.any((message) => message.id == messageId)) {
+        return messages;
+      }
+      if (!page.hasMore || page.nextBefore == null) return messages;
+      before = page.nextBefore;
+    }
+    return messages;
+  }
+
   Future<int> markRead({
     required String roomId,
     required String lastReadMessageId,

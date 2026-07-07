@@ -1054,6 +1054,8 @@ void main() {
       expect(notification.id, 'rnot_1');
       expect(notification.type, 'role_promoted');
       expect(notification.toRole, 'admin');
+      expect(notification.messageId, 'msg_mention_1');
+      expect(notification.messagePreview, '@Alice hello');
       expect(notification.room.name, 'Invite Room');
       expect(notification.room.description, 'Invite room bio');
       expect(notification.actor?.roomDisplayName, 'Alice in Invite Room');
@@ -2640,6 +2642,8 @@ Map<String, Object?> _roomEventNotificationJson({String? readAt}) {
     'actor_exists': true,
     'from_role': 'member',
     'to_role': 'admin',
+    'message_id': 'msg_mention_1',
+    'message_preview': '@Alice hello',
     'room': _roomInviteJson(roomJoined: true)['room'],
     'actor': {
       'id': 'user_1',

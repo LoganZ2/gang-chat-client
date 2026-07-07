@@ -81,6 +81,7 @@ extension _HomeShellLayout on _HomeShellState {
         onResolveRoomProfile: _resolveRoomProfile,
         onResolveRoomUserProfile: _resolveRoomUserProfile,
         onOpenRoom: _openNotificationRoom,
+        onOpenRoomEvent: _openNotificationRoomEvent,
       );
     }
 
@@ -199,6 +200,7 @@ extension _HomeShellLayout on _HomeShellState {
       live: _live,
       messages: visibleMessages,
       newMessageCount: _visibleNewMessageCount(visibleMessages),
+      focusMessageId: _focusedMessageId,
       fileTransfers: _fileTransfers,
       fileDownloads: _fileDownloads,
       downloadActions: ChatFileDownloadActions(

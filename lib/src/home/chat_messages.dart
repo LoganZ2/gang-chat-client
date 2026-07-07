@@ -135,6 +135,7 @@ class _MessageStage extends StatefulWidget {
     required this.error,
     required this.messages,
     required this.newMessageCount,
+    required this.focusMessageId,
     required this.mentionMembers,
     required this.fileTransfers,
     required this.fileDownloads,
@@ -163,6 +164,7 @@ class _MessageStage extends StatefulWidget {
   final String? error;
   final List<Message> messages;
   final int newMessageCount;
+  final String? focusMessageId;
   final List<RoomMember> mentionMembers;
   final Map<String, FileTransferState> fileTransfers;
   final Map<String, FileTransferState> fileDownloads;
@@ -205,7 +207,10 @@ class _MessageStageState extends State<_MessageStage> {
   final Map<String, GlobalKey> _messageRowKeys = {};
   final Set<String> _viewedUnreadMentionClientIds = {};
   String? _highlightedMentionClientId;
+  String? _highlightedMessageId;
+  String? _handledFocusMessageId;
   Timer? _highlightedMentionTimer;
+  Timer? _highlightedMessageTimer;
   double _underflowBottomSpacer = 0;
   bool _underflowAlignmentScheduled = false;
   bool _newMessageJumpVisibilityScheduled = false;
@@ -234,6 +239,7 @@ class _MessageStageState extends State<_MessageStage> {
     if (!restoring) {
       _scrollToBottom(animated: false);
     }
+    _scheduleFocusedMessageJump(widget.focusMessageId);
   }
 
   @override
@@ -246,8 +252,12 @@ class _MessageStageState extends State<_MessageStage> {
       _newMessageJumpDismissed = false;
       _viewedUnreadMentionClientIds.clear();
       _highlightedMentionClientId = null;
+      _highlightedMessageId = null;
+      _handledFocusMessageId = null;
       _highlightedMentionTimer?.cancel();
       _highlightedMentionTimer = null;
+      _highlightedMessageTimer?.cancel();
+      _highlightedMessageTimer = null;
       _incomingUnreadWaitingForUserScroll = false;
       _restoringIncomingViewport = false;
       _clearRetainedNewMessageAnchor();
@@ -263,6 +273,10 @@ class _MessageStageState extends State<_MessageStage> {
         _scrollToBottom(animated: false);
       }
       return;
+    }
+    if (oldWidget.focusMessageId != widget.focusMessageId ||
+        oldWidget.messages.length != widget.messages.length) {
+      _scheduleFocusedMessageJump(widget.focusMessageId);
     }
     final addedMessages = _addedMessagesSince(oldWidget);
     final preserveIncomingViewport = _shouldPreserveViewportForIncoming(
@@ -311,6 +325,7 @@ class _MessageStageState extends State<_MessageStage> {
   void dispose() {
     _rememberScrollPosition();
     _highlightedMentionTimer?.cancel();
+    _highlightedMessageTimer?.cancel();
     _scrollController.removeListener(_handleScrollChanged);
     _scrollController.dispose();
     super.dispose();
@@ -901,6 +916,32 @@ class _MessageStageState extends State<_MessageStage> {
     );
   }
 
+  void _scheduleFocusedMessageJump(String? messageId) {
+    if (messageId == null || messageId.isEmpty) return;
+    if (_handledFocusMessageId == messageId) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Message? message;
+      for (final item in widget.messages) {
+        if (item.id == messageId) {
+          message = item;
+          break;
+        }
+      }
+      if (message == null) return;
+      final focusedMessage = message;
+      final focusedMessageId = focusedMessage.id;
+      _handledFocusMessageId = focusedMessageId;
+      setState(() => _highlightedMessageId = focusedMessageId);
+      _ensureMessageVisible(focusedMessage);
+      _highlightedMessageTimer?.cancel();
+      _highlightedMessageTimer = Timer(const Duration(milliseconds: 2600), () {
+        if (!mounted || _highlightedMessageId != focusedMessageId) return;
+        setState(() => _highlightedMessageId = null);
+      });
+    });
+  }
+
   bool _messageTargetsCurrentUser(Message message) {
     if (message.pending || message.isRemoved) return false;
     if (message.sender.id == widget.currentUser.id) return false;
@@ -1062,7 +1103,8 @@ class _MessageStageState extends State<_MessageStage> {
                 imagePreviewActions: widget.imagePreviewActions,
                 messageActions: widget.messageActions,
                 mentionHighlighted:
-                    message.clientMessageId == _highlightedMentionClientId,
+                    message.clientMessageId == _highlightedMentionClientId ||
+                    message.id == _highlightedMessageId,
                 mentionTargetsCurrentUser: _messageTargetsCurrentUser(message),
                 inLive: _userInLive(message.sender.id),
                 onResolveSenderProfile: widget.onResolveSenderProfile,

@@ -11,6 +11,8 @@ typedef RoomInviteReviewCallback =
     Future<void> Function(RoomInvite invite, bool accept);
 typedef RoomApplicationWithdrawCallback =
     Future<void> Function(RoomApplication application);
+typedef RoomEventOpenCallback =
+    void Function(RoomEventNotification notification);
 
 class HomeNotificationsPane extends StatefulWidget {
   const HomeNotificationsPane({
@@ -28,6 +30,7 @@ class HomeNotificationsPane extends StatefulWidget {
     required this.onWithdrawApplication,
     required this.currentUser,
     required this.onOpenRoom,
+    required this.onOpenRoomEvent,
     this.onResolveRoomProfile,
     this.onResolveRoomUserProfile,
   });
@@ -45,6 +48,7 @@ class HomeNotificationsPane extends StatefulWidget {
   final RoomInviteReviewCallback onReviewInvite;
   final RoomApplicationWithdrawCallback onWithdrawApplication;
   final ValueChanged<PublicRoom> onOpenRoom;
+  final RoomEventOpenCallback onOpenRoomEvent;
   final RoomProfileResolver? onResolveRoomProfile;
   final Future<UserSummary> Function(String roomId, UserSummary user)?
   onResolveRoomUserProfile;
@@ -156,6 +160,7 @@ class _HomeNotificationsPaneState extends State<HomeNotificationsPane> {
         onWithdrawApplication: widget.onWithdrawApplication,
         currentUser: widget.currentUser,
         onOpenRoom: widget.onOpenRoom,
+        onOpenRoomEvent: widget.onOpenRoomEvent,
         onResolveRoomProfile: widget.onResolveRoomProfile,
         onResolveRoomUserProfile: widget.onResolveRoomUserProfile,
       ),
@@ -178,6 +183,7 @@ class _NotificationsBody extends StatelessWidget {
     required this.onWithdrawApplication,
     required this.currentUser,
     required this.onOpenRoom,
+    required this.onOpenRoomEvent,
     required this.onResolveRoomProfile,
     required this.onResolveRoomUserProfile,
   });
@@ -195,6 +201,7 @@ class _NotificationsBody extends StatelessWidget {
   final RoomInviteReviewCallback onReviewInvite;
   final RoomApplicationWithdrawCallback onWithdrawApplication;
   final ValueChanged<PublicRoom> onOpenRoom;
+  final RoomEventOpenCallback onOpenRoomEvent;
   final RoomProfileResolver? onResolveRoomProfile;
   final Future<UserSummary> Function(String roomId, UserSummary user)?
   onResolveRoomUserProfile;
@@ -279,6 +286,7 @@ class _NotificationsBody extends StatelessWidget {
             query: query,
             currentUser: currentUser,
             onOpenRoom: onOpenRoom,
+            onOpenRoomEvent: onOpenRoomEvent,
             onResolveRoomProfile: onResolveRoomProfile,
             onResolveRoomUserProfile: onResolveRoomUserProfile,
           ),
@@ -747,6 +755,7 @@ class _RoomEventNotificationRow extends StatelessWidget {
     required this.query,
     required this.currentUser,
     required this.onOpenRoom,
+    required this.onOpenRoomEvent,
     required this.onResolveRoomProfile,
     required this.onResolveRoomUserProfile,
   });
@@ -755,6 +764,7 @@ class _RoomEventNotificationRow extends StatelessWidget {
   final String query;
   final CurrentUser currentUser;
   final ValueChanged<PublicRoom> onOpenRoom;
+  final RoomEventOpenCallback onOpenRoomEvent;
   final RoomProfileResolver? onResolveRoomProfile;
   final Future<UserSummary> Function(String roomId, UserSummary user)?
   onResolveRoomUserProfile;
@@ -791,7 +801,16 @@ class _RoomEventNotificationRow extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(child: _buildContent()),
               const SizedBox(width: 12),
-              const SizedBox(width: 88),
+              SizedBox(
+                width: 88,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: _RoomEventJumpAction(
+                    notification: notification,
+                    onOpenRoomEvent: onOpenRoomEvent,
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -884,6 +903,49 @@ class _RoomEventNotificationRow extends StatelessWidget {
             ),
           ],
         );
+      case kRoomEventNotificationMentioned:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                _NotificationText(text: '您在', query: query),
+                const SizedBox(width: 8),
+                Flexible(flex: 4, child: _roomTarget()),
+                const SizedBox(width: 8),
+                if (actor != null) ...[
+                  _NotificationText(text: '中被', query: query),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    flex: 4,
+                    child: _InlineUserTarget(
+                      user: actor,
+                      roomId: notification.room.id,
+                      targetId: notification.id,
+                      query: query,
+                      userExists: notification.actorExists,
+                      currentUser: currentUser,
+                      onResolveRoomProfile: onResolveRoomProfile,
+                      onResolveRoomUserProfile: onResolveRoomUserProfile,
+                      onOpenRoom: onOpenRoom,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _NotificationText(text: '提及', query: query),
+                ] else
+                  _NotificationText(text: '中被提及', query: query),
+              ],
+            ),
+            if ((notification.messagePreview ?? '').trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              _RoomEventMessagePreview(
+                text: notification.messagePreview!.trim(),
+                query: query,
+              ),
+            ],
+          ],
+        );
       default:
         return Row(
           children: [
@@ -907,6 +969,59 @@ class _RoomEventNotificationRow extends StatelessWidget {
       onResolveRoomProfile: onResolveRoomProfile,
       onResolveRoomUserProfile: onResolveRoomUserProfile,
       onOpenRoom: onOpenRoom,
+    );
+  }
+}
+
+class _RoomEventJumpAction extends StatelessWidget {
+  const _RoomEventJumpAction({
+    required this.notification,
+    required this.onOpenRoomEvent,
+  });
+
+  final RoomEventNotification notification;
+  final RoomEventOpenCallback onOpenRoomEvent;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = notification.roomExists && notification.room.joined;
+    return ButtonIcon(
+      tooltip: notification.messageId == null ? '进入房间' : '跳转到消息',
+      icon: const Icon(Icons.arrow_forward_rounded),
+      tone: ButtonTone.primary,
+      onPressed: enabled ? () => onOpenRoomEvent(notification) : null,
+      size: 34,
+    );
+  }
+}
+
+class _RoomEventMessagePreview extends StatelessWidget {
+  const _RoomEventMessagePreview({required this.text, required this.query});
+
+  final String text;
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: UiColors.surfacePressed,
+        borderRadius: BorderRadius.circular(UiRadii.md),
+        border: Border.all(color: UiColors.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        child: HighlightedText(
+          text: text,
+          query: query,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: UiTypography.label.copyWith(
+            color: UiColors.textSecondary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
     );
   }
 }

@@ -14,6 +14,7 @@ const kRoomEventNotificationMemberRemoved = 'member_removed';
 const kRoomEventNotificationRolePromoted = 'role_promoted';
 const kRoomEventNotificationRoleDemoted = 'role_demoted';
 const kRoomEventNotificationCreatorTransferDemoted = 'creator_transfer_demoted';
+const kRoomEventNotificationMentioned = 'mentioned';
 
 const missingRoomNotificationRoomLabel = '房间不存在';
 const missingRoomNotificationRoomAvatarLabel = '';
@@ -560,6 +561,10 @@ String _roomEventNotificationSearchText(RoomEventNotification notification) {
       break;
     case kRoomEventNotificationCreatorTransferDemoted:
       _addSearchValue(values, '转让创建者 降职为 creator transferred');
+      break;
+    case kRoomEventNotificationMentioned:
+      _addSearchValue(values, '提及 @ mentioned');
+      _addSearchValue(values, notification.messagePreview);
       break;
   }
   return values.join('\n');

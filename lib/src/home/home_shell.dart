@@ -154,6 +154,7 @@ class _HomeShellState extends State<HomeShell> {
   int _composerMentionMembersSerial = 0;
   final Set<String> _locallyDeletedMessageKeys = {};
   int _selectedRoomNewMessageCount = 0;
+  String? _focusedMessageId;
   Map<String, FileTransferState> _fileTransfers = const {};
   // Active file downloads, keyed by [file_display.fileDownloadKey]. Kept apart
   // from [_fileTransfers] (outgoing uploads) so the two never collide on a

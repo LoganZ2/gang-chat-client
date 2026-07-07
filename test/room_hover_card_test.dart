@@ -395,6 +395,7 @@ void main() {
           onReviewInvite: (_, _) async {},
           onWithdrawApplication: (_) async {},
           onOpenRoom: (_) {},
+          onOpenRoomEvent: (_) {},
         ),
       ),
     );
@@ -454,6 +455,7 @@ void main() {
           onReviewInvite: (_, _) async {},
           onWithdrawApplication: (_) async {},
           onOpenRoom: (_) {},
+          onOpenRoomEvent: (_) {},
         ),
       ),
     );
@@ -531,6 +533,7 @@ void main() {
           onReviewInvite: (_, _) async {},
           onWithdrawApplication: (_) async {},
           onOpenRoom: (_) {},
+          onOpenRoomEvent: (_) {},
         ),
       ),
     );
@@ -609,6 +612,7 @@ void main() {
           onReviewInvite: (_, _) async {},
           onWithdrawApplication: (_) async {},
           onOpenRoom: (_) {},
+          onOpenRoomEvent: (_) {},
         ),
       ),
     );
