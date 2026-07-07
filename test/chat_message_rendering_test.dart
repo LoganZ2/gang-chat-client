@@ -2044,6 +2044,7 @@ Widget _host(Widget child, {double? height}) {
       config: const AppConfig(
         apiBaseUrl: 'https://api.test/api/v1',
         assetBaseUrl: 'https://assets.test',
+        releaseBucketUrl: 'https://releases.test/gang-chat',
       ),
       child: Scaffold(
         body: Center(

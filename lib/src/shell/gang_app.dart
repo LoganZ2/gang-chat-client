@@ -11,6 +11,7 @@ import '../app/auth_session_controller.dart';
 import '../app/authenticated_app_context.dart';
 import '../app/language_preference.dart';
 import '../app/login_account_history.dart';
+import 'app_update_gate.dart';
 import 'desktop_window_controller.dart';
 import 'local_login_account_history_store.dart';
 import 'local_language_preference_store.dart';
@@ -305,10 +306,14 @@ class _AuthGateState extends State<_AuthGate> {
     );
 
     return SelectionContainer.disabled(
-      child: HomePage(
-        app: app,
-        languageStore: widget.languageStore,
+      child: AppUpdateGate(
+        releaseBucketUrl: widget.config.releaseBucketUrl,
         windowController: widget.windowController,
+        child: HomePage(
+          app: app,
+          languageStore: widget.languageStore,
+          windowController: widget.windowController,
+        ),
       ),
     );
   }

@@ -57,6 +57,7 @@ void _installConfiguredHostProxyBypass(AppConfig config) {
   final directHosts = <String>{
     _hostFromUrl(config.apiBaseUrl),
     _hostFromUrl(config.assetBaseUrl),
+    _hostFromUrl(config.releaseBucketUrl),
   }..remove('');
   if (directHosts.isEmpty) return;
   HttpOverrides.global = _GangHttpOverrides(

@@ -16,5 +16,6 @@ class AppConfigScope extends InheritedWidget {
   @override
   bool updateShouldNotify(AppConfigScope oldWidget) =>
       oldWidget.config.apiBaseUrl != config.apiBaseUrl ||
-      oldWidget.config.assetBaseUrl != config.assetBaseUrl;
+      oldWidget.config.assetBaseUrl != config.assetBaseUrl ||
+      oldWidget.config.releaseBucketUrl != config.releaseBucketUrl;
 }

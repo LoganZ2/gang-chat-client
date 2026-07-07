@@ -76,7 +76,7 @@ jobs:
         run: |
           APP="build/macos/Build/Products/Release/client.app"
           [ -d "$APP" ] || { echo "app bundle not found at $APP"; exit 1; }
-          DMG="GangChat-${{ needs.prepare.outputs.version }}-macos.dmg"
+          DMG="GangChat_v${{ needs.prepare.outputs.version }}.dmg"
           STAGING="$(mktemp -d)"
           cp -R "$APP" "$STAGING/"
           ln -s /Applications "$STAGING/Applications"
@@ -170,11 +170,12 @@ jobs:
           $MAKENSIS = "C:\Program Files (x86)\NSIS\makensis.exe"
           if (-not (Test-Path $MAKENSIS)) { Write-Error "makensis.exe not found at $MAKENSIS"; exit 1 }
           $VERSION_QUAD = "$VERSION.0"
-          $INSTALLER = "GangChat-$VERSION-windows-installer.exe"
+          $INSTALLER = "GangChat_v$VERSION.exe"
           $ROOT = (Resolve-Path ".").Path
           $SRC_ABS = (Resolve-Path $SRC).Path
           $OUT_ABS = Join-Path $ROOT $INSTALLER
           & $MAKENSIS `
+            "/INPUTCHARSET" "UTF8" `
             "/DAPP_VERSION=$VERSION" `
             "/DAPP_VERSION_QUAD=$VERSION_QUAD" `
             "/DPROJECT_ROOT=$ROOT" `

@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
 import '../app/account_display.dart' as account_display;
+import '../app/app_update.dart';
 import '../app/account_forms.dart';
 import '../app/account_sessions.dart';
 import '../app/account_state.dart';
@@ -37,6 +39,7 @@ import '../shell/local_auto_update_prompt_store.dart';
 import '../shell/local_close_behavior_store.dart';
 import '../shell/local_audio_device_store.dart';
 import '../shell/local_language_preference_store.dart';
+import '../shell/release_update_service.dart';
 import '../ui/avatar_crop_dialog.dart';
 import '../ui/sticker_upload_adapter.dart';
 import '../ui/ui.dart';
@@ -71,6 +74,7 @@ class SettingsPage extends StatefulWidget {
     this.feedbackMailService = const FeedbackMailService(),
     this.autoUpdatePromptStore = const LocalAutoUpdatePromptStore(),
     this.installInfoService = const InstallInfoService(),
+    this.releaseUpdateService = const ReleaseUpdateService(),
     this.closeBehaviorStore = const LocalCloseBehaviorStore(),
     this.languageStore = const LocalLanguagePreferenceStore(),
     this.stickerImagePreviewOpener,
@@ -99,6 +103,7 @@ class SettingsPage extends StatefulWidget {
   final FeedbackMailService feedbackMailService;
   final AutoUpdatePromptStore autoUpdatePromptStore;
   final InstallInfoService installInfoService;
+  final ReleaseUpdateService releaseUpdateService;
   final CloseBehaviorStore closeBehaviorStore;
   final LanguagePreferenceStore languageStore;
   final StickerImagePreviewOpener? stickerImagePreviewOpener;
@@ -817,8 +822,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _checkAppVersion() async {
     if (_checkingAppVersion) return;
-    if (!_settingsController.hasApi) {
-      setState(() => _aboutError = '检查更新需要登录后连接服务端');
+    final platform = _currentUpdatePlatform();
+    if (platform == null) {
+      setState(() => _aboutError = '当前平台暂不支持自动检查更新');
       return;
     }
     setState(() {
@@ -827,16 +833,19 @@ class _SettingsPageState extends State<SettingsPage> {
       _notice = null;
     });
     try {
-      final info = await _settingsController.checkAppVersion();
+      final update = await widget.releaseUpdateService.checkForUpdate(
+        bucketUrl: AppConfigScope.of(context).releaseBucketUrl,
+        currentVersion: widget.appVersion,
+        platform: platform,
+      );
       if (!mounted) return;
-      final latestVersion = info?.latestVersion.trim() ?? '';
       setState(() {
         _checkingAppVersion = false;
-        _notice = latestVersion.isEmpty
-            ? '暂时无法获取最新版本'
+        _notice = update == null
+            ? '当前已是最新版本'
             : updateCheckSucceededText(
                 currentVersion: widget.appVersion,
-                latestVersion: latestVersion,
+                latestVersion: update.latestVersion,
               );
       });
     } catch (error) {
@@ -846,6 +855,12 @@ class _SettingsPageState extends State<SettingsPage> {
         _aboutError = '检查更新失败：$error';
       });
     }
+  }
+
+  AppUpdatePlatform? _currentUpdatePlatform() {
+    if (Platform.isWindows) return AppUpdatePlatform.windows;
+    if (Platform.isMacOS) return AppUpdatePlatform.macos;
+    return null;
   }
 
   Future<void> _openFeedbackMail() async {

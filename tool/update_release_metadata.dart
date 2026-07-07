@@ -29,9 +29,17 @@ void main(List<String> args) {
     releaseDate,
     'gangChatClientReleaseDate',
   );
+  source = _replaceSingle(
+    source,
+    RegExp(r"(const\s+gangChatClientLastUpdateDate\s*=\s*')[^']+(';)"),
+    releaseDate,
+    'gangChatClientLastUpdateDate',
+  );
   file.writeAsStringSync(source);
 
-  stdout.writeln('Updated release metadata: $version, $releaseDate');
+  stdout.writeln(
+    'Updated release metadata: $version, release/update date $releaseDate',
+  );
 }
 
 String _requiredArg(List<String> args, String name) {

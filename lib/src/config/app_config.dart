@@ -11,13 +11,18 @@ import 'package:flutter/services.dart' show rootBundle;
 ///
 /// The asset is loaded once at app startup via [AppConfig.load].
 class AppConfig {
-  const AppConfig({required this.apiBaseUrl, required this.assetBaseUrl});
+  const AppConfig({
+    required this.apiBaseUrl,
+    required this.assetBaseUrl,
+    required this.releaseBucketUrl,
+  });
 
   /// Compile-time fallback config. Useful for tests and as a last-resort
   /// default when [load] cannot be awaited (e.g. synchronous widget creation).
   const AppConfig.defaults()
     : apiBaseUrl = _fallbackApiBaseUrl,
-      assetBaseUrl = _fallbackAssetBaseUrl;
+      assetBaseUrl = _fallbackAssetBaseUrl,
+      releaseBucketUrl = _fallbackReleaseBucketUrl;
 
   /// Base URL of the REST API, including the `/api/v1` prefix.
   final String apiBaseUrl;
@@ -26,12 +31,21 @@ class AppConfig {
   /// Should not contain a trailing slash.
   final String assetBaseUrl;
 
+  /// Public S3-compatible bucket URL used to discover and download releases.
+  /// Should not contain a trailing slash.
+  final String releaseBucketUrl;
+
   static const _fallbackApiBaseUrl = 'http://127.0.0.1:21116/api/v1';
   static const _fallbackAssetBaseUrl = 'http://127.0.0.1:21116';
+  static const _fallbackReleaseBucketUrl =
+      'https://os.ky-z.com:9000/gang-chat';
 
   static const _defineApiBaseUrl = String.fromEnvironment('GANG_API_BASE_URL');
   static const _defineAssetBaseUrl = String.fromEnvironment(
     'GANG_ASSET_BASE_URL',
+  );
+  static const _defineReleaseBucketUrl = String.fromEnvironment(
+    'GANG_RELEASE_BUCKET_URL',
   );
 
   static const _assetPath = 'assets/config/app_config.json';
@@ -84,6 +98,11 @@ class AppConfig {
         'asset_base_url',
         _fallbackAssetBaseUrl,
         _defineAssetBaseUrl,
+      ),
+      releaseBucketUrl: pick(
+        'release_bucket_url',
+        _fallbackReleaseBucketUrl,
+        _defineReleaseBucketUrl,
       ),
     );
   }

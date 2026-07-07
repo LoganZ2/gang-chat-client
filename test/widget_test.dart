@@ -31,6 +31,7 @@ import 'package:client/src/shell/desktop_window_controller.dart';
 import 'package:client/src/shell/feedback_mail_service.dart';
 import 'package:client/src/shell/install_info_service.dart';
 import 'package:client/src/shell/login_page.dart';
+import 'package:client/src/shell/release_update_service.dart';
 import 'package:client/src/ui/ui.dart' as ui;
 import 'package:client/src/home/hover_card_anchor.dart';
 import 'package:client/src/home/home_page.dart';
@@ -2548,6 +2549,15 @@ void main() {
             initialValue: true,
           ),
           installInfoService: const _FakeInstallInfoService('2026/07/01'),
+          releaseUpdateService: ReleaseUpdateService(
+            httpClient: MockClient((request) async {
+              return http.Response('''
+                <ListBucketResult>
+                  <Contents><Key>releases/GangChat_v0.4.0.exe</Key></Contents>
+                </ListBucketResult>
+              ''', 200);
+            }),
+          ),
           systemAudioDevices: SystemAudioDevices(supported: false),
         ),
       ),
