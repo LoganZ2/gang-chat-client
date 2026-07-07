@@ -8,6 +8,7 @@ import '../config/app_config.dart';
 import '../ui/ui.dart';
 import '../home/home_page.dart';
 import '../app/auth_session_controller.dart';
+import '../app/app_update.dart';
 import '../app/authenticated_app_context.dart';
 import '../app/language_preference.dart';
 import '../app/login_account_history.dart';
@@ -89,6 +90,7 @@ class _AuthGateState extends State<_AuthGate> {
   // The window starts hidden and is revealed once we know which screen to show.
   bool _windowRevealed = false;
   bool _exitingSessionForAppExit = false;
+  AvailableAppUpdate? _detectedAppUpdate;
   String _authLanguage = defaultLanguagePreference;
   Timer? _revealFallbackTimer;
 
@@ -309,10 +311,19 @@ class _AuthGateState extends State<_AuthGate> {
       child: AppUpdateGate(
         releaseBucketUrl: widget.config.releaseBucketUrl,
         windowController: widget.windowController,
+        onUpdateAvailable: (update) {
+          if (!mounted) return;
+          setState(() => _detectedAppUpdate = update);
+        },
         child: HomePage(
           app: app,
           languageStore: widget.languageStore,
           windowController: widget.windowController,
+          detectedAppUpdate: _detectedAppUpdate,
+          onDetectedAppUpdateShown: () {
+            if (!mounted || _detectedAppUpdate == null) return;
+            setState(() => _detectedAppUpdate = null);
+          },
         ),
       ),
     );

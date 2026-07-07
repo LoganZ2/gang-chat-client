@@ -32,6 +32,8 @@ import '../protocol/api_client.dart';
 import '../protocol/models.dart';
 import '../protocol/sticker_pack_store.dart';
 import '../shell/clipboard_service.dart';
+import '../shell/app_update_gate.dart';
+import '../shell/desktop_window_controller.dart';
 import '../shell/file_selection_service.dart';
 import '../shell/feedback_mail_service.dart';
 import '../shell/install_info_service.dart';
@@ -75,8 +77,11 @@ class SettingsPage extends StatefulWidget {
     this.autoUpdatePromptStore = const LocalAutoUpdatePromptStore(),
     this.installInfoService = const InstallInfoService(),
     this.releaseUpdateService = const ReleaseUpdateService(),
+    this.windowController,
     this.closeBehaviorStore = const LocalCloseBehaviorStore(),
     this.languageStore = const LocalLanguagePreferenceStore(),
+    this.initialSection = SettingsSection.profile,
+    this.initialAppUpdate,
     this.stickerImagePreviewOpener,
     this.appVersion = gangChatClientVersion,
     this.currentUser,
@@ -104,8 +109,11 @@ class SettingsPage extends StatefulWidget {
   final AutoUpdatePromptStore autoUpdatePromptStore;
   final InstallInfoService installInfoService;
   final ReleaseUpdateService releaseUpdateService;
+  final DesktopWindowController? windowController;
   final CloseBehaviorStore closeBehaviorStore;
   final LanguagePreferenceStore languageStore;
+  final SettingsSection initialSection;
+  final AvailableAppUpdate? initialAppUpdate;
   final StickerImagePreviewOpener? stickerImagePreviewOpener;
   final String appVersion;
   final CurrentUser? currentUser;
@@ -174,6 +182,11 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _aboutError;
   String? _notice;
   bool _checkingAppVersion = false;
+  AvailableAppUpdate? _availableAppUpdate;
+  bool _downloadingAppUpdate = false;
+  int _updateDownloadedBytes = 0;
+  int? _updateDownloadTotalBytes;
+  String? _updateDownloadError;
   bool _openingFeedbackMail = false;
   bool _autoPromptUpdates = defaultAutoUpdatePromptEnabled;
   String _lastUpdateDate = gangChatClientLastUpdateDate;
@@ -209,6 +222,7 @@ class _SettingsPageState extends State<SettingsPage> {
   AudioTestHandle? _inputTest;
   AudioTestHandle? _outputTest;
   SystemAudioDevices? _systemAudioDevices;
+  DesktopWindowController? _ownedWindowController;
   StreamSubscription<String?>? _systemDefaultInputSubscription;
   StreamSubscription<String?>? _systemDefaultOutputSubscription;
   String? _systemDefaultInputId;
@@ -231,11 +245,19 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  DesktopWindowController get _windowController =>
+      widget.windowController ??
+      (_ownedWindowController ??= DesktopWindowController());
+
   @override
   void initState() {
     super.initState();
     _user = widget.currentUser;
     _syncUserFields(widget.currentUser);
+    _section = widget.initialAppUpdate == null
+        ? widget.initialSection
+        : SettingsSection.about;
+    _availableAppUpdate = widget.initialAppUpdate;
     unawaited(_loadCloseBehavior());
     unawaited(_loadAutoUpdatePrompt());
     unawaited(_loadInstallDate());
@@ -257,6 +279,12 @@ class _SettingsPageState extends State<SettingsPage> {
     }
     if (oldWidget.installInfoService != widget.installInfoService) {
       unawaited(_loadInstallDate());
+    }
+    if (oldWidget.initialAppUpdate != widget.initialAppUpdate &&
+        widget.initialAppUpdate != null) {
+      _section = SettingsSection.about;
+      _availableAppUpdate = widget.initialAppUpdate;
+      _resetUpdateDownloadState();
     }
   }
 
@@ -841,18 +869,64 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!mounted) return;
       setState(() {
         _checkingAppVersion = false;
-        _notice = update == null
-            ? '当前已是最新版本'
-            : updateCheckSucceededText(
-                currentVersion: widget.appVersion,
-                latestVersion: update.latestVersion,
-              );
+        _availableAppUpdate = update;
+        _resetUpdateDownloadState();
+        _notice = update == null ? '当前已是最新版本' : null;
       });
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _checkingAppVersion = false;
         _aboutError = '检查更新失败：$error';
+      });
+    }
+  }
+
+  void _resetUpdateDownloadState() {
+    _downloadingAppUpdate = false;
+    _updateDownloadedBytes = 0;
+    _updateDownloadTotalBytes = null;
+    _updateDownloadError = null;
+  }
+
+  void _closeAppUpdatePage() {
+    if (_downloadingAppUpdate) return;
+    setState(() {
+      _section = SettingsSection.about;
+      _availableAppUpdate = null;
+      _resetUpdateDownloadState();
+    });
+  }
+
+  Future<void> _downloadAndInstallAvailableUpdate() async {
+    final update = _availableAppUpdate;
+    if (update == null || _downloadingAppUpdate) return;
+    setState(() {
+      _downloadingAppUpdate = true;
+      _updateDownloadError = null;
+      _updateDownloadedBytes = 0;
+      _updateDownloadTotalBytes = null;
+    });
+    try {
+      final file = await widget.releaseUpdateService.downloadUpdate(
+        update,
+        onProgress: ({required receivedBytes, totalBytes}) {
+          if (!mounted) return;
+          setState(() {
+            _updateDownloadedBytes = receivedBytes;
+            _updateDownloadTotalBytes = totalBytes;
+          });
+        },
+      );
+      if (!mounted) return;
+      await widget.releaseUpdateService.startInstaller(file);
+      await Future<void>.delayed(const Duration(milliseconds: 280));
+      await _windowController.terminateApplication();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _downloadingAppUpdate = false;
+        _updateDownloadError = '下载或启动安装器失败：$error';
       });
     }
   }
@@ -3522,6 +3596,19 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  Widget _buildAppUpdateContent(AvailableAppUpdate update) {
+    return AppUpdatePage(
+      update: update,
+      downloading: _downloadingAppUpdate,
+      downloadedBytes: _updateDownloadedBytes,
+      downloadTotalBytes: _updateDownloadTotalBytes,
+      error: _updateDownloadError,
+      onBack: _closeAppUpdatePage,
+      onRemindLater: _closeAppUpdatePage,
+      onDownload: () => unawaited(_downloadAndInstallAvailableUpdate()),
+    );
+  }
+
   Widget _buildVoiceContent() {
     return SettingsList(
       children: [
@@ -3606,6 +3693,14 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final availableUpdate = _availableAppUpdate;
+    if (_section == SettingsSection.about && availableUpdate != null) {
+      return Scaffold(
+        backgroundColor: _primaryDarkLow,
+        body: _buildAppUpdateContent(availableUpdate),
+      );
+    }
+
     return Scaffold(
       backgroundColor: _primaryDarkLow,
       body: SettingsScaffold(

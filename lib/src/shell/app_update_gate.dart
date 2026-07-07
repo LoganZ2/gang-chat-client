@@ -10,6 +10,8 @@ import 'desktop_window_controller.dart';
 import 'local_auto_update_prompt_store.dart';
 import 'release_update_service.dart';
 
+typedef AppUpdateAvailableCallback = void Function(AvailableAppUpdate update);
+
 class AppUpdateGate extends StatefulWidget {
   const AppUpdateGate({
     super.key,
@@ -20,6 +22,7 @@ class AppUpdateGate extends StatefulWidget {
     this.autoUpdatePromptStore = const LocalAutoUpdatePromptStore(),
     this.updateService,
     this.platformOverride,
+    this.onUpdateAvailable,
   });
 
   final Widget child;
@@ -29,19 +32,15 @@ class AppUpdateGate extends StatefulWidget {
   final ReleaseUpdateService? updateService;
   final AppUpdatePlatform? platformOverride;
   final DesktopWindowController windowController;
+  final AppUpdateAvailableCallback? onUpdateAvailable;
 
   @override
   State<AppUpdateGate> createState() => _AppUpdateGateState();
 }
 
 class _AppUpdateGateState extends State<AppUpdateGate> {
-  AvailableAppUpdate? _update;
-  bool _dismissed = false;
   bool _checking = false;
-  bool _downloading = false;
-  int _downloadedBytes = 0;
-  int? _downloadTotalBytes;
-  String? _error;
+  String? _notifiedAssetKey;
 
   ReleaseUpdateService get _updateService =>
       widget.updateService ?? ReleaseUpdateService();
@@ -58,30 +57,24 @@ class _AppUpdateGateState extends State<AppUpdateGate> {
     if (oldWidget.releaseBucketUrl != widget.releaseBucketUrl ||
         oldWidget.currentVersion != widget.currentVersion ||
         oldWidget.updateService != widget.updateService) {
-      _update = null;
-      _dismissed = false;
+      _notifiedAssetKey = null;
       unawaited(_checkForUpdate());
     }
   }
 
-  Future<void> _checkForUpdate({bool forced = false}) async {
+  Future<void> _checkForUpdate() async {
     if (_checking) return;
     final platform = _currentPlatform();
     if (platform == null) return;
 
-    if (!forced) {
-      try {
-        final enabled = await widget.autoUpdatePromptStore.read();
-        if (!enabled) return;
-      } catch (_) {
-        return;
-      }
+    try {
+      final enabled = await widget.autoUpdatePromptStore.read();
+      if (!enabled) return;
+    } catch (_) {
+      return;
     }
 
-    setState(() {
-      _checking = true;
-      _error = null;
-    });
+    setState(() => _checking = true);
     try {
       final update = await _updateService.checkForUpdate(
         bucketUrl: widget.releaseBucketUrl,
@@ -89,60 +82,14 @@ class _AppUpdateGateState extends State<AppUpdateGate> {
         platform: platform,
       );
       if (!mounted) return;
-      setState(() {
-        _checking = false;
-        _update = update;
-        _dismissed = update == null;
-        _downloadedBytes = 0;
-        _downloadTotalBytes = null;
-      });
+      setState(() => _checking = false);
+      if (update == null || update.asset.key == _notifiedAssetKey) return;
+      _notifiedAssetKey = update.asset.key;
+      widget.onUpdateAvailable?.call(update);
     } catch (error) {
       if (!mounted) return;
-      setState(() {
-        _checking = false;
-        if (forced || _update != null) {
-          _error = '检查更新失败：$error';
-        }
-      });
+      setState(() => _checking = false);
     }
-  }
-
-  Future<void> _downloadAndInstall() async {
-    final update = _update;
-    if (update == null || _downloading) return;
-    setState(() {
-      _downloading = true;
-      _error = null;
-      _downloadedBytes = 0;
-      _downloadTotalBytes = null;
-    });
-    try {
-      final file = await _updateService.downloadUpdate(
-        update,
-        onProgress: ({required receivedBytes, totalBytes}) {
-          if (!mounted) return;
-          setState(() {
-            _downloadedBytes = receivedBytes;
-            _downloadTotalBytes = totalBytes;
-          });
-        },
-      );
-      if (!mounted) return;
-      await _updateService.startInstaller(file);
-      await Future<void>.delayed(const Duration(milliseconds: 280));
-      await widget.windowController.terminateApplication();
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _downloading = false;
-        _error = '下载或启动安装器失败：$error';
-      });
-    }
-  }
-
-  void _dismissUpdate() {
-    if (_downloading) return;
-    setState(() => _dismissed = true);
   }
 
   AppUpdatePlatform? _currentPlatform() {
@@ -154,46 +101,32 @@ class _AppUpdateGateState extends State<AppUpdateGate> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final update = _update;
-    if (update == null || _dismissed) return widget.child;
-
-    return _AppUpdatePage(
-      update: update,
-      checking: _checking,
-      downloading: _downloading,
-      downloadedBytes: _downloadedBytes,
-      downloadTotalBytes: _downloadTotalBytes,
-      error: _error,
-      onDownload: () => unawaited(_downloadAndInstall()),
-      onRetry: () => unawaited(_checkForUpdate(forced: true)),
-      onContinue: _dismissUpdate,
-    );
-  }
+  Widget build(BuildContext context) => widget.child;
 }
 
-class _AppUpdatePage extends StatelessWidget {
-  const _AppUpdatePage({
+class AppUpdatePage extends StatelessWidget {
+  const AppUpdatePage({
+    super.key,
     required this.update,
-    required this.checking,
     required this.downloading,
     required this.downloadedBytes,
     required this.onDownload,
-    required this.onRetry,
-    required this.onContinue,
+    required this.onBack,
+    required this.onRemindLater,
     this.downloadTotalBytes,
     this.error,
+    this.wrapInScaffold = false,
   });
 
   final AvailableAppUpdate update;
-  final bool checking;
   final bool downloading;
   final int downloadedBytes;
   final int? downloadTotalBytes;
   final String? error;
   final VoidCallback onDownload;
-  final VoidCallback onRetry;
-  final VoidCallback onContinue;
+  final VoidCallback onBack;
+  final VoidCallback onRemindLater;
+  final bool wrapInScaffold;
 
   double? get _downloadProgress {
     final total = downloadTotalBytes;
@@ -203,81 +136,75 @@ class _AppUpdatePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: UiColors.surfaceLow,
-      body: SettingsScaffold(
-        icon: Icons.system_update_alt_outlined,
-        title: '发现新版本',
-        onBack: downloading ? null : onContinue,
-        headerAction: ButtonIcon(
-          tooltip: '重新检查',
-          icon: const Icon(Icons.refresh),
-          loading: checking,
-          onPressed: checking || downloading ? null : onRetry,
-          size: 38,
-        ),
-        body: SettingsList(
-          children: [
+    final page = SettingsScaffold(
+      icon: Icons.system_update_alt_outlined,
+      iconColor: UiColors.controlAccent,
+      title: '发现新版本',
+      onBack: downloading ? null : onBack,
+      body: SettingsList(
+        children: [
+          SettingsCard(
+            title: '版本更新',
+            trailing: _UpdateBadge(version: update.latestVersion),
+            children: [
+              _VersionLine(
+                label: '当前版本',
+                value: appVersionLabel(update.currentVersion),
+              ),
+              _VersionLine(
+                label: '最新版本',
+                value: appVersionLabel(update.latestVersion),
+                accent: true,
+              ),
+              _VersionLine(
+                label: '发行时间',
+                value: releaseTimeLabel(update.asset.releasedAt),
+              ),
+              _VersionLog(value: releaseNotesLabel(update.releaseNotes)),
+              if (downloading) ...[
+                const SizedBox(height: 2),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(UiRadii.sm),
+                  child: LinearProgressIndicator(
+                    value: _downloadProgress,
+                    minHeight: 8,
+                    color: UiColors.controlAccent,
+                    backgroundColor: UiColors.surfacePressed,
+                  ),
+                ),
+                Text(
+                  _downloadProgress == null
+                      ? '正在下载更新'
+                      : '正在下载更新 ${(_downloadProgress! * 100).round()}%',
+                  style: UiTypography.label,
+                ),
+              ],
+            ],
+          ),
+          if (error != null)
             SettingsCard(
-              title: '版本更新',
-              trailing: _UpdateBadge(version: update.latestVersion),
+              title: '更新失败',
+              danger: true,
               children: [
-                _VersionLine(
-                  label: '当前版本',
-                  value: appVersionLabel(update.currentVersion),
-                ),
-                _VersionLine(
-                  label: '最新版本',
-                  value: appVersionLabel(update.latestVersion),
-                  accent: true,
-                ),
-                _VersionLine(
-                  label: '发行时间',
-                  value: releaseTimeLabel(update.asset.releasedAt),
-                ),
-                if (downloading) ...[
-                  const SizedBox(height: 2),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(UiRadii.sm),
-                    child: LinearProgressIndicator(
-                      value: _downloadProgress,
-                      minHeight: 8,
-                      color: UiColors.controlAccent,
-                      backgroundColor: UiColors.surfacePressed,
-                    ),
+                Text(
+                  error!,
+                  style: UiTypography.label.copyWith(
+                    color: UiColors.danger,
+                    height: 1.5,
                   ),
-                  Text(
-                    _downloadProgress == null
-                        ? '正在下载更新'
-                        : '正在下载更新 ${(_downloadProgress! * 100).round()}%',
-                    style: UiTypography.label,
-                  ),
-                ],
+                ),
               ],
             ),
-            if (error != null)
-              SettingsCard(
-                title: '更新失败',
-                danger: true,
-                children: [
-                  Text(
-                    error!,
-                    style: UiTypography.label.copyWith(
-                      color: UiColors.danger,
-                      height: 1.5,
-                    ),
-                  ),
-                ],
-              ),
-            _UpdateActions(
-              downloading: downloading,
-              onDownload: onDownload,
-              onContinue: onContinue,
-            ),
-          ],
-        ),
+          _UpdateActions(
+            downloading: downloading,
+            onDownload: onDownload,
+            onRemindLater: onRemindLater,
+          ),
+        ],
       ),
     );
+    if (!wrapInScaffold) return page;
+    return Scaffold(backgroundColor: UiColors.surfaceLow, body: page);
   }
 }
 
@@ -306,6 +233,34 @@ class _VersionLine extends StatelessWidget {
               color: accent ? UiColors.accent : UiColors.text,
               fontSize: 15,
               fontWeight: FontWeight.w600,
+              letterSpacing: 0,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _VersionLog extends StatelessWidget {
+  const _VersionLog({required this.value});
+
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(width: 86, child: Text('版本日志', style: UiTypography.label)),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(
+              color: UiColors.text,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              height: 1.5,
               letterSpacing: 0,
             ),
           ),
@@ -346,41 +301,37 @@ class _UpdateActions extends StatelessWidget {
   const _UpdateActions({
     required this.downloading,
     required this.onDownload,
-    required this.onContinue,
+    required this.onRemindLater,
   });
 
   final bool downloading;
   final VoidCallback onDownload;
-  final VoidCallback onContinue;
+  final VoidCallback onRemindLater;
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: Wrap(
-        spacing: 12,
-        runSpacing: 10,
-        alignment: WrapAlignment.end,
-        children: [
-          Button(
-            onPressed: downloading ? null : onContinue,
+    return Row(
+      children: [
+        Expanded(
+          child: Button(
+            onPressed: downloading ? null : onRemindLater,
             icon: const Icon(Icons.schedule_outlined),
+            width: double.infinity,
             child: const Text('稍后提醒'),
           ),
-          Button(
-            onPressed: downloading ? null : onContinue,
-            icon: const Icon(Icons.login_outlined),
-            child: const Text('继续使用'),
-          ),
-          Button(
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Button(
             onPressed: downloading ? null : onDownload,
             loading: downloading,
             icon: const Icon(Icons.download_outlined),
             tone: ButtonTone.primary,
+            width: double.infinity,
             child: const Text('下载更新'),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

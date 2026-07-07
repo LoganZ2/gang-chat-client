@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../app/audio_device_store.dart';
+import '../app/app_update.dart';
 import '../app/audio_device_state.dart'
     show rememberedAudioVolume, restoredAudioVolume;
 import '../app/audio_levels.dart';
@@ -39,6 +40,7 @@ import '../app/room_members_filter.dart' as member_filter;
 import '../app/room_notifications.dart' as room_notifications;
 import '../app/rooms_controller.dart';
 import '../app/search_display.dart' as search_display;
+import '../app/settings_shell_state.dart';
 import '../app/sticker_display.dart' as sticker_display;
 import '../app/sticker_packs_controller.dart';
 import '../app/voice_message_display.dart' as voice_display;
@@ -104,6 +106,8 @@ class HomeShell extends StatefulWidget {
     required this.windowController,
     this.liveSessionController,
     this.realtime,
+    this.detectedAppUpdate,
+    this.onDetectedAppUpdateShown,
   });
 
   final AuthenticatedAppContext app;
@@ -113,6 +117,8 @@ class HomeShell extends StatefulWidget {
   final DesktopWindowController windowController;
   final LiveSessionController? liveSessionController;
   final RealtimeService? realtime;
+  final AvailableAppUpdate? detectedAppUpdate;
+  final VoidCallback? onDetectedAppUpdateShown;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -185,6 +191,7 @@ class _HomeShellState extends State<HomeShell> {
   int _clipboardImagePasteSerial = 0;
   bool _pickingAttachments = false;
   bool _settingsOpen = false;
+  AvailableAppUpdate? _settingsAppUpdate;
   bool _logoutConfirming = false;
   bool _closeConfirming = false;
   bool _exitingApplication = false;
@@ -282,6 +289,14 @@ class _HomeShellState extends State<HomeShell> {
     widget.windowController.setTrayExitHandler(_exitApplication);
     _fileDropEvents = _fileDropService.drops.listen(_handleDroppedFiles);
     _startRealtime();
+    final detectedAppUpdate = widget.detectedAppUpdate;
+    if (detectedAppUpdate != null) {
+      _showSettingsAppUpdateInState(detectedAppUpdate);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        widget.onDetectedAppUpdateShown?.call();
+      });
+    }
     unawaited(_loadServers());
     unawaited(_refreshPendingRoomInviteBadge());
   }
@@ -294,6 +309,14 @@ class _HomeShellState extends State<HomeShell> {
       oldWidget.windowController.setTrayExitHandler(null);
       widget.windowController.setCloseRequestHandler(_handleWindowCloseRequest);
       widget.windowController.setTrayExitHandler(_exitApplication);
+    }
+    if (oldWidget.detectedAppUpdate != widget.detectedAppUpdate &&
+        widget.detectedAppUpdate != null) {
+      _openSettingsForAppUpdate(widget.detectedAppUpdate!);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        widget.onDetectedAppUpdateShown?.call();
+      });
     }
     final appChanged =
         widget.app.currentUser.id != oldWidget.app.currentUser.id ||
@@ -337,6 +360,7 @@ class _HomeShellState extends State<HomeShell> {
       _sendError = null;
       _stickerPanelState = const sticker_display.StickerPanelLoadState();
       _settingsOpen = false;
+      _settingsAppUpdate = null;
       _logoutConfirming = false;
       _narrowContentOpen = false;
       _contentMode = _ContentMode.chat;
@@ -416,6 +440,18 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   void _setHomeState(VoidCallback update) => setState(update);
+
+  void _showSettingsAppUpdateInState(AvailableAppUpdate update) {
+    _settingsOpen = true;
+    _settingsAppUpdate = update;
+    _contentMode = _ContentMode.chat;
+    _narrowContentOpen = true;
+  }
+
+  void _openSettingsForAppUpdate(AvailableAppUpdate update) {
+    if (!mounted) return;
+    _setHomeState(() => _showSettingsAppUpdateInState(update));
+  }
 
   void _handleVoicePlaybackChanged() {
     if (!mounted) return;

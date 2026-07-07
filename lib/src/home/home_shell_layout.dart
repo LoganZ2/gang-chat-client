@@ -31,6 +31,11 @@ extension _HomeShellLayout on _HomeShellState {
         audioDeviceStore: widget.audioDeviceStore,
         closeBehaviorStore: widget.closeBehaviorStore,
         languageStore: widget.languageStore,
+        windowController: widget.windowController,
+        initialSection: _settingsAppUpdate == null
+            ? SettingsSection.profile
+            : SettingsSection.about,
+        initialAppUpdate: _settingsAppUpdate,
         stickerPackStore: widget.app.stickerPackStore,
         stickerImagePreviewOpener: _openStickerManagerImagePreview,
         currentUser: _currentUser,

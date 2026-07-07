@@ -176,7 +176,10 @@ extension _HomeShellRoomActions on _HomeShellState {
       _clearDeferredRoomNotificationVisualMarkersInState();
       final opening = !_settingsOpen;
       _settingsOpen = opening;
-      if (opening) _contentMode = _ContentMode.chat;
+      if (opening) {
+        _contentMode = _ContentMode.chat;
+        _settingsAppUpdate = null;
+      }
       if (openContent) {
         _narrowContentOpen = opening;
       }
@@ -204,7 +207,10 @@ extension _HomeShellRoomActions on _HomeShellState {
   }
 
   void _closeSettings() {
-    _setHomeState(() => _settingsOpen = false);
+    _setHomeState(() {
+      _settingsOpen = false;
+      _settingsAppUpdate = null;
+    });
   }
 
   Future<void> _confirmLogout() async {

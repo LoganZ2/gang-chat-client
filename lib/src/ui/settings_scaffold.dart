@@ -16,6 +16,7 @@ class SettingsScaffold extends StatelessWidget {
     required this.title,
     required this.body,
     this.headerAction,
+    this.iconColor,
     this.onBack,
     this.pinned,
   });
@@ -28,6 +29,9 @@ class SettingsScaffold extends StatelessWidget {
 
   /// 标题栏右侧额外元素(如刷新按钮),可空。
   final Widget? headerAction;
+
+  /// 标题栏左侧图标颜色;为空时使用默认强调色。
+  final Color? iconColor;
 
   /// 返回回调;为空则不显示返回按钮。
   final VoidCallback? onBack;
@@ -66,7 +70,7 @@ class SettingsScaffold extends StatelessWidget {
                   ),
                   const SizedBox(width: 16),
                 ],
-                Icon(icon, color: UiColors.accent, size: 19),
+                Icon(icon, color: iconColor ?? UiColors.accent, size: 19),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(

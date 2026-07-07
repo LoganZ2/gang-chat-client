@@ -11,6 +11,7 @@ import 'package:livekit_client/livekit_client.dart' as lk;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:client/main.dart';
+import 'package:client/src/app/app_update.dart';
 import 'package:client/src/app/audio_device_info.dart';
 import 'package:client/src/app/audio_device_store.dart';
 import 'package:client/src/app/authenticated_app_context.dart';
@@ -836,6 +837,52 @@ void main() {
       isTrue,
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('detected app update opens settings update page in home shell', (
+    WidgetTester tester,
+  ) async {
+    final update = AvailableAppUpdate(
+      currentVersion: '0.4.0',
+      latestVersion: '0.4.1',
+      asset: ReleaseAsset(
+        key: 'releases/GangChat_v0.4.1.exe',
+        version: '0.4.1',
+        platform: AppUpdatePlatform.windows,
+        releasedAt: DateTime(2026, 7, 8, 1, 2),
+      ),
+      downloadUrl: Uri.parse(
+        'https://os.example.test/gang-chat/releases/GangChat_v0.4.1.exe',
+      ),
+    );
+    var shownCount = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(),
+          realtime: _NoopRealtimeService(),
+          detectedAppUpdate: update,
+          onDetectedAppUpdateShown: () => shownCount += 1,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(shownCount, 1);
+    expect(find.text('发现新版本'), findsOneWidget);
+    expect(find.text('v0.4.1'), findsWidgets);
+    expect(find.text('版本日志'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '继续使用'), findsNothing);
+
+    await tester.tap(find.byTooltip('返回'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('发现新版本'), findsNothing);
+    expect(find.text('设置'), findsOneWidget);
+    expect(find.text('关于Gang Chat'), findsOneWidget);
+    expect(find.text('版本信息'), findsOneWidget);
   });
 
   testWidgets('authenticated home shell title search keeps fixed resize size', (
@@ -2572,7 +2619,7 @@ void main() {
     expect(find.text('0.4.0'), findsOneWidget);
     expect(find.text('发行时间'), findsOneWidget);
     expect(find.text('上次更新时间'), findsOneWidget);
-    expect(find.text('2026/06/30'), findsOneWidget);
+    expect(find.text(gangChatClientReleaseDate), findsOneWidget);
     expect(find.text('2026/07/01'), findsOneWidget);
     expect(find.text('自动提示更新'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '检查更新'), findsOneWidget);
@@ -2603,6 +2650,63 @@ void main() {
     expect(feedbackDrafts.single.from, 'kai@example.com');
     expect(feedbackDrafts.single.to, 'gang-chat@outlook.com');
     expect(feedbackDrafts.single.subject, contains('v0.4.0'));
+  });
+
+  testWidgets('settings about check opens update page for newer release', (
+    WidgetTester tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(980, 760);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: SettingsPage(
+          isSubWindow: true,
+          currentUser: CurrentUser.fromJson(_currentUserJson),
+          appVersion: '0.4.0',
+          installInfoService: const _FakeInstallInfoService('2026/07/01'),
+          releaseUpdateService: ReleaseUpdateService(
+            httpClient: MockClient((request) async {
+              return http.Response('''
+                <ListBucketResult>
+                  <Contents>
+                    <Key>releases/GangChat_v0.4.1.exe</Key>
+                    <LastModified>2026-07-08T01:02:03.000Z</LastModified>
+                  </Contents>
+                </ListBucketResult>
+              ''', 200);
+            }),
+          ),
+          systemAudioDevices: SystemAudioDevices(supported: false),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('关于Gang Chat').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ui.Button, '检查更新'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('发现新版本'), findsOneWidget);
+    expect(find.text('v0.4.1'), findsWidgets);
+    expect(find.text('发行时间'), findsOneWidget);
+    expect(find.text('版本日志'), findsOneWidget);
+    expect(find.text('无'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '稍后提醒'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '下载更新'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '继续使用'), findsNothing);
+    expect(find.byTooltip('重新检查'), findsNothing);
+
+    await tester.tap(find.byTooltip('返回'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('发现新版本'), findsNothing);
+    expect(find.text('版本信息'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '检查更新'), findsOneWidget);
   });
 
   testWidgets('settings audio sliders apply live mute coupling rules', (

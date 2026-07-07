@@ -22,12 +22,14 @@ class AvailableAppUpdate {
     required this.latestVersion,
     required this.asset,
     required this.downloadUrl,
+    this.releaseNotes,
   });
 
   final String currentVersion;
   final String latestVersion;
   final ReleaseAsset asset;
   final Uri downloadUrl;
+  final String? releaseNotes;
 }
 
 List<ReleaseAsset> parseReleaseAssetsFromS3List(String xmlText) {
@@ -96,6 +98,11 @@ String releaseTimeLabel(DateTime? releasedAt) {
   final hour = local.hour.toString().padLeft(2, '0');
   final minute = local.minute.toString().padLeft(2, '0');
   return '$year/$month/$day $hour:$minute';
+}
+
+String releaseNotesLabel(String? releaseNotes) {
+  final trimmed = releaseNotes?.trim() ?? '';
+  return trimmed.isEmpty ? '无' : trimmed;
 }
 
 List<_S3Object> _s3Objects(String xmlText) {

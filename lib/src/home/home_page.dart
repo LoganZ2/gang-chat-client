@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../app/app_update.dart';
 import '../app/audio_device_store.dart';
 import '../app/authenticated_app_context.dart';
 import '../app/close_behavior.dart';
@@ -21,6 +22,8 @@ class HomePage extends StatelessWidget {
     this.realtime,
     this.closeBehaviorStore = const LocalCloseBehaviorStore(),
     this.languageStore = const LocalLanguagePreferenceStore(),
+    this.detectedAppUpdate,
+    this.onDetectedAppUpdateShown,
     DesktopWindowController? windowController,
   }) : windowController = windowController ?? DesktopWindowController();
 
@@ -30,6 +33,8 @@ class HomePage extends StatelessWidget {
   final RealtimeService? realtime;
   final CloseBehaviorStore closeBehaviorStore;
   final LanguagePreferenceStore languageStore;
+  final AvailableAppUpdate? detectedAppUpdate;
+  final VoidCallback? onDetectedAppUpdateShown;
   final DesktopWindowController windowController;
 
   @override
@@ -42,6 +47,8 @@ class HomePage extends StatelessWidget {
       closeBehaviorStore: closeBehaviorStore,
       languageStore: languageStore,
       windowController: windowController,
+      detectedAppUpdate: detectedAppUpdate,
+      onDetectedAppUpdateShown: onDetectedAppUpdateShown,
     );
   }
 }

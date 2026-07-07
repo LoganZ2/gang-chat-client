@@ -69,4 +69,10 @@ void main() {
     expect(releaseTimeLabel(null), '暂无');
     expect(releaseTimeLabel(DateTime(2026, 7, 8, 9, 5)), '2026/07/08 09:05');
   });
+
+  test('releaseNotesLabel falls back to none', () {
+    expect(releaseNotesLabel(null), '无');
+    expect(releaseNotesLabel('   '), '无');
+    expect(releaseNotesLabel('修复更新安装流程'), '修复更新安装流程');
+  });
 }
