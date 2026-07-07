@@ -3,6 +3,7 @@ import 'dart:io' show Directory, File, Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart';
@@ -24,6 +25,7 @@ import '../app/live_controller.dart';
 import '../app/live_display.dart' as live_display;
 import '../app/live_session_controller.dart';
 import '../app/language_preference.dart';
+import '../app/message_mentions.dart' as message_mentions;
 import '../app/message_display.dart' as message_display;
 import '../app/messages_controller.dart';
 import '../app/music_box_controller.dart';
@@ -119,7 +121,8 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   late AuthenticatedAppServices _services;
   late CurrentUser _currentUser;
-  final TextEditingController _composerController = TextEditingController();
+  final _MentionTextEditingController _composerController =
+      _MentionTextEditingController();
   final ChatComposerController _composerPanelController =
       ChatComposerController();
   final TextEditingController _titleSearchController = TextEditingController();
@@ -140,6 +143,15 @@ class _HomeShellState extends State<HomeShell> {
   Map<String, String> _messageDrafts = const {};
   Map<String, List<_StagedAttachment>> _stagedAttachmentDrafts = const {};
   bool _updatingComposerFromDraft = false;
+  message_mentions.MessageMentionQuery? _composerMentionQuery;
+  List<message_mentions.MessageMentionOption> _composerMentionOptions =
+      const [];
+  int _composerMentionSelectedIndex = 0;
+  List<RoomMember> _composerMentionMembers = const [];
+  String? _composerMentionMembersRoomId;
+  String? _loadingComposerMentionMembersRoomId;
+  bool _loadingComposerMentionMembers = false;
+  int _composerMentionMembersSerial = 0;
   final Set<String> _locallyDeletedMessageKeys = {};
   int _selectedRoomNewMessageCount = 0;
   Map<String, FileTransferState> _fileTransfers = const {};
@@ -616,4 +628,185 @@ class _StagedAttachment {
 
   bool get isUploaded =>
       status == composer_attachment.ComposerAttachmentStatus.uploaded;
+}
+
+class _MentionTextEditingController extends TextEditingController {
+  List<_ConfirmedComposerMention> _confirmedMentions = const [];
+
+  void clearConfirmedMentions() {
+    if (_confirmedMentions.isEmpty) return;
+    _confirmedMentions = const [];
+    notifyListeners();
+  }
+
+  void addConfirmedMention({required int start, required String label}) {
+    final trimmedLabel = label.trim();
+    if (trimmedLabel.isEmpty) return;
+    final mentionText = '@$trimmedLabel';
+    final end = start + mentionText.length;
+    if (start < 0 ||
+        end > text.length ||
+        text.substring(start, end) != mentionText) {
+      return;
+    }
+    final next = [
+      for (final mention in _validConfirmedMentions())
+        if (mention.end <= start || mention.start >= end) mention,
+      _ConfirmedComposerMention(start: start, end: end, text: mentionText),
+    ]..sort((a, b) => a.start.compareTo(b.start));
+    _confirmedMentions = List.unmodifiable(next);
+    notifyListeners();
+  }
+
+  void pruneInvalidConfirmedMentions({bool notify = true}) {
+    final valid = _validConfirmedMentions();
+    if (valid.length == _confirmedMentions.length) return;
+    _confirmedMentions = valid;
+    if (notify) notifyListeners();
+  }
+
+  bool hasConfirmedMention({required int start, required int end}) {
+    for (final mention in _validConfirmedMentions()) {
+      if (mention.start == start && mention.end == end) return true;
+    }
+    return false;
+  }
+
+  TextEditingValue? formatConfirmedMentionBackspace({
+    required TextEditingValue oldValue,
+    required TextEditingValue defaultValue,
+  }) {
+    final selection = oldValue.selection;
+    if (!selection.isValid || !selection.isCollapsed) return null;
+    final cursor = selection.extentOffset;
+    if (cursor <= 0) return null;
+    if (oldValue.text.length != defaultValue.text.length + 1) return null;
+    final defaultBackspaceText = oldValue.text.replaceRange(
+      cursor - 1,
+      cursor,
+      '',
+    );
+    if (defaultValue.text != defaultBackspaceText) return null;
+
+    final mentions = _validConfirmedMentionsFor(oldValue.text);
+    for (final mention in mentions) {
+      final hasTrailingSpace =
+          mention.end < oldValue.text.length &&
+          oldValue.text.codeUnitAt(mention.end) == 0x20;
+      final deleteEnd = cursor == mention.end
+          ? mention.end
+          : hasTrailingSpace && cursor == mention.end + 1
+          ? mention.end + 1
+          : null;
+      if (deleteEnd == null) continue;
+      final removedLength = deleteEnd - mention.start;
+      final nextText = oldValue.text.replaceRange(mention.start, deleteEnd, '');
+      final nextMentions = <_ConfirmedComposerMention>[];
+      for (final entry in mentions) {
+        if (entry.start == mention.start && entry.end == mention.end) {
+          continue;
+        }
+        nextMentions.add(
+          entry.start >= deleteEnd ? entry.shift(-removedLength) : entry,
+        );
+      }
+      _confirmedMentions = List.unmodifiable(nextMentions);
+      return oldValue.copyWith(
+        text: nextText,
+        selection: TextSelection.collapsed(offset: mention.start),
+        composing: TextRange.empty,
+      );
+    }
+    return null;
+  }
+
+  List<_ConfirmedComposerMention> _validConfirmedMentions() {
+    return _validConfirmedMentionsFor(text);
+  }
+
+  List<_ConfirmedComposerMention> _validConfirmedMentionsFor(String value) {
+    if (_confirmedMentions.isEmpty) return const [];
+    return [
+      for (final mention in _confirmedMentions)
+        if (mention.start >= 0 &&
+            mention.end <= value.length &&
+            value.substring(mention.start, mention.end) == mention.text)
+          mention,
+    ];
+  }
+
+  @override
+  TextSpan buildTextSpan({
+    required BuildContext context,
+    TextStyle? style,
+    required bool withComposing,
+  }) {
+    final textStyle = style ?? DefaultTextStyle.of(context).style;
+    final mentions = _validConfirmedMentions();
+    if (mentions.isEmpty) {
+      return TextSpan(text: text, style: textStyle);
+    }
+
+    final mentionStyle = textStyle.copyWith(
+      color: UiColors.controlAccent,
+      fontWeight: FontWeight.w600,
+    );
+    final spans = <InlineSpan>[];
+    var cursor = 0;
+    for (final mention in mentions) {
+      if (mention.start > cursor) {
+        spans.add(TextSpan(text: text.substring(cursor, mention.start)));
+      }
+      spans.add(
+        TextSpan(
+          text: text.substring(mention.start, mention.end),
+          style: mentionStyle,
+        ),
+      );
+      cursor = mention.end;
+    }
+    if (cursor < text.length) {
+      spans.add(TextSpan(text: text.substring(cursor)));
+    }
+    return TextSpan(style: textStyle, children: spans);
+  }
+}
+
+class _ConfirmedMentionBackspaceFormatter extends TextInputFormatter {
+  const _ConfirmedMentionBackspaceFormatter(this.controller);
+
+  final _MentionTextEditingController controller;
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    return controller.formatConfirmedMentionBackspace(
+          oldValue: oldValue,
+          defaultValue: newValue,
+        ) ??
+        newValue;
+  }
+}
+
+class _ConfirmedComposerMention {
+  const _ConfirmedComposerMention({
+    required this.start,
+    required this.end,
+    required this.text,
+  });
+
+  final int start;
+  final int end;
+  final String text;
+
+  _ConfirmedComposerMention shift(int delta) {
+    if (delta == 0) return this;
+    return _ConfirmedComposerMention(
+      start: start + delta,
+      end: end + delta,
+      text: text,
+    );
+  }
 }

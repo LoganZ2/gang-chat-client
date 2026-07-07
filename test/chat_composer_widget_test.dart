@@ -225,6 +225,158 @@ void main() {
     expect(controller.selection.baseOffset, 2);
   });
 
+  testWidgets('chat composer reports suggestion navigation keys', (
+    tester,
+  ) async {
+    final navigation = <ui.ComposerSuggestionNavigation>[];
+    final actions = <ui.ComposerSuggestionAction>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: Scaffold(
+          body: ui.ChatComposer(
+            suggestionShortcutsEnabled: true,
+            onSuggestionNavigationPressed: (direction) {
+              navigation.add(direction);
+              return true;
+            },
+            onSuggestionActionPressed: (action) {
+              actions.add(action);
+              return true;
+            },
+            actions: const [],
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowUp);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowUp);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+
+    final editableText = tester.widget<EditableText>(find.byType(EditableText));
+    expect(editableText.focusNode.hasFocus, isTrue);
+    expect(navigation, [
+      ui.ComposerSuggestionNavigation.next,
+      ui.ComposerSuggestionNavigation.previous,
+    ]);
+    expect(actions, [ui.ComposerSuggestionAction.confirm]);
+  });
+
+  testWidgets('chat composer leaves horizontal arrows for cursor movement', (
+    tester,
+  ) async {
+    final controller = TextEditingController(text: 'hello');
+    addTearDown(controller.dispose);
+    final navigation = <ui.ComposerSuggestionNavigation>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: Scaffold(
+          body: ui.ChatComposer(
+            controller: controller,
+            suggestionShortcutsEnabled: true,
+            onSuggestionNavigationPressed: (direction) {
+              navigation.add(direction);
+              return true;
+            },
+            actions: const [],
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    controller.selection = const TextSelection.collapsed(offset: 3);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+
+    expect(navigation, isEmpty);
+  });
+
+  testWidgets('chat composer keeps input focused when suggestions enable', (
+    tester,
+  ) async {
+    final controller = TextEditingController(text: '@');
+    final suggestionsEnabled = ValueNotifier(false);
+    addTearDown(controller.dispose);
+    addTearDown(suggestionsEnabled.dispose);
+
+    Widget buildHost() {
+      return MaterialApp(
+        theme: ui.uiTheme(),
+        home: Scaffold(
+          body: ValueListenableBuilder<bool>(
+            valueListenable: suggestionsEnabled,
+            builder: (context, enabled, child) => ui.ChatComposer(
+              controller: controller,
+              suggestionShortcutsEnabled: enabled,
+              onSuggestionNavigationPressed: (_) => true,
+              onSuggestionActionPressed: (_) => true,
+              actions: const [],
+            ),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildHost());
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    final before = tester.widget<EditableText>(find.byType(EditableText));
+    expect(before.focusNode.hasFocus, isTrue);
+
+    suggestionsEnabled.value = true;
+    await tester.pump();
+    final after = tester.widget<EditableText>(find.byType(EditableText));
+    expect(after.focusNode.hasFocus, isTrue);
+
+    await tester.enterText(find.byType(TextField), '@a');
+    await tester.pump();
+    expect(controller.text, '@a');
+  });
+
+  testWidgets('chat composer applies input formatters before text editing', (
+    tester,
+  ) async {
+    final controller = TextEditingController(text: 'hello');
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: Scaffold(
+          body: ui.ChatComposer(
+            controller: controller,
+            inputFormatters: const [_BackspaceReplacementFormatter()],
+            actions: const [],
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    controller.selection = const TextSelection.collapsed(offset: 5);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.backspace);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.backspace);
+    await tester.pump();
+
+    expect(controller.text, 'handled');
+  });
+
   testWidgets('paste does not type clipboard text when a file is staged', (
     tester,
   ) async {
@@ -349,4 +501,22 @@ void _mockClipboardText(String? text) {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, null);
   });
+}
+
+class _BackspaceReplacementFormatter extends TextInputFormatter {
+  const _BackspaceReplacementFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (oldValue.text == 'hello' && newValue.text == 'hell') {
+      return const TextEditingValue(
+        text: 'handled',
+        selection: TextSelection.collapsed(offset: 7),
+      );
+    }
+    return newValue;
+  }
 }

@@ -147,6 +147,7 @@ class _MessageStage extends StatefulWidget {
     this.onResolveRoomProfile,
     this.onEnterProfileRoom,
     this.senderProfileActionBuilder,
+    this.onMentionUser,
   });
 
   final String? roomId;
@@ -174,6 +175,7 @@ class _MessageStage extends StatefulWidget {
   final RoomProfileResolver? onResolveRoomProfile;
   final ValueChanged<PublicRoom>? onEnterProfileRoom;
   final UserProfileActionBuilder? senderProfileActionBuilder;
+  final ValueChanged<UserSummary>? onMentionUser;
 
   @override
   State<_MessageStage> createState() => _MessageStageState();
@@ -943,6 +945,7 @@ class _MessageStageState extends State<_MessageStage> {
                 onResolveRoomProfile: widget.onResolveRoomProfile,
                 onEnterProfileRoom: widget.onEnterProfileRoom,
                 profileActionBuilder: widget.senderProfileActionBuilder,
+                onMentionUser: widget.onMentionUser,
               ),
           ],
         );
@@ -1780,6 +1783,7 @@ class _MessageRow extends StatelessWidget {
     this.onResolveRoomProfile,
     this.onEnterProfileRoom,
     this.profileActionBuilder,
+    this.onMentionUser,
   });
 
   final Message message;
@@ -1798,6 +1802,7 @@ class _MessageRow extends StatelessWidget {
   final RoomProfileResolver? onResolveRoomProfile;
   final ValueChanged<PublicRoom>? onEnterProfileRoom;
   final UserProfileActionBuilder? profileActionBuilder;
+  final ValueChanged<UserSummary>? onMentionUser;
 
   @override
   Widget build(BuildContext context) {
@@ -1869,6 +1874,11 @@ class _MessageRow extends StatelessWidget {
       inLive: inLive,
       child: avatar,
     );
+    final avatarWithContextMenu = _MessageAvatarMentionMenu(
+      user: message.sender,
+      onMentionUser: message.sender.id == currentUser.id ? null : onMentionUser,
+      child: avatarHoverCard,
+    );
 
     return Row(
       mainAxisAlignment: outgoing
@@ -1876,10 +1886,49 @@ class _MessageRow extends StatelessWidget {
           : MainAxisAlignment.start,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (!outgoing) ...[avatarHoverCard, const SizedBox(width: 10)],
+        if (!outgoing) ...[avatarWithContextMenu, const SizedBox(width: 10)],
         bubble,
-        if (outgoing) ...[const SizedBox(width: 10), avatarHoverCard],
+        if (outgoing) ...[const SizedBox(width: 10), avatarWithContextMenu],
       ],
+    );
+  }
+}
+
+class _MessageAvatarMentionMenu extends StatelessWidget {
+  const _MessageAvatarMentionMenu({
+    required this.user,
+    required this.child,
+    this.onMentionUser,
+  });
+
+  final UserSummary user;
+  final Widget child;
+  final ValueChanged<UserSummary>? onMentionUser;
+
+  @override
+  Widget build(BuildContext context) {
+    final onMention = onMentionUser;
+    if (onMention == null) return child;
+    final label = _senderName(user);
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onSecondaryTapDown: (details) {
+        unawaited(
+          showUiContextMenu(
+            context,
+            position: details.globalPosition,
+            sections: [
+              UiContextMenuSection([
+                UiContextMenuItem(
+                  label: '@$label',
+                  onPressed: () => onMention(user),
+                ),
+              ]),
+            ],
+          ),
+        );
+      },
+      child: child,
     );
   }
 }
@@ -2246,8 +2295,12 @@ class _MessageTextController extends TextEditingController {
     TextStyle? style,
     required bool withComposing,
   }) {
-    final matches = _messageLinkMatches(text).toList(growable: false);
-    if (matches.isEmpty) {
+    final linkMatches = _messageLinkMatches(text).toList(growable: false);
+    final mentionMatches = message_mentions
+        .messageMentionRanges(text)
+        .where((range) => !_overlapsAnyLink(range, linkMatches))
+        .toList(growable: false);
+    if (linkMatches.isEmpty && mentionMatches.isEmpty) {
       _disposeStaleLinkRecognizers(_linkRecognizers);
       _linkRecognizers = {};
       return TextSpan(text: text, style: style);
@@ -2259,29 +2312,50 @@ class _MessageTextController extends TextEditingController {
       decoration: TextDecoration.underline,
       decorationColor: UiColors.accent,
     );
+    final mentionStyle = baseStyle.copyWith(
+      color: UiColors.controlAccent,
+      fontWeight: FontWeight.w600,
+      decoration: TextDecoration.none,
+    );
+    final segments = <_MessageInlineSegment>[
+      for (final match in linkMatches) _MessageInlineSegment.link(match),
+      for (final match in mentionMatches) _MessageInlineSegment.mention(match),
+    ]..sort((a, b) => a.start.compareTo(b.start));
     final children = <InlineSpan>[];
     final staleRecognizers = Map<String, TapGestureRecognizer>.of(
       _linkRecognizers,
     );
     final nextRecognizers = <String, TapGestureRecognizer>{};
     var cursor = 0;
-    for (final match in matches) {
-      if (match.start > cursor) {
-        children.add(TextSpan(text: text.substring(cursor, match.start)));
+    for (final segment in segments) {
+      if (segment.start < cursor) continue;
+      if (segment.start > cursor) {
+        children.add(TextSpan(text: text.substring(cursor, segment.start)));
       }
-      final key = '${match.start}:${match.end}:${match.uri}';
-      final recognizer = staleRecognizers.remove(key) ?? TapGestureRecognizer();
-      recognizer.onTap = () => onOpenLink(match.uri);
-      nextRecognizers[key] = recognizer;
-      children.add(
-        TextSpan(
-          text: text.substring(match.start, match.end),
-          style: linkStyle,
-          recognizer: recognizer,
-          mouseCursor: SystemMouseCursors.click,
-        ),
-      );
-      cursor = match.end;
+      if (segment.link != null) {
+        final match = segment.link!;
+        final key = '${match.start}:${match.end}:${match.uri}';
+        final recognizer =
+            staleRecognizers.remove(key) ?? TapGestureRecognizer();
+        recognizer.onTap = () => onOpenLink(match.uri);
+        nextRecognizers[key] = recognizer;
+        children.add(
+          TextSpan(
+            text: text.substring(match.start, match.end),
+            style: linkStyle,
+            recognizer: recognizer,
+            mouseCursor: SystemMouseCursors.click,
+          ),
+        );
+      } else {
+        children.add(
+          TextSpan(
+            text: text.substring(segment.start, segment.end),
+            style: mentionStyle,
+          ),
+        );
+      }
+      cursor = segment.end;
     }
     if (cursor < text.length) {
       children.add(TextSpan(text: text.substring(cursor)));
@@ -2305,6 +2379,29 @@ class _MessageTextController extends TextEditingController {
       recognizer.dispose();
     }
   }
+}
+
+class _MessageInlineSegment {
+  const _MessageInlineSegment.link(this.link) : mention = null;
+
+  const _MessageInlineSegment.mention(this.mention) : link = null;
+
+  final _MessageLinkMatch? link;
+  final message_mentions.MessageMentionRange? mention;
+
+  int get start => link?.start ?? mention!.start;
+
+  int get end => link?.end ?? mention!.end;
+}
+
+bool _overlapsAnyLink(
+  message_mentions.MessageMentionRange range,
+  List<_MessageLinkMatch> links,
+) {
+  for (final link in links) {
+    if (range.start < link.end && range.end > link.start) return true;
+  }
+  return false;
 }
 
 class _MessageLinkMatch {

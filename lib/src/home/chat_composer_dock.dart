@@ -3,6 +3,17 @@ part of 'chat_pane.dart';
 const _stickerPanelHeight = 268.0;
 const _stickerTileSize = 56.0;
 const _voicePanelHeight = 150.0;
+const _mentionPanelWidth = 300.0;
+const _mentionPanelVisibleRows = 4;
+const _mentionPanelEmptyHeight = 52.0;
+const _mentionPanelVerticalPadding = 12.0;
+const _mentionPanelTileHeight = 44.0;
+const _mentionPanelTileGap = 2.0;
+const _mentionPanelHeight =
+    _mentionPanelVerticalPadding +
+    _mentionPanelVisibleRows * _mentionPanelTileHeight +
+    (_mentionPanelVisibleRows - 1) * _mentionPanelTileGap;
+const _mentionPanelGap = 8.0;
 
 class _ComposerDock extends StatelessWidget {
   const _ComposerDock({
@@ -14,6 +25,14 @@ class _ComposerDock extends StatelessWidget {
     required this.voiceState,
     required this.attachments,
     required this.fileActionHighlighted,
+    required this.mentionOptions,
+    required this.mentionLoading,
+    required this.mentionSelectedIndex,
+    required this.onSelectMention,
+    required this.inputFormatters,
+    required this.onNavigateMentionSelection,
+    required this.onConfirmMentionSelection,
+    required this.onHighlightMentionSelection,
     required this.onSubmit,
     required this.onSendSticker,
     required this.onOpenStickers,
@@ -38,6 +57,16 @@ class _ComposerDock extends StatelessWidget {
   final voice_display.VoiceRecorderState voiceState;
   final List<composer_attachment.ComposerAttachmentView> attachments;
   final bool fileActionHighlighted;
+  final List<message_mentions.MessageMentionOption> mentionOptions;
+  final bool mentionLoading;
+  final int mentionSelectedIndex;
+  final ValueChanged<message_mentions.MessageMentionOption>? onSelectMention;
+  final List<TextInputFormatter>? inputFormatters;
+  final bool Function(ComposerSuggestionNavigation navigation)?
+  onNavigateMentionSelection;
+  final bool Function(ComposerSuggestionAction action)?
+  onConfirmMentionSelection;
+  final ValueChanged<int>? onHighlightMentionSelection;
   final ValueChanged<String> onSubmit;
   final ValueChanged<Sticker> onSendSticker;
   final VoidCallback onOpenStickers;
@@ -80,73 +109,425 @@ class _ComposerDock extends StatelessWidget {
                 ),
               ),
             ],
-            ChatComposer(
-              key: dropKey,
-              controller: controller,
-              composerController: composerController,
-              hintText: '写点什么…',
-              maxLines: 5,
-              onSubmitted: onSubmit,
-              onPasteFiles: onPasteFiles,
-              onCanPasteFiles: onCanPasteFiles,
-              attachments: attachments.isEmpty
-                  ? null
-                  : _ComposerAttachmentStrip(
-                      attachments: attachments,
-                      onRemove: onRemoveAttachment,
-                      onRetry: onRetryAttachment,
-                    ),
-              actions: [
-                ComposerAction(
-                  id: 'stickers',
-                  icon: Icons.emoji_emotions_outlined,
-                  label: '表情',
-                  onPressed: onOpenStickers,
-                  panel: ComposerPanel.static(
-                    height: _stickerPanelHeight,
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                    child: _StickerPanel(
-                      state: stickerPanel,
-                      onSendSticker: onSendSticker,
-                      onRefresh: onRefreshStickers,
-                      onSourceChanged: onStickerSourceChanged,
+            _ComposerMentionOverlay(
+              visible: mentionOptions.isNotEmpty || mentionLoading,
+              panel: _ComposerMentionPanel(
+                options: mentionOptions,
+                loading: mentionLoading,
+                selectedIndex: mentionSelectedIndex,
+                onHighlight: onHighlightMentionSelection,
+                onSelected: onSelectMention,
+              ),
+              child: ChatComposer(
+                key: dropKey,
+                controller: controller,
+                composerController: composerController,
+                hintText: '写点什么…',
+                maxLines: 5,
+                onSubmitted: onSubmit,
+                suggestionShortcutsEnabled: mentionOptions.isNotEmpty,
+                onSuggestionNavigationPressed: onNavigateMentionSelection,
+                onSuggestionActionPressed: onConfirmMentionSelection,
+                inputFormatters: inputFormatters,
+                onPasteFiles: onPasteFiles,
+                onCanPasteFiles: onCanPasteFiles,
+                attachments: attachments.isEmpty
+                    ? null
+                    : _ComposerAttachmentStrip(
+                        attachments: attachments,
+                        onRemove: onRemoveAttachment,
+                        onRetry: onRetryAttachment,
+                      ),
+                actions: [
+                  ComposerAction(
+                    id: 'stickers',
+                    icon: Icons.emoji_emotions_outlined,
+                    label: '表情',
+                    onPressed: onOpenStickers,
+                    panel: ComposerPanel.static(
+                      height: _stickerPanelHeight,
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                      child: _StickerPanel(
+                        state: stickerPanel,
+                        onSendSticker: onSendSticker,
+                        onRefresh: onRefreshStickers,
+                        onSourceChanged: onStickerSourceChanged,
+                      ),
                     ),
                   ),
-                ),
-                ComposerAction(
-                  id: 'voice',
-                  icon: Icons.mic_none,
-                  label: '语音',
-                  onPressed: onCancelVoice,
-                  panel: ComposerPanel.static(
-                    height: _voicePanelHeight,
-                    child: _VoicePanel(
-                      state: voiceState,
-                      onStart: onStartVoice,
-                      onSend: onSendVoice,
-                      onCancel: onCancelVoice,
+                  ComposerAction(
+                    id: 'voice',
+                    icon: Icons.mic_none,
+                    label: '语音',
+                    onPressed: onCancelVoice,
+                    panel: ComposerPanel.static(
+                      height: _voicePanelHeight,
+                      child: _VoicePanel(
+                        state: voiceState,
+                        onStart: onStartVoice,
+                        onSend: onSendVoice,
+                        onCancel: onCancelVoice,
+                      ),
                     ),
                   ),
-                ),
-                ComposerAction(
-                  id: 'file',
-                  icon: Icons.attach_file,
-                  label: '文件',
-                  selected: fileActionHighlighted,
-                  onPressed: onPickFile,
-                ),
-                ComposerAction(
-                  id: 'send',
-                  icon: Icons.send_rounded,
-                  label: '发送',
-                  tooltip: sending ? '发送中' : '发送',
-                  tone: ButtonTone.primary,
-                  alignment: ComposerActionAlignment.trailing,
-                  onPressed: () => onSubmit(controller.text),
-                ),
-              ],
+                  ComposerAction(
+                    id: 'file',
+                    icon: Icons.attach_file,
+                    label: '文件',
+                    selected: fileActionHighlighted,
+                    onPressed: onPickFile,
+                  ),
+                  ComposerAction(
+                    id: 'send',
+                    icon: Icons.send_rounded,
+                    label: '发送',
+                    tooltip: sending ? '发送中' : '发送',
+                    tone: ButtonTone.primary,
+                    alignment: ComposerActionAlignment.trailing,
+                    onPressed: () => onSubmit(controller.text),
+                  ),
+                ],
+              ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ComposerMentionOverlay extends StatefulWidget {
+  const _ComposerMentionOverlay({
+    required this.visible,
+    required this.panel,
+    required this.child,
+  });
+
+  final bool visible;
+  final Widget panel;
+  final Widget child;
+
+  @override
+  State<_ComposerMentionOverlay> createState() =>
+      _ComposerMentionOverlayState();
+}
+
+class _ComposerMentionOverlayState extends State<_ComposerMentionOverlay> {
+  final GlobalKey _anchorKey = GlobalKey();
+  final OverlayPortalController _portal = OverlayPortalController();
+
+  @override
+  void didUpdateWidget(_ComposerMentionOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _schedulePortalSync();
+  }
+
+  @override
+  void dispose() {
+    if (_portal.isShowing) _portal.hide();
+    super.dispose();
+  }
+
+  void _schedulePortalSync() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (widget.visible) {
+        if (!_portal.isShowing) _portal.show();
+      } else if (_portal.isShowing) {
+        _portal.hide();
+      }
+    });
+  }
+
+  Rect? _anchorRectInOverlay() {
+    final anchorContext = _anchorKey.currentContext;
+    final overlay = Overlay.maybeOf(context);
+    final anchorBox = anchorContext?.findRenderObject();
+    final overlayBox = overlay?.context.findRenderObject();
+    if (anchorBox is! RenderBox ||
+        overlayBox is! RenderBox ||
+        !anchorBox.hasSize ||
+        !overlayBox.hasSize) {
+      return null;
+    }
+
+    final topLeft = anchorBox.localToGlobal(Offset.zero, ancestor: overlayBox);
+    return topLeft & anchorBox.size;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _schedulePortalSync();
+    return OverlayPortal(
+      controller: _portal,
+      overlayChildBuilder: (context) {
+        return Positioned.fill(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final anchorRect = _anchorRectInOverlay();
+              if (anchorRect == null) return const SizedBox.shrink();
+              return CustomSingleChildLayout(
+                delegate: _ComposerMentionOverlayLayoutDelegate(
+                  anchorRect: anchorRect,
+                ),
+                child: widget.panel,
+              );
+            },
+          ),
+        );
+      },
+      child: KeyedSubtree(key: _anchorKey, child: widget.child),
+    );
+  }
+}
+
+class _ComposerMentionOverlayLayoutDelegate extends SingleChildLayoutDelegate {
+  const _ComposerMentionOverlayLayoutDelegate({required this.anchorRect});
+
+  final Rect anchorRect;
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
+    return BoxConstraints.loose(constraints.biggest);
+  }
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) {
+    final maxLeft = math.max(0.0, size.width - childSize.width);
+    final left = (anchorRect.left + 4).clamp(0.0, maxLeft).toDouble();
+    final maxTop = math.max(0.0, size.height - childSize.height);
+    final top = (anchorRect.top - _mentionPanelGap - childSize.height)
+        .clamp(0.0, maxTop)
+        .toDouble();
+    return Offset(left, top);
+  }
+
+  @override
+  bool shouldRelayout(_ComposerMentionOverlayLayoutDelegate oldDelegate) {
+    return oldDelegate.anchorRect != anchorRect;
+  }
+}
+
+class _ComposerMentionPanel extends StatefulWidget {
+  const _ComposerMentionPanel({
+    required this.options,
+    required this.loading,
+    required this.selectedIndex,
+    required this.onHighlight,
+    required this.onSelected,
+  });
+
+  final List<message_mentions.MessageMentionOption> options;
+  final bool loading;
+  final int selectedIndex;
+  final ValueChanged<int>? onHighlight;
+  final ValueChanged<message_mentions.MessageMentionOption>? onSelected;
+
+  @override
+  State<_ComposerMentionPanel> createState() => _ComposerMentionPanelState();
+}
+
+class _ComposerMentionPanelState extends State<_ComposerMentionPanel> {
+  late final ScrollController _scrollController = ScrollController();
+
+  @override
+  void didUpdateWidget(_ComposerMentionPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedIndex != widget.selectedIndex ||
+        oldWidget.options.length != widget.options.length) {
+      _scheduleSelectedVisible();
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleSelectedVisible();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final config = AppConfigScope.of(context);
+    final rows = widget.options;
+    final height = _mentionPanelHeightFor(rows.length);
+    final selectedIndex = _effectiveSelectedIndex(rows.length);
+    return SizedBox(
+      width: _mentionPanelWidth,
+      height: height,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: UiColors.surfaceRaised,
+          borderRadius: BorderRadius.circular(UiRadii.md),
+          border: Border.all(color: UiColors.borderStrong),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x66000000),
+              blurRadius: 18,
+              offset: Offset(0, 10),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(UiRadii.md),
+          child: rows.isEmpty
+              ? SizedBox(
+                  child: Center(
+                    child: widget.loading
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: UiColors.accent,
+                            ),
+                          )
+                        : Text(
+                            '没有匹配的成员',
+                            style: UiTypography.label.copyWith(
+                              color: UiColors.textMuted,
+                            ),
+                          ),
+                  ),
+                )
+              : Scrollbar(
+                  controller: _scrollController,
+                  thumbVisibility: rows.length > 4,
+                  child: ListView.separated(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    itemCount: rows.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: _mentionPanelTileGap),
+                    itemBuilder: (context, index) {
+                      final option = rows[index];
+                      final user = option.member.user;
+                      final nameColor = roleBadgeForegroundColorForLabel(
+                        option.roleLabel,
+                      );
+                      return _ComposerMentionTile(
+                        option: option,
+                        avatarUrl: config.resolveAssetUrl(user.avatarUrl),
+                        nameColor: nameColor,
+                        highlighted: selectedIndex == index,
+                        onHover: () => widget.onHighlight?.call(index),
+                        onSelected: widget.onSelected,
+                      );
+                    },
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+
+  int _effectiveSelectedIndex(int rowCount) {
+    if (rowCount <= 0) return 0;
+    return widget.selectedIndex.clamp(0, rowCount - 1).toInt();
+  }
+
+  void _scheduleSelectedVisible() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final rowCount = widget.options.length;
+      if (rowCount <= 0) return;
+      final index = _effectiveSelectedIndex(rowCount);
+      final rowTop =
+          6.0 + index * (_mentionPanelTileHeight + _mentionPanelTileGap);
+      final rowBottom = rowTop + _mentionPanelTileHeight;
+      final position = _scrollController.position;
+      var target = position.pixels;
+      if (rowTop < position.pixels) {
+        target = rowTop;
+      } else if (rowBottom > position.pixels + position.viewportDimension) {
+        target = rowBottom - position.viewportDimension;
+      }
+      target = target
+          .clamp(position.minScrollExtent, position.maxScrollExtent)
+          .toDouble();
+      if ((target - position.pixels).abs() < 0.5) return;
+      _scrollController.animateTo(
+        target,
+        duration: const Duration(milliseconds: 90),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+}
+
+double _mentionPanelHeightFor(int rowCount) {
+  if (rowCount <= 0) return _mentionPanelEmptyHeight;
+  if (rowCount >= _mentionPanelVisibleRows) return _mentionPanelHeight;
+  return _mentionPanelVerticalPadding +
+      rowCount * _mentionPanelTileHeight +
+      (rowCount - 1) * _mentionPanelTileGap;
+}
+
+class _ComposerMentionTile extends StatelessWidget {
+  const _ComposerMentionTile({
+    required this.option,
+    required this.avatarUrl,
+    required this.nameColor,
+    required this.highlighted,
+    required this.onHover,
+    required this.onSelected,
+  });
+
+  final message_mentions.MessageMentionOption option;
+  final String? avatarUrl;
+  final Color nameColor;
+  final bool highlighted;
+  final VoidCallback onHover;
+  final ValueChanged<message_mentions.MessageMentionOption>? onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final user = option.member.user;
+    return MouseRegion(
+      onEnter: (_) => onHover(),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onSelected == null ? null : () => onSelected!(option),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOutCubic,
+          margin: const EdgeInsets.symmetric(horizontal: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          constraints: const BoxConstraints.tightFor(
+            height: _mentionPanelTileHeight,
+          ),
+          decoration: BoxDecoration(
+            color: highlighted ? UiColors.selected : Colors.transparent,
+            borderRadius: BorderRadius.circular(UiRadii.sm),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Avatar(
+                label: room_display.userAvatarLabel(user),
+                imageUrl: avatarUrl,
+                defaultAvatarKey: user.defaultAvatarKey,
+                size: 30,
+                showBorder: false,
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  option.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: UiTypography.body.copyWith(
+                    color: nameColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -10,6 +10,7 @@ import 'package:flutter/gestures.dart'
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart'
     show RenderAbstractViewport, ScrollCacheExtent;
+import 'package:flutter/services.dart' show TextInputFormatter;
 
 import '../app/file_display.dart' as file_display;
 import '../app/file_transfer_state.dart';
@@ -17,6 +18,7 @@ import '../app/media_cache_controller.dart';
 import '../app/composer_attachment_display.dart' as composer_attachment;
 import '../app/live_display.dart' as live_display;
 import '../app/message_display.dart' as message_display;
+import '../app/message_mentions.dart' as message_mentions;
 import '../app/room_display.dart' as room_display;
 import '../app/sticker_display.dart' as sticker_display;
 import '../app/voice_message_display.dart' as voice_display;
@@ -79,6 +81,14 @@ class ChatPane extends StatelessWidget {
     required this.voiceState,
     required this.composerAttachments,
     required this.fileActionHighlighted,
+    this.mentionOptions = const [],
+    this.mentionLoading = false,
+    this.mentionSelectedIndex = 0,
+    this.onSelectMention,
+    this.composerInputFormatters,
+    this.onNavigateMentionSelection,
+    this.onConfirmMentionSelection,
+    this.onHighlightMentionSelection,
     required this.onSubmit,
     required this.onSendSticker,
     required this.onLoadStickers,
@@ -101,6 +111,7 @@ class ChatPane extends StatelessWidget {
     this.onResolveRoomProfile,
     this.onEnterProfileRoom,
     this.senderProfileActionBuilder,
+    this.onMentionUser,
     this.composerDropKey,
   });
 
@@ -127,6 +138,16 @@ class ChatPane extends StatelessWidget {
   final voice_display.VoiceRecorderState voiceState;
   final List<composer_attachment.ComposerAttachmentView> composerAttachments;
   final bool fileActionHighlighted;
+  final List<message_mentions.MessageMentionOption> mentionOptions;
+  final bool mentionLoading;
+  final int mentionSelectedIndex;
+  final ValueChanged<message_mentions.MessageMentionOption>? onSelectMention;
+  final List<TextInputFormatter>? composerInputFormatters;
+  final bool Function(ComposerSuggestionNavigation navigation)?
+  onNavigateMentionSelection;
+  final bool Function(ComposerSuggestionAction action)?
+  onConfirmMentionSelection;
+  final ValueChanged<int>? onHighlightMentionSelection;
   final ValueChanged<String> onSubmit;
   final ValueChanged<Sticker> onSendSticker;
   final VoidCallback onLoadStickers;
@@ -154,6 +175,7 @@ class ChatPane extends StatelessWidget {
   final RoomProfileResolver? onResolveRoomProfile;
   final ValueChanged<PublicRoom>? onEnterProfileRoom;
   final UserProfileActionBuilder? senderProfileActionBuilder;
+  final ValueChanged<UserSummary>? onMentionUser;
   final Key? composerDropKey;
 
   @override
@@ -229,6 +251,7 @@ class ChatPane extends StatelessWidget {
               onResolveRoomProfile: onResolveRoomProfile,
               onEnterProfileRoom: onEnterProfileRoom,
               senderProfileActionBuilder: senderProfileActionBuilder,
+              onMentionUser: onMentionUser,
             ),
           ),
           if (roomReady)
@@ -247,6 +270,14 @@ class ChatPane extends StatelessWidget {
                 voiceState: voiceState,
                 attachments: composerAttachments,
                 fileActionHighlighted: fileActionHighlighted,
+                mentionOptions: mentionOptions,
+                mentionLoading: mentionLoading,
+                mentionSelectedIndex: mentionSelectedIndex,
+                onSelectMention: onSelectMention,
+                inputFormatters: composerInputFormatters,
+                onNavigateMentionSelection: onNavigateMentionSelection,
+                onConfirmMentionSelection: onConfirmMentionSelection,
+                onHighlightMentionSelection: onHighlightMentionSelection,
                 onSubmit: onSubmit,
                 onSendSticker: onSendSticker,
                 onOpenStickers: onLoadStickers,

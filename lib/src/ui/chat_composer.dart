@@ -7,13 +7,19 @@ import 'tokens.dart';
 
 enum ComposerPanelType { list, static }
 
+enum ComposerSuggestionNavigation { previous, next }
+
+enum ComposerSuggestionAction { confirm }
+
 /// Lets an owner drive the composer's open panel imperatively — chiefly to
 /// retract a panel (e.g. the voice recorder) once its action completes, so the
 /// composer collapses back to the input without the user tapping again.
 class ChatComposerController extends ChangeNotifier {
   bool _closeRequested = false;
+  bool _focusRequested = false;
 
   bool get closeRequested => _closeRequested;
+  bool get focusRequested => _focusRequested;
 
   /// Asks the attached [ChatComposer] to close whatever panel is open.
   void closePanel() {
@@ -21,7 +27,13 @@ class ChatComposerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void requestInputFocus() {
+    _focusRequested = true;
+    notifyListeners();
+  }
+
   void _consumeCloseRequest() => _closeRequested = false;
+  void _consumeFocusRequest() => _focusRequested = false;
 }
 
 class ComposerAction {
@@ -91,6 +103,10 @@ class ChatComposer extends StatefulWidget {
     this.maxLines = 5,
     this.onSubmitted,
     this.onChanged,
+    this.suggestionShortcutsEnabled = false,
+    this.onSuggestionNavigationPressed,
+    this.onSuggestionActionPressed,
+    this.inputFormatters,
     this.onPasteFiles,
     this.onCanPasteFiles,
     this.attachments,
@@ -106,6 +122,12 @@ class ChatComposer extends StatefulWidget {
   final int maxLines;
   final ValueChanged<String>? onSubmitted;
   final ValueChanged<String>? onChanged;
+  final bool suggestionShortcutsEnabled;
+  final bool Function(ComposerSuggestionNavigation navigation)?
+  onSuggestionNavigationPressed;
+  final bool Function(ComposerSuggestionAction action)?
+  onSuggestionActionPressed;
+  final List<TextInputFormatter>? inputFormatters;
 
   /// Invoked when the user pastes into the composer. Should stage any clipboard
   /// files/image as attachments and return true when it consumed the paste, so
@@ -187,11 +209,16 @@ class _ChatComposerState extends State<ChatComposer> {
 
   void _handleComposerControllerChanged() {
     final controller = widget.composerController;
-    if (controller == null || !controller.closeRequested) return;
-    controller._consumeCloseRequest();
-    if (_openActionId != null) {
+    if (controller == null) return;
+    final closeRequested = controller.closeRequested;
+    final focusRequested = controller.focusRequested;
+    if (!closeRequested && !focusRequested) return;
+    if (closeRequested) controller._consumeCloseRequest();
+    if (focusRequested) controller._consumeFocusRequest();
+    if (closeRequested && _openActionId != null) {
       setState(() => _openActionId = null);
     }
+    if (focusRequested) _inputFocusNode.requestFocus();
   }
 
   bool _handleKeyboardEvent(KeyEvent event) {
@@ -276,6 +303,50 @@ class _ChatComposerState extends State<ChatComposer> {
     );
   }
 
+  Widget _wrapSuggestionShortcuts(Widget input) {
+    return Shortcuts(
+      shortcuts: widget.suggestionShortcutsEnabled
+          ? const <ShortcutActivator, Intent>{
+              SingleActivator(LogicalKeyboardKey.tab):
+                  _ComposerSuggestionConfirmIntent(),
+              SingleActivator(
+                LogicalKeyboardKey.arrowUp,
+              ): _ComposerSuggestionNavigateIntent(
+                ComposerSuggestionNavigation.previous,
+              ),
+              SingleActivator(
+                LogicalKeyboardKey.arrowDown,
+              ): _ComposerSuggestionNavigateIntent(
+                ComposerSuggestionNavigation.next,
+              ),
+            }
+          : const <ShortcutActivator, Intent>{},
+      child: Actions(
+        actions: <Type, Action<Intent>>{
+          _ComposerSuggestionConfirmIntent:
+              CallbackAction<_ComposerSuggestionConfirmIntent>(
+                onInvoke: (_) {
+                  widget.onSuggestionActionPressed?.call(
+                    ComposerSuggestionAction.confirm,
+                  );
+                  _inputFocusNode.requestFocus();
+                  return null;
+                },
+              ),
+          _ComposerSuggestionNavigateIntent:
+              CallbackAction<_ComposerSuggestionNavigateIntent>(
+                onInvoke: (intent) {
+                  widget.onSuggestionNavigationPressed?.call(intent.navigation);
+                  _inputFocusNode.requestFocus();
+                  return null;
+                },
+              ),
+        },
+        child: input,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final openAction = _openAction;
@@ -302,16 +373,19 @@ class _ChatComposerState extends State<ChatComposer> {
                       curve: Curves.easeOutCubic,
                       alignment: Alignment.topCenter,
                       child: openPanel == null
-                          ? _wrapPaste(
-                              Input(
-                                controller: _effectiveController,
-                                focusNode: _inputFocusNode,
-                                hintText: widget.hintText,
-                                minLines: widget.minLines,
-                                maxLines: widget.maxLines,
-                                canPasteNonText: widget.onCanPasteFiles,
-                                onSubmitted: widget.onSubmitted,
-                                onChanged: widget.onChanged,
+                          ? _wrapSuggestionShortcuts(
+                              _wrapPaste(
+                                Input(
+                                  controller: _effectiveController,
+                                  focusNode: _inputFocusNode,
+                                  hintText: widget.hintText,
+                                  minLines: widget.minLines,
+                                  maxLines: widget.maxLines,
+                                  inputFormatters: widget.inputFormatters,
+                                  canPasteNonText: widget.onCanPasteFiles,
+                                  onSubmitted: widget.onSubmitted,
+                                  onChanged: widget.onChanged,
+                                ),
                               ),
                             )
                           : _ComposerPanelFrame(
@@ -345,6 +419,16 @@ class _ChatComposerState extends State<ChatComposer> {
       },
     );
   }
+}
+
+class _ComposerSuggestionConfirmIntent extends Intent {
+  const _ComposerSuggestionConfirmIntent();
+}
+
+class _ComposerSuggestionNavigateIntent extends Intent {
+  const _ComposerSuggestionNavigateIntent(this.navigation);
+
+  final ComposerSuggestionNavigation navigation;
 }
 
 class _ComposerActionRow extends StatelessWidget {

@@ -186,9 +186,10 @@ class _UiContextMenuItemWidgetState extends State<_UiContextMenuItemWidget> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: _enabled
-            ? () {
-                Navigator.of(context).maybePop();
-                widget.item.onPressed!();
+            ? () async {
+                final onPressed = widget.item.onPressed!;
+                await Navigator.of(context).maybePop();
+                onPressed();
               }
             : null,
         child: AnimatedContainer(

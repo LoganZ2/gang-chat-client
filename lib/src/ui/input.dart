@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'text_context_menu.dart';
 import 'tokens.dart';
@@ -34,6 +35,7 @@ class Input extends StatefulWidget {
     this.maxLines = 5,
     this.onSubmitted,
     this.onChanged,
+    this.inputFormatters,
     this.style = UiTypography.body,
     this.hintStyle = const TextStyle(color: UiColors.textMuted),
     this.height = defaultHeight,
@@ -59,6 +61,7 @@ class Input extends StatefulWidget {
   final int? maxLines;
   final ValueChanged<String>? onSubmitted;
   final ValueChanged<String>? onChanged;
+  final List<TextInputFormatter>? inputFormatters;
   final TextStyle style;
   final TextStyle hintStyle;
   final UndoHistoryController? undoController;
@@ -215,6 +218,7 @@ class _InputState extends State<Input> {
           textInputAction: _effectiveTextInputAction,
           minLines: _effectiveMinLines,
           maxLines: _effectiveMaxLines,
+          inputFormatters: widget.inputFormatters,
           undoController: _effectiveUndoController,
           onSubmitted: widget.onSubmitted,
           onChanged: widget.onChanged,

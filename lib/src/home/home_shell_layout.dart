@@ -238,6 +238,17 @@ extension _HomeShellLayout on _HomeShellState {
       composerAttachments: _stagedAttachmentViews,
       fileActionHighlighted:
           _pickingAttachments || _stagedAttachments.isNotEmpty,
+      mentionOptions: _composerMentionOptions,
+      mentionLoading:
+          _composerMentionQuery != null && _loadingComposerMentionMembers,
+      mentionSelectedIndex: _composerMentionSelectedIndex,
+      onSelectMention: _selectComposerMention,
+      composerInputFormatters: [
+        _ConfirmedMentionBackspaceFormatter(_composerController),
+      ],
+      onNavigateMentionSelection: _navigateComposerMentionSelection,
+      onConfirmMentionSelection: _confirmComposerMentionSelection,
+      onHighlightMentionSelection: _highlightComposerMentionSelection,
       hasPendingJoinRequests: _selectedRoomHasPendingJoinRequests,
       onSubmit: (value) => unawaited(_sendText(value)),
       onSendSticker: (sticker) => unawaited(_sendSticker(sticker)),
@@ -261,6 +272,7 @@ extension _HomeShellLayout on _HomeShellState {
       onResolveRoomProfile: _resolveRoomProfile,
       onEnterProfileRoom: _openNotificationRoom,
       senderProfileActionBuilder: _messageProfileAction,
+      onMentionUser: _mentionUserFromAvatar,
       composerDropKey: _composerDropKey,
     );
   }

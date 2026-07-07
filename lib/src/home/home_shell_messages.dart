@@ -56,7 +56,10 @@ extension _HomeShellMessages on _HomeShellState {
 
   void _handleComposerDraftChanged() {
     if (_updatingComposerFromDraft) return;
+    if (_tryCompleteSingleComposerMentionAfterSpace()) return;
+    _composerController.pruneInvalidConfirmedMentions(notify: false);
     _saveComposerDraftValue(_composerController.text);
+    _updateComposerMentionState();
   }
 
   void _storeSelectedComposerDraft() {
@@ -68,6 +71,7 @@ extension _HomeShellMessages on _HomeShellState {
       ..clear()
       ..addAll(_stagedAttachmentDrafts[roomId] ?? const []);
     _setComposerText(_messageDrafts[roomId] ?? '', saveDraft: false);
+    _clearComposerMentionState();
   }
 
   void _setComposerText(String text, {required bool saveDraft}) {
@@ -80,6 +84,7 @@ extension _HomeShellMessages on _HomeShellState {
       return;
     }
 
+    _composerController.clearConfirmedMentions();
     final previousUpdating = _updatingComposerFromDraft;
     _updatingComposerFromDraft = true;
     _composerController.value = nextValue;
@@ -89,6 +94,316 @@ extension _HomeShellMessages on _HomeShellState {
 
   void _saveComposerDraftValue(String text) {
     _setHomeState(() => _saveDraftInState(text: text));
+  }
+
+  List<message_mentions.MessageMentionOption> _buildComposerMentionOptions(
+    message_mentions.MessageMentionQuery? query,
+  ) {
+    final roomId = _selectedServerId;
+    if (query == null ||
+        roomId == null ||
+        _composerMentionMembersRoomId != roomId) {
+      return const [];
+    }
+    return message_mentions.messageMentionOptions(
+      members: _composerMentionMembers,
+      query: query.query,
+      ownerUserId: _selectedRoom?.createdBy?.id,
+      excludedUserId: _currentUser.id,
+      limit: 50,
+    );
+  }
+
+  void _setComposerMentionQuery(message_mentions.MessageMentionQuery? query) {
+    _composerMentionQuery = query;
+    _composerMentionOptions = _buildComposerMentionOptions(query);
+    _composerMentionSelectedIndex = 0;
+  }
+
+  void _refreshComposerMentionOptions() {
+    _composerMentionOptions = _buildComposerMentionOptions(
+      _composerMentionQuery,
+    );
+    _composerMentionSelectedIndex = _clampComposerMentionSelectedIndex(
+      _composerMentionSelectedIndex,
+    );
+  }
+
+  int _clampComposerMentionSelectedIndex(int index) {
+    if (_composerMentionOptions.isEmpty) return 0;
+    return index.clamp(0, _composerMentionOptions.length - 1).toInt();
+  }
+
+  void _highlightComposerMentionSelection(int index) {
+    if (_composerMentionOptions.isEmpty) return;
+    final nextIndex = _clampComposerMentionSelectedIndex(index);
+    if (_composerMentionSelectedIndex == nextIndex) return;
+    _setHomeState(() => _composerMentionSelectedIndex = nextIndex);
+  }
+
+  bool _navigateComposerMentionSelection(
+    ComposerSuggestionNavigation navigation,
+  ) {
+    if (_composerMentionQuery == null || _composerMentionOptions.isEmpty) {
+      return false;
+    }
+    final current = _clampComposerMentionSelectedIndex(
+      _composerMentionSelectedIndex,
+    );
+    final delta = navigation == ComposerSuggestionNavigation.previous ? -1 : 1;
+    final count = _composerMentionOptions.length;
+    final nextIndex = (current + delta + count) % count;
+    _setHomeState(() => _composerMentionSelectedIndex = nextIndex);
+    _composerPanelController.requestInputFocus();
+    return true;
+  }
+
+  bool _confirmComposerMentionSelection(ComposerSuggestionAction action) {
+    if (action != ComposerSuggestionAction.confirm) return false;
+    return _completeComposerMentionSelection(
+      includeTerminatingSpace: true,
+      synthesizeTerminatingSpace: true,
+    );
+  }
+
+  void _clearComposerMentionState() {
+    if (_composerMentionQuery == null &&
+        _composerMentionOptions.isEmpty &&
+        !_loadingComposerMentionMembers) {
+      return;
+    }
+    _setHomeState(() {
+      _setComposerMentionQuery(null);
+      _loadingComposerMentionMembers = false;
+      _loadingComposerMentionMembersRoomId = null;
+    });
+  }
+
+  void _updateComposerMentionState() {
+    final roomId = _selectedServerId;
+    if (roomId == null) {
+      if (_composerMentionQuery != null) {
+        _setHomeState(() => _setComposerMentionQuery(null));
+      }
+      return;
+    }
+    final selection = _composerController.selection;
+    final query = !selection.isValid || !selection.isCollapsed
+        ? null
+        : message_mentions.activeMessageMentionQuery(
+            text: _composerController.text,
+            cursorOffset: selection.extentOffset,
+          );
+    if (query == null ||
+        _composerController.hasConfirmedMention(
+          start: query.start,
+          end: query.end,
+        )) {
+      if (_composerMentionQuery != null) {
+        _setHomeState(() => _setComposerMentionQuery(null));
+      }
+      return;
+    }
+
+    final previous = _composerMentionQuery;
+    if (previous == null ||
+        previous.start != query.start ||
+        previous.end != query.end ||
+        previous.query != query.query) {
+      _setHomeState(() => _setComposerMentionQuery(query));
+    }
+    _ensureComposerMentionMembers(roomId);
+  }
+
+  Future<void> _ensureComposerMentionMembers(String roomId) async {
+    if (_composerMentionMembersRoomId == roomId ||
+        (_loadingComposerMentionMembers &&
+            _loadingComposerMentionMembersRoomId == roomId)) {
+      return;
+    }
+    final serial = ++_composerMentionMembersSerial;
+    _setHomeState(() {
+      _loadingComposerMentionMembers = true;
+      _loadingComposerMentionMembersRoomId = roomId;
+    });
+    try {
+      final members = await _roomsController.loadAllRoomMembers(roomId);
+      if (!mounted ||
+          serial != _composerMentionMembersSerial ||
+          _selectedServerId != roomId) {
+        return;
+      }
+      _setHomeState(() {
+        _composerMentionMembers = List.unmodifiable(members);
+        _composerMentionMembersRoomId = roomId;
+        _loadingComposerMentionMembers = false;
+        _loadingComposerMentionMembersRoomId = null;
+        _refreshComposerMentionOptions();
+      });
+    } catch (_) {
+      if (!mounted ||
+          serial != _composerMentionMembersSerial ||
+          _selectedServerId != roomId) {
+        return;
+      }
+      _setHomeState(() {
+        _composerMentionMembers = const [];
+        _composerMentionMembersRoomId = roomId;
+        _loadingComposerMentionMembers = false;
+        _loadingComposerMentionMembersRoomId = null;
+        _refreshComposerMentionOptions();
+      });
+    }
+  }
+
+  void _selectComposerMention(message_mentions.MessageMentionOption option) {
+    final value = _composerController.value;
+    final selection = value.selection;
+    final query = selection.isValid && selection.isCollapsed
+        ? message_mentions.activeMessageMentionQuery(
+            text: value.text,
+            cursorOffset: selection.extentOffset,
+          )
+        : _composerMentionQuery;
+    if (query == null) return;
+
+    final replacement = message_mentions.messageMentionInsertText(option);
+    final nextText = value.text.replaceRange(
+      query.start,
+      query.end,
+      replacement,
+    );
+    final nextOffset = query.start + replacement.length;
+    final nextValue = value.copyWith(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: nextOffset),
+      composing: TextRange.empty,
+    );
+    _composerController.value = nextValue;
+    _composerController.addConfirmedMention(
+      start: query.start,
+      label: option.label,
+    );
+    _saveComposerDraftValue(nextText);
+    if (_composerMentionQuery != null) {
+      _setHomeState(() => _setComposerMentionQuery(null));
+    }
+    _composerPanelController.requestInputFocus();
+  }
+
+  bool _tryCompleteSingleComposerMentionAfterSpace() {
+    final value = _composerController.value;
+    final selection = value.selection;
+    if (!selection.isValid || !selection.isCollapsed) return false;
+    final query = _composerMentionQuery;
+    if (query == null) return false;
+    final cursor = selection.extentOffset;
+    if (cursor != query.end + 1) return false;
+    if (query.start < 0 || query.end >= value.text.length) return false;
+    if (value.text.codeUnitAt(query.end) != 0x20) return false;
+    return _completeComposerMentionSelection(includeTerminatingSpace: true);
+  }
+
+  bool _completeComposerMentionSelection({
+    required bool includeTerminatingSpace,
+    bool synthesizeTerminatingSpace = false,
+  }) {
+    final query = _composerMentionQuery;
+    if (query == null) return false;
+    final value = _composerController.value;
+    final selection = value.selection;
+    if (!selection.isValid || !selection.isCollapsed) return false;
+    var text = value.text;
+    if (synthesizeTerminatingSpace) {
+      if (!includeTerminatingSpace || selection.extentOffset != query.end) {
+        return false;
+      }
+      text = text.replaceRange(query.end, query.end, ' ');
+    }
+    final replaceEnd = includeTerminatingSpace ? query.end + 1 : query.end;
+    if (query.start < 0 ||
+        query.end > text.length ||
+        replaceEnd > text.length) {
+      return false;
+    }
+    if (includeTerminatingSpace && text.codeUnitAt(query.end) != 0x20) {
+      return false;
+    }
+    if (text.substring(query.start, query.end) != '@${query.query}') {
+      return false;
+    }
+    if (_composerController.hasConfirmedMention(
+      start: query.start,
+      end: query.end,
+    )) {
+      _setHomeState(() => _setComposerMentionQuery(null));
+      return false;
+    }
+
+    final options = _composerMentionOptions;
+    if (options.isEmpty) return false;
+    final option =
+        options[_clampComposerMentionSelectedIndex(
+          _composerMentionSelectedIndex,
+        )];
+    final replacement = message_mentions.messageMentionInsertText(option);
+    final nextText = text.replaceRange(query.start, replaceEnd, replacement);
+    final nextOffset = query.start + replacement.length;
+    final nextValue = value.copyWith(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: nextOffset),
+      composing: TextRange.empty,
+    );
+
+    final previousUpdating = _updatingComposerFromDraft;
+    _updatingComposerFromDraft = true;
+    _composerController.value = nextValue;
+    _updatingComposerFromDraft = previousUpdating;
+    _composerController.addConfirmedMention(
+      start: query.start,
+      label: option.label,
+    );
+    _saveComposerDraftValue(nextText);
+    _setHomeState(() => _setComposerMentionQuery(null));
+    _composerPanelController.requestInputFocus();
+    return true;
+  }
+
+  void _mentionUserFromAvatar(UserSummary user) {
+    final label = _mentionLabelForUser(user);
+    if (label.isEmpty) return;
+    final value = _composerController.value;
+    final needsLeadingSpace =
+        value.text.isNotEmpty && !_endsWithMentionBoundary(value.text);
+    final prefix = needsLeadingSpace ? ' ' : '';
+    final insertion = '$prefix@$label ';
+    final selection = value.selection;
+    final insertAt = selection.isValid ? selection.end : value.text.length;
+    final nextText = value.text.replaceRange(insertAt, insertAt, insertion);
+    final mentionStart = insertAt + prefix.length;
+    final nextOffset = insertAt + insertion.length;
+    _composerController.value = value.copyWith(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: nextOffset),
+      composing: TextRange.empty,
+    );
+    _composerController.addConfirmedMention(start: mentionStart, label: label);
+    _saveComposerDraftValue(nextText);
+    _composerPanelController.requestInputFocus();
+  }
+
+  String _mentionLabelForUser(UserSummary user) {
+    final roomName = user.roomDisplayName?.trim();
+    if (roomName != null && roomName.isNotEmpty) return roomName;
+    final displayName = user.displayName.trim();
+    if (displayName.isNotEmpty) return displayName;
+    return user.username.trim();
+  }
+
+  bool _endsWithMentionBoundary(String text) {
+    if (text.isEmpty) return true;
+    final codeUnit = text.codeUnitAt(text.length - 1);
+    return codeUnit <= 0x20 || codeUnit == 0x3000;
   }
 
   void _saveDraftInState({String? text}) {
