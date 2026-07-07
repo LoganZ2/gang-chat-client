@@ -84,6 +84,7 @@ class ChatPane extends StatelessWidget {
     required this.fileActionHighlighted,
     this.mentionOptions = const [],
     this.mentionMembers = const [],
+    this.mentionMembersReady = true,
     this.mentionLoading = false,
     this.mentionSelectedIndex = 0,
     this.onSelectMention,
@@ -143,6 +144,7 @@ class ChatPane extends StatelessWidget {
   final bool fileActionHighlighted;
   final List<message_mentions.MessageMentionOption> mentionOptions;
   final List<RoomMember> mentionMembers;
+  final bool mentionMembersReady;
   final bool mentionLoading;
   final int mentionSelectedIndex;
   final ValueChanged<message_mentions.MessageMentionOption>? onSelectMention;
@@ -248,6 +250,7 @@ class ChatPane extends StatelessWidget {
               newMessageCount: newMessageCount,
               focusMessageId: focusMessageId,
               mentionMembers: mentionMembers,
+              mentionMembersReady: mentionMembersReady,
               fileTransfers: fileTransfers,
               fileDownloads: fileDownloads,
               live: live,

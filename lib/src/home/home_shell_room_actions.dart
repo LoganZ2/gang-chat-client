@@ -124,7 +124,7 @@ extension _HomeShellRoomActions on _HomeShellState {
       _selectedRoom = null;
       _live = null;
       _messages = const [];
-      _focusedMessageId = null;
+      _focusedMessageId = focusMessageId;
       _fileTransfers = const {};
       _fileDownloads = const {};
       _membersInitialSearchQuery = '';

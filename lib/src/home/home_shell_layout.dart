@@ -244,6 +244,7 @@ extension _HomeShellLayout on _HomeShellState {
       mentionMembers: _composerMentionMembersRoomId == _selectedServerId
           ? _composerMentionMembers
           : const [],
+      mentionMembersReady: _composerMentionMembersRoomId == _selectedServerId,
       mentionLoading:
           _composerMentionQuery != null && _loadingComposerMentionMembers,
       mentionSelectedIndex: _composerMentionSelectedIndex,

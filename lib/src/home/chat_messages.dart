@@ -137,6 +137,7 @@ class _MessageStage extends StatefulWidget {
     required this.newMessageCount,
     required this.focusMessageId,
     required this.mentionMembers,
+    required this.mentionMembersReady,
     required this.fileTransfers,
     required this.fileDownloads,
     required this.live,
@@ -166,6 +167,7 @@ class _MessageStage extends StatefulWidget {
   final int newMessageCount;
   final String? focusMessageId;
   final List<RoomMember> mentionMembers;
+  final bool mentionMembersReady;
   final Map<String, FileTransferState> fileTransfers;
   final Map<String, FileTransferState> fileDownloads;
   final LiveState? live;
@@ -239,12 +241,21 @@ class _MessageStageState extends State<_MessageStage> {
     if (!restoring) {
       _scrollToBottom(animated: false);
     }
+    _prepareFocusedMessageHighlight(widget.focusMessageId);
     _scheduleFocusedMessageJump(widget.focusMessageId);
   }
 
   @override
   void didUpdateWidget(covariant _MessageStage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.focusMessageId != null &&
+        oldWidget.messages.isNotEmpty &&
+        widget.messages.isEmpty) {
+      _highlightedMessageTimer?.cancel();
+      _highlightedMessageTimer = null;
+      _highlightedMessageId = null;
+      _handledFocusMessageId = null;
+    }
     if (oldWidget.roomId != widget.roomId) {
       _showDetailedTimestamps = false;
       _showLatestButton = false;
@@ -272,10 +283,13 @@ class _MessageStageState extends State<_MessageStage> {
       } else {
         _scrollToBottom(animated: false);
       }
+      _prepareFocusedMessageHighlight(widget.focusMessageId);
+      _scheduleFocusedMessageJump(widget.focusMessageId);
       return;
     }
     if (oldWidget.focusMessageId != widget.focusMessageId ||
         oldWidget.messages.length != widget.messages.length) {
+      _prepareFocusedMessageHighlight(widget.focusMessageId);
       _scheduleFocusedMessageJump(widget.focusMessageId);
     }
     final addedMessages = _addedMessagesSince(oldWidget);
@@ -921,13 +935,7 @@ class _MessageStageState extends State<_MessageStage> {
     if (_handledFocusMessageId == messageId) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      Message? message;
-      for (final item in widget.messages) {
-        if (item.id == messageId) {
-          message = item;
-          break;
-        }
-      }
+      final message = _messageById(messageId);
       if (message == null) return;
       final focusedMessage = message;
       final focusedMessageId = focusedMessage.id;
@@ -942,6 +950,23 @@ class _MessageStageState extends State<_MessageStage> {
     });
   }
 
+  void _prepareFocusedMessageHighlight(String? messageId) {
+    if (messageId == null || messageId.isEmpty) return;
+    if (_handledFocusMessageId == messageId && _highlightedMessageId == null) {
+      return;
+    }
+    final message = _messageById(messageId);
+    if (message == null) return;
+    _highlightedMessageId = message.id;
+  }
+
+  Message? _messageById(String messageId) {
+    for (final item in widget.messages) {
+      if (item.id == messageId) return item;
+    }
+    return null;
+  }
+
   bool _messageTargetsCurrentUser(Message message) {
     if (message.pending || message.isRemoved) return false;
     if (message.sender.id == widget.currentUser.id) return false;
@@ -951,6 +976,29 @@ class _MessageStageState extends State<_MessageStage> {
       user: _currentUserMentionIdentity,
       ownerUserId: widget.ownerUserId,
     );
+  }
+
+  bool _messageIsHighlighted(Message message) {
+    if (message.clientMessageId == _highlightedMentionClientId) return true;
+    if (message.id == _highlightedMessageId) return true;
+    final focusMessageId = widget.focusMessageId;
+    return focusMessageId != null &&
+        focusMessageId.isNotEmpty &&
+        _handledFocusMessageId != focusMessageId &&
+        message.id == focusMessageId;
+  }
+
+  bool get _waitingForMentionRenderContext {
+    if (widget.mentionMembersReady) return false;
+    return widget.messages.any(_messageNeedsMentionRenderContext);
+  }
+
+  bool _messageNeedsMentionRenderContext(Message message) {
+    if (message.pending || message.isRemoved || message.type != 'text') {
+      return false;
+    }
+    if (message.mentions.isNotEmpty) return true;
+    return message_mentions.messageMentionRanges(message.body).isNotEmpty;
   }
 
   void _toggleDetailedTimestamps() {
@@ -976,7 +1024,8 @@ class _MessageStageState extends State<_MessageStage> {
       );
     }
 
-    if (widget.loading && widget.messages.isEmpty) {
+    if ((widget.loading && widget.messages.isEmpty) ||
+        _waitingForMentionRenderContext) {
       return const Center(
         child: SizedBox.square(
           dimension: 24,
@@ -1102,9 +1151,7 @@ class _MessageStageState extends State<_MessageStage> {
                 voicePlaybackActions: widget.voicePlaybackActions,
                 imagePreviewActions: widget.imagePreviewActions,
                 messageActions: widget.messageActions,
-                mentionHighlighted:
-                    message.clientMessageId == _highlightedMentionClientId ||
-                    message.id == _highlightedMessageId,
+                mentionHighlighted: _messageIsHighlighted(message),
                 mentionTargetsCurrentUser: _messageTargetsCurrentUser(message),
                 inLive: _userInLive(message.sender.id),
                 onResolveSenderProfile: widget.onResolveSenderProfile,
@@ -2184,15 +2231,22 @@ class _MessageBubbleState extends State<_MessageBubble> {
     final mentionBackgroundColor = widget.outgoing
         ? UiColors.amber.withValues(alpha: 0.18)
         : UiColors.amber.withValues(alpha: 0.13);
+    final contextMentionBackgroundColor = widget.outgoing
+        ? UiColors.amber.withValues(alpha: 0.28)
+        : UiColors.amber.withValues(alpha: 0.22);
     final highlightColor = contextMenuActive
-        ? UiColors.selected
+        ? widget.mentionTargetsCurrentUser
+              ? Color.alphaBlend(contextMentionBackgroundColor, backgroundColor)
+              : UiColors.selected
         : widget.mentionHighlighted
         ? UiColors.selected.withValues(alpha: 0.86)
         : widget.mentionTargetsCurrentUser
         ? Color.alphaBlend(mentionBackgroundColor, backgroundColor)
         : backgroundColor;
     final borderColor = contextMenuActive
-        ? UiColors.selectedBorder
+        ? (widget.mentionTargetsCurrentUser
+              ? UiColors.amber.withValues(alpha: 0.72)
+              : UiColors.selectedBorder)
         : widget.mentionHighlighted
         ? UiColors.selectedBorder
         : widget.mentionTargetsCurrentUser
@@ -2205,7 +2259,9 @@ class _MessageBubbleState extends State<_MessageBubble> {
       onPointerDown: (event) => _handleBubblePointerDown(event, contentKind),
       child: AnimatedContainer(
         key: ValueKey('message-bubble-surface-${widget.message.id}'),
-        duration: const Duration(milliseconds: 90),
+        duration: widget.mentionTargetsCurrentUser || widget.mentionHighlighted
+            ? Duration.zero
+            : const Duration(milliseconds: 90),
         curve: Curves.easeOutCubic,
         decoration: BoxDecoration(
           color: highlightColor,

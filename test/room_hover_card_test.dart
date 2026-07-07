@@ -489,6 +489,68 @@ void main() {
     expect(find.text('RID: R200'), findsOneWidget);
   });
 
+  testWidgets(
+    'mention room event notification shows content from info button',
+    (tester) async {
+      const preview = '@Current User 请看一下这里';
+      final notification = RoomEventNotification(
+        id: 'event_mention_info',
+        type: kRoomEventNotificationMentioned,
+        room: PublicRoom(
+          id: 'room_event_mention',
+          rid: 'R201',
+          name: 'Mention Room',
+          avatarUrl: null,
+          defaultAvatarKey: 'room-2',
+          visibility: 'private',
+          joinPolicy: 'closed',
+          memberCount: 2,
+          onlineMemberCount: 0,
+          liveParticipantCount: 0,
+          joined: true,
+          joinState: 'joined',
+        ),
+        actor: _creator,
+        createdAt: DateTime.utc(2026, 6, 1),
+        messageId: 'msg_mention_info',
+        messagePreview: preview,
+      );
+
+      await tester.pumpWidget(
+        _host(
+          HomeNotificationsPane(
+            invites: const [],
+            applications: const [],
+            roomNotifications: [notification],
+            loading: false,
+            error: null,
+            busyInviteId: null,
+            busyApplicationId: null,
+            currentUser: _currentUser,
+            onClose: () {},
+            onRefresh: () {},
+            onReviewInvite: (_, _) async {},
+            onWithdrawApplication: (_) async {},
+            onOpenRoom: (_) {},
+            onOpenRoomEvent: (_) {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('提及'), findsOneWidget);
+      expect(find.text(preview), findsNothing);
+
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: Offset.zero);
+      addTearDown(gesture.removePointer);
+      await gesture.moveTo(tester.getCenter(find.byIcon(Icons.info_outline)));
+      await tester.pumpAndSettle();
+
+      expect(find.text(preview), findsOneWidget);
+    },
+  );
+
   testWidgets('deleted notification rooms do not open room profile cards', (
     tester,
   ) async {

@@ -456,7 +456,7 @@ void main() {
         invites: const [],
         applications: const [],
         roomEvents: [mentioned],
-        query: '@Morgan',
+        query: '提及',
         filter: RoomNotificationFilter.all,
       ).single.roomEvent,
       mentioned,

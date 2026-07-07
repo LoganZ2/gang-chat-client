@@ -755,6 +755,84 @@ void main() {
 
     expect(mentionSpan, isNotNull);
     expect(mentionSpan!.style?.color, ui.UiColors.controlAccent);
+
+    await _secondaryClickAt(tester, tester.getCenter(fieldFinder));
+    await tester.pumpAndSettle();
+    final contextDecoration = _messageBubbleDecoration(tester);
+    expect(contextDecoration.color, isNot(ui.UiColors.selected));
+    expect(
+      (contextDecoration.border as Border).top.color,
+      isNot(ui.UiColors.selectedBorder),
+    );
+  });
+
+  testWidgets('mentioned messages wait for mention render context', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+
+    final mentionedMessage = _message(
+      type: 'text',
+      body: 'hello @Me',
+      mentions: const [
+        {'type': 'user', 'user_id': _currentUserId, 'label': 'Me'},
+      ],
+    );
+
+    await tester.pumpWidget(
+      _host(
+        _chatPane(
+          controller: controller,
+          room: _roomDetail,
+          messages: [mentionedMessage],
+          mentionMembersReady: false,
+        ),
+        height: 620,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('hello @Me'), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+    await tester.pumpWidget(
+      _host(
+        _chatPane(
+          controller: controller,
+          room: _roomDetail,
+          messages: [mentionedMessage],
+          mentionMembersReady: true,
+        ),
+        height: 620,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('hello @Me'), findsOneWidget);
+    final decoration = _messageBubbleDecoration(tester);
+    expect(decoration.color, isNot(ui.UiColors.surface));
+  });
+
+  testWidgets('focused message is highlighted on first frame', (tester) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      _host(
+        _chatPane(
+          controller: controller,
+          room: _roomDetail,
+          messages: [_message(type: 'text', body: 'jump target')],
+          focusMessageId: 'message_1',
+        ),
+        height: 620,
+      ),
+    );
+
+    final decoration = _messageBubbleDecoration(tester);
+    expect(decoration.color, isNot(ui.UiColors.surface));
+    expect(decoration.color, ui.UiColors.selected.withValues(alpha: 0.86));
   });
 
   testWidgets('selected text message context menu only copies selection', (
@@ -1937,11 +2015,13 @@ Widget _chatPane({
   LiveState? live,
   bool loading = false,
   int newMessageCount = 0,
+  String? focusMessageId,
   Future<UserSummary> Function(UserSummary sender)? onResolveSenderProfile,
   ValueChanged<PublicRoom>? onEnterProfileRoom,
   UserProfileActionBuilder? senderProfileActionBuilder,
   ChatMessageActions messageActions = const ChatMessageActions.disabled(),
   List<RoomMember> mentionMembers = const [],
+  bool mentionMembersReady = true,
   VoidCallback? onViewedNewMessages,
 }) {
   return ChatPane(
@@ -1951,6 +2031,7 @@ Widget _chatPane({
     live: live,
     messages: messages,
     newMessageCount: newMessageCount,
+    focusMessageId: focusMessageId,
     fileTransfers: const {},
     fileDownloads: const {},
     downloadActions: _downloadActions(),
@@ -1968,6 +2049,7 @@ Widget _chatPane({
     composerAttachments: const <composer_attachment.ComposerAttachmentView>[],
     fileActionHighlighted: false,
     mentionMembers: mentionMembers,
+    mentionMembersReady: mentionMembersReady,
     onSubmit: (_) {},
     onSendSticker: (_) {},
     onLoadStickers: () {},

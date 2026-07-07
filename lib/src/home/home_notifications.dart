@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import '../app/room_notifications.dart';
 import '../protocol/models.dart';
 import '../ui/ui.dart';
+import 'hover_card_anchor.dart';
 import 'room_profile_card.dart';
 
 typedef RoomInviteReviewCallback =
@@ -904,45 +906,35 @@ class _RoomEventNotificationRow extends StatelessWidget {
           ],
         );
       case kRoomEventNotificationMentioned:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
+        return Row(
           children: [
-            Row(
-              children: [
-                _NotificationText(text: '您在', query: query),
-                const SizedBox(width: 8),
-                Flexible(flex: 4, child: _roomTarget()),
-                const SizedBox(width: 8),
-                if (actor != null) ...[
-                  _NotificationText(text: '中被', query: query),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    flex: 4,
-                    child: _InlineUserTarget(
-                      user: actor,
-                      roomId: notification.room.id,
-                      targetId: notification.id,
-                      query: query,
-                      userExists: notification.actorExists,
-                      currentUser: currentUser,
-                      onResolveRoomProfile: onResolveRoomProfile,
-                      onResolveRoomUserProfile: onResolveRoomUserProfile,
-                      onOpenRoom: onOpenRoom,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  _NotificationText(text: '提及', query: query),
-                ] else
-                  _NotificationText(text: '中被提及', query: query),
-              ],
-            ),
-            if ((notification.messagePreview ?? '').trim().isNotEmpty) ...[
-              const SizedBox(height: 8),
-              _RoomEventMessagePreview(
-                text: notification.messagePreview!.trim(),
-                query: query,
+            _NotificationText(text: '您在', query: query),
+            const SizedBox(width: 8),
+            Flexible(flex: 4, child: _roomTarget()),
+            const SizedBox(width: 8),
+            if (actor != null) ...[
+              _NotificationText(text: '中被', query: query),
+              const SizedBox(width: 8),
+              Flexible(
+                flex: 4,
+                child: _InlineUserTarget(
+                  user: actor,
+                  roomId: notification.room.id,
+                  targetId: notification.id,
+                  query: query,
+                  userExists: notification.actorExists,
+                  currentUser: currentUser,
+                  onResolveRoomProfile: onResolveRoomProfile,
+                  onResolveRoomUserProfile: onResolveRoomUserProfile,
+                  onOpenRoom: onOpenRoom,
+                ),
               ),
+              const SizedBox(width: 8),
+              _NotificationText(text: '提及', query: query),
+              ..._messagePreviewInfoButton(),
+            ] else ...[
+              _NotificationText(text: '中被提及', query: query),
+              ..._messagePreviewInfoButton(),
             ],
           ],
         );
@@ -971,6 +963,12 @@ class _RoomEventNotificationRow extends StatelessWidget {
       onOpenRoom: onOpenRoom,
     );
   }
+
+  List<Widget> _messagePreviewInfoButton() {
+    final preview = notification.messagePreview?.trim();
+    if (preview == null || preview.isEmpty) return const [];
+    return [const SizedBox(width: 4), _RoomEventInfoButton(message: preview)];
+  }
 }
 
 class _RoomEventJumpAction extends StatelessWidget {
@@ -995,32 +993,68 @@ class _RoomEventJumpAction extends StatelessWidget {
   }
 }
 
-class _RoomEventMessagePreview extends StatelessWidget {
-  const _RoomEventMessagePreview({required this.text, required this.query});
+class _RoomEventInfoButton extends StatelessWidget {
+  const _RoomEventInfoButton({required this.message});
 
-  final String text;
-  final String query;
+  final String message;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: UiColors.surfacePressed,
-        borderRadius: BorderRadius.circular(UiRadii.md),
-        border: Border.all(color: UiColors.border),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-        child: HighlightedText(
-          text: text,
-          query: query,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: UiTypography.label.copyWith(
-            color: UiColors.textSecondary,
-            fontWeight: FontWeight.w600,
-          ),
+    return HoverCardAnchor(
+      resetKey: message,
+      cardWidth: _roomEventInfoCardWidth(context, message),
+      gap: 8,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: SizedBox.square(
+          dimension: 16,
+          child: Icon(Icons.info_outline, size: 14, color: UiColors.accent),
         ),
+      ),
+      cardBuilder: (context) => _RoomEventInfoCard(message: message),
+    );
+  }
+}
+
+double _roomEventInfoCardWidth(BuildContext context, String message) {
+  const horizontalPadding = 24.0;
+  const minWidth = 112.0;
+  const maxWidth = 360.0;
+  final direction = Directionality.maybeOf(context) ?? TextDirection.ltr;
+  final style = UiTypography.body.copyWith(fontSize: 12, height: 1.38);
+  final lines = message.trimRight().split('\n');
+  var longestLineWidth = 0.0;
+  for (final line in lines) {
+    final painter = TextPainter(
+      text: TextSpan(text: line.isEmpty ? ' ' : line, style: style),
+      textDirection: direction,
+      maxLines: 1,
+    )..layout();
+    longestLineWidth = math.max(longestLineWidth, painter.width);
+  }
+  return (longestLineWidth + horizontalPadding).clamp(minWidth, maxWidth);
+}
+
+class _RoomEventInfoCard extends StatelessWidget {
+  const _RoomEventInfoCard({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final hoverScope = HoverCardTapRegionScope.maybeOf(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: ReadOnlySelectableText(
+        value: message,
+        maxLines: 8,
+        style: UiTypography.body.copyWith(
+          color: UiColors.text,
+          fontSize: 12,
+          height: 1.38,
+        ),
+        contextMenuTapRegionGroupId: hoverScope?.tapRegionGroup,
+        onContextMenuOpenChanged: hoverScope?.onOverlayActivityChanged,
       ),
     );
   }

@@ -564,7 +564,6 @@ String _roomEventNotificationSearchText(RoomEventNotification notification) {
       break;
     case kRoomEventNotificationMentioned:
       _addSearchValue(values, '提及 @ mentioned');
-      _addSearchValue(values, notification.messagePreview);
       break;
   }
   return values.join('\n');
