@@ -301,17 +301,20 @@ class _UserProfileCardPopupRoute extends PopupRoute<void> {
       delegate: _UserProfileCardPopupLayoutDelegate(position),
       child: FadeTransition(
         opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-        child: AnchoredPanel(
-          width: hoverCardDefaultWidth,
-          child: _ResolvingUserProfileCard(
-            user: user,
-            currentUser: currentUser,
-            onResolveProfile: onResolveProfile,
-            onResolveRoomProfile: onResolveRoomProfile,
-            onEnterCommonRoom: onEnterCommonRoom,
-            profileActionBuilder: profileActionBuilder,
-            inLive: inLive,
-            showRoomRole: showRoomRole,
+        child: Material(
+          type: MaterialType.transparency,
+          child: AnchoredPanel(
+            width: hoverCardDefaultWidth,
+            child: _ResolvingUserProfileCard(
+              user: user,
+              currentUser: currentUser,
+              onResolveProfile: onResolveProfile,
+              onResolveRoomProfile: onResolveRoomProfile,
+              onEnterCommonRoom: onEnterCommonRoom,
+              profileActionBuilder: profileActionBuilder,
+              inLive: inLive,
+              showRoomRole: showRoomRole,
+            ),
           ),
         ),
       ),

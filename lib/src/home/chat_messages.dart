@@ -2606,11 +2606,11 @@ class _MessageTextController extends TextEditingController {
       decoration: TextDecoration.none,
     );
     final ownMentionStyle = mentionStyle.copyWith(
-      color: UiColors.accent,
+      color: UiColors.amber,
       fontWeight: FontWeight.w800,
       backgroundColor: _mentionHighlighted
-          ? UiColors.accent.withValues(alpha: 0.22)
-          : UiColors.accent.withValues(alpha: 0.12),
+          ? UiColors.amber.withValues(alpha: 0.24)
+          : UiColors.amber.withValues(alpha: 0.14),
     );
     final segments = <_MessageInlineSegment>[
       for (final match in linkMatches) _MessageInlineSegment.link(match),

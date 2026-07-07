@@ -607,6 +607,69 @@ void main() {
     expect(linkSpan.style?.color, ui.UiColors.accent);
   });
 
+  testWidgets('mention text click opens the user profile card', (tester) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    const mentionedUser = UserSummary(
+      id: 'mentioned_user',
+      username: 'target_user',
+      displayName: 'Target User',
+      avatarUrl: null,
+      defaultAvatarKey: 'green-2',
+      roomDisplayName: 'Target',
+      roomRole: 'member',
+    );
+    final mentionedMember = RoomMember(
+      user: mentionedUser,
+      role: 'member',
+      joinedAt: DateTime.utc(2026, 6, 11),
+      roomDisplayName: 'Target',
+    );
+
+    await tester.pumpWidget(
+      _host(
+        _chatPane(
+          controller: controller,
+          room: _roomDetail,
+          messages: [
+            _message(
+              type: 'text',
+              body: 'hello @Target',
+              mentions: const [
+                {
+                  'type': 'user',
+                  'user_id': 'mentioned_user',
+                  'label': 'Target',
+                },
+              ],
+            ),
+          ],
+          mentionMembers: [mentionedMember],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final fieldFinder = find.byType(TextField).first;
+    final field = tester.widget<TextField>(fieldFinder);
+    final span = field.controller!.buildTextSpan(
+      context: tester.element(fieldFinder),
+      style: field.style,
+      withComposing: false,
+    );
+    final mentionSpan = _findTextSpan(span, '@Target');
+
+    expect(mentionSpan, isNotNull);
+    expect(mentionSpan!.recognizer, isA<TapGestureRecognizer>());
+    expect(field.enableInteractiveSelection, isTrue);
+
+    (mentionSpan.recognizer! as TapGestureRecognizer).onTap!();
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('@target_user'), findsOneWidget);
+  });
+
   testWidgets('selected text message context menu only copies selection', (
     tester,
   ) async {
@@ -1791,6 +1854,7 @@ Widget _chatPane({
   ValueChanged<PublicRoom>? onEnterProfileRoom,
   UserProfileActionBuilder? senderProfileActionBuilder,
   ChatMessageActions messageActions = const ChatMessageActions.disabled(),
+  List<RoomMember> mentionMembers = const [],
   VoidCallback? onViewedNewMessages,
 }) {
   return ChatPane(
@@ -1816,6 +1880,7 @@ Widget _chatPane({
     voiceState: const voice_display.VoiceRecorderState(),
     composerAttachments: const <composer_attachment.ComposerAttachmentView>[],
     fileActionHighlighted: false,
+    mentionMembers: mentionMembers,
     onSubmit: (_) {},
     onSendSticker: (_) {},
     onLoadStickers: () {},
@@ -1862,6 +1927,7 @@ Message _message({
   UserSummary? recalledBy,
   bool isForceDeleted = false,
   UserSummary? forceDeletedBy,
+  List<Map<String, Object?>> mentions = const [],
   UserSummary sender = const UserSummary(
     id: 'user_1',
     username: 'logan',
@@ -1879,6 +1945,7 @@ Message _message({
     body: body,
     createdAt: createdAt ?? DateTime.utc(2026, 6, 11),
     attachments: attachments,
+    mentions: mentions,
     isRecalled: isRecalled,
     recalledBy: recalledBy,
     isForceDeleted: isForceDeleted,
