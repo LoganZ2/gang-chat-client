@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:client/src/app/composer_attachment_display.dart'
     as composer_attachment;
 import 'package:client/src/app/message_display.dart' as message_display;
@@ -625,6 +627,24 @@ void main() {
       joinedAt: DateTime.utc(2026, 6, 11),
       roomDisplayName: 'Target',
     );
+    const resolvedProfile = UserSummary(
+      id: 'mentioned_user',
+      username: 'resolved_target',
+      displayName: 'Resolved Target',
+      avatarUrl: null,
+      defaultAvatarKey: 'green-2',
+      roomDisplayName: 'Resolved Target',
+      roomRole: 'member',
+      uid: '2000001',
+      bio: 'Loaded mention profile',
+    );
+    final resolveCompleter = Completer<UserSummary>();
+    final resolvedIds = <String>[];
+
+    Future<UserSummary> resolveProfile(UserSummary sender) {
+      resolvedIds.add(sender.id);
+      return resolveCompleter.future;
+    }
 
     await tester.pumpWidget(
       _host(
@@ -645,6 +665,7 @@ void main() {
             ),
           ],
           mentionMembers: [mentionedMember],
+          onResolveSenderProfile: resolveProfile,
         ),
       ),
     );
@@ -664,6 +685,18 @@ void main() {
     expect(field.enableInteractiveSelection, isTrue);
 
     (mentionSpan.recognizer! as TapGestureRecognizer).onTap!();
+    await tester.pump();
+
+    expect(resolvedIds, ['mentioned_user']);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is ui.AnchoredPanel && widget.width < 300,
+      ),
+      findsNothing,
+    );
+    expect(find.text('@target_user'), findsNothing);
+
+    resolveCompleter.complete(resolvedProfile);
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -675,7 +708,9 @@ void main() {
     final hostRect = tester.getRect(find.byType(Scaffold));
     expect(profilePanelRect.width, lessThan(hostRect.width / 2));
     expect(profilePanelRect.height, lessThan(hostRect.height));
-    expect(find.text('@target_user'), findsOneWidget);
+    expect(resolvedIds, ['mentioned_user']);
+    expect(find.text('@resolved_target'), findsOneWidget);
+    expect(find.text('Loaded mention profile'), findsOneWidget);
   });
 
   testWidgets('@me message highlights bubble background only', (tester) async {

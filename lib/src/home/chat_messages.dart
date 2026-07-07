@@ -2512,19 +2512,35 @@ class _TextBodyState extends State<_TextBody> {
 
   void _handleOpenMentionUser(UserSummary user) {
     final position = _lastPointerDownPosition ?? _fallbackProfilePosition();
-    unawaited(
-      showUserProfileCardAtPosition(
-        context,
-        position: position,
-        user: user,
-        currentUser: widget.profileCurrentUser,
-        onResolveProfile: widget.onResolveSenderProfile,
-        onResolveRoomProfile: widget.onResolveRoomProfile,
-        onEnterCommonRoom: widget.onEnterProfileRoom,
-        profileActionBuilder: widget.profileActionBuilder,
-        inLive: widget.isUserInLive?.call(user.id) ?? false,
-        showRoomRole: true,
-      ),
+    unawaited(_openMentionUserProfile(user, position));
+  }
+
+  Future<void> _openMentionUserProfile(
+    UserSummary user,
+    Offset position,
+  ) async {
+    final resolver = widget.onResolveSenderProfile;
+    var displayUser = user;
+    if (resolver != null) {
+      try {
+        displayUser = await resolver(user);
+      } catch (_) {
+        displayUser = user;
+      }
+    }
+    if (!mounted) return;
+    await showUserProfileCardAtPosition(
+      context,
+      position: position,
+      user: displayUser,
+      currentUser: widget.profileCurrentUser,
+      onResolveProfile: resolver,
+      onResolveRoomProfile: widget.onResolveRoomProfile,
+      onEnterCommonRoom: widget.onEnterProfileRoom,
+      profileActionBuilder: widget.profileActionBuilder,
+      inLive: widget.isUserInLive?.call(displayUser.id) ?? false,
+      showRoomRole: true,
+      resolveOnOpen: false,
     );
   }
 

@@ -154,6 +154,7 @@ Future<void> showUserProfileCardAtPosition(
   UserProfileActionBuilder? profileActionBuilder,
   bool inLive = false,
   bool showRoomRole = false,
+  bool resolveOnOpen = true,
 }) {
   return Navigator.of(context, rootNavigator: true).push(
     _UserProfileCardPopupRoute(
@@ -166,6 +167,7 @@ Future<void> showUserProfileCardAtPosition(
       profileActionBuilder: profileActionBuilder,
       inLive: inLive,
       showRoomRole: showRoomRole,
+      resolveOnOpen: resolveOnOpen,
     ),
   );
 }
@@ -267,6 +269,7 @@ class _UserProfileCardPopupRoute extends PopupRoute<void> {
     required this.profileActionBuilder,
     required this.inLive,
     required this.showRoomRole,
+    required this.resolveOnOpen,
   });
 
   final Offset position;
@@ -278,6 +281,7 @@ class _UserProfileCardPopupRoute extends PopupRoute<void> {
   final UserProfileActionBuilder? profileActionBuilder;
   final bool inLive;
   final bool showRoomRole;
+  final bool resolveOnOpen;
 
   @override
   Color? get barrierColor => Colors.transparent;
@@ -314,6 +318,7 @@ class _UserProfileCardPopupRoute extends PopupRoute<void> {
               profileActionBuilder: profileActionBuilder,
               inLive: inLive,
               showRoomRole: showRoomRole,
+              resolveOnOpen: resolveOnOpen,
             ),
           ),
         ),
@@ -376,6 +381,7 @@ class _ResolvingUserProfileCard extends StatefulWidget {
     required this.profileActionBuilder,
     required this.inLive,
     required this.showRoomRole,
+    required this.resolveOnOpen,
   });
 
   final UserSummary user;
@@ -386,6 +392,7 @@ class _ResolvingUserProfileCard extends StatefulWidget {
   final UserProfileActionBuilder? profileActionBuilder;
   final bool inLive;
   final bool showRoomRole;
+  final bool resolveOnOpen;
 
   @override
   State<_ResolvingUserProfileCard> createState() =>
@@ -400,7 +407,7 @@ class _ResolvingUserProfileCardState extends State<_ResolvingUserProfileCard> {
   @override
   void initState() {
     super.initState();
-    _resolve();
+    if (widget.resolveOnOpen) _resolve();
   }
 
   Future<void> _resolve() async {
