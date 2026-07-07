@@ -835,6 +835,52 @@ void main() {
     expect(decoration.color, ui.UiColors.selected.withValues(alpha: 0.86));
   });
 
+  testWidgets('focused @me message uses mention color immediately', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      _host(
+        _chatPane(
+          controller: controller,
+          room: _roomDetail,
+          messages: [
+            _message(
+              type: 'text',
+              body: 'jump to @Me',
+              mentions: const [
+                {'type': 'user', 'user_id': _currentUserId, 'label': 'Me'},
+              ],
+            ),
+          ],
+          focusMessageId: 'message_1',
+        ),
+        height: 620,
+      ),
+    );
+
+    final expectedColor = Color.alphaBlend(
+      ui.UiColors.amber.withValues(alpha: 0.13),
+      ui.UiColors.surface,
+    );
+    final expectedBorder = ui.UiColors.amber.withValues(alpha: 0.58);
+    var decoration = _messageBubbleDecoration(tester);
+    expect(decoration.color, expectedColor);
+    expect(
+      decoration.color,
+      isNot(ui.UiColors.selected.withValues(alpha: 0.86)),
+    );
+    expect((decoration.border as Border).top.color, expectedBorder);
+
+    await tester.pump(const Duration(milliseconds: 2700));
+
+    decoration = _messageBubbleDecoration(tester);
+    expect(decoration.color, expectedColor);
+    expect((decoration.border as Border).top.color, expectedBorder);
+  });
+
   testWidgets('selected text message context menu only copies selection', (
     tester,
   ) async {
