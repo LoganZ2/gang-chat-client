@@ -577,6 +577,36 @@ void main() {
     expect(field.showCursor, isFalse);
   });
 
+  testWidgets('text message body link is recognized as clickable', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        MessageBubbleForTest(
+          message: _message(
+            type: 'text',
+            body: 'open https://example.com/docs now',
+          ),
+          downloadActions: _downloadActions(),
+        ),
+      ),
+    );
+
+    final fieldFinder = find.byType(TextField);
+    final field = tester.widget<TextField>(fieldFinder);
+    final span = field.controller!.buildTextSpan(
+      context: tester.element(fieldFinder),
+      style: field.style,
+      withComposing: false,
+    );
+    final linkSpan = _findTextSpan(span, 'https://example.com/docs');
+
+    expect(linkSpan, isNotNull);
+    expect(linkSpan!.recognizer, isA<TapGestureRecognizer>());
+    expect(linkSpan.mouseCursor, SystemMouseCursors.click);
+    expect(linkSpan.style?.color, ui.UiColors.accent);
+  });
+
   testWidgets('selected text message context menu only copies selection', (
     tester,
   ) async {
@@ -631,12 +661,22 @@ void main() {
 
     await _secondaryClickTextMessage(tester);
 
+    var decoration = _messageBubbleDecoration(tester);
+    expect(decoration.color, ui.UiColors.selected);
+    expect((decoration.border as Border).top.color, ui.UiColors.selectedBorder);
+    var contentDecoration = _messageBubbleContentDecoration(tester);
+    expect(contentDecoration.color, decoration.color);
     expect(find.text('复制'), findsOneWidget);
     expect(find.text('删除'), findsOneWidget);
     expect(find.text('全选'), findsNothing);
 
     await tester.tap(find.text('复制'));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    decoration = _messageBubbleDecoration(tester);
+    expect(decoration.color, ui.UiColors.surface);
+    contentDecoration = _messageBubbleContentDecoration(tester);
+    expect(contentDecoration.color, decoration.color);
     expect(copied, isTrue);
     expect(deleted, isFalse);
   });
@@ -1205,6 +1245,47 @@ void main() {
     await tester.tap(button);
     await tester.pumpAndSettle();
     expect(find.text('moderated secret'), findsOneWidget);
+  });
+
+  testWidgets('own text message recalled by another user exposes info card', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      _host(
+        _chatPane(
+          controller: controller,
+          room: _roomDetail,
+          messages: [
+            _message(
+              type: 'text',
+              body: 'my moderated text',
+              sender: _currentUser.toSummary(),
+              isRecalled: true,
+              recalledBy: const UserSummary(
+                id: 'user_admin',
+                username: 'admin',
+                displayName: 'Admin',
+                avatarUrl: null,
+                defaultAvatarKey: 'blue-3',
+                roomRole: 'admin',
+              ),
+            ),
+          ],
+          messageActions: _messageActions(canInspectRecalledText: (_) => true),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final button = find.byKey(const ValueKey('message-info-message_1'));
+    expect(button, findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('message-reedit-message_1')),
+      findsNothing,
+    );
   });
 
   testWidgets('sticker bubble exposes the sticker name only as a tooltip', (
@@ -1918,6 +1999,38 @@ void _mockClipboard(List<String> writes) {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, null);
   });
+}
+
+TextSpan? _findTextSpan(InlineSpan span, String text) {
+  if (span is! TextSpan) return null;
+  if (span.text == text) return span;
+  final children = span.children;
+  if (children == null) return null;
+  for (final child in children) {
+    final result = _findTextSpan(child, text);
+    if (result != null) return result;
+  }
+  return null;
+}
+
+BoxDecoration _messageBubbleDecoration(
+  WidgetTester tester, [
+  String id = 'message_1',
+]) {
+  final surface = tester.widget<AnimatedContainer>(
+    find.byKey(ValueKey('message-bubble-surface-$id')),
+  );
+  return surface.decoration! as BoxDecoration;
+}
+
+BoxDecoration _messageBubbleContentDecoration(
+  WidgetTester tester, [
+  String id = 'message_1',
+]) {
+  final content = tester.widget<DecoratedBox>(
+    find.byKey(ValueKey('message-bubble-content-$id')),
+  );
+  return content.decoration as BoxDecoration;
 }
 
 const _currentUser = CurrentUser(

@@ -512,9 +512,12 @@ extension _HomeShellMessages on _HomeShellState {
     if (!message.isRecalled ||
         message.isForceDeleted ||
         message.type != 'text' ||
-        message.body.isEmpty ||
-        message.sender.id == _currentUser.id) {
+        message.body.isEmpty) {
       return false;
+    }
+    final actor = message.recalledBy ?? message.sender;
+    if (message.sender.id == _currentUser.id) {
+      return actor.id != _currentUser.id;
     }
     final room = _selectedRoom;
     if (room == null) return false;

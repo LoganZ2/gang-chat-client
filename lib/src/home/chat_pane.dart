@@ -2,7 +2,11 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart'
-    show PointerDownEvent, kPrimaryMouseButton, kSecondaryMouseButton;
+    show
+        PointerDownEvent,
+        TapGestureRecognizer,
+        kPrimaryMouseButton,
+        kSecondaryMouseButton;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart'
     show RenderAbstractViewport, ScrollCacheExtent;
@@ -17,6 +21,7 @@ import '../app/room_display.dart' as room_display;
 import '../app/sticker_display.dart' as sticker_display;
 import '../app/voice_message_display.dart' as voice_display;
 import '../protocol/models.dart';
+import '../shell/external_uri_launcher.dart';
 import '../ui/ui.dart';
 import 'chat_image_preview.dart';
 import 'hover_card_anchor.dart';

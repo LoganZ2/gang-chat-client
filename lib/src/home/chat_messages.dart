@@ -1153,7 +1153,7 @@ class _SystemMessageRow extends StatelessWidget {
   }
 }
 
-class _SystemMessageContainer extends StatelessWidget {
+class _SystemMessageContainer extends StatefulWidget {
   const _SystemMessageContainer({
     required this.children,
     this.message,
@@ -1165,31 +1165,53 @@ class _SystemMessageContainer extends StatelessWidget {
   final ChatMessageActions? actions;
 
   @override
+  State<_SystemMessageContainer> createState() =>
+      _SystemMessageContainerState();
+}
+
+class _SystemMessageContainerState extends State<_SystemMessageContainer> {
+  bool _contextMenuActive = false;
+
+  @override
   Widget build(BuildContext context) {
-    final content = DecoratedBox(
+    final active = _contextMenuActive;
+    final contentColor = UiColors.surfacePressed.withValues(alpha: 0.82);
+    final highlightColor = active ? UiColors.selected : contentColor;
+    final content = AnimatedContainer(
+      duration: const Duration(milliseconds: 90),
+      curve: Curves.easeOutCubic,
       decoration: BoxDecoration(
-        color: UiColors.surfacePressed.withValues(alpha: 0.82),
+        color: highlightColor,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: UiColors.border),
+        border: Border.all(
+          color: active ? UiColors.selectedBorder : UiColors.border,
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        child: Wrap(
-          alignment: WrapAlignment.center,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 5,
-          runSpacing: 5,
-          children: children,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: highlightColor,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Wrap(
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 5,
+            runSpacing: 5,
+            children: widget.children,
+          ),
         ),
       ),
     );
-    final menuMessage = message;
-    final menuActions = actions;
+    final menuMessage = widget.message;
+    final menuActions = widget.actions;
     final wrappedContent = menuMessage == null || menuActions == null
         ? content
         : _MessageContextMenuRegion(
             message: menuMessage,
             actions: menuActions,
+            onContextMenuActiveChanged: _setContextMenuActive,
             child: content,
           );
 
@@ -1199,6 +1221,11 @@ class _SystemMessageContainer extends StatelessWidget {
         child: wrappedContent,
       ),
     );
+  }
+
+  void _setContextMenuActive(bool active) {
+    if (!mounted || _contextMenuActive == active) return;
+    setState(() => _contextMenuActive = active);
   }
 }
 
@@ -1398,28 +1425,35 @@ class _MessageContextMenuRegion extends StatelessWidget {
     required this.message,
     required this.actions,
     required this.child,
+    this.onContextMenuActiveChanged,
   });
 
   final Message message;
   final ChatMessageActions actions;
   final Widget child;
+  final ValueChanged<bool>? onContextMenuActiveChanged;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
-      onSecondaryTapDown: (details) => _showChatMessageContextMenu(
-        context: context,
-        position: details.globalPosition,
-        message: message,
-        actions: actions,
-      ),
+      onSecondaryTapDown: (details) {
+        onContextMenuActiveChanged?.call(true);
+        unawaited(
+          _showChatMessageContextMenu(
+            context: context,
+            position: details.globalPosition,
+            message: message,
+            actions: actions,
+          ).whenComplete(() => onContextMenuActiveChanged?.call(false)),
+        );
+      },
       child: child,
     );
   }
 }
 
-void _showChatMessageContextMenu({
+Future<void> _showChatMessageContextMenu({
   required BuildContext context,
   required Offset position,
   required Message message,
@@ -1433,7 +1467,7 @@ void _showChatMessageContextMenu({
     includeDelete: true,
     includeRecall: !message.isRemoved,
   );
-  unawaited(showUiContextMenu(context, position: position, sections: sections));
+  return showUiContextMenu(context, position: position, sections: sections);
 }
 
 List<UiContextMenuSection> _messageContextMenuSections({
@@ -1877,81 +1911,100 @@ class _MessageBubble extends StatefulWidget {
 
 class _MessageBubbleState extends State<_MessageBubble> {
   bool _textSelectionActive = false;
+  bool _contextMenuActive = false;
 
   @override
   Widget build(BuildContext context) {
     final contentKind = message_display.messageContentKind(widget.message);
     final status = message_display.messageDeliveryStatusText(widget.message);
+    final contextMenuActive = _contextMenuActive;
+    final backgroundColor = widget.outgoing ? _outgoingBubble : _incomingBubble;
+    final highlightColor = contextMenuActive
+        ? UiColors.selected
+        : backgroundColor;
+    final borderColor = contextMenuActive
+        ? UiColors.selectedBorder
+        : widget.outgoing
+        ? UiColors.accentBorder
+        : UiColors.border;
 
     return Listener(
       onPointerDown: (event) => _handleBubblePointerDown(event, contentKind),
-      child: DecoratedBox(
+      child: AnimatedContainer(
+        key: ValueKey('message-bubble-surface-${widget.message.id}'),
+        duration: const Duration(milliseconds: 90),
+        curve: Curves.easeOutCubic,
         decoration: BoxDecoration(
-          color: widget.outgoing ? _outgoingBubble : _incomingBubble,
+          color: highlightColor,
           borderRadius: BorderRadius.circular(UiRadii.lg),
-          border: Border.all(
-            color: widget.outgoing ? UiColors.accentBorder : UiColors.border,
-          ),
+          border: Border.all(color: borderColor),
         ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              switch (contentKind) {
-                message_display.MessageContentKind.sticker => _StickerBody(
-                  message: widget.message,
-                  attachment: widget.message.stickerAttachment!,
-                  imagePreviewActions: widget.imagePreviewActions,
-                ),
-                message_display.MessageContentKind.voice => _VoiceBody(
-                  message: widget.message,
-                  attachment: voice_display.voiceMessageAttachment(
-                    widget.message,
-                  )!,
-                  playbackActions: widget.voicePlaybackActions,
-                ),
-                message_display.MessageContentKind.files => _FileBody(
-                  message: widget.message,
-                  outgoing: widget.outgoing,
-                  transfer: widget.transfer,
-                  fileDownloads: widget.fileDownloads,
-                  downloadActions: widget.downloadActions,
-                  imagePreviewActions: widget.imagePreviewActions,
-                ),
-                message_display.MessageContentKind.text => _TextBody(
-                  message: widget.message,
-                  onSelectionActiveChanged: _handleTextSelectionActiveChanged,
-                ),
-              },
-              if (status != null) ...[
-                const SizedBox(height: 7),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (widget.message.pending && !widget.message.failed) ...[
-                      const SizedBox.square(
-                        dimension: 11,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 1.6,
-                          color: UiColors.textMuted,
+          child: DecoratedBox(
+            key: ValueKey('message-bubble-content-${widget.message.id}'),
+            decoration: BoxDecoration(
+              color: highlightColor,
+              borderRadius: BorderRadius.circular(math.max(0, UiRadii.lg - 5)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                switch (contentKind) {
+                  message_display.MessageContentKind.sticker => _StickerBody(
+                    message: widget.message,
+                    attachment: widget.message.stickerAttachment!,
+                    imagePreviewActions: widget.imagePreviewActions,
+                  ),
+                  message_display.MessageContentKind.voice => _VoiceBody(
+                    message: widget.message,
+                    attachment: voice_display.voiceMessageAttachment(
+                      widget.message,
+                    )!,
+                    playbackActions: widget.voicePlaybackActions,
+                  ),
+                  message_display.MessageContentKind.files => _FileBody(
+                    message: widget.message,
+                    outgoing: widget.outgoing,
+                    transfer: widget.transfer,
+                    fileDownloads: widget.fileDownloads,
+                    downloadActions: widget.downloadActions,
+                    imagePreviewActions: widget.imagePreviewActions,
+                  ),
+                  message_display.MessageContentKind.text => _TextBody(
+                    message: widget.message,
+                    onSelectionActiveChanged: _handleTextSelectionActiveChanged,
+                  ),
+                },
+                if (status != null) ...[
+                  const SizedBox(height: 7),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (widget.message.pending && !widget.message.failed) ...[
+                        const SizedBox.square(
+                          dimension: 11,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 1.6,
+                            color: UiColors.textMuted,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      Text(
+                        status,
+                        style: UiTypography.label.copyWith(
+                          color: widget.message.failed
+                              ? UiColors.danger
+                              : UiColors.textMuted,
                         ),
                       ),
-                      const SizedBox(width: 6),
                     ],
-                    Text(
-                      status,
-                      style: UiTypography.label.copyWith(
-                        color: widget.message.failed
-                            ? UiColors.danger
-                            : UiColors.textMuted,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -1968,27 +2021,45 @@ class _MessageBubbleState extends State<_MessageBubble> {
       return;
     }
     if (contentKind == message_display.MessageContentKind.sticker) {
-      _showStickerContextMenu(
-        context: context,
-        position: event.position,
-        message: widget.message,
-        attachment: widget.message.stickerAttachment!,
-        imagePreviewActions: widget.imagePreviewActions,
-        messageActions: widget.messageActions,
+      _showContextMenuWithHighlight(
+        () => _showStickerContextMenu(
+          context: context,
+          position: event.position,
+          message: widget.message,
+          attachment: widget.message.stickerAttachment!,
+          imagePreviewActions: widget.imagePreviewActions,
+          messageActions: widget.messageActions,
+        ),
       );
       return;
     }
-    _showChatMessageContextMenu(
-      context: context,
-      position: event.position,
-      message: widget.message,
-      actions: widget.messageActions,
+    _showContextMenuWithHighlight(
+      () => _showChatMessageContextMenu(
+        context: context,
+        position: event.position,
+        message: widget.message,
+        actions: widget.messageActions,
+      ),
     );
   }
 
   void _handleTextSelectionActiveChanged(bool active) {
     if (_textSelectionActive == active) return;
     setState(() => _textSelectionActive = active);
+  }
+
+  void _showContextMenuWithHighlight(Future<void> Function() showMenu) {
+    _setContextMenuActive(true);
+    unawaited(
+      showMenu().whenComplete(() {
+        if (mounted) _setContextMenuActive(false);
+      }),
+    );
+  }
+
+  void _setContextMenuActive(bool active) {
+    if (!mounted || _contextMenuActive == active) return;
+    setState(() => _contextMenuActive = active);
   }
 }
 
@@ -2006,7 +2077,7 @@ class _TextBody extends StatefulWidget {
 }
 
 class _TextBodyState extends State<_TextBody> {
-  late final TextEditingController _controller;
+  late final _MessageTextController _controller;
   final FocusNode _focusNode = FocusNode();
   final UndoHistoryController _undoController = UndoHistoryController();
   final Object _tapRegionGroup = Object();
@@ -2017,7 +2088,10 @@ class _TextBodyState extends State<_TextBody> {
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController(text: widget.message.body);
+    _controller = _MessageTextController(
+      text: widget.message.body,
+      onOpenLink: _handleOpenLink,
+    );
     _controller.addListener(_handleControllerChanged);
   }
 
@@ -2144,6 +2218,138 @@ class _TextBodyState extends State<_TextBody> {
     widget.onSelectionActiveChanged(false);
     if (hideToolbar) _activeTextContextMenuState?.hideToolbar();
   }
+
+  void _handleOpenLink(Uri uri) {
+    unawaited(_openLink(uri));
+  }
+
+  Future<void> _openLink(Uri uri) async {
+    try {
+      await const ExternalUriLauncher().open(uri);
+    } catch (_) {
+      if (!mounted) return;
+      _showMessageContextNotice(context, '无法打开链接');
+    }
+  }
+}
+
+class _MessageTextController extends TextEditingController {
+  _MessageTextController({required String text, required this.onOpenLink})
+    : super(text: text);
+
+  final ValueChanged<Uri> onOpenLink;
+  Map<String, TapGestureRecognizer> _linkRecognizers = {};
+
+  @override
+  TextSpan buildTextSpan({
+    required BuildContext context,
+    TextStyle? style,
+    required bool withComposing,
+  }) {
+    final matches = _messageLinkMatches(text).toList(growable: false);
+    if (matches.isEmpty) {
+      _disposeStaleLinkRecognizers(_linkRecognizers);
+      _linkRecognizers = {};
+      return TextSpan(text: text, style: style);
+    }
+
+    final baseStyle = style ?? DefaultTextStyle.of(context).style;
+    final linkStyle = baseStyle.copyWith(
+      color: UiColors.accent,
+      decoration: TextDecoration.underline,
+      decorationColor: UiColors.accent,
+    );
+    final children = <InlineSpan>[];
+    final staleRecognizers = Map<String, TapGestureRecognizer>.of(
+      _linkRecognizers,
+    );
+    final nextRecognizers = <String, TapGestureRecognizer>{};
+    var cursor = 0;
+    for (final match in matches) {
+      if (match.start > cursor) {
+        children.add(TextSpan(text: text.substring(cursor, match.start)));
+      }
+      final key = '${match.start}:${match.end}:${match.uri}';
+      final recognizer = staleRecognizers.remove(key) ?? TapGestureRecognizer();
+      recognizer.onTap = () => onOpenLink(match.uri);
+      nextRecognizers[key] = recognizer;
+      children.add(
+        TextSpan(
+          text: text.substring(match.start, match.end),
+          style: linkStyle,
+          recognizer: recognizer,
+          mouseCursor: SystemMouseCursors.click,
+        ),
+      );
+      cursor = match.end;
+    }
+    if (cursor < text.length) {
+      children.add(TextSpan(text: text.substring(cursor)));
+    }
+    _disposeStaleLinkRecognizers(staleRecognizers);
+    _linkRecognizers = nextRecognizers;
+    return TextSpan(style: baseStyle, children: children);
+  }
+
+  @override
+  void dispose() {
+    _disposeStaleLinkRecognizers(_linkRecognizers);
+    _linkRecognizers = {};
+    super.dispose();
+  }
+
+  void _disposeStaleLinkRecognizers(
+    Map<String, TapGestureRecognizer> recognizers,
+  ) {
+    for (final recognizer in recognizers.values) {
+      recognizer.dispose();
+    }
+  }
+}
+
+class _MessageLinkMatch {
+  const _MessageLinkMatch({
+    required this.start,
+    required this.end,
+    required this.uri,
+  });
+
+  final int start;
+  final int end;
+  final Uri uri;
+}
+
+final RegExp _messageLinkPattern = RegExp(
+  r"""(?:(?:https?:\/\/)|(?:www\.))[^\s<>{}\[\]"']+""",
+  caseSensitive: false,
+);
+
+const String _messageLinkTrailingPunctuation = '.,!?;:，。！？；：、)]}）】》';
+
+Iterable<_MessageLinkMatch> _messageLinkMatches(String value) sync* {
+  for (final match in _messageLinkPattern.allMatches(value)) {
+    var end = match.end;
+    while (end > match.start &&
+        _messageLinkTrailingPunctuation.contains(value[end - 1])) {
+      end--;
+    }
+    if (end <= match.start) continue;
+    final raw = value.substring(match.start, end);
+    final uri = _messageLinkUri(raw);
+    if (uri == null) continue;
+    yield _MessageLinkMatch(start: match.start, end: end, uri: uri);
+  }
+}
+
+Uri? _messageLinkUri(String value) {
+  final lower = value.toLowerCase();
+  final normalized = lower.startsWith('http://') || lower.startsWith('https://')
+      ? value
+      : 'https://$value';
+  final uri = Uri.tryParse(normalized);
+  if (uri == null || !uri.hasScheme || uri.host.isEmpty) return null;
+  if (uri.scheme != 'http' && uri.scheme != 'https') return null;
+  return uri;
 }
 
 TextSelection _clampMessageTextSelection(TextSelection selection, int length) {
@@ -2227,7 +2433,7 @@ class _StickerBody extends StatelessWidget {
   }
 }
 
-void _showStickerContextMenu({
+Future<void> _showStickerContextMenu({
   required BuildContext context,
   required Offset position,
   required Message message,
@@ -2294,7 +2500,7 @@ void _showStickerContextMenu({
     ),
   ];
 
-  unawaited(showUiContextMenu(context, position: position, sections: sections));
+  return showUiContextMenu(context, position: position, sections: sections);
 }
 
 Future<void> _runStickerContextAction(
@@ -2307,14 +2513,14 @@ Future<void> _runStickerContextAction(
   try {
     await action(message, attachment);
     if (!context.mounted) return;
-    _showStickerContextNotice(context, successMessage);
+    _showMessageContextNotice(context, successMessage);
   } catch (error) {
     if (!context.mounted) return;
-    _showStickerContextNotice(context, '$error');
+    _showMessageContextNotice(context, '$error');
   }
 }
 
-void _showStickerContextNotice(BuildContext context, String message) {
+void _showMessageContextNotice(BuildContext context, String message) {
   ScaffoldMessenger.maybeOf(context)
     ?..clearSnackBars()
     ..showSnackBar(SnackBar(content: Text(message)));
