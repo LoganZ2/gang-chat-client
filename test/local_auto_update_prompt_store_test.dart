@@ -23,4 +23,16 @@ void main() {
     await store.write(false);
     expect(await store.read(), isFalse);
   });
+
+  test('ignored update version persists and can be cleared', () async {
+    const store = LocalAutoUpdatePromptStore();
+
+    expect(await store.readIgnoredVersion(), isNull);
+
+    await store.writeIgnoredVersion(' 0.5.1 ');
+    expect(await store.readIgnoredVersion(), '0.5.1');
+
+    await store.writeIgnoredVersion(null);
+    expect(await store.readIgnoredVersion(), isNull);
+  });
 }

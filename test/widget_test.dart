@@ -2659,6 +2659,11 @@ void main() {
     tester.view.physicalSize = const Size(980, 760);
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetPhysicalSize);
+    final autoUpdateWrites = <bool>[];
+    final autoUpdateStore = _FakeAutoUpdatePromptStore(
+      autoUpdateWrites,
+      initialValue: true,
+    );
 
     await tester.pumpWidget(
       MaterialApp(
@@ -2667,6 +2672,7 @@ void main() {
           isSubWindow: true,
           currentUser: CurrentUser.fromJson(_currentUserJson),
           appVersion: '0.4.0',
+          autoUpdatePromptStore: autoUpdateStore,
           installInfoService: const _FakeInstallInfoService('2026/07/01'),
           releaseUpdateService: ReleaseUpdateService(
             httpClient: MockClient((request) async {
@@ -2696,17 +2702,42 @@ void main() {
     expect(find.text('发行时间'), findsOneWidget);
     expect(find.text('版本日志'), findsOneWidget);
     expect(find.text('无'), findsOneWidget);
-    expect(find.widgetWithText(ui.Button, '稍后提醒'), findsOneWidget);
-    expect(find.widgetWithText(ui.Button, '下载更新'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '忽略新版本'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '下载新版本'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '继续使用'), findsNothing);
-    expect(find.byTooltip('重新检查'), findsNothing);
+    expect(find.byTooltip('重新检查'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('返回'));
+    await tester.tap(find.widgetWithText(ui.Button, '下载新版本'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('下载新版本'), findsWidgets);
+    expect(find.textContaining('会退出当前程序并启动安装程序'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ui.Button, '取消'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('发现新版本'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ui.Button, '忽略新版本'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('忽略新版本'), findsWidgets);
+    expect(find.textContaining('不会再主动提示该版本'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ui.Button, '取消'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('发现新版本'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ui.Button, '忽略新版本'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ui.Button, '忽略新版本').last);
     await tester.pumpAndSettle();
 
     expect(find.text('发现新版本'), findsNothing);
     expect(find.text('版本信息'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '检查更新'), findsOneWidget);
+    expect(autoUpdateStore.ignoredVersion, '0.4.1');
   });
 
   testWidgets('settings audio sliders apply live mute coupling rules', (
@@ -7266,6 +7297,7 @@ class _FakeAutoUpdatePromptStore extends AutoUpdatePromptStore {
   final List<bool> writes;
   final bool initialValue;
   bool? value;
+  String? ignoredVersion;
 
   @override
   Future<bool> read() async => value ?? initialValue;
@@ -7274,6 +7306,14 @@ class _FakeAutoUpdatePromptStore extends AutoUpdatePromptStore {
   Future<void> write(bool enabled) async {
     value = enabled;
     writes.add(enabled);
+  }
+
+  @override
+  Future<String?> readIgnoredVersion() async => ignoredVersion;
+
+  @override
+  Future<void> writeIgnoredVersion(String? version) async {
+    ignoredVersion = version;
   }
 }
 

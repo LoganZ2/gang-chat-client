@@ -898,6 +898,84 @@ class _SettingsPageState extends State<SettingsPage> {
     });
   }
 
+  Future<void> _confirmIgnoreAvailableUpdate() async {
+    final update = _availableAppUpdate;
+    if (update == null || _downloadingAppUpdate) return;
+    final confirmed = await _confirmAppUpdateAction(
+      title: '忽略新版本',
+      icon: Icons.notifications_off_outlined,
+      body:
+          '忽略 ${appVersionLabel(update.latestVersion)} 后，除非你主动点击检查更新，'
+          '或出现更高版本，否则不会再主动提示该版本。',
+      confirmLabel: '忽略新版本',
+    );
+    if (!confirmed || !mounted) return;
+    try {
+      await widget.autoUpdatePromptStore.writeIgnoredVersion(
+        update.latestVersion,
+      );
+      if (!mounted) return;
+      setState(() {
+        _section = SettingsSection.about;
+        _availableAppUpdate = null;
+        _notice = '已忽略新版本 ${appVersionLabel(update.latestVersion)}';
+        _resetUpdateDownloadState();
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _updateDownloadError = '忽略新版本失败：$error';
+      });
+    }
+  }
+
+  Future<void> _confirmDownloadAvailableUpdate() async {
+    final update = _availableAppUpdate;
+    if (update == null || _downloadingAppUpdate) return;
+    final confirmed = await _confirmAppUpdateAction(
+      title: '下载新版本',
+      icon: Icons.download_for_offline_outlined,
+      body: '将下载新版安装包。下载完成后，Gang Chat 会退出当前程序并启动安装程序。',
+      confirmLabel: '下载新版本',
+    );
+    if (!confirmed || !mounted) return;
+    await _downloadAndInstallAvailableUpdate();
+  }
+
+  Future<bool> _confirmAppUpdateAction({
+    required String title,
+    required IconData icon,
+    required String body,
+    required String confirmLabel,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => DialogFrame(
+        title: title,
+        icon: icon,
+        actions: [
+          Button(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          Button(
+            onPressed: () => Navigator.of(context).pop(true),
+            tone: ButtonTone.primary,
+            child: Text(confirmLabel),
+          ),
+        ],
+        child: Text(
+          body,
+          style: UiTypography.body.copyWith(
+            color: UiColors.textSecondary,
+            height: 1.55,
+          ),
+        ),
+      ),
+    );
+    return confirmed ?? false;
+  }
+
   Future<void> _downloadAndInstallAvailableUpdate() async {
     final update = _availableAppUpdate;
     if (update == null || _downloadingAppUpdate) return;
@@ -3599,13 +3677,15 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _buildAppUpdateContent(AvailableAppUpdate update) {
     return AppUpdatePage(
       update: update,
+      checking: _checkingAppVersion,
       downloading: _downloadingAppUpdate,
       downloadedBytes: _updateDownloadedBytes,
       downloadTotalBytes: _updateDownloadTotalBytes,
       error: _updateDownloadError,
       onBack: _closeAppUpdatePage,
-      onRemindLater: _closeAppUpdatePage,
-      onDownload: () => unawaited(_downloadAndInstallAvailableUpdate()),
+      onRefresh: () => unawaited(_checkAppVersion()),
+      onIgnoreVersion: () => unawaited(_confirmIgnoreAvailableUpdate()),
+      onDownload: () => unawaited(_confirmDownloadAvailableUpdate()),
     );
   }
 

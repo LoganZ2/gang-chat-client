@@ -84,6 +84,13 @@ class _AppUpdateGateState extends State<AppUpdateGate> {
       if (!mounted) return;
       setState(() => _checking = false);
       if (update == null || update.asset.key == _notifiedAssetKey) return;
+      final ignoredVersion = await widget.autoUpdatePromptStore
+          .readIgnoredVersion();
+      if (!mounted) return;
+      if (ignoredVersion != null &&
+          compareAppVersions(update.latestVersion, ignoredVersion) <= 0) {
+        return;
+      }
       _notifiedAssetKey = update.asset.key;
       widget.onUpdateAvailable?.call(update);
     } catch (error) {
@@ -108,24 +115,28 @@ class AppUpdatePage extends StatelessWidget {
   const AppUpdatePage({
     super.key,
     required this.update,
+    required this.checking,
     required this.downloading,
     required this.downloadedBytes,
     required this.onDownload,
     required this.onBack,
-    required this.onRemindLater,
+    required this.onIgnoreVersion,
+    required this.onRefresh,
     this.downloadTotalBytes,
     this.error,
     this.wrapInScaffold = false,
   });
 
   final AvailableAppUpdate update;
+  final bool checking;
   final bool downloading;
   final int downloadedBytes;
   final int? downloadTotalBytes;
   final String? error;
   final VoidCallback onDownload;
   final VoidCallback onBack;
-  final VoidCallback onRemindLater;
+  final VoidCallback onIgnoreVersion;
+  final VoidCallback onRefresh;
   final bool wrapInScaffold;
 
   double? get _downloadProgress {
@@ -141,6 +152,13 @@ class AppUpdatePage extends StatelessWidget {
       iconColor: UiColors.controlAccent,
       title: '发现新版本',
       onBack: downloading ? null : onBack,
+      headerAction: ButtonIcon(
+        tooltip: '重新检查',
+        icon: const Icon(Icons.refresh),
+        loading: checking,
+        onPressed: checking || downloading ? null : onRefresh,
+        size: 38,
+      ),
       body: SettingsList(
         children: [
           SettingsCard(
@@ -198,7 +216,7 @@ class AppUpdatePage extends StatelessWidget {
           _UpdateActions(
             downloading: downloading,
             onDownload: onDownload,
-            onRemindLater: onRemindLater,
+            onIgnoreVersion: onIgnoreVersion,
           ),
         ],
       ),
@@ -301,12 +319,12 @@ class _UpdateActions extends StatelessWidget {
   const _UpdateActions({
     required this.downloading,
     required this.onDownload,
-    required this.onRemindLater,
+    required this.onIgnoreVersion,
   });
 
   final bool downloading;
   final VoidCallback onDownload;
-  final VoidCallback onRemindLater;
+  final VoidCallback onIgnoreVersion;
 
   @override
   Widget build(BuildContext context) {
@@ -314,10 +332,10 @@ class _UpdateActions extends StatelessWidget {
       children: [
         Expanded(
           child: Button(
-            onPressed: downloading ? null : onRemindLater,
-            icon: const Icon(Icons.schedule_outlined),
+            onPressed: downloading ? null : onIgnoreVersion,
+            icon: const Icon(Icons.notifications_off_outlined),
             width: double.infinity,
-            child: const Text('稍后提醒'),
+            child: const Text('忽略新版本'),
           ),
         ),
         const SizedBox(width: 12),
@@ -325,10 +343,10 @@ class _UpdateActions extends StatelessWidget {
           child: Button(
             onPressed: downloading ? null : onDownload,
             loading: downloading,
-            icon: const Icon(Icons.download_outlined),
+            icon: const Icon(Icons.download_for_offline_outlined),
             tone: ButtonTone.primary,
             width: double.infinity,
-            child: const Text('下载更新'),
+            child: const Text('下载新版本'),
           ),
         ),
       ],

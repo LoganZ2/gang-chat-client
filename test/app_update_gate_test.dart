@@ -66,19 +66,22 @@ void main() {
       ),
     );
     var backCount = 0;
-    var laterCount = 0;
+    var ignoreCount = 0;
     var downloadCount = 0;
+    var refreshCount = 0;
 
     await tester.pumpWidget(
       MaterialApp(
         theme: ui.uiTheme(),
         home: AppUpdatePage(
           update: update,
+          checking: false,
           downloading: false,
           downloadedBytes: 0,
           wrapInScaffold: true,
           onBack: () => backCount += 1,
-          onRemindLater: () => laterCount += 1,
+          onRefresh: () => refreshCount += 1,
+          onIgnoreVersion: () => ignoreCount += 1,
           onDownload: () => downloadCount += 1,
         ),
       ),
@@ -93,22 +96,97 @@ void main() {
     expect(find.text('无'), findsOneWidget);
     expect(find.textContaining('安装包来自'), findsNothing);
     expect(find.text('English'), findsNothing);
-    expect(find.byTooltip('重新检查'), findsNothing);
+    expect(find.byTooltip('重新检查'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '继续使用'), findsNothing);
-    expect(find.widgetWithText(ui.Button, '稍后提醒'), findsOneWidget);
-    expect(find.widgetWithText(ui.Button, '下载更新'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '忽略新版本'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '下载新版本'), findsOneWidget);
 
     await tester.tap(find.byTooltip('返回'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ui.Button, '稍后提醒'));
+    await tester.tap(find.byTooltip('重新检查'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ui.Button, '下载更新'));
+    await tester.tap(find.widgetWithText(ui.Button, '忽略新版本'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ui.Button, '下载新版本'));
     await tester.pumpAndSettle();
 
     expect(backCount, 1);
-    expect(laterCount, 1);
+    expect(refreshCount, 1);
+    expect(ignoreCount, 1);
     expect(downloadCount, 1);
   });
+
+  testWidgets(
+    'update gate skips ignored version until a higher version appears',
+    (tester) async {
+      final ignored = AvailableAppUpdate(
+        currentVersion: '0.5.0',
+        latestVersion: '0.5.1',
+        asset: const ReleaseAsset(
+          key: 'releases/GangChat_v0.5.1.exe',
+          version: '0.5.1',
+          platform: AppUpdatePlatform.windows,
+        ),
+        downloadUrl: Uri.parse(
+          'https://os.example.test/gang-chat/releases/GangChat_v0.5.1.exe',
+        ),
+      );
+      final higher = AvailableAppUpdate(
+        currentVersion: '0.5.0',
+        latestVersion: '0.5.2',
+        asset: const ReleaseAsset(
+          key: 'releases/GangChat_v0.5.2.exe',
+          version: '0.5.2',
+          platform: AppUpdatePlatform.windows,
+        ),
+        downloadUrl: Uri.parse(
+          'https://os.example.test/gang-chat/releases/GangChat_v0.5.2.exe',
+        ),
+      );
+      final store = _FakeAutoUpdatePromptStore(true, ignoredVersion: '0.5.1');
+      final updateService = _MutableFakeReleaseUpdateService(ignored);
+      final reportedUpdates = <AvailableAppUpdate>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: AppUpdateGate(
+            releaseBucketUrl: 'https://os.example.test/gang-chat',
+            currentVersion: '0.5.0',
+            autoUpdatePromptStore: store,
+            updateService: updateService,
+            platformOverride: AppUpdatePlatform.windows,
+            windowController: DesktopWindowController(),
+            onUpdateAvailable: reportedUpdates.add,
+            child: const Scaffold(body: Text('Home is visible')),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(reportedUpdates, isEmpty);
+
+      updateService.update = higher;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: AppUpdateGate(
+            releaseBucketUrl: 'https://os.example.test/gang-chat?refresh=1',
+            currentVersion: '0.5.0',
+            autoUpdatePromptStore: store,
+            updateService: updateService,
+            platformOverride: AppUpdatePlatform.windows,
+            windowController: DesktopWindowController(),
+            onUpdateAvailable: reportedUpdates.add,
+            child: const Scaffold(body: Text('Home is visible')),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(reportedUpdates, [same(higher)]);
+    },
+  );
 
   testWidgets('update gate keeps child when auto prompt is disabled', (
     tester,
@@ -149,14 +227,36 @@ class _FakeReleaseUpdateService extends ReleaseUpdateService {
   }
 }
 
+class _MutableFakeReleaseUpdateService extends ReleaseUpdateService {
+  _MutableFakeReleaseUpdateService(this.update);
+
+  AvailableAppUpdate? update;
+
+  @override
+  Future<AvailableAppUpdate?> checkForUpdate({
+    required String bucketUrl,
+    required String currentVersion,
+    required AppUpdatePlatform platform,
+  }) async {
+    return update;
+  }
+}
+
 class _FakeAutoUpdatePromptStore extends AutoUpdatePromptStore {
-  const _FakeAutoUpdatePromptStore(this.enabled);
+  const _FakeAutoUpdatePromptStore(this.enabled, {this.ignoredVersion});
 
   final bool enabled;
+  final String? ignoredVersion;
 
   @override
   Future<bool> read() async => enabled;
 
   @override
   Future<void> write(bool enabled) async {}
+
+  @override
+  Future<String?> readIgnoredVersion() async => ignoredVersion;
+
+  @override
+  Future<void> writeIgnoredVersion(String? version) async {}
 }

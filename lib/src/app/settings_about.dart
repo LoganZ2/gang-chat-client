@@ -74,6 +74,18 @@ class AutoUpdatePromptStore {
       'AutoUpdatePromptStore.write must be implemented.',
     );
   }
+
+  Future<String?> readIgnoredVersion() {
+    throw UnimplementedError(
+      'AutoUpdatePromptStore.readIgnoredVersion must be implemented.',
+    );
+  }
+
+  Future<void> writeIgnoredVersion(String? version) {
+    throw UnimplementedError(
+      'AutoUpdatePromptStore.writeIgnoredVersion must be implemented.',
+    );
+  }
 }
 
 int compareAppVersions(String left, String right) {
