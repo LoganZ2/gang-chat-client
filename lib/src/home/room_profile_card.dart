@@ -301,10 +301,10 @@ class _UserProfileCardPopupRoute extends PopupRoute<void> {
       delegate: _UserProfileCardPopupLayoutDelegate(position),
       child: FadeTransition(
         opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-        child: Material(
-          type: MaterialType.transparency,
-          child: AnchoredPanel(
-            width: hoverCardDefaultWidth,
+        child: AnchoredPanel(
+          width: hoverCardDefaultWidth,
+          child: Material(
+            type: MaterialType.transparency,
             child: _ResolvingUserProfileCard(
               user: user,
               currentUser: currentUser,
@@ -329,6 +329,17 @@ class _UserProfileCardPopupLayoutDelegate extends SingleChildLayoutDelegate {
   static const double _gap = 10;
 
   final Offset anchor;
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
+    final maxWidth = constraints.hasBoundedWidth
+        ? math.max(0.0, constraints.maxWidth - _screenPadding * 2)
+        : double.infinity;
+    final maxHeight = constraints.hasBoundedHeight
+        ? math.max(0.0, constraints.maxHeight - _screenPadding * 2)
+        : double.infinity;
+    return BoxConstraints(maxWidth: maxWidth, maxHeight: maxHeight);
+  }
 
   @override
   Offset getPositionForChild(Size size, Size childSize) {

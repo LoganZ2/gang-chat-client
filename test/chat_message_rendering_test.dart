@@ -667,7 +667,59 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
+    final profilePanelFinder = find.byWidgetPredicate(
+      (widget) => widget is ui.AnchoredPanel && widget.width < 300,
+    );
+    expect(profilePanelFinder, findsOneWidget);
+    final profilePanelRect = tester.getRect(profilePanelFinder);
+    final hostRect = tester.getRect(find.byType(Scaffold));
+    expect(profilePanelRect.width, lessThan(hostRect.width / 2));
+    expect(profilePanelRect.height, lessThan(hostRect.height));
     expect(find.text('@target_user'), findsOneWidget);
+  });
+
+  testWidgets('@me message highlights bubble background only', (tester) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      _host(
+        _chatPane(
+          controller: controller,
+          room: _roomDetail,
+          messages: [
+            _message(
+              type: 'text',
+              body: 'hello @Me',
+              mentions: const [
+                {'type': 'user', 'user_id': _currentUserId, 'label': 'Me'},
+              ],
+            ),
+          ],
+        ),
+        height: 620,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final decoration = _messageBubbleDecoration(tester);
+    final contentDecoration = _messageBubbleContentDecoration(tester);
+    expect(decoration.color, isNot(ui.UiColors.surface));
+    expect(decoration.color, isNot(ui.UiColors.selected));
+    expect(contentDecoration.color, decoration.color);
+    expect((decoration.border as Border).top.color, isNot(ui.UiColors.border));
+
+    final fieldFinder = find.byType(TextField).first;
+    final field = tester.widget<TextField>(fieldFinder);
+    final span = field.controller!.buildTextSpan(
+      context: tester.element(fieldFinder),
+      style: field.style,
+      withComposing: false,
+    );
+    final mentionSpan = _findTextSpan(span, '@Me');
+
+    expect(mentionSpan, isNotNull);
+    expect(mentionSpan!.style?.color, ui.UiColors.controlAccent);
   });
 
   testWidgets('selected text message context menu only copies selection', (

@@ -901,6 +901,17 @@ class _MessageStageState extends State<_MessageStage> {
     );
   }
 
+  bool _messageTargetsCurrentUser(Message message) {
+    if (message.pending || message.isRemoved) return false;
+    if (message.sender.id == widget.currentUser.id) return false;
+    return message_mentions.messageMentionsUser(
+      text: message.body,
+      mentions: message.mentions,
+      user: _currentUserMentionIdentity,
+      ownerUserId: widget.ownerUserId,
+    );
+  }
+
   void _toggleDetailedTimestamps() {
     setState(() {
       _showDetailedTimestamps = !_showDetailedTimestamps;
@@ -1052,6 +1063,7 @@ class _MessageStageState extends State<_MessageStage> {
                 messageActions: widget.messageActions,
                 mentionHighlighted:
                     message.clientMessageId == _highlightedMentionClientId,
+                mentionTargetsCurrentUser: _messageTargetsCurrentUser(message),
                 inLive: _userInLive(message.sender.id),
                 onResolveSenderProfile: widget.onResolveSenderProfile,
                 onResolveRoomProfile: widget.onResolveRoomProfile,
@@ -1896,6 +1908,7 @@ class _MessageRow extends StatelessWidget {
     required this.imagePreviewActions,
     required this.messageActions,
     required this.mentionHighlighted,
+    required this.mentionTargetsCurrentUser,
     required this.inLive,
     this.onResolveSenderProfile,
     this.onResolveRoomProfile,
@@ -1918,6 +1931,7 @@ class _MessageRow extends StatelessWidget {
   final ChatImagePreviewActions imagePreviewActions;
   final ChatMessageActions messageActions;
   final bool mentionHighlighted;
+  final bool mentionTargetsCurrentUser;
   final bool inLive;
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
@@ -1972,6 +1986,7 @@ class _MessageRow extends StatelessWidget {
               imagePreviewActions: imagePreviewActions,
               messageActions: messageActions,
               mentionHighlighted: mentionHighlighted,
+              mentionTargetsCurrentUser: mentionTargetsCurrentUser,
               currentUser: currentUser,
               currentUserMentionIdentity: currentUserMentionIdentity,
               ownerUserId: ownerUserId,
@@ -2077,6 +2092,7 @@ class _MessageBubble extends StatefulWidget {
     required this.imagePreviewActions,
     required this.messageActions,
     required this.mentionHighlighted,
+    required this.mentionTargetsCurrentUser,
     required this.currentUser,
     required this.currentUserMentionIdentity,
     required this.ownerUserId,
@@ -2097,6 +2113,7 @@ class _MessageBubble extends StatefulWidget {
   final ChatImagePreviewActions imagePreviewActions;
   final ChatMessageActions messageActions;
   final bool mentionHighlighted;
+  final bool mentionTargetsCurrentUser;
   final CurrentUser currentUser;
   final UserSummary currentUserMentionIdentity;
   final String? ownerUserId;
@@ -2122,15 +2139,22 @@ class _MessageBubbleState extends State<_MessageBubble> {
     final status = message_display.messageDeliveryStatusText(widget.message);
     final contextMenuActive = _contextMenuActive;
     final backgroundColor = widget.outgoing ? _outgoingBubble : _incomingBubble;
+    final mentionBackgroundColor = widget.outgoing
+        ? UiColors.amber.withValues(alpha: 0.18)
+        : UiColors.amber.withValues(alpha: 0.13);
     final highlightColor = contextMenuActive
         ? UiColors.selected
         : widget.mentionHighlighted
         ? UiColors.selected.withValues(alpha: 0.86)
+        : widget.mentionTargetsCurrentUser
+        ? Color.alphaBlend(mentionBackgroundColor, backgroundColor)
         : backgroundColor;
     final borderColor = contextMenuActive
         ? UiColors.selectedBorder
         : widget.mentionHighlighted
         ? UiColors.selectedBorder
+        : widget.mentionTargetsCurrentUser
+        ? UiColors.amber.withValues(alpha: 0.58)
         : widget.outgoing
         ? UiColors.accentBorder
         : UiColors.border;
@@ -2605,13 +2629,6 @@ class _MessageTextController extends TextEditingController {
       fontWeight: FontWeight.w600,
       decoration: TextDecoration.none,
     );
-    final ownMentionStyle = mentionStyle.copyWith(
-      color: UiColors.amber,
-      fontWeight: FontWeight.w800,
-      backgroundColor: _mentionHighlighted
-          ? UiColors.amber.withValues(alpha: 0.24)
-          : UiColors.amber.withValues(alpha: 0.14),
-    );
     final segments = <_MessageInlineSegment>[
       for (final match in linkMatches) _MessageInlineSegment.link(match),
       for (final match in mentionMatches) _MessageInlineSegment.mention(match),
@@ -2649,13 +2666,6 @@ class _MessageTextController extends TextEditingController {
       } else {
         final range = segment.mention!;
         final label = text.substring(range.start + 1, range.end);
-        final isOwnMention = message_mentions.isMessageMentionRangeForUser(
-          text: text,
-          range: range,
-          mentions: _mentions,
-          user: _currentUser,
-          ownerUserId: _ownerUserId,
-        );
         final mentionMember =
             message_mentions.messageMentionKindForLabel(label) ==
                 message_mentions.MessageMentionKind.user
@@ -2675,7 +2685,7 @@ class _MessageTextController extends TextEditingController {
         children.add(
           TextSpan(
             text: text.substring(range.start, range.end),
-            style: isOwnMention ? ownMentionStyle : mentionStyle,
+            style: mentionStyle,
             recognizer: recognizer,
           ),
         );
@@ -3587,6 +3597,7 @@ class MessageBubbleForTest extends StatelessWidget {
             imagePreviewActions ?? ChatImagePreviewActions.disabled(),
         messageActions: messageActions,
         mentionHighlighted: false,
+        mentionTargetsCurrentUser: false,
         currentUser: _avatarHoverCardTestCurrentUser,
         currentUserMentionIdentity: _avatarHoverCardTestCurrentUser.toSummary(),
         ownerUserId: null,
