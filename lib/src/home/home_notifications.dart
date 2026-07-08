@@ -985,7 +985,7 @@ class _RoomEventJumpAction extends StatelessWidget {
     final enabled = notification.roomExists && notification.room.joined;
     return ButtonIcon(
       tooltip: notification.messageId == null ? '进入房间' : '跳转到消息',
-      icon: const Icon(Icons.arrow_forward_rounded),
+      icon: const Icon(Icons.location_on_rounded),
       tone: ButtonTone.primary,
       onPressed: enabled ? () => onOpenRoomEvent(notification) : null,
       size: 34,
