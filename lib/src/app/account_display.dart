@@ -180,8 +180,14 @@ String sessionIpAddressLabel(UserSession session) {
   return ipAddress;
 }
 
+String sessionLocationLabel(UserSession session) {
+  final location = session.location.trim();
+  if (location.isEmpty) return '未知地点';
+  return location;
+}
+
 String sessionDetailText(UserSession session) {
-  return '${session.location} · ${sessionIpAddressLabel(session)} · ${formatDateTime(session.lastUsedAt)}';
+  return '位置：${sessionLocationLabel(session)} · IP：${sessionIpAddressLabel(session)} · 最近活动：${formatDateTime(session.lastUsedAt)}';
 }
 
 SessionListBodyState sessionListBodyState({

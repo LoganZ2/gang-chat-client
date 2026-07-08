@@ -175,7 +175,11 @@ void main() {
 
     expect(sessionDeviceLabel(session), '未知设备');
     expect(sessionIpAddressLabel(session), '未知 IP');
-    expect(sessionDetailText(session), 'Local · 未知 IP · 2026-06-04 00:00');
+    expect(sessionLocationLabel(session), 'Local');
+    expect(
+      sessionDetailText(session),
+      '位置：Local · IP：未知 IP · 最近活动：2026-06-04 00:00',
+    );
   });
 
   test('sessionListBodyState separates loading empty and result states', () {

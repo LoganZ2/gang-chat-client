@@ -344,7 +344,7 @@ class _SessionList extends StatelessWidget {
                       const SizedBox(height: 8),
                       Text(
                         account_display.sessionDetailText(session),
-                        maxLines: 2,
+                        maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: _textMuted,
