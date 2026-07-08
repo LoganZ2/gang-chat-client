@@ -44,6 +44,36 @@ void main() {
   });
 
   test(
+    'reports request round-trip latency after a successful response',
+    () async {
+      final latencies = <Duration>[];
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        onRequestLatency: latencies.add,
+        httpClient: MockClient((request) async {
+          await Future<void>.delayed(const Duration(milliseconds: 2));
+          return http.Response(
+            jsonEncode({
+              'latest_version': '1.2.3',
+              'minimum_supported_version': '1.0.0',
+              'release_notes': 'ok',
+              'download_url': 'https://example.test/download',
+            }),
+            200,
+          );
+        }),
+      );
+
+      await api.getAppVersion();
+
+      expect(latencies, hasLength(1));
+      expect(latencies.single.inMicroseconds, greaterThan(0));
+      api.close();
+    },
+  );
+
+  test(
     'listMessages retries once after a transient closed connection',
     () async {
       var requests = 0;

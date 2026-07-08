@@ -23,6 +23,7 @@ export 'language_preference.dart';
 export 'login_account_history.dart';
 export 'message_display.dart';
 export 'messages_controller.dart';
+export 'network_latency.dart';
 export 'realtime_controller.dart';
 export 'room_display.dart';
 export 'room_badges.dart';

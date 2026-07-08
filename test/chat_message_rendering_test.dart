@@ -982,6 +982,75 @@ void main() {
     expect((decoration.border as Border).top.color, expectedBorder);
   });
 
+  testWidgets('handled focused message does not replay after remount', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    String? focusMessageId = 'message_70';
+    final room = _roomDetailFor('room_focus_restore_position');
+    final messages = [
+      for (var index = 0; index < 80; index++)
+        _message(
+          id: 'message_$index',
+          type: 'text',
+          body: 'Message $index',
+          clientMessageId: 'client_$index',
+          createdAt: DateTime.utc(2026, 6, 11, 9).add(Duration(minutes: index)),
+        ),
+    ];
+
+    Widget chat() {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return _chatPane(
+            controller: controller,
+            room: room,
+            messages: messages,
+            focusMessageId: focusMessageId,
+            onFocusMessageHandled: (messageId) {
+              setState(() {
+                if (focusMessageId == messageId) focusMessageId = null;
+              });
+            },
+          );
+        },
+      );
+    }
+
+    await tester.pumpWidget(_host(chat(), height: 420));
+    await tester.pumpAndSettle();
+    expect(focusMessageId, isNull);
+
+    var scrollable = tester.state<ScrollableState>(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('chat-message-list')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
+    await tester.pump();
+    final previousPixels = scrollable.position.pixels;
+
+    await tester.pumpWidget(_host(const SizedBox.shrink(), height: 420));
+    await tester.pump();
+    await tester.pumpWidget(_host(chat(), height: 420));
+    await tester.pump();
+    await tester.pump();
+
+    scrollable = tester.state<ScrollableState>(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('chat-message-list')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    expect(scrollable.position.pixels, closeTo(previousPixels, 1));
+  });
+
   testWidgets('selected text message context menu only copies selection', (
     tester,
   ) async {
@@ -2164,6 +2233,7 @@ Widget _chatPane({
   bool loading = false,
   int newMessageCount = 0,
   String? focusMessageId,
+  ValueChanged<String>? onFocusMessageHandled,
   Future<UserSummary> Function(UserSummary sender)? onResolveSenderProfile,
   ValueChanged<PublicRoom>? onEnterProfileRoom,
   UserProfileActionBuilder? senderProfileActionBuilder,
@@ -2182,6 +2252,7 @@ Widget _chatPane({
     messages: messages,
     newMessageCount: newMessageCount,
     focusMessageId: focusMessageId,
+    onFocusMessageHandled: onFocusMessageHandled,
     fileTransfers: const {},
     fileDownloads: const {},
     downloadActions: _downloadActions(),
@@ -2236,6 +2307,7 @@ List<Message> _textMessages(int count) {
 }
 
 Message _message({
+  String id = 'message_1',
   required String type,
   String body = '',
   List<MessageAttachment> attachments = const [],
@@ -2256,7 +2328,7 @@ Message _message({
   ),
 }) {
   return Message(
-    id: 'message_1',
+    id: id,
     roomId: 'room_1',
     sender: sender,
     clientMessageId: clientMessageId,

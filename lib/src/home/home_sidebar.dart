@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../app/network_latency.dart' as network_latency;
 import '../app/room_display.dart' as room_display;
 import '../protocol/models.dart';
 import '../ui/ui.dart';
@@ -18,6 +19,9 @@ const _footerButtonGap = 8.0;
 const _footerButtonOuterHeight = _footerButtonSize + 3.0 + 5.0;
 const _compactFooterBreakpoint = 130.0;
 const _compactSummaryBreakpoint = 88.0;
+const _latencySignalGoodColor = Color(0xFF26B36F);
+const _latencySignalFairColor = Color(0xFFE0A12A);
+const _latencySignalPoorColor = Color(0xFFE25A5A);
 
 class HomeSidebar extends StatelessWidget {
   const HomeSidebar({
@@ -30,6 +34,7 @@ class HomeSidebar extends StatelessWidget {
     required this.selectedServerId,
     required this.joinedLiveRoomId,
     required this.realtimeReconnecting,
+    this.requestRoundTrip,
     required this.searchQuery,
     required this.loading,
     required this.error,
@@ -55,6 +60,7 @@ class HomeSidebar extends StatelessWidget {
   final String? selectedServerId;
   final String? joinedLiveRoomId;
   final bool realtimeReconnecting;
+  final Duration? requestRoundTrip;
   final String searchQuery;
   final bool loading;
   final String? error;
@@ -108,6 +114,7 @@ class HomeSidebar extends StatelessWidget {
                         user: currentUser,
                         inLive: joinedLiveRoomId != null,
                         reconnecting: realtimeReconnecting,
+                        requestRoundTrip: requestRoundTrip,
                         logoutActive: logoutActive,
                         onLogout: onLogout,
                       ),
@@ -351,6 +358,7 @@ class _UserSummaryBar extends StatelessWidget {
     required this.user,
     required this.inLive,
     required this.reconnecting,
+    required this.requestRoundTrip,
     required this.logoutActive,
     required this.onLogout,
   });
@@ -358,6 +366,7 @@ class _UserSummaryBar extends StatelessWidget {
   final CurrentUser user;
   final bool inLive;
   final bool reconnecting;
+  final Duration? requestRoundTrip;
   final bool logoutActive;
   final VoidCallback onLogout;
 
@@ -368,6 +377,10 @@ class _UserSummaryBar extends StatelessWidget {
       inLive: inLive,
       reconnecting: reconnecting,
     );
+    final latencyQuality = network_latency.networkLatencyQuality(
+      requestRoundTrip,
+    );
+    final latencyColor = _latencySignalColor(latencyQuality);
     return DecoratedBox(
       key: const ValueKey('home-sidebar-user-summary'),
       decoration: BoxDecoration(
@@ -381,14 +394,35 @@ class _UserSummaryBar extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 10),
           child: Row(
             children: [
-              Avatar(
-                label: user.displayName,
-                imageUrl: AppConfigScope.of(
-                  context,
-                ).resolveAssetUrl(user.avatarUrl),
-                defaultAvatarKey: user.defaultAvatarKey,
-                size: 38,
-                showBorder: false,
+              SizedBox.square(
+                dimension: 38,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Avatar(
+                      label: user.displayName,
+                      imageUrl: AppConfigScope.of(
+                        context,
+                      ).resolveAssetUrl(user.avatarUrl),
+                      defaultAvatarKey: user.defaultAvatarKey,
+                      size: 38,
+                      showBorder: false,
+                    ),
+                    Positioned(
+                      right: -3,
+                      bottom: -2,
+                      child: LatencySignalBadge(
+                        activeBars: network_latency.networkLatencySignalBars(
+                          requestRoundTrip,
+                        ),
+                        activeColor: latencyColor,
+                        tooltip: network_latency.networkLatencyTooltip(
+                          requestRoundTrip,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(width: 11),
               Expanded(
@@ -426,6 +460,15 @@ class _UserSummaryBar extends StatelessWidget {
       ),
     );
   }
+}
+
+Color _latencySignalColor(network_latency.NetworkLatencyQuality quality) {
+  return switch (quality) {
+    network_latency.NetworkLatencyQuality.good => _latencySignalGoodColor,
+    network_latency.NetworkLatencyQuality.fair => _latencySignalFairColor,
+    network_latency.NetworkLatencyQuality.poor => _latencySignalPoorColor,
+    network_latency.NetworkLatencyQuality.unavailable => UiColors.textMuted,
+  };
 }
 
 /// Compact status label with a colored presence dot.

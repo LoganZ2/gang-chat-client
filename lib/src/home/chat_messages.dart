@@ -137,6 +137,7 @@ class _MessageStage extends StatefulWidget {
     required this.messages,
     required this.newMessageCount,
     required this.focusMessageId,
+    required this.onFocusMessageHandled,
     required this.mentionMembers,
     required this.mentionMembersReady,
     required this.fileTransfers,
@@ -168,6 +169,7 @@ class _MessageStage extends StatefulWidget {
   final List<Message> messages;
   final int newMessageCount;
   final String? focusMessageId;
+  final ValueChanged<String>? onFocusMessageHandled;
   final List<RoomMember> mentionMembers;
   final bool mentionMembersReady;
   final Map<String, FileTransferState> fileTransfers;
@@ -964,6 +966,7 @@ class _MessageStageState extends State<_MessageStage> {
         if (!mounted || _highlightedMessageId != focusedMessageId) return;
         setState(() => _highlightedMessageId = null);
       });
+      widget.onFocusMessageHandled?.call(focusedMessageId);
     });
   }
 

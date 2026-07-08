@@ -15,6 +15,7 @@ class ServerClock {
   final Set<ServerClockListener> _listeners = <ServerClockListener>{};
   DateTime? _serverBaseTime;
   Duration? _monotonicBaseTime;
+  Duration? _requestRoundTrip;
 
   DateTime now() {
     final serverBaseTime = _serverBaseTime;
@@ -25,15 +26,28 @@ class ServerClock {
     return serverBaseTime.add(_elapsed() - monotonicBaseTime);
   }
 
+  Duration? get requestRoundTrip => _requestRoundTrip;
+
   bool updateFromHeader(String? value) {
     final serverTime = parseServerTimeHeader(value);
     if (serverTime == null) return false;
     _serverBaseTime = serverTime;
     _monotonicBaseTime = _elapsed();
+    _notifyListeners();
+    return true;
+  }
+
+  bool updateRequestRoundTrip(Duration value) {
+    if (value < Duration.zero) return false;
+    _requestRoundTrip = value;
+    _notifyListeners();
+    return true;
+  }
+
+  void _notifyListeners() {
     for (final listener in List<ServerClockListener>.of(_listeners)) {
       listener();
     }
-    return true;
   }
 
   void addListener(ServerClockListener listener) {

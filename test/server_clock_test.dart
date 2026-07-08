@@ -34,4 +34,25 @@ void main() {
     expect(clock.updateFromHeader('not-a-time'), isFalse);
     expect(notifications, 1);
   });
+
+  test('records the latest successful request round-trip latency', () {
+    final clock = ServerClock();
+    var notifications = 0;
+    clock.addListener(() => notifications += 1);
+
+    expect(clock.requestRoundTrip, isNull);
+    expect(
+      clock.updateRequestRoundTrip(const Duration(milliseconds: 87)),
+      isTrue,
+    );
+
+    expect(clock.requestRoundTrip, const Duration(milliseconds: 87));
+    expect(notifications, 1);
+    expect(
+      clock.updateRequestRoundTrip(const Duration(milliseconds: -1)),
+      isFalse,
+    );
+    expect(clock.requestRoundTrip, const Duration(milliseconds: 87));
+    expect(notifications, 1);
+  });
 }

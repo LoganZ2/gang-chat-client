@@ -207,6 +207,7 @@ extension _HomeShellLayout on _HomeShellState {
       messages: visibleMessages,
       newMessageCount: _visibleNewMessageCount(visibleMessages),
       focusMessageId: _focusedMessageId,
+      onFocusMessageHandled: _handleFocusMessageHandled,
       fileTransfers: _fileTransfers,
       fileDownloads: _fileDownloads,
       downloadActions: ChatFileDownloadActions(
@@ -303,6 +304,7 @@ extension _HomeShellLayout on _HomeShellState {
       joinedLiveRoomId: _joinedLiveRoomId,
       realtimeReconnecting:
           _realtimeStatus == RealtimeConnectionStatus.reconnecting,
+      requestRoundTrip: widget.app.serverClock.requestRoundTrip,
       searchQuery: _filteringSidebarBySearch ? _searchQuery : '',
       loading: _loadingServers || _loadingSidebarSearch,
       error: _serverLoadError,

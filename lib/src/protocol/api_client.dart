@@ -10,6 +10,7 @@ import 'utf8_json.dart';
 
 typedef AccessTokenProvider = Future<String> Function({bool forceRefresh});
 typedef ServerTimeCallback = void Function(String? value);
+typedef RequestLatencyCallback = void Function(Duration value);
 typedef UploadProgressCallback =
     void Function({required int sentBytes, required int totalBytes});
 
@@ -452,11 +453,13 @@ class GangApiClient implements GangApi {
     required this.accessTokenProvider,
     http.Client? httpClient,
     this.onServerTime,
+    this.onRequestLatency,
   }) : _httpClient = httpClient ?? http.Client();
 
   final String baseUrl;
   final AccessTokenProvider accessTokenProvider;
   final ServerTimeCallback? onServerTime;
+  final RequestLatencyCallback? onRequestLatency;
   final http.Client _httpClient;
 
   @override
@@ -1835,11 +1838,14 @@ class GangApiClient implements GangApi {
     Future<http.Response> Function(String accessToken) send,
   ) async {
     var token = await accessTokenProvider();
+    final stopwatch = Stopwatch()..start();
     var response = await send(token);
     if (response.statusCode == 401) {
       token = await accessTokenProvider(forceRefresh: true);
       response = await send(token);
     }
+    stopwatch.stop();
+    onRequestLatency?.call(stopwatch.elapsed);
     onServerTime?.call(response.headers[gangServerTimeHeader]);
     return response;
   }

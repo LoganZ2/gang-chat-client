@@ -104,6 +104,11 @@ extension _HomeShellRoomActions on _HomeShellState {
     );
   }
 
+  void _handleFocusMessageHandled(String messageId) {
+    if (_focusedMessageId != messageId) return;
+    _setHomeState(() => _focusedMessageId = null);
+  }
+
   Future<void> _openRoom(
     RoomCard server, {
     required bool openContent,

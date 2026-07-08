@@ -37,6 +37,7 @@ class AuthenticatedAppContext {
       baseUrl: apiBaseUrl,
       accessTokenProvider: accessTokenProvider,
       onServerTime: serverClock.updateFromHeader,
+      onRequestLatency: serverClock.updateRequestRoundTrip,
     );
   }
 

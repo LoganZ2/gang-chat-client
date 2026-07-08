@@ -66,6 +66,7 @@ class ChatPane extends StatelessWidget {
     required this.messages,
     required this.newMessageCount,
     this.focusMessageId,
+    this.onFocusMessageHandled,
     required this.fileTransfers,
     required this.fileDownloads,
     required this.downloadActions,
@@ -127,6 +128,7 @@ class ChatPane extends StatelessWidget {
   final List<Message> messages;
   final int newMessageCount;
   final String? focusMessageId;
+  final ValueChanged<String>? onFocusMessageHandled;
   final Map<String, FileTransferState> fileTransfers;
   final Map<String, FileTransferState> fileDownloads;
   final ChatFileDownloadActions downloadActions;
@@ -252,6 +254,7 @@ class ChatPane extends StatelessWidget {
               messages: messages,
               newMessageCount: newMessageCount,
               focusMessageId: focusMessageId,
+              onFocusMessageHandled: onFocusMessageHandled,
               mentionMembers: mentionMembers,
               mentionMembersReady: mentionMembersReady,
               fileTransfers: fileTransfers,
