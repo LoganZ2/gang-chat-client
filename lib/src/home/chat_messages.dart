@@ -217,6 +217,7 @@ class _MessageStageState extends State<_MessageStage> {
   Timer? _highlightedMessageTimer;
   double _underflowBottomSpacer = 0;
   bool _underflowAlignmentScheduled = false;
+  bool _latestButtonVisibilityScheduled = false;
   bool _newMessageJumpVisibilityScheduled = false;
   bool _messageListReady = false;
   bool _incomingUnreadWaitingForUserScroll = false;
@@ -243,6 +244,7 @@ class _MessageStageState extends State<_MessageStage> {
     if (!restoring) {
       _scrollToBottom(animated: false);
     }
+    _scheduleLatestButtonVisibilitySync();
     _prepareFocusedMessageHighlight(widget.focusMessageId);
     _scheduleFocusedMessageJump(widget.focusMessageId);
   }
@@ -379,6 +381,8 @@ class _MessageStageState extends State<_MessageStage> {
       }
       final position = _scrollController.position;
       _scrollController.jumpTo(offset.clamp(0.0, position.maxScrollExtent));
+      _rememberScrollPosition();
+      _syncLatestButtonVisibility();
     });
   }
 
@@ -463,6 +467,17 @@ class _MessageStageState extends State<_MessageStage> {
     final next = !_isNearBottom();
     if (next == _showLatestButton) return;
     setState(() => _showLatestButton = next);
+  }
+
+  void _scheduleLatestButtonVisibilitySync() {
+    if (_latestButtonVisibilityScheduled) return;
+    _latestButtonVisibilityScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _latestButtonVisibilityScheduled = false;
+      if (!mounted) return;
+      _rememberScrollPosition();
+      _syncLatestButtonVisibility();
+    });
   }
 
   void _captureNewMessageAnchorFromWidget() {
@@ -1057,6 +1072,7 @@ class _MessageStageState extends State<_MessageStage> {
     }
 
     _scheduleUnderflowAlignment();
+    _scheduleLatestButtonVisibilitySync();
 
     final now = widget.timestampNow;
     final firstNewMessageIndex = _firstNewMessageIndex;

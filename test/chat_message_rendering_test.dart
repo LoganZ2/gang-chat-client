@@ -563,6 +563,106 @@ void main() {
     expect(find.byKey(const ValueKey('chat-jump-to-latest')), findsNothing);
   });
 
+  testWidgets('latest message button reappears after chat pane remounts', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    final messages = _textMessages(80);
+    final room = _roomDetailFor('room_restore_latest_jump');
+
+    await tester.pumpWidget(
+      _host(
+        _chatPane(controller: controller, room: room, messages: messages),
+        height: 420,
+      ),
+    );
+
+    final scrollable = tester.state<ScrollableState>(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('chat-message-list')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('chat-jump-to-latest')), findsOneWidget);
+
+    await tester.pumpWidget(_host(const SizedBox.shrink(), height: 420));
+    await tester.pump();
+    await tester.pumpWidget(
+      _host(
+        _chatPane(controller: controller, room: room, messages: messages),
+        height: 420,
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('chat-jump-to-latest')), findsOneWidget);
+  });
+
+  testWidgets('unread jump button reappears after chat pane remounts', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    final messages = _textMessages(80);
+    messages[30] = _message(
+      type: 'text',
+      body: 'Message 30 @Me',
+      clientMessageId: 'client_30',
+      createdAt: DateTime.utc(2026, 6, 11, 9, 30),
+      mentions: const [
+        {'type': 'user', 'user_id': _currentUserId, 'label': 'Me'},
+      ],
+    );
+    final room = _roomDetailFor('room_restore_unread_jump');
+
+    await tester.pumpWidget(
+      _host(
+        _chatPane(
+          controller: controller,
+          room: room,
+          messages: messages,
+          newMessageCount: 50,
+        ),
+        height: 360,
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('chat-jump-to-first-new')),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(_host(const SizedBox.shrink(), height: 360));
+    await tester.pump();
+    await tester.pumpWidget(
+      _host(
+        _chatPane(
+          controller: controller,
+          room: room,
+          messages: messages,
+          newMessageCount: 50,
+        ),
+        height: 360,
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('chat-jump-to-first-new')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('text message body is selectable for copy', (tester) async {
     await tester.pumpWidget(
       _host(
