@@ -849,7 +849,7 @@ void main() {
         key: 'releases/GangChat_v0.4.1.exe',
         version: '0.4.1',
         platform: AppUpdatePlatform.windows,
-        releasedAt: DateTime(2026, 7, 8, 1, 2),
+        releasedAt: DateTime.utc(2026, 7, 8, 1, 2),
       ),
       downloadUrl: Uri.parse(
         'https://os.example.test/gang-chat/releases/GangChat_v0.4.1.exe',
@@ -2619,8 +2619,11 @@ void main() {
     expect(find.text('0.4.0'), findsOneWidget);
     expect(find.text('发行时间'), findsOneWidget);
     expect(find.text('上次更新时间'), findsOneWidget);
-    expect(find.text(gangChatClientReleaseDate), findsOneWidget);
-    expect(find.text('2026/07/01'), findsOneWidget);
+    expect(
+      find.text(officialVersionDateLabel(gangChatClientReleaseDate)),
+      findsOneWidget,
+    );
+    expect(find.text('2026/07/01 UTC+08:00'), findsOneWidget);
     expect(find.text('自动提示更新'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '检查更新'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '意见反馈'), findsOneWidget);

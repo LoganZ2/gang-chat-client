@@ -1,10 +1,17 @@
-const gangChatClientVersion = String.fromEnvironment(
+const _gangChatClientBuildVersion = String.fromEnvironment(
   'GANG_CHAT_VERSION',
   defaultValue: '0.4.0',
 );
+const _gangChatClientDebugBuild =
+    !bool.fromEnvironment('dart.vm.product') &&
+    !bool.fromEnvironment('dart.vm.profile');
+const gangChatClientVersion = _gangChatClientDebugBuild
+    ? '1.0.0'
+    : _gangChatClientBuildVersion;
 
 const gangChatClientReleaseDate = '2026/07/08';
 const gangChatClientLastUpdateDate = '2026/07/08';
+const gangChatOfficialTimeZoneLabel = 'UTC+08:00';
 const gangChatClientInstallInfoFileName = 'gang_chat_install_info.txt';
 const gangChatSupportEmail = 'gang-chat@outlook.com';
 const defaultAutoUpdatePromptEnabled = true;
@@ -17,6 +24,13 @@ String normalizeAboutDate(
   if (normalized == null || normalized.isEmpty) return fallback;
   if (!RegExp(r'^\d{4}/\d{2}/\d{2}$').hasMatch(normalized)) return fallback;
   return normalized;
+}
+
+String officialVersionDateLabel(
+  String? value, {
+  String fallback = gangChatClientLastUpdateDate,
+}) {
+  return '${normalizeAboutDate(value, fallback: fallback)} $gangChatOfficialTimeZoneLabel';
 }
 
 String appVersionLabel(String version) {

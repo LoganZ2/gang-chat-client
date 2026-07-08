@@ -67,7 +67,10 @@ void main() {
 
   test('releaseTimeLabel formats release time when available', () {
     expect(releaseTimeLabel(null), '暂无');
-    expect(releaseTimeLabel(DateTime(2026, 7, 8, 9, 5)), '2026/07/08 09:05');
+    expect(
+      releaseTimeLabel(DateTime.utc(2026, 7, 8, 1, 5)),
+      '2026/07/08 09:05 UTC+08:00',
+    );
   });
 
   test('releaseNotesLabel falls back to none', () {

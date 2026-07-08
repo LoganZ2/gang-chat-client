@@ -91,13 +91,13 @@ String releaseAssetUrl(String bucketUrl, String key) {
 
 String releaseTimeLabel(DateTime? releasedAt) {
   if (releasedAt == null) return '暂无';
-  final local = releasedAt.toLocal();
-  final year = local.year.toString().padLeft(4, '0');
-  final month = local.month.toString().padLeft(2, '0');
-  final day = local.day.toString().padLeft(2, '0');
-  final hour = local.hour.toString().padLeft(2, '0');
-  final minute = local.minute.toString().padLeft(2, '0');
-  return '$year/$month/$day $hour:$minute';
+  final beijing = releasedAt.toUtc().add(const Duration(hours: 8));
+  final year = beijing.year.toString().padLeft(4, '0');
+  final month = beijing.month.toString().padLeft(2, '0');
+  final day = beijing.day.toString().padLeft(2, '0');
+  final hour = beijing.hour.toString().padLeft(2, '0');
+  final minute = beijing.minute.toString().padLeft(2, '0');
+  return '$year/$month/$day $hour:$minute $gangChatOfficialTimeZoneLabel';
 }
 
 String releaseNotesLabel(String? releaseNotes) {

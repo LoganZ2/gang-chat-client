@@ -19,7 +19,7 @@ void main() {
         key: 'releases/GangChat_v0.5.1.exe',
         version: '0.5.1',
         platform: AppUpdatePlatform.windows,
-        releasedAt: DateTime(2026, 7, 8, 1, 2),
+        releasedAt: DateTime.utc(2026, 7, 8, 1, 2),
       ),
       downloadUrl: Uri.parse(
         'https://os.example.test/gang-chat/releases/GangChat_v0.5.1.exe',
@@ -59,7 +59,7 @@ void main() {
         key: 'releases/GangChat_v0.5.1.exe',
         version: '0.5.1',
         platform: AppUpdatePlatform.windows,
-        releasedAt: DateTime(2026, 7, 8, 1, 2),
+        releasedAt: DateTime.utc(2026, 7, 8, 1, 2),
       ),
       downloadUrl: Uri.parse(
         'https://os.example.test/gang-chat/releases/GangChat_v0.5.1.exe',
@@ -91,7 +91,7 @@ void main() {
     expect(find.text('发现新版本'), findsOneWidget);
     expect(find.text('v0.5.1'), findsWidgets);
     expect(find.text('发行时间'), findsOneWidget);
-    expect(find.text('2026/07/08 01:02'), findsOneWidget);
+    expect(find.text('2026/07/08 09:02 UTC+08:00'), findsOneWidget);
     expect(find.text('版本日志'), findsOneWidget);
     expect(find.text('无'), findsOneWidget);
     expect(find.textContaining('安装包来自'), findsNothing);

@@ -3,6 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:client/src/app/settings_about.dart';
 
 void main() {
+  test('debug builds use fixed app version', () {
+    expect(gangChatClientVersion, '1.0.0');
+  });
+
   test('appVersionLabel normalizes display text', () {
     expect(appVersionLabel('1.2.3'), 'v1.2.3');
     expect(appVersionLabel('v2.0.0'), 'v2.0.0');
@@ -55,4 +59,12 @@ void main() {
       expect(normalizeAboutDate('', fallback: '2026/06/30'), '2026/06/30');
     },
   );
+
+  test('officialVersionDateLabel appends official timezone', () {
+    expect(officialVersionDateLabel('2026/07/01'), '2026/07/01 UTC+08:00');
+    expect(
+      officialVersionDateLabel('invalid', fallback: '2026/06/30'),
+      '2026/06/30 UTC+08:00',
+    );
+  });
 }
