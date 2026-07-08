@@ -658,6 +658,10 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
             ),
             if (!_creating)
               _ReadOnlyRoomRid(value: room_display.roomIdentifier(_room)),
+            if (!_creating)
+              _ReadOnlyRoomCreatedAt(
+                value: room_display.roomCreatedAtLabel(_room.createdAt),
+              ),
             _LabeledSegmented<String>(
               label: '可见性',
               value: _visibility,
@@ -796,14 +800,50 @@ class _ReadOnlyRoomRid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return _ReadOnlyRoomInfoField(
+      label: '房间 RID',
+      value: value,
+      fieldKey: const ValueKey('room-settings-rid'),
+    );
+  }
+}
+
+class _ReadOnlyRoomCreatedAt extends StatelessWidget {
+  const _ReadOnlyRoomCreatedAt({required this.value});
+
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ReadOnlyRoomInfoField(
+      label: '创建时间',
+      value: value,
+      fieldKey: const ValueKey('room-settings-created-at'),
+    );
+  }
+}
+
+class _ReadOnlyRoomInfoField extends StatelessWidget {
+  const _ReadOnlyRoomInfoField({
+    required this.label,
+    required this.value,
+    required this.fieldKey,
+  });
+
+  final String label;
+  final String value;
+  final Key fieldKey;
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _RoomFieldLabel('房间 RID'),
+        _RoomFieldLabel(label),
         const SizedBox(height: 8),
         ReadOnlyTextBox(
           value: value,
-          fieldKey: const ValueKey('room-settings-rid'),
+          fieldKey: fieldKey,
           style: UiTypography.body.copyWith(color: UiColors.text, fontSize: 13),
         ),
       ],

@@ -281,6 +281,15 @@ String roomIdentifier(RoomDetail room) {
   return _nonEmpty(room.rid) ?? room.id;
 }
 
+String roomCreatedAtLabel(DateTime value) {
+  final local = value.toLocal();
+  return '${local.year.toString().padLeft(4, '0')}/'
+      '${_twoDigits(local.month)}/'
+      '${_twoDigits(local.day)} '
+      '${_twoDigits(local.hour)}:'
+      '${_twoDigits(local.minute)}';
+}
+
 String? roomDescriptionValue(RoomDetail room) {
   return _nonEmpty(room.description);
 }

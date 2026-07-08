@@ -19,6 +19,7 @@ import 'package:client/src/app/close_behavior.dart';
 import 'package:client/src/app/login_account_history.dart';
 import 'package:client/src/app/live_session_controller.dart';
 import 'package:client/src/app/realtime_controller.dart';
+import 'package:client/src/app/room_display.dart' as room_display;
 import 'package:client/src/app/settings_about.dart';
 import 'package:client/src/app/server_clock.dart';
 import 'package:client/src/auth/auth_client.dart';
@@ -3180,9 +3181,25 @@ void main() {
       find.byKey(const ValueKey('room-settings-rid')),
     );
     expect(ridText.controller?.text, 'server-alpha');
+    expect(find.text('创建时间'), findsOneWidget);
+    final createdAtText = tester.widget<TextField>(
+      find.byKey(const ValueKey('room-settings-created-at')),
+    );
+    expect(
+      createdAtText.controller?.text,
+      room_display.roomCreatedAtLabel(DateTime.parse('2026-06-01T00:00:00Z')),
+    );
     expect(
       tester.getRect(find.byKey(const ValueKey('room-settings-rid'))).top,
       greaterThan(tester.getRect(descriptionField).bottom),
+    );
+    expect(
+      tester
+          .getRect(find.byKey(const ValueKey('room-settings-created-at')))
+          .top,
+      greaterThan(
+        tester.getRect(find.byKey(const ValueKey('room-settings-rid'))).bottom,
+      ),
     );
     final roomInfoSectionDecorations = tester
         .widgetList<DecoratedBox>(

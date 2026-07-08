@@ -143,6 +143,7 @@ void main() {
   test('room identity display helpers provide stable fallbacks', () {
     expect(roomIdentifier(_roomDetail(rid: 'R001')), 'R001');
     expect(roomIdentifier(_roomDetail()), 'room_1');
+    expect(roomCreatedAtLabel(DateTime(2026, 6, 4, 9, 5)), '2026/06/04 09:05');
     expect(
       roomDescriptionValue(_roomDetail(description: '  Launch room  ')),
       'Launch room',
