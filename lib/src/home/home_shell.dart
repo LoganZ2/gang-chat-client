@@ -274,6 +274,7 @@ class _HomeShellState extends State<HomeShell> {
   FileDownloadsController get _fileDownloadsController =>
       _services.fileDownloads;
   MediaCacheController get _mediaCacheController => _services.mediaCache;
+  DateTime get _serverNow => widget.app.serverClock.now();
 
   @override
   void initState() {
@@ -283,6 +284,7 @@ class _HomeShellState extends State<HomeShell> {
     _titleSearchController.addListener(_handleTitleSearchChanged);
     _musicBoxSearchController.addListener(_handleMusicBoxSearchChanged);
     _voicePlaybackService.state.addListener(_handleVoicePlaybackChanged);
+    widget.app.serverClock.addListener(_handleServerClockChanged);
     _installServices();
     _attachLiveSessionCallbacks();
     widget.windowController.setCloseRequestHandler(_handleWindowCloseRequest);
@@ -321,8 +323,16 @@ class _HomeShellState extends State<HomeShell> {
     final appChanged =
         widget.app.currentUser.id != oldWidget.app.currentUser.id ||
         !widget.app.hasSameApiSource(oldWidget.app);
-    if (!appChanged) return;
+    if (!appChanged) {
+      if (oldWidget.app.serverClock != widget.app.serverClock) {
+        oldWidget.app.serverClock.removeListener(_handleServerClockChanged);
+        widget.app.serverClock.addListener(_handleServerClockChanged);
+      }
+      return;
+    }
 
+    oldWidget.app.serverClock.removeListener(_handleServerClockChanged);
+    widget.app.serverClock.addListener(_handleServerClockChanged);
     _detachLiveSessionCallbacks();
     _services.close();
     _installServices();
@@ -425,6 +435,7 @@ class _HomeShellState extends State<HomeShell> {
     _composerPanelController.dispose();
     _voicePlaybackService.state.removeListener(_handleVoicePlaybackChanged);
     unawaited(_voicePlaybackService.dispose());
+    widget.app.serverClock.removeListener(_handleServerClockChanged);
     _cancelActiveDownloads();
     _services.close();
     super.dispose();
@@ -437,6 +448,11 @@ class _HomeShellState extends State<HomeShell> {
       liveSessionController: widget.liveSessionController,
       realtime: widget.realtime,
     );
+  }
+
+  void _handleServerClockChanged() {
+    if (!mounted) return;
+    setState(() {});
   }
 
   void _setHomeState(VoidCallback update) => setState(update);
@@ -584,6 +600,7 @@ class _HomeShellState extends State<HomeShell> {
                               loading: _searching,
                               loadingMore: _searchLoadingMore,
                               error: _searchError,
+                              timestampNow: _serverNow,
                               currentUser: widget.app.currentUser,
                               activeCategory: _activeSearchCategory,
                               visibleCategories: _visibleSearchCategories,

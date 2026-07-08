@@ -5,9 +5,11 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import 'models.dart';
+import 'server_time_header.dart';
 import 'utf8_json.dart';
 
 typedef AccessTokenProvider = Future<String> Function({bool forceRefresh});
+typedef ServerTimeCallback = void Function(String? value);
 typedef UploadProgressCallback =
     void Function({required int sentBytes, required int totalBytes});
 
@@ -449,10 +451,12 @@ class GangApiClient implements GangApi {
     required this.baseUrl,
     required this.accessTokenProvider,
     http.Client? httpClient,
+    this.onServerTime,
   }) : _httpClient = httpClient ?? http.Client();
 
   final String baseUrl;
   final AccessTokenProvider accessTokenProvider;
+  final ServerTimeCallback? onServerTime;
   final http.Client _httpClient;
 
   @override
@@ -1836,6 +1840,7 @@ class GangApiClient implements GangApi {
       token = await accessTokenProvider(forceRefresh: true);
       response = await send(token);
     }
+    onServerTime?.call(response.headers[gangServerTimeHeader]);
     return response;
   }
 

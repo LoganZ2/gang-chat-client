@@ -200,6 +200,7 @@ extension _HomeShellLayout on _HomeShellState {
     final visibleMessages = _visibleMessagesForMe(_messages);
     return ChatPane(
       currentUser: _currentUser,
+      timestampNow: _serverNow,
       roomCard: _selectedServer,
       room: _selectedRoom,
       live: _live,
@@ -296,6 +297,7 @@ extension _HomeShellLayout on _HomeShellState {
       width: width,
       currentUser: _currentUser,
       servers: _sidebarServers,
+      timestampNow: _serverNow,
       roomDrafts: _sidebarRoomDrafts,
       selectedServerId: _selectedServerId,
       joinedLiveRoomId: _joinedLiveRoomId,

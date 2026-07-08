@@ -59,6 +59,7 @@ class ChatPane extends StatelessWidget {
   const ChatPane({
     super.key,
     required this.currentUser,
+    required this.timestampNow,
     required this.roomCard,
     required this.room,
     required this.live,
@@ -119,6 +120,7 @@ class ChatPane extends StatelessWidget {
   });
 
   final CurrentUser currentUser;
+  final DateTime timestampNow;
   final RoomCard? roomCard;
   final RoomDetail? room;
   final LiveState? live;
@@ -246,6 +248,7 @@ class ChatPane extends StatelessWidget {
               roomReady: roomReady,
               loading: loading,
               error: error,
+              timestampNow: timestampNow,
               messages: messages,
               newMessageCount: newMessageCount,
               focusMessageId: focusMessageId,

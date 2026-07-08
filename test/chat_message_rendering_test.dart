@@ -178,6 +178,7 @@ void main() {
       _host(
         ChatPane(
           currentUser: _currentUser,
+          timestampNow: now,
           roomCard: _roomCard,
           room: null,
           live: null,
@@ -2069,10 +2070,12 @@ Widget _chatPane({
   ChatMessageActions messageActions = const ChatMessageActions.disabled(),
   List<RoomMember> mentionMembers = const [],
   bool mentionMembersReady = true,
+  DateTime? timestampNow,
   VoidCallback? onViewedNewMessages,
 }) {
   return ChatPane(
     currentUser: _currentUser,
+    timestampNow: timestampNow ?? DateTime.now(),
     roomCard: _roomCard,
     room: room,
     live: live,

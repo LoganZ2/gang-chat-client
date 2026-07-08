@@ -12,6 +12,7 @@ import '../app/app_update.dart';
 import '../app/authenticated_app_context.dart';
 import '../app/language_preference.dart';
 import '../app/login_account_history.dart';
+import '../app/server_clock.dart';
 import 'app_update_gate.dart';
 import 'desktop_window_controller.dart';
 import 'local_login_account_history_store.dart';
@@ -84,6 +85,7 @@ class _AuthGateState extends State<_AuthGate> {
     tokenStore: widget.tokenStore,
     apiBaseUrl: widget.config.apiBaseUrl,
   );
+  final ServerClock _serverClock = ServerClock();
   // Tracks whether initial auth restore has finished so an authenticated start
   // does not briefly mount LoginPage and shrink the prepared app window.
   bool _initialRestoreDone = false;
@@ -271,6 +273,7 @@ class _AuthGateState extends State<_AuthGate> {
   void dispose() {
     _auth.removeListener(_onAuthChanged);
     _auth.dispose();
+    _serverClock.dispose();
     _revealFallbackTimer?.cancel();
     super.dispose();
   }
@@ -305,6 +308,7 @@ class _AuthGateState extends State<_AuthGate> {
       accessTokenProvider: _auth.accessToken,
       logout: _logout,
       exitSessionForAppExit: _exitSessionForAppExit,
+      serverClock: _serverClock,
     );
 
     return SelectionContainer.disabled(

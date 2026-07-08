@@ -7,12 +7,15 @@ import 'package:http/testing.dart';
 
 import 'package:client/src/protocol/api_client.dart';
 import 'package:client/src/protocol/models.dart';
+import 'package:client/src/protocol/server_time_header.dart';
 
 void main() {
   test('getAppVersion fetches current server version metadata', () async {
+    final serverTimes = <String?>[];
     final api = GangApiClient(
       baseUrl: 'http://example.test/api/v1',
       accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      onServerTime: serverTimes.add,
       httpClient: MockClient((request) async {
         expect(request.method, 'GET');
         expect(request.url.path, '/api/v1/app/version');
@@ -25,6 +28,7 @@ void main() {
             'download_url': 'https://example.test/download',
           }),
           200,
+          headers: {gangServerTimeHeader: '2026-07-08T09:00:00Z'},
         );
       }),
     );
@@ -35,6 +39,7 @@ void main() {
     expect(info.minimumSupportedVersion, '1.0.0');
     expect(info.releaseNotes, 'ok');
     expect(info.downloadUrl, 'https://example.test/download');
+    expect(serverTimes, ['2026-07-08T09:00:00Z']);
     api.close();
   });
 

@@ -41,6 +41,7 @@ void main() {
                 width: 320,
                 currentUser: _currentUser,
                 servers: [room],
+                timestampNow: lastMessageAt,
                 roomDrafts: const {'room_1': 'draft\ncontent'},
                 selectedServerId: null,
                 joinedLiveRoomId: null,

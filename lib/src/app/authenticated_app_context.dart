@@ -2,6 +2,7 @@ import '../auth/auth_client.dart';
 import '../protocol/api_client.dart';
 import '../protocol/models.dart';
 import '../protocol/sticker_pack_store.dart';
+import 'server_clock.dart';
 
 typedef LogoutCallback = Future<void> Function();
 typedef ExitSessionCallback = Future<void> Function();
@@ -13,6 +14,7 @@ class AuthenticatedAppContext {
     required this.accessTokenProvider,
     required this.logout,
     required this.exitSessionForAppExit,
+    required this.serverClock,
     this.api,
     this.stickerPackStore = const StickerPackStore(),
   });
@@ -22,6 +24,7 @@ class AuthenticatedAppContext {
   final AccessTokenProvider accessTokenProvider;
   final LogoutCallback logout;
   final ExitSessionCallback exitSessionForAppExit;
+  final ServerClock serverClock;
   final GangApi? api;
   final StickerPackStore stickerPackStore;
 
@@ -33,10 +36,13 @@ class AuthenticatedAppContext {
     return GangApiClient(
       baseUrl: apiBaseUrl,
       accessTokenProvider: accessTokenProvider,
+      onServerTime: serverClock.updateFromHeader,
     );
   }
 
   bool hasSameApiSource(AuthenticatedAppContext other) {
-    return apiBaseUrl == other.apiBaseUrl && api == other.api;
+    return apiBaseUrl == other.apiBaseUrl &&
+        api == other.api &&
+        serverClock == other.serverClock;
   }
 }

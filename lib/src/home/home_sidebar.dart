@@ -25,6 +25,7 @@ class HomeSidebar extends StatelessWidget {
     required this.width,
     required this.currentUser,
     required this.servers,
+    required this.timestampNow,
     this.roomDrafts = const {},
     required this.selectedServerId,
     required this.joinedLiveRoomId,
@@ -49,6 +50,7 @@ class HomeSidebar extends StatelessWidget {
   final double width;
   final CurrentUser currentUser;
   final List<RoomCard> servers;
+  final DateTime timestampNow;
   final Map<String, String> roomDrafts;
   final String? selectedServerId;
   final String? joinedLiveRoomId;
@@ -161,6 +163,7 @@ class HomeSidebar extends StatelessWidget {
 
     return _ServerList(
       servers: servers,
+      timestampNow: timestampNow,
       roomDrafts: roomDrafts,
       selectedServerId: selectedServerId,
       joinedLiveRoomId: joinedLiveRoomId,
@@ -173,6 +176,7 @@ class HomeSidebar extends StatelessWidget {
 class _ServerList extends StatefulWidget {
   const _ServerList({
     required this.servers,
+    required this.timestampNow,
     required this.roomDrafts,
     required this.selectedServerId,
     required this.joinedLiveRoomId,
@@ -181,6 +185,7 @@ class _ServerList extends StatefulWidget {
   });
 
   final List<RoomCard> servers;
+  final DateTime timestampNow;
   final Map<String, String> roomDrafts;
   final String? selectedServerId;
   final String? joinedLiveRoomId;
@@ -221,6 +226,7 @@ class _ServerListState extends State<_ServerList> {
             final server = widget.servers[index];
             return _ServerCard(
               server: server,
+              timestampNow: widget.timestampNow,
               draft: widget.roomDrafts[server.id],
               selected: server.id == widget.selectedServerId,
               voiceJoined: server.id == widget.joinedLiveRoomId,
@@ -490,6 +496,7 @@ class _FlatIconButton extends StatelessWidget {
 class _ServerCard extends StatelessWidget {
   const _ServerCard({
     required this.server,
+    required this.timestampNow,
     required this.draft,
     required this.selected,
     required this.voiceJoined,
@@ -498,6 +505,7 @@ class _ServerCard extends StatelessWidget {
   });
 
   final RoomCard server;
+  final DateTime timestampNow;
   final String? draft;
   final bool selected;
   final bool voiceJoined;
@@ -506,7 +514,10 @@ class _ServerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final lastMessageTime = room_display.roomSidebarLastMessageTime(server);
+    final lastMessageTime = room_display.roomSidebarLastMessageTime(
+      server,
+      now: timestampNow,
+    );
     final draftPreview = room_display.roomDraftPreview(draft);
     final subtitle = room_display.roomSidebarSubtitle(server);
     final hasUnreadMention = server.unreadMentionCount > 0;

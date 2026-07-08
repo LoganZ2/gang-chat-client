@@ -133,6 +133,7 @@ class _MessageStage extends StatefulWidget {
     required this.roomReady,
     required this.loading,
     required this.error,
+    required this.timestampNow,
     required this.messages,
     required this.newMessageCount,
     required this.focusMessageId,
@@ -163,6 +164,7 @@ class _MessageStage extends StatefulWidget {
   final bool roomReady;
   final bool loading;
   final String? error;
+  final DateTime timestampNow;
   final List<Message> messages;
   final int newMessageCount;
   final String? focusMessageId;
@@ -1047,7 +1049,7 @@ class _MessageStageState extends State<_MessageStage> {
 
     _scheduleUnderflowAlignment();
 
-    final now = DateTime.now();
+    final now = widget.timestampNow;
     final firstNewMessageIndex = _firstNewMessageIndex;
     final showNewMessageJump =
         firstNewMessageIndex != null &&

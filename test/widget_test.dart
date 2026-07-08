@@ -20,6 +20,7 @@ import 'package:client/src/app/login_account_history.dart';
 import 'package:client/src/app/live_session_controller.dart';
 import 'package:client/src/app/realtime_controller.dart';
 import 'package:client/src/app/settings_about.dart';
+import 'package:client/src/app/server_clock.dart';
 import 'package:client/src/auth/auth_client.dart';
 import 'package:client/src/auth/token_store.dart';
 import 'package:client/src/live/audio_device_service.dart';
@@ -6132,6 +6133,7 @@ AuthenticatedAppContext _homeTestAppContext({
     ),
     apiBaseUrl: 'http://localhost:3000',
     accessTokenProvider: ({bool forceRefresh = false}) async => 'access-token',
+    serverClock: ServerClock(localNow: () => DateTime.utc(2026, 6, 12, 2)),
     logout: onLogout ?? () async {},
     exitSessionForAppExit: onExitSessionForAppExit ?? () async {},
     api: _roomsApi(

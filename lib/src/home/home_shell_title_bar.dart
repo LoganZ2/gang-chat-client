@@ -533,6 +533,7 @@ class _TitleSearchResultsPanel extends StatelessWidget {
     required this.loading,
     required this.loadingMore,
     required this.error,
+    required this.timestampNow,
     required this.currentUser,
     required this.activeCategory,
     required this.visibleCategories,
@@ -554,6 +555,7 @@ class _TitleSearchResultsPanel extends StatelessWidget {
   final bool loading;
   final bool loadingMore;
   final String? error;
+  final DateTime timestampNow;
   final CurrentUser currentUser;
   final search_display.GlobalSearchCategory? activeCategory;
   final List<search_display.GlobalSearchCategory> visibleCategories;
@@ -693,7 +695,10 @@ class _TitleSearchResultsPanel extends StatelessWidget {
       search_display.GlobalSearchCategory.myRooms => snapshot.myRooms.map((
         room,
       ) {
-        final time = room_display.roomSidebarLastMessageTime(room);
+        final time = room_display.roomSidebarLastMessageTime(
+          room,
+          now: timestampNow,
+        );
         return _RoomSearchResultTile(
           title: room.displayName,
           subtitle: room_display.roomSidebarSubtitle(room),
