@@ -902,12 +902,12 @@ class _SettingsPageState extends State<SettingsPage> {
     final update = _availableAppUpdate;
     if (update == null || _downloadingAppUpdate) return;
     final confirmed = await _confirmAppUpdateAction(
-      title: '忽略新版本',
+      title: '忽略此版本',
       icon: Icons.notifications_off_outlined,
       body:
           '忽略 ${appVersionLabel(update.latestVersion)} 后，除非你主动点击检查更新，'
           '或出现更高版本，否则不会再主动提示该版本。',
-      confirmLabel: '忽略新版本',
+      confirmLabel: '忽略此版本',
     );
     if (!confirmed || !mounted) return;
     try {
@@ -918,13 +918,13 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() {
         _section = SettingsSection.about;
         _availableAppUpdate = null;
-        _notice = '已忽略新版本 ${appVersionLabel(update.latestVersion)}';
+        _notice = '已忽略此版本 ${appVersionLabel(update.latestVersion)}';
         _resetUpdateDownloadState();
       });
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _updateDownloadError = '忽略新版本失败：$error';
+        _updateDownloadError = '忽略此版本失败：$error';
       });
     }
   }

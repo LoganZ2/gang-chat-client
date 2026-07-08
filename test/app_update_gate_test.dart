@@ -98,14 +98,14 @@ void main() {
     expect(find.text('English'), findsNothing);
     expect(find.byTooltip('重新检查'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '继续使用'), findsNothing);
-    expect(find.widgetWithText(ui.Button, '忽略新版本'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '忽略此版本'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '下载新版本'), findsOneWidget);
 
     await tester.tap(find.byTooltip('返回'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('重新检查'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ui.Button, '忽略新版本'));
+    await tester.tap(find.widgetWithText(ui.Button, '忽略此版本'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(ui.Button, '下载新版本'));
     await tester.pumpAndSettle();

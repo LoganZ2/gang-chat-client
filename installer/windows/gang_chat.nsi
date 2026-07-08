@@ -24,6 +24,7 @@ Unicode true
 !define APP_PUBLISHER "Gang Chat"
 !define APP_EXE "client.exe"
 !define APP_ICON_FILE "GangChat.ico"
+!define APP_SUPPORT_URL "https://ky-z.com/gang-chat/home/"
 
 !if /FileExists "${SOURCE_DIR}\${APP_EXE}"
 !else
@@ -54,6 +55,7 @@ VIAddVersionKey "LegalCopyright" "Copyright (C) 2026 ${APP_PUBLISHER}. All right
 !include "LogicLib.nsh"
 !include "nsDialogs.nsh"
 !insertmacro GetTime
+!insertmacro GetSize
 
 !define MUI_ABORTWARNING
 !define MUI_ICON "${PROJECT_ROOT}\windows\runner\resources\app_icon.ico"
@@ -186,6 +188,7 @@ Section "Install"
 
   SetShellVarContext all
   WriteUninstaller "$INSTDIR\Uninstall.exe"
+  ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
 
   CreateDirectory "$SMPROGRAMS\Gang Chat"
   CreateShortcut "$SMPROGRAMS\Gang Chat\Gang Chat.lnk" "$INSTDIR\${APP_EXE}" "" "$INSTDIR\${APP_ICON_FILE}" 0
@@ -198,6 +201,9 @@ Section "Install"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gang Chat" "InstallLocation" "$INSTDIR"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gang Chat" "DisplayIcon" "$INSTDIR\${APP_ICON_FILE},0"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gang Chat" "UninstallString" '"$INSTDIR\Uninstall.exe"'
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gang Chat" "HelpLink" "${APP_SUPPORT_URL}"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gang Chat" "URLInfoAbout" "${APP_SUPPORT_URL}"
+  WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gang Chat" "EstimatedSize" $0
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gang Chat" "NoModify" 1
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gang Chat" "NoRepair" 1
 SectionEnd

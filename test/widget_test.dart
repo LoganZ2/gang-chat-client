@@ -2702,7 +2702,7 @@ void main() {
     expect(find.text('发行时间'), findsOneWidget);
     expect(find.text('版本日志'), findsOneWidget);
     expect(find.text('无'), findsOneWidget);
-    expect(find.widgetWithText(ui.Button, '忽略新版本'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '忽略此版本'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '下载新版本'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '继续使用'), findsNothing);
     expect(find.byTooltip('重新检查'), findsOneWidget);
@@ -2718,10 +2718,10 @@ void main() {
 
     expect(find.text('发现新版本'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(ui.Button, '忽略新版本'));
+    await tester.tap(find.widgetWithText(ui.Button, '忽略此版本'));
     await tester.pumpAndSettle();
 
-    expect(find.text('忽略新版本'), findsWidgets);
+    expect(find.text('忽略此版本'), findsWidgets);
     expect(find.textContaining('不会再主动提示该版本'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(ui.Button, '取消'));
@@ -2729,9 +2729,9 @@ void main() {
 
     expect(find.text('发现新版本'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(ui.Button, '忽略新版本'));
+    await tester.tap(find.widgetWithText(ui.Button, '忽略此版本'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ui.Button, '忽略新版本').last);
+    await tester.tap(find.widgetWithText(ui.Button, '忽略此版本').last);
     await tester.pumpAndSettle();
 
     expect(find.text('发现新版本'), findsNothing);

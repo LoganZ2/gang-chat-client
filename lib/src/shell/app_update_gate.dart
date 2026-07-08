@@ -335,7 +335,7 @@ class _UpdateActions extends StatelessWidget {
             onPressed: downloading ? null : onIgnoreVersion,
             icon: const Icon(Icons.notifications_off_outlined),
             width: double.infinity,
-            child: const Text('忽略新版本'),
+            child: const Text('忽略此版本'),
           ),
         ),
         const SizedBox(width: 12),
