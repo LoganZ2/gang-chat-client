@@ -88,6 +88,8 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
   bool _changed = false;
   String? _error;
   String? _notice;
+  int _floatingNoticeSerial = 0;
+  final Map<String, int> _floatingNoticeEventKeys = {};
 
   bool get _creating => widget._mode == _RoomSettingsDialogMode.create;
 
@@ -201,6 +203,33 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
     Navigator.of(context).pop(result);
   }
 
+  void _markFloatingNoticeEvent(String channel, String? message) {
+    if (message == null || message.trim().isEmpty) return;
+    _floatingNoticeEventKeys[channel] = ++_floatingNoticeSerial;
+  }
+
+  Object? _floatingNoticeEventKey(String channel) {
+    return _floatingNoticeEventKeys[channel];
+  }
+
+  List<FloatingNotice> _floatingNotices() {
+    return [
+      if (_notice != null)
+        FloatingNotice(
+          message: _notice!,
+          tone: FloatingNoticeTone.success,
+          eventKey: _floatingNoticeEventKey('notice'),
+        ),
+      if (_error != null)
+        FloatingNotice(
+          message: _error!,
+          tone: FloatingNoticeTone.error,
+          duration: null,
+          eventKey: _floatingNoticeEventKey('error'),
+        ),
+    ];
+  }
+
   Future<void> _save() async {
     if (_saving ||
         _savingPreferences ||
@@ -223,6 +252,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
       setState(() {
         _error = draft.error;
         _notice = null;
+        _markFloatingNoticeEvent('error', _error);
       });
       return;
     }
@@ -268,6 +298,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
         _changed = true;
         _error = null;
         _notice = room_display.roomInfoSavedNotice();
+        _markFloatingNoticeEvent('notice', _notice);
       });
       widget.onRoomUpdated(updated);
     } catch (error) {
@@ -276,6 +307,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
         _saving = false;
         _error = error.toString();
         _notice = null;
+        _markFloatingNoticeEvent('error', _error);
       });
     }
   }
@@ -317,6 +349,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
         _changed = true;
         _error = null;
         _notice = room_display.roomPersonalPreferencesSavedNotice();
+        _markFloatingNoticeEvent('notice', _notice);
       });
       widget.onRoomUpdated(updated);
     } catch (error) {
@@ -325,6 +358,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
         _savingPreferences = false;
         _error = error.toString();
         _notice = null;
+        _markFloatingNoticeEvent('error', _error);
       });
     }
   }
@@ -365,6 +399,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
       setState(() {
         _refreshing = false;
         _error = error.toString();
+        _markFloatingNoticeEvent('error', _error);
       });
     }
   }
@@ -379,6 +414,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
       setState(() {
         _error = error.toString();
         _notice = null;
+        _markFloatingNoticeEvent('error', _error);
       });
       return;
     }
@@ -406,6 +442,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
       setState(() {
         _uploadingAvatar = false;
         _error = error.toString();
+        _markFloatingNoticeEvent('error', _error);
       });
     }
   }
@@ -474,6 +511,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
       setState(() {
         _leaving = false;
         _error = error.toString();
+        _markFloatingNoticeEvent('error', _error);
       });
     }
   }
@@ -515,68 +553,72 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
       setState(() {
         _deleting = false;
         _error = error.toString();
+        _markFloatingNoticeEvent('error', _error);
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return _RoomDialogShell(
-      title: _creating ? '创建房间' : '房间设置',
-      icon: _creating ? Icons.add_circle_outline : Icons.tune,
-      maxWidth: _dialogMaxWidth,
-      maxHeight: _dialogMaxHeight,
-      embedded: widget.embedded,
-      onClose: _close,
-      headerAction: _creating
-          ? null
-          : ButtonIcon(
-              tooltip: '刷新设置',
-              onPressed: _refreshing ? null : _refreshRoom,
-              icon: const Icon(Icons.refresh),
-              size: 38,
-              loading: _refreshing,
-            ),
-      pinned: _creating
-          ? null
-          : SegmentedControl<_RoomSettingsSection>(
-              expanded: true,
-              value: _section,
-              onChanged: (section) => setState(() => _section = section),
-              segments: const [
-                Segment(
-                  value: _RoomSettingsSection.info,
-                  label: '房间信息',
-                  icon: Icons.info_outline,
-                ),
-                Segment(
-                  value: _RoomSettingsSection.preferences,
-                  label: '个人偏好',
-                  icon: Icons.tune_outlined,
-                ),
-                Segment(
-                  value: _RoomSettingsSection.stickers,
-                  label: '表情包',
-                  icon: Icons.emoji_emotions_outlined,
-                ),
-              ],
-            ),
-      child: _creating
-          ? _buildSettingsBody(context)
-          : switch (_section) {
-              _RoomSettingsSection.info => _buildSettingsBody(context),
-              _RoomSettingsSection.preferences => _buildPreferencesBody(),
-              _RoomSettingsSection.stickers => StickerManagerPanel(
-                backend: _RoomStickerBackend(
-                  controller: widget.controller,
-                  roomId: _room.id,
-                  canManage: _canManageRoom,
-                ),
-                imagePreviewOpener: widget.stickerImagePreviewOpener,
-                title: '房间表情包',
-                unavailableText: '房间表情包需要登录后从服务端读取',
+    return FloatingNoticeEmitter(
+      notices: _floatingNotices(),
+      child: _RoomDialogShell(
+        title: _creating ? '创建房间' : '房间设置',
+        icon: _creating ? Icons.add_circle_outline : Icons.tune,
+        maxWidth: _dialogMaxWidth,
+        maxHeight: _dialogMaxHeight,
+        embedded: widget.embedded,
+        onClose: _close,
+        headerAction: _creating
+            ? null
+            : ButtonIcon(
+                tooltip: '刷新设置',
+                onPressed: _refreshing ? null : _refreshRoom,
+                icon: const Icon(Icons.refresh),
+                size: 38,
+                loading: _refreshing,
               ),
-            },
+        pinned: _creating
+            ? null
+            : SegmentedControl<_RoomSettingsSection>(
+                expanded: true,
+                value: _section,
+                onChanged: (section) => setState(() => _section = section),
+                segments: const [
+                  Segment(
+                    value: _RoomSettingsSection.info,
+                    label: '房间信息',
+                    icon: Icons.info_outline,
+                  ),
+                  Segment(
+                    value: _RoomSettingsSection.preferences,
+                    label: '个人偏好',
+                    icon: Icons.tune_outlined,
+                  ),
+                  Segment(
+                    value: _RoomSettingsSection.stickers,
+                    label: '表情包',
+                    icon: Icons.emoji_emotions_outlined,
+                  ),
+                ],
+              ),
+        child: _creating
+            ? _buildSettingsBody(context)
+            : switch (_section) {
+                _RoomSettingsSection.info => _buildSettingsBody(context),
+                _RoomSettingsSection.preferences => _buildPreferencesBody(),
+                _RoomSettingsSection.stickers => StickerManagerPanel(
+                  backend: _RoomStickerBackend(
+                    controller: widget.controller,
+                    roomId: _room.id,
+                    canManage: _canManageRoom,
+                  ),
+                  imagePreviewOpener: widget.stickerImagePreviewOpener,
+                  title: '房间表情包',
+                  unavailableText: '房间表情包需要登录后从服务端读取',
+                ),
+              },
+      ),
     );
   }
 
@@ -584,9 +626,6 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
     return SettingsList(
       physics: const ClampingScrollPhysics(),
       children: [
-        if (_notice != null)
-          _NoticeStrip(message: _notice!, icon: Icons.check_circle_outline),
-        if (_error != null) _NoticeStrip(message: _error!, danger: true),
         SettingsCard(
           title: '房间信息',
           children: [
@@ -696,9 +735,6 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
     return SettingsList(
       physics: const ClampingScrollPhysics(),
       children: [
-        if (_notice != null)
-          _NoticeStrip(message: _notice!, icon: Icons.check_circle_outline),
-        if (_error != null) _NoticeStrip(message: _error!, danger: true),
         SettingsCard(
           title: '个人偏好',
           children: [

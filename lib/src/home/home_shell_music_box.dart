@@ -146,9 +146,15 @@ extension _HomeShellMusicBox on _HomeShellState {
         result: result,
       );
       _applyMusicBoxSnapshot(state);
-      _showMusicBoxNotice('已加入队列：${result.name}');
+      _showMusicBoxNotice(
+        '已加入队列：${result.name}',
+        tone: FloatingNoticeTone.success,
+      );
     } catch (error) {
-      _showMusicBoxNotice(_musicBoxWriteErrorMessage(error));
+      _showMusicBoxNotice(
+        _musicBoxWriteErrorMessage(error),
+        tone: FloatingNoticeTone.error,
+      );
     }
   }
 
@@ -162,7 +168,10 @@ extension _HomeShellMusicBox on _HomeShellState {
       );
       _applyMusicBoxSnapshot(state);
     } catch (error) {
-      _showMusicBoxNotice(_musicBoxWriteErrorMessage(error));
+      _showMusicBoxNotice(
+        _musicBoxWriteErrorMessage(error),
+        tone: FloatingNoticeTone.error,
+      );
     }
   }
 
@@ -176,7 +185,10 @@ extension _HomeShellMusicBox on _HomeShellState {
       );
       _applyMusicBoxSnapshot(state);
     } catch (error) {
-      _showMusicBoxNotice(_musicBoxWriteErrorMessage(error));
+      _showMusicBoxNotice(
+        _musicBoxWriteErrorMessage(error),
+        tone: FloatingNoticeTone.error,
+      );
     }
   }
 
@@ -208,11 +220,11 @@ extension _HomeShellMusicBox on _HomeShellState {
     return '操作失败，请重试';
   }
 
-  void _showMusicBoxNotice(String message) {
+  void _showMusicBoxNotice(
+    String message, {
+    FloatingNoticeTone tone = FloatingNoticeTone.info,
+  }) {
     if (!mounted) return;
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    messenger
-      ?..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showFloatingNotice(context, message, tone: tone);
   }
 }

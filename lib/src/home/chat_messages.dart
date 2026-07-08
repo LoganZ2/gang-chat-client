@@ -1014,14 +1014,23 @@ class _MessageStageState extends State<_MessageStage> {
   Widget build(BuildContext context) {
     _trimMessageRowKeys();
     if (widget.error != null && !widget.roomReady) {
-      return _CenteredState(
-        icon: Icons.error_outline,
-        title: '无法加载聊天',
-        detail: widget.error!,
-        action: Button(
-          icon: const Icon(Icons.refresh),
-          onPressed: widget.onRetry,
-          child: const Text('重试'),
+      return FloatingNoticeEmitter(
+        notices: [
+          FloatingNotice(
+            message: widget.error!,
+            tone: FloatingNoticeTone.error,
+            duration: null,
+          ),
+        ],
+        child: _CenteredState(
+          icon: Icons.error_outline,
+          title: '无法加载聊天',
+          detail: '请稍后重试',
+          action: Button(
+            icon: const Icon(Icons.refresh),
+            onPressed: widget.onRetry,
+            child: const Text('重试'),
+          ),
         ),
       );
     }
@@ -2664,7 +2673,11 @@ class _TextBodyState extends State<_TextBody> {
       await const ExternalUriLauncher().open(uri);
     } catch (_) {
       if (!mounted) return;
-      _showMessageContextNotice(context, '无法打开链接');
+      _showMessageContextNotice(
+        context,
+        '无法打开链接',
+        tone: FloatingNoticeTone.error,
+      );
     }
   }
 }
@@ -3081,17 +3094,27 @@ Future<void> _runStickerContextAction(
   try {
     await action(message, attachment);
     if (!context.mounted) return;
-    _showMessageContextNotice(context, successMessage);
+    _showMessageContextNotice(
+      context,
+      successMessage,
+      tone: FloatingNoticeTone.success,
+    );
   } catch (error) {
     if (!context.mounted) return;
-    _showMessageContextNotice(context, '$error');
+    _showMessageContextNotice(
+      context,
+      '$error',
+      tone: FloatingNoticeTone.error,
+    );
   }
 }
 
-void _showMessageContextNotice(BuildContext context, String message) {
-  ScaffoldMessenger.maybeOf(context)
-    ?..clearSnackBars()
-    ..showSnackBar(SnackBar(content: Text(message)));
+void _showMessageContextNotice(
+  BuildContext context,
+  String message, {
+  FloatingNoticeTone tone = FloatingNoticeTone.info,
+}) {
+  showFloatingNotice(context, message, tone: tone);
 }
 
 class _StickerFallback extends StatelessWidget {

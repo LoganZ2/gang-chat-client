@@ -29,7 +29,10 @@ extension _HomeShellDownloads on _HomeShellState {
 
     final uri = file_display.fileDownloadUri(resolvedUrl);
     if (uri == null) {
-      _showDownloadNotice(file_display.fileDownloadUnavailableMessage());
+      _showDownloadNotice(
+        file_display.fileDownloadUnavailableMessage(),
+        tone: FloatingNoticeTone.error,
+      );
       return;
     }
 
@@ -41,7 +44,10 @@ extension _HomeShellDownloads on _HomeShellState {
       );
     } catch (error) {
       if (!mounted) return;
-      _showDownloadNotice(file_display.filePickerOpenFailureMessage(error));
+      _showDownloadNotice(
+        file_display.filePickerOpenFailureMessage(error),
+        tone: FloatingNoticeTone.error,
+      );
       return;
     }
     if (!mounted || location == null) return;
@@ -113,7 +119,10 @@ extension _HomeShellDownloads on _HomeShellState {
           ),
         ),
       );
-      _showDownloadNotice(file_display.fileDownloadedNotice());
+      _showDownloadNotice(
+        file_display.fileDownloadedNotice(),
+        tone: FloatingNoticeTone.success,
+      );
     } on MediaCacheCancelledException catch (_) {
       // Cancellation already removed the entry via [_cancelDownload]; nothing
       // to report.
@@ -195,11 +204,11 @@ extension _HomeShellDownloads on _HomeShellState {
     _fileDownloads = patch.downloads;
   }
 
-  void _showDownloadNotice(String message) {
+  void _showDownloadNotice(
+    String message, {
+    FloatingNoticeTone tone = FloatingNoticeTone.info,
+  }) {
     if (!mounted) return;
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    messenger
-      ?..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showFloatingNotice(context, message, tone: tone);
   }
 }

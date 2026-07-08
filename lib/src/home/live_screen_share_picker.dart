@@ -81,6 +81,7 @@ class _LiveScreenSharePickerState extends State<LiveScreenSharePicker> {
 
   @override
   Widget build(BuildContext context) {
+    final error = _state.error?.trim();
     return Dialog(
       backgroundColor: UiColors.surfaceLow,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
@@ -92,44 +93,47 @@ class _LiveScreenSharePickerState extends State<LiveScreenSharePicker> {
         constraints: const BoxConstraints(maxWidth: 720, maxHeight: 560),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('选择共享内容', style: UiTypography.title),
-              const SizedBox(height: 16),
-              Flexible(child: _buildSourceList(_state.sources)),
-              if (_state.error != null) ...[
-                const SizedBox(height: 10),
-                Text(
-                  _state.error!,
-                  style: UiTypography.label.copyWith(color: UiColors.danger),
+          child: FloatingNoticeEmitter(
+            notices: [
+              if (error != null && error.isNotEmpty)
+                FloatingNotice(
+                  message: error,
+                  tone: FloatingNoticeTone.error,
+                  duration: null,
+                ),
+            ],
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('选择共享内容', style: UiTypography.title),
+                const SizedBox(height: 16),
+                Flexible(child: _buildSourceList(_state.sources)),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Button(
+                      height: 40,
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('取消'),
+                    ),
+                    const SizedBox(width: 10),
+                    Button(
+                      height: 40,
+                      tone: ButtonTone.primary,
+                      onPressed:
+                          live_display.canConfirmLiveScreenSourceSelection(
+                            _state.selectedId,
+                          )
+                          ? _confirm
+                          : null,
+                      child: const Text('共享'),
+                    ),
+                  ],
                 ),
               ],
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Button(
-                    height: 40,
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('取消'),
-                  ),
-                  const SizedBox(width: 10),
-                  Button(
-                    height: 40,
-                    tone: ButtonTone.primary,
-                    onPressed:
-                        live_display.canConfirmLiveScreenSourceSelection(
-                          _state.selectedId,
-                        )
-                        ? _confirm
-                        : null,
-                    child: const Text('共享'),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
         ),
       ),

@@ -574,7 +574,8 @@ class _TitleSearchResultsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
+    final message = error?.trim();
+    final panel = DecoratedBox(
       decoration: BoxDecoration(
         color: UiColors.surfaceLow,
         borderRadius: BorderRadius.circular(UiRadii.lg),
@@ -606,6 +607,17 @@ class _TitleSearchResultsPanel extends StatelessWidget {
         ),
       ),
     );
+    if (message == null || message.isEmpty) return panel;
+    return FloatingNoticeEmitter(
+      notices: [
+        FloatingNotice(
+          message: message,
+          tone: FloatingNoticeTone.error,
+          duration: null,
+        ),
+      ],
+      child: panel,
+    );
   }
 
   Widget _buildBody(BuildContext context) {
@@ -614,7 +626,7 @@ class _TitleSearchResultsPanel extends StatelessWidget {
       return _SearchPanelState(
         icon: Icons.error_outline,
         title: '搜索失败',
-        detail: failure,
+        detail: '请稍后重试',
       );
     }
 

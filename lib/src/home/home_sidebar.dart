@@ -156,8 +156,17 @@ class HomeSidebar extends StatelessWidget {
     }
 
     if (servers.isEmpty && error != null) {
-      return Center(
-        child: Icon(Icons.error_outline, color: UiColors.danger, size: 22),
+      return FloatingNoticeEmitter(
+        notices: [
+          FloatingNotice(
+            message: error!,
+            tone: FloatingNoticeTone.error,
+            duration: null,
+          ),
+        ],
+        child: Center(
+          child: Icon(Icons.error_outline, color: UiColors.danger, size: 22),
+        ),
       );
     }
 

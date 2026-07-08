@@ -128,48 +128,6 @@ class _RoomFieldLabel extends StatelessWidget {
   }
 }
 
-class _NoticeStrip extends StatelessWidget {
-  const _NoticeStrip({required this.message, this.icon, this.danger = false});
-
-  final String message;
-  final IconData? icon;
-  final bool danger;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: danger ? const Color(0xFF2E1F22) : UiColors.selected,
-        borderRadius: BorderRadius.circular(UiRadii.md),
-        border: Border.all(
-          color: danger ? UiColors.dangerBorder : UiColors.accentBorder,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        child: Row(
-          children: [
-            Icon(
-              icon ?? Icons.error_outline,
-              color: danger ? UiColors.danger : UiColors.accent,
-              size: 16,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                message,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: UiTypography.label.copyWith(color: UiColors.text),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.icon, required this.title});
 

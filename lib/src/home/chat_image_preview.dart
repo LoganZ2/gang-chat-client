@@ -164,8 +164,6 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
   double? _gestureStartScale;
   Offset? _gestureStartContentFocal;
   _PreviewAction? _busy;
-  String? _notice;
-  bool _noticeIsError = false;
 
   bool get _canSaveSticker =>
       widget.stickerSource != null && widget.actions.onSaveSticker != null;
@@ -237,27 +235,17 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
     required String successMessage,
   }) async {
     if (_busy != null) return;
-    setState(() {
-      _busy = action;
-      _notice = null;
-    });
+    setState(() => _busy = action);
     try {
       await task();
       if (!mounted) return;
-      setState(() {
-        _notice = successMessage;
-        _noticeIsError = false;
-      });
+      showFloatingSuccessNotice(context, successMessage);
     } on ImagePreviewActionCancelled {
       // User cancelled (e.g. closed the save-as picker); leave the overlay as
       // it was without showing success or error.
-      if (mounted) setState(() => _notice = null);
     } catch (error) {
       if (!mounted) return;
-      setState(() {
-        _notice = '$error';
-        _noticeIsError = true;
-      });
+      showFloatingErrorNotice(context, '$error');
     } finally {
       if (mounted) setState(() => _busy = null);
     }
@@ -309,14 +297,6 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
                       child: Column(
                         children: [
                           Expanded(child: _buildImage()),
-                          if (_notice != null) ...[
-                            const SizedBox(height: 16),
-                            _PreviewNotice(
-                              message: _notice!,
-                              isError: _noticeIsError,
-                            ),
-                            const SizedBox(height: 12),
-                          ],
                           if (widget.showActionBar) ...[
                             const SizedBox(height: 16),
                             _buildActionBar(),
@@ -707,36 +687,6 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
           ),
         ],
       ],
-    );
-  }
-}
-
-class _PreviewNotice extends StatelessWidget {
-  const _PreviewNotice({required this.message, required this.isError});
-
-  final String message;
-  final bool isError;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: const Color(0x99000000),
-        borderRadius: BorderRadius.circular(UiRadii.md),
-        border: Border.all(
-          color: isError ? UiColors.dangerBorder : UiColors.border,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        child: Text(
-          message,
-          textAlign: TextAlign.center,
-          style: UiTypography.label.copyWith(
-            color: isError ? UiColors.danger : UiColors.textSecondary,
-          ),
-        ),
-      ),
     );
   }
 }

@@ -17,6 +17,7 @@ import '../shell/file_selection_service.dart';
 import 'app_config_scope.dart';
 import 'button.dart';
 import 'cached_asset_image.dart';
+import 'feedback.dart';
 import 'input.dart';
 import 'media_cache_scope.dart';
 import 'settings_scaffold.dart';
@@ -134,6 +135,8 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
   String _filterMimeType = '';
   String? _error;
   String? _notice;
+  int _floatingNoticeSerial = 0;
+  final Map<String, int> _floatingNoticeEventKeys = {};
 
   StickerManagementScope get _scope => widget.backend.scope;
   StickerManagementCapabilities get _capabilities =>
@@ -175,6 +178,7 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
     _selectedStickerIds = patch.selectedStickerIds;
     _loading = patch.loading;
     _error = patch.error;
+    _markFloatingNoticeEvent('error', _error);
   }
 
   void _applySelectionPatch(StickerSelectionPatch patch) {
@@ -192,6 +196,17 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
     _selectedStickerIds = patch.selectedStickerIds;
     _error = patch.error;
     _notice = patch.notice;
+    _markFloatingNoticeEvent('error', _error);
+    _markFloatingNoticeEvent('notice', _notice);
+  }
+
+  void _markFloatingNoticeEvent(String channel, String? message) {
+    if (message == null || message.trim().isEmpty) return;
+    _floatingNoticeEventKeys[channel] = ++_floatingNoticeSerial;
+  }
+
+  Object? _floatingNoticeEventKey(String channel) {
+    return _floatingNoticeEventKeys[channel];
   }
 
   Future<void> _load() async {
@@ -1015,170 +1030,185 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
       visibleItems: items,
     );
 
-    return SettingsList(
-      children: [
-        if (_notice != null) StickerNotice(message: _notice!),
-        if (_error != null) StickerError(message: _error!),
-        if (!widget.backend.hasApi)
-          StickerEmptyState(text: widget.unavailableText)
-        else
-          SettingsCard(
-            title: widget.title,
-            spacing: 0,
-            trailing: Text(
-              stickerManagementCountText(
-                filterActive: _filterActive,
-                visibleCount: items.length,
-                totalCount: totalCount,
+    return FloatingNoticeEmitter(
+      notices: [
+        if (_notice != null)
+          FloatingNotice(
+            message: _notice!,
+            tone: FloatingNoticeTone.success,
+            eventKey: _floatingNoticeEventKey('notice'),
+          ),
+        if (_error != null)
+          FloatingNotice(
+            message: _error!,
+            tone: FloatingNoticeTone.error,
+            duration: null,
+            eventKey: _floatingNoticeEventKey('error'),
+          ),
+      ],
+      child: SettingsList(
+        children: [
+          if (!widget.backend.hasApi)
+            StickerEmptyState(text: widget.unavailableText)
+          else
+            SettingsCard(
+              title: widget.title,
+              spacing: 0,
+              trailing: Text(
+                stickerManagementCountText(
+                  filterActive: _filterActive,
+                  visibleCount: items.length,
+                  totalCount: totalCount,
+                ),
+                style: const TextStyle(
+                  color: UiColors.textMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-              style: const TextStyle(
-                color: UiColors.textMuted,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            children: [
-              StickerActionRow(
-                children: [
-                  Button(
-                    onPressed:
-                        canStartStickerPrimaryAction(
-                          busy: busy,
-                          allowed: _managing
-                              ? capabilities.canDelete
-                              : capabilities.canUpload,
-                        )
-                        ? _managing
-                              ? _deleteSelected
-                              : _upload
-                        : null,
-                    loading: _managing ? _deleting : _uploading,
-                    tone: _managing ? ButtonTone.danger : ButtonTone.primary,
-                    icon: Icon(
-                      _managing ? Icons.delete_outline : Icons.upload_file,
-                    ),
-                    width: double.infinity,
-                    child: Text(_managing ? '删除' : '本地上传'),
-                  ),
-                  Button(
-                    onPressed:
-                        canUseStickerManagementControl(
-                          busy: busy,
-                          allowed: capabilities.canBatchManage,
-                        )
-                        ? _toggleManageMode
-                        : null,
-                    selected: _managing,
-                    tone: _managing ? ButtonTone.primary : ButtonTone.neutral,
-                    icon: Icon(_managing ? Icons.close : Icons.checklist_rtl),
-                    width: double.infinity,
-                    child: Text(_managing ? '取消管理' : '批量管理'),
-                  ),
-                  Button(
-                    onPressed:
-                        canUseStickerManagementControl(
-                          busy: busy,
-                          allowed: capabilities.canFilter,
-                        )
-                        ? _openFilter
-                        : null,
-                    selected: _filterActive,
-                    tone: _filterActive
-                        ? ButtonTone.primary
-                        : ButtonTone.neutral,
-                    icon: const Icon(Icons.filter_alt_outlined),
-                    width: double.infinity,
-                    child: const Text('筛选'),
-                  ),
-                ],
-              ),
-              if (_managing) ...[
-                const SizedBox(height: 10),
+              children: [
                 StickerActionRow(
                   children: [
                     Button(
                       onPressed:
-                          canStartStickerSelectionAction(
+                          canStartStickerPrimaryAction(
                             busy: busy,
-                            selectedStickerIds: _selectedStickerIds,
-                            allowed: capabilities.canDownload,
+                            allowed: _managing
+                                ? capabilities.canDelete
+                                : capabilities.canUpload,
                           )
-                          ? () => _downloadIds(_selectedStickerIds)
+                          ? _managing
+                                ? _deleteSelected
+                                : _upload
                           : null,
-                      loading: _downloading,
-                      icon: const Icon(Icons.download_outlined),
-                      width: double.infinity,
-                      child: const Text('下载'),
-                    ),
-                    Button(
-                      onPressed:
-                          canStartStickerSelectionAction(
-                            busy: busy,
-                            selectedStickerIds: _selectedStickerIds,
-                            allowed: capabilities.canPin,
-                          )
-                          ? _pinSelected
-                          : null,
-                      loading: _savingOrder,
-                      icon: const Icon(Icons.vertical_align_top),
-                      width: double.infinity,
-                      child: const Text('置顶'),
-                    ),
-                    Button(
-                      onPressed:
-                          canSelectVisibleStickers(
-                            busy: busy,
-                            visibleItems: items,
-                            allowed: capabilities.canSelectAll,
-                          )
-                          ? () => _selectAllVisible(items)
-                          : null,
-                      selected: allVisibleSelected,
+                      loading: _managing ? _deleting : _uploading,
+                      tone: _managing ? ButtonTone.danger : ButtonTone.primary,
                       icon: Icon(
-                        allVisibleSelected
-                            ? Icons.check_box
-                            : Icons.check_box_outline_blank,
+                        _managing ? Icons.delete_outline : Icons.upload_file,
                       ),
                       width: double.infinity,
-                      child: Text(
-                        stickerVisibleSelectionButtonText(
-                          selectedStickerIds: _selectedStickerIds,
-                          visibleItems: items,
-                        ),
-                      ),
+                      child: Text(_managing ? '删除' : '本地上传'),
+                    ),
+                    Button(
+                      onPressed:
+                          canUseStickerManagementControl(
+                            busy: busy,
+                            allowed: capabilities.canBatchManage,
+                          )
+                          ? _toggleManageMode
+                          : null,
+                      selected: _managing,
+                      tone: _managing ? ButtonTone.primary : ButtonTone.neutral,
+                      icon: Icon(_managing ? Icons.close : Icons.checklist_rtl),
+                      width: double.infinity,
+                      child: Text(_managing ? '取消管理' : '批量管理'),
+                    ),
+                    Button(
+                      onPressed:
+                          canUseStickerManagementControl(
+                            busy: busy,
+                            allowed: capabilities.canFilter,
+                          )
+                          ? _openFilter
+                          : null,
+                      selected: _filterActive,
+                      tone: _filterActive
+                          ? ButtonTone.primary
+                          : ButtonTone.neutral,
+                      icon: const Icon(Icons.filter_alt_outlined),
+                      width: double.infinity,
+                      child: const Text('筛选'),
                     ),
                   ],
                 ),
-              ],
-              const SizedBox(height: 14),
-              if (_loading && _packs.isEmpty)
-                const SizedBox(
-                  height: 128,
-                  child: Center(
-                    child: CircularProgressIndicator(color: UiColors.accent),
+                if (_managing) ...[
+                  const SizedBox(height: 10),
+                  StickerActionRow(
+                    children: [
+                      Button(
+                        onPressed:
+                            canStartStickerSelectionAction(
+                              busy: busy,
+                              selectedStickerIds: _selectedStickerIds,
+                              allowed: capabilities.canDownload,
+                            )
+                            ? () => _downloadIds(_selectedStickerIds)
+                            : null,
+                        loading: _downloading,
+                        icon: const Icon(Icons.download_outlined),
+                        width: double.infinity,
+                        child: const Text('下载'),
+                      ),
+                      Button(
+                        onPressed:
+                            canStartStickerSelectionAction(
+                              busy: busy,
+                              selectedStickerIds: _selectedStickerIds,
+                              allowed: capabilities.canPin,
+                            )
+                            ? _pinSelected
+                            : null,
+                        loading: _savingOrder,
+                        icon: const Icon(Icons.vertical_align_top),
+                        width: double.infinity,
+                        child: const Text('置顶'),
+                      ),
+                      Button(
+                        onPressed:
+                            canSelectVisibleStickers(
+                              busy: busy,
+                              visibleItems: items,
+                              allowed: capabilities.canSelectAll,
+                            )
+                            ? () => _selectAllVisible(items)
+                            : null,
+                        selected: allVisibleSelected,
+                        icon: Icon(
+                          allVisibleSelected
+                              ? Icons.check_box
+                              : Icons.check_box_outline_blank,
+                        ),
+                        width: double.infinity,
+                        child: Text(
+                          stickerVisibleSelectionButtonText(
+                            selectedStickerIds: _selectedStickerIds,
+                            visibleItems: items,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                )
-              else if (totalCount == 0)
-                const StickerEmptyState(text: '暂无表情,点击本地上传会自动创建')
-              else if (items.isEmpty)
-                const StickerEmptyState(text: '没有匹配的表情')
-              else
-                StickerGrid(
-                  items: items,
-                  managing: _managing,
-                  selectionNumbers: selectionNumbers,
-                  busy: busy,
-                  onTap: (item) {
-                    if (_managing) {
-                      _toggleSelection(item.sticker.id);
-                    } else {
-                      _preview(item);
-                    }
-                  },
-                ),
-            ],
-          ),
-      ],
+                ],
+                const SizedBox(height: 14),
+                if (_loading && _packs.isEmpty)
+                  const SizedBox(
+                    height: 128,
+                    child: Center(
+                      child: CircularProgressIndicator(color: UiColors.accent),
+                    ),
+                  )
+                else if (totalCount == 0)
+                  const StickerEmptyState(text: '暂无表情,点击本地上传会自动创建')
+                else if (items.isEmpty)
+                  const StickerEmptyState(text: '没有匹配的表情')
+                else
+                  StickerGrid(
+                    items: items,
+                    managing: _managing,
+                    selectionNumbers: selectionNumbers,
+                    busy: busy,
+                    onTap: (item) {
+                      if (_managing) {
+                        _toggleSelection(item.sticker.id);
+                      } else {
+                        _preview(item);
+                      }
+                    },
+                  ),
+              ],
+            ),
+        ],
+      ),
     );
   }
 }
@@ -1202,64 +1232,6 @@ class StickerActionRow extends StatelessWidget {
           Expanded(child: entry.value),
         ],
       ],
-    );
-  }
-}
-
-/// 提示条(成功/通知)。
-class StickerNotice extends StatelessWidget {
-  const StickerNotice({super.key, required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: UiColors.selected,
-        borderRadius: BorderRadius.all(Radius.circular(UiRadii.md)),
-        border: Border.fromBorderSide(BorderSide(color: Color(0xFF22332B))),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Text(
-          message,
-          style: const TextStyle(
-            color: UiColors.textSecondary,
-            fontSize: 13,
-            height: 1.4,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 错误条。
-class StickerError extends StatelessWidget {
-  const StickerError({super.key, required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: Color(0xFF2E1F22),
-        borderRadius: BorderRadius.all(Radius.circular(UiRadii.md)),
-        border: Border.fromBorderSide(BorderSide(color: Color(0xFF3A2A2E))),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Text(
-          message,
-          style: const TextStyle(
-            color: UiColors.danger,
-            fontSize: 13,
-            height: 1.4,
-          ),
-        ),
-      ),
     );
   }
 }
@@ -2046,6 +2018,7 @@ class StickerPreviewDialog extends StatefulWidget {
 class _StickerPreviewDialogState extends State<StickerPreviewDialog> {
   late final TextEditingController _nameController;
   late StickerPreviewState _previewState;
+  int _errorEventKey = 0;
 
   Sticker get _sticker => widget.item.sticker;
   bool get _busy => _previewState.busy;
@@ -2087,13 +2060,14 @@ class _StickerPreviewDialogState extends State<StickerPreviewDialog> {
       action: () => widget.onRename(name),
       onSuccess: (actualName) {
         if (actualName == null) {
-          setState(
-            () => _previewState = stickerPreviewActionFailed(
+          setState(() {
+            _previewState = stickerPreviewActionFailed(
               state: _previewState,
               action: StickerPreviewActionKind.rename,
               failure: '名称保存失败',
-            ),
-          );
+            );
+            _errorEventKey++;
+          });
         } else {
           _nameController.text = actualName;
           Navigator.of(context).pop();
@@ -2198,13 +2172,14 @@ class _StickerPreviewDialogState extends State<StickerPreviewDialog> {
       return result;
     } catch (e) {
       if (mounted) {
-        setState(
-          () => _previewState = stickerPreviewActionFailed(
+        setState(() {
+          _previewState = stickerPreviewActionFailed(
             state: _previewState,
             action: actionKind,
             failure: e,
-          ),
-        );
+          );
+          _errorEventKey++;
+        });
       }
       return null;
     } finally {
@@ -2233,143 +2208,152 @@ class _StickerPreviewDialogState extends State<StickerPreviewDialog> {
         constraints: const BoxConstraints(maxWidth: 640),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      '表情预览',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: UiColors.text,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
+          child: FloatingNoticeEmitter(
+            notices: [
+              if (_error != null)
+                FloatingNotice(
+                  message: _error!,
+                  tone: FloatingNoticeTone.error,
+                  duration: null,
+                  eventKey: _errorEventKey,
+                ),
+            ],
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        '表情预览',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: UiColors.text,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                  ),
-                  ButtonIcon(
-                    onPressed: () => Navigator.of(context).pop(),
-                    tooltip: '关闭预览',
-                    icon: const Icon(Icons.close),
-                    size: 32,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              _StickerPreviewImage(
-                imageUrl: widget.imageUrl,
-                asset: asset,
-                onOpenPreview: widget.imagePreviewOpener == null
-                    ? null
-                    : () => unawaited(_openImagePreview()),
-              ),
-              const SizedBox(height: 14),
-              Input(
-                controller: _nameController,
-                hintText: '名称',
-                enabled: widget.canRename,
-                minLines: 1,
-                maxLines: 1,
-                onSubmitted: widget.canRename
-                    ? (_) => unawaited(_saveName())
-                    : null,
-              ),
-              const SizedBox(height: 8),
-              _StickerDimensionsLine(asset: asset, imageUrl: widget.imageUrl),
-              if (_error != null) ...[
-                const SizedBox(height: 10),
-                StickerError(message: _error!),
-              ],
-              const SizedBox(height: 16),
-              _StickerPreviewActionRow(
-                children: [
-                  Button(
-                    onPressed: _busy || !widget.canDownload ? null : _download,
-                    loading: _downloading,
-                    icon: const Icon(Icons.download_outlined),
-                    width: double.infinity,
-                    child: const Text('下载'),
-                  ),
-                  if (showSetAvatar)
-                    Button(
-                      onPressed: _busy ? null : _setAvatar,
-                      loading: _settingAvatar,
-                      icon: const Icon(Icons.account_circle_outlined),
-                      width: double.infinity,
-                      child: const Text('设为头像'),
+                    ButtonIcon(
+                      onPressed: () => Navigator.of(context).pop(),
+                      tooltip: '关闭预览',
+                      icon: const Icon(Icons.close),
+                      size: 32,
                     ),
-                  Button(
-                    onPressed:
-                        canStartStickerRename(
-                          busy: _busy,
-                          name: _nameController.text,
-                          allowed: widget.canRename,
-                        )
-                        ? _saveName
-                        : null,
-                    loading: _savingName,
-                    tone: ButtonTone.primary,
-                    icon: const Icon(Icons.save_outlined),
-                    width: double.infinity,
-                    child: const Text('保存名称'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              _StickerPreviewActionRow(
-                children: [
-                  Button(
-                    onPressed: _busy || !_canPin
-                        ? null
-                        : () => _move(
-                            action: widget.onPin,
-                            actionKind: StickerPreviewActionKind.pin,
-                          ),
-                    loading: _pinning,
-                    icon: const Icon(Icons.vertical_align_top),
-                    width: double.infinity,
-                    child: const Text('置顶'),
-                  ),
-                  Button(
-                    onPressed: _busy || !_canMoveUp
-                        ? null
-                        : () => _move(
-                            action: widget.onMoveUp,
-                            actionKind: StickerPreviewActionKind.moveUp,
-                          ),
-                    loading: _movingUp,
-                    icon: const Icon(Icons.arrow_upward),
-                    width: double.infinity,
-                    child: const Text('上移一位'),
-                  ),
-                  Button(
-                    onPressed: _busy || !_canMoveDown
-                        ? null
-                        : () => _move(
-                            action: widget.onMoveDown,
-                            actionKind: StickerPreviewActionKind.moveDown,
-                          ),
-                    loading: _movingDown,
-                    icon: const Icon(Icons.arrow_downward),
-                    width: double.infinity,
-                    child: const Text('下移一位'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Button(
-                onPressed: _busy || !widget.canDelete ? null : _delete,
-                loading: _deleting,
-                tone: ButtonTone.danger,
-                icon: const Icon(Icons.delete_outline),
-                width: double.infinity,
-                child: const Text('删除'),
-              ),
-            ],
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _StickerPreviewImage(
+                  imageUrl: widget.imageUrl,
+                  asset: asset,
+                  onOpenPreview: widget.imagePreviewOpener == null
+                      ? null
+                      : () => unawaited(_openImagePreview()),
+                ),
+                const SizedBox(height: 14),
+                Input(
+                  controller: _nameController,
+                  hintText: '名称',
+                  enabled: widget.canRename,
+                  minLines: 1,
+                  maxLines: 1,
+                  onSubmitted: widget.canRename
+                      ? (_) => unawaited(_saveName())
+                      : null,
+                ),
+                const SizedBox(height: 8),
+                _StickerDimensionsLine(asset: asset, imageUrl: widget.imageUrl),
+                const SizedBox(height: 16),
+                _StickerPreviewActionRow(
+                  children: [
+                    Button(
+                      onPressed: _busy || !widget.canDownload
+                          ? null
+                          : _download,
+                      loading: _downloading,
+                      icon: const Icon(Icons.download_outlined),
+                      width: double.infinity,
+                      child: const Text('下载'),
+                    ),
+                    if (showSetAvatar)
+                      Button(
+                        onPressed: _busy ? null : _setAvatar,
+                        loading: _settingAvatar,
+                        icon: const Icon(Icons.account_circle_outlined),
+                        width: double.infinity,
+                        child: const Text('设为头像'),
+                      ),
+                    Button(
+                      onPressed:
+                          canStartStickerRename(
+                            busy: _busy,
+                            name: _nameController.text,
+                            allowed: widget.canRename,
+                          )
+                          ? _saveName
+                          : null,
+                      loading: _savingName,
+                      tone: ButtonTone.primary,
+                      icon: const Icon(Icons.save_outlined),
+                      width: double.infinity,
+                      child: const Text('保存名称'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                _StickerPreviewActionRow(
+                  children: [
+                    Button(
+                      onPressed: _busy || !_canPin
+                          ? null
+                          : () => _move(
+                              action: widget.onPin,
+                              actionKind: StickerPreviewActionKind.pin,
+                            ),
+                      loading: _pinning,
+                      icon: const Icon(Icons.vertical_align_top),
+                      width: double.infinity,
+                      child: const Text('置顶'),
+                    ),
+                    Button(
+                      onPressed: _busy || !_canMoveUp
+                          ? null
+                          : () => _move(
+                              action: widget.onMoveUp,
+                              actionKind: StickerPreviewActionKind.moveUp,
+                            ),
+                      loading: _movingUp,
+                      icon: const Icon(Icons.arrow_upward),
+                      width: double.infinity,
+                      child: const Text('上移一位'),
+                    ),
+                    Button(
+                      onPressed: _busy || !_canMoveDown
+                          ? null
+                          : () => _move(
+                              action: widget.onMoveDown,
+                              actionKind: StickerPreviewActionKind.moveDown,
+                            ),
+                      loading: _movingDown,
+                      icon: const Icon(Icons.arrow_downward),
+                      width: double.infinity,
+                      child: const Text('下移一位'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Button(
+                  onPressed: _busy || !widget.canDelete ? null : _delete,
+                  loading: _deleting,
+                  tone: ButtonTone.danger,
+                  icon: const Icon(Icons.delete_outline),
+                  width: double.infinity,
+                  child: const Text('删除'),
+                ),
+              ],
+            ),
           ),
         ),
       ),

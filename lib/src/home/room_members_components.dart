@@ -397,10 +397,6 @@ class _InviteSection extends StatelessWidget {
               enabled: enabled,
               showClearButton: true,
             ),
-            if (error != null) ...[
-              const SizedBox(height: 8),
-              _NoticeStrip(message: error!, danger: true),
-            ],
             if (searching) ...[
               const SizedBox(height: 10),
               const LinearProgressIndicator(
@@ -586,10 +582,6 @@ class _BlockUserSection extends StatelessWidget {
               showClearButton: true,
               textInputAction: TextInputAction.search,
             ),
-            if (error != null) ...[
-              const SizedBox(height: 8),
-              _NoticeStrip(message: error!, danger: true),
-            ],
             if (searching) ...[
               const SizedBox(height: 10),
               const LinearProgressIndicator(
@@ -766,7 +758,6 @@ class _BlacklistSection extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (error != null) _NoticeStrip(message: error!, danger: true),
               if (loading) ...[
                 const SizedBox(height: 8),
                 const LinearProgressIndicator(
@@ -918,7 +909,6 @@ class _JoinRequestsSection extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (error != null) _NoticeStrip(message: error!, danger: true),
               if (requests.isEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 12, bottom: 6),

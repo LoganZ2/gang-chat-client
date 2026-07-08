@@ -553,10 +553,18 @@ extension _HomeShellMessages on _HomeShellState {
     try {
       await _copyChatMessageContents(context, message);
       if (!context.mounted) return;
-      _showChatMessageActionNotice(context, '已复制');
+      _showChatMessageActionNotice(
+        context,
+        '已复制',
+        tone: FloatingNoticeTone.success,
+      );
     } catch (error) {
       if (!context.mounted) return;
-      _showChatMessageActionNotice(context, '$error');
+      _showChatMessageActionNotice(
+        context,
+        '$error',
+        tone: FloatingNoticeTone.error,
+      );
     }
   }
 
@@ -775,15 +783,29 @@ extension _HomeShellMessages on _HomeShellState {
           );
         });
         unawaited(_loadServers());
-        if (context.mounted) _showChatMessageActionNotice(context, '已撤回');
+        if (context.mounted) {
+          _showChatMessageActionNotice(
+            context,
+            '已撤回',
+            tone: FloatingNoticeTone.success,
+          );
+        }
         return;
       }
       if (result.isPending && context.mounted) {
-        _showChatMessageActionNotice(context, '已提交撤回申请');
+        _showChatMessageActionNotice(
+          context,
+          '已提交撤回申请',
+          tone: FloatingNoticeTone.success,
+        );
       }
     } catch (error) {
       if (!context.mounted) return;
-      _showChatMessageActionNotice(context, '$error');
+      _showChatMessageActionNotice(
+        context,
+        '$error',
+        tone: FloatingNoticeTone.error,
+      );
     }
   }
 
@@ -864,10 +886,12 @@ extension _HomeShellMessages on _HomeShellState {
     }
   }
 
-  void _showChatMessageActionNotice(BuildContext context, String message) {
-    ScaffoldMessenger.maybeOf(context)
-      ?..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
+  void _showChatMessageActionNotice(
+    BuildContext context,
+    String message, {
+    FloatingNoticeTone tone = FloatingNoticeTone.info,
+  }) {
+    showFloatingNotice(context, message, tone: tone);
   }
 
   Future<void> _sendText(String value) async {

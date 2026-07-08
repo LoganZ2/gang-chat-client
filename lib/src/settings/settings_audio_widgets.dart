@@ -425,36 +425,3 @@ class _EmptyDeviceRow extends StatelessWidget {
     );
   }
 }
-
-class _SettingsError extends StatelessWidget {
-  const _SettingsError({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: Color(0xFF2E1F22),
-        borderRadius: BorderRadius.all(Radius.circular(UiRadii.md)),
-        border: Border.fromBorderSide(BorderSide(color: Color(0xFF3A2A2E))),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.warning_amber, color: _danger, size: 18),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                message,
-                style: const TextStyle(color: _danger, fontSize: 12),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

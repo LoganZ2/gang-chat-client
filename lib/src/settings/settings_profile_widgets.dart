@@ -234,38 +234,6 @@ class _FieldLabel extends StatelessWidget {
   }
 }
 
-class _SettingsNotice extends StatelessWidget {
-  const _SettingsNotice({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: Color(0xFF1F2D27),
-        borderRadius: BorderRadius.all(Radius.circular(UiRadii.md)),
-        border: Border.fromBorderSide(BorderSide(color: Color(0xFF22332B))),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            const Icon(Icons.check_circle_outline, color: _cyan, size: 17),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                message,
-                style: const TextStyle(color: _textPrimary, fontSize: 12),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _SettingsEmptyState extends StatelessWidget {
   const _SettingsEmptyState({required this.text});
 

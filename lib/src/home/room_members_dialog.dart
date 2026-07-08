@@ -82,6 +82,8 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
   String? _blockError;
   String? _blacklistError;
   String? _notice;
+  int _floatingNoticeSerial = 0;
+  final Map<String, int> _floatingNoticeEventKeys = {};
   String? _activeJoinRequestDetailId;
   member_filter.RoomMemberPresenceFilter _presenceFilter =
       member_filter.RoomMemberPresenceFilter.all;
@@ -312,6 +314,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       setState(() {
         _loading = false;
         _error = error.toString();
+        _markFloatingNoticeEvent('error', _error);
       });
     }
   }
@@ -408,6 +411,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
         _pendingInviteUserIds.add(user.id);
         _changed = true;
         _notice = '邀请已发送';
+        _markFloatingNoticeEvent('notice', _notice);
       });
     } catch (error) {
       if (!mounted) return;
@@ -442,6 +446,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
         _blacklistLoaded = true;
         _changed = true;
         _notice = '已加入黑名单';
+        _markFloatingNoticeEvent('notice', _notice);
       });
     } catch (error) {
       if (!mounted) return;
@@ -476,6 +481,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
         _blacklistLoaded = true;
         _changed = true;
         _notice = '已取消拉黑';
+        _markFloatingNoticeEvent('notice', _notice);
       });
     } catch (error) {
       if (!mounted) return;
@@ -508,6 +514,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
         ];
         _changed = true;
         _notice = approve ? '申请已通过' : '申请已拒绝';
+        _markFloatingNoticeEvent('notice', _notice);
       });
       _notifyPendingJoinRequestsChanged(_requests, _requestError);
       if (approve) unawaited(_load(refreshDisplayOrder: false));
@@ -526,6 +533,33 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
   ) {
     if (!_canViewJoinRequests || requestError != null) return;
     widget.onPendingJoinRequestsChanged?.call(requests.isNotEmpty);
+  }
+
+  void _markFloatingNoticeEvent(String channel, String? message) {
+    if (message == null || message.trim().isEmpty) return;
+    _floatingNoticeEventKeys[channel] = ++_floatingNoticeSerial;
+  }
+
+  Object? _floatingNoticeEventKey(String channel) {
+    return _floatingNoticeEventKeys[channel];
+  }
+
+  List<FloatingNotice> _floatingNotices() {
+    return [
+      if (_notice != null)
+        FloatingNotice(
+          message: _notice!,
+          tone: FloatingNoticeTone.success,
+          eventKey: _floatingNoticeEventKey('notice'),
+        ),
+      if (_error != null)
+        FloatingNotice(
+          message: _error!,
+          tone: FloatingNoticeTone.error,
+          duration: null,
+          eventKey: _floatingNoticeEventKey('error'),
+        ),
+    ];
   }
 
   Future<void> _showJoinRequestDetails(JoinRequest request) async {
@@ -576,12 +610,14 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
         _members = member_filter.replaceRoomMember(_members, updated);
         _changed = true;
         _notice = member_filter.roomMemberRoleUpdateNotice(role);
+        _markFloatingNoticeEvent('notice', _notice);
       });
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _busyMemberIds.remove(member.user.id);
         _error = error.toString();
+        _markFloatingNoticeEvent('error', _error);
       });
     }
   }
@@ -611,12 +647,14 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
         _members = member_filter.replaceRoomMember(_members, updated);
         _changed = true;
         _notice = member_filter.roomMemberRoomDisplayNameUpdatedNotice(updated);
+        _markFloatingNoticeEvent('notice', _notice);
       });
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _busyMemberIds.remove(member.user.id);
         _error = error.toString();
+        _markFloatingNoticeEvent('error', _error);
       });
     }
   }
@@ -658,12 +696,14 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
         );
         _changed = true;
         _notice = member_filter.transferCreatorSuccessNotice();
+        _markFloatingNoticeEvent('notice', _notice);
       });
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _busyMemberIds.remove(member.user.id);
         _error = error.toString();
+        _markFloatingNoticeEvent('error', _error);
       });
     }
   }
@@ -706,6 +746,8 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
         _changed = patch.changed;
         _error = patch.error;
         _notice = patch.notice;
+        _markFloatingNoticeEvent('error', _error);
+        _markFloatingNoticeEvent('notice', _notice);
       });
     } catch (error) {
       if (!mounted) return;
@@ -723,6 +765,8 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
           ..addAll(patch.busyMemberIds);
         _error = patch.error;
         _notice = patch.notice;
+        _markFloatingNoticeEvent('error', _error);
+        _markFloatingNoticeEvent('notice', _notice);
       });
     }
   }
@@ -845,41 +889,48 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
           icon: Icons.block,
         ),
     ];
-    return _RoomDialogShell(
-      title: '成员',
-      icon: Icons.group_outlined,
-      maxWidth: _dialogMaxWidth,
-      maxHeight: _dialogMaxHeight,
-      embedded: widget.embedded,
-      onClose: _close,
-      pinned: sections.length > 1
-          ? SegmentedControl<_RoomMembersSection>(
-              expanded: true,
-              value: activeSection,
-              onChanged: _selectSection,
-              segments: sections,
-            )
-          : null,
-      headerAction:
-          _canReviewRequests ||
-              (activeSection == _RoomMembersSection.blacklist &&
-                  _canManageMembers)
-          ? ButtonIcon(
-              tooltip: '刷新',
-              icon: const Icon(Icons.refresh),
-              onPressed: activeSection == _RoomMembersSection.blacklist
-                  ? _loadBlacklist
-                  : _load,
-              size: 38,
-            )
-          : null,
-      child: switch (activeSection) {
-        _RoomMembersSection.roomMembers => _buildRoomMembersBody(filterCounts),
-        _RoomMembersSection.newMembers => _buildNewMembersBody(
-          effectiveMembers,
-        ),
-        _RoomMembersSection.blacklist => _buildBlacklistBody(effectiveMembers),
-      },
+    return FloatingNoticeEmitter(
+      notices: _floatingNotices(),
+      child: _RoomDialogShell(
+        title: '成员',
+        icon: Icons.group_outlined,
+        maxWidth: _dialogMaxWidth,
+        maxHeight: _dialogMaxHeight,
+        embedded: widget.embedded,
+        onClose: _close,
+        pinned: sections.length > 1
+            ? SegmentedControl<_RoomMembersSection>(
+                expanded: true,
+                value: activeSection,
+                onChanged: _selectSection,
+                segments: sections,
+              )
+            : null,
+        headerAction:
+            _canReviewRequests ||
+                (activeSection == _RoomMembersSection.blacklist &&
+                    _canManageMembers)
+            ? ButtonIcon(
+                tooltip: '刷新',
+                icon: const Icon(Icons.refresh),
+                onPressed: activeSection == _RoomMembersSection.blacklist
+                    ? _loadBlacklist
+                    : _load,
+                size: 38,
+              )
+            : null,
+        child: switch (activeSection) {
+          _RoomMembersSection.roomMembers => _buildRoomMembersBody(
+            filterCounts,
+          ),
+          _RoomMembersSection.newMembers => _buildNewMembersBody(
+            effectiveMembers,
+          ),
+          _RoomMembersSection.blacklist => _buildBlacklistBody(
+            effectiveMembers,
+          ),
+        },
+      ),
     );
   }
 
@@ -891,14 +942,6 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (_notice != null) ...[
-            _NoticeStrip(message: _notice!, icon: Icons.check_circle_outline),
-            const SizedBox(height: 14),
-          ],
-          if (_error != null) ...[
-            _NoticeStrip(message: _error!, danger: true),
-            const SizedBox(height: 14),
-          ],
           _MemberFilters(
             controller: _memberSearchController,
             filterCounts: filterCounts,
@@ -932,9 +975,6 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
   Widget _buildNewMembersBody(List<RoomMember> effectiveMembers) {
     return SettingsList(
       children: [
-        if (_notice != null)
-          _NoticeStrip(message: _notice!, icon: Icons.check_circle_outline),
-        if (_error != null) _NoticeStrip(message: _error!, danger: true),
         _InviteSection(
           controller: _inviteSearchController,
           currentUser: widget.currentUser,
@@ -972,8 +1012,6 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
   Widget _buildBlacklistBody(List<RoomMember> effectiveMembers) {
     return SettingsList(
       children: [
-        if (_notice != null)
-          _NoticeStrip(message: _notice!, icon: Icons.check_circle_outline),
         _BlockUserSection(
           controller: _blockSearchController,
           currentUser: widget.currentUser,

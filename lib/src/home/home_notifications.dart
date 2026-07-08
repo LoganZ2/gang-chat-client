@@ -210,6 +210,21 @@ class _NotificationsBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Widget withErrorNotice(Widget child) {
+      final message = error?.trim();
+      if (message == null || message.isEmpty) return child;
+      return FloatingNoticeEmitter(
+        notices: [
+          FloatingNotice(
+            message: message,
+            tone: FloatingNoticeTone.error,
+            duration: null,
+          ),
+        ],
+        child: child,
+      );
+    }
+
     if (loading && rawNotificationCount == 0) {
       return const Center(
         child: SizedBox.square(
@@ -223,77 +238,79 @@ class _NotificationsBody extends StatelessWidget {
     }
 
     if (error != null && rawNotificationCount == 0) {
-      return _NotificationEmptyState(
-        icon: Icons.error_outline,
-        title: '通知加载失败',
-        subtitle: error!,
-        actionLabel: '重试',
-        onAction: onRefresh,
-        danger: true,
+      return withErrorNotice(
+        _NotificationEmptyState(
+          icon: Icons.error_outline,
+          title: '通知加载失败',
+          subtitle: '请稍后重试',
+          actionLabel: '重试',
+          onAction: onRefresh,
+          danger: true,
+        ),
       );
     }
 
     if (items.isEmpty) {
-      return _NotificationEmptyState(
-        icon: _emptyIcon(filter),
-        title: _emptyTitle(filter: filter, query: query),
+      return withErrorNotice(
+        _NotificationEmptyState(
+          icon: _emptyIcon(filter),
+          title: _emptyTitle(filter: filter, query: query),
+        ),
       );
     }
 
-    final itemCount = items.length + (error == null ? 0 : 1);
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
-      itemCount: itemCount,
-      separatorBuilder: (_, _) => const SizedBox(height: 10),
-      itemBuilder: (context, index) {
-        if (error != null && index == 0) {
-          return _NotificationErrorStrip(message: error!);
-        }
-        final item = items[index - (error == null ? 0 : 1)];
-        return switch (item.type) {
-          RoomNotificationItemType.invite => _RoomInviteNotificationRow(
-            invite: item.invite!,
-            query: query,
-            busy: busyInviteId == item.invite!.id,
-            busyInviteId: busyInviteId,
-            onReviewInvite: onReviewInvite,
-            currentUser: currentUser,
-            onOpenRoom: onOpenRoom,
-            onResolveRoomProfile: onResolveRoomProfile,
-            onResolveRoomUserProfile: onResolveRoomUserProfile,
-          ),
-          RoomNotificationItemType.applicationRequested =>
-            _RoomApplicationRequestNotificationRow(
-              application: item.application!,
+    return withErrorNotice(
+      ListView.separated(
+        padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
+        itemCount: items.length,
+        separatorBuilder: (_, _) => const SizedBox(height: 10),
+        itemBuilder: (context, index) {
+          final item = items[index];
+          return switch (item.type) {
+            RoomNotificationItemType.invite => _RoomInviteNotificationRow(
+              invite: item.invite!,
               query: query,
-              busy: busyApplicationId == item.application!.id,
-              busyApplicationId: busyApplicationId,
-              onWithdrawApplication: onWithdrawApplication,
+              busy: busyInviteId == item.invite!.id,
+              busyInviteId: busyInviteId,
+              onReviewInvite: onReviewInvite,
               currentUser: currentUser,
               onOpenRoom: onOpenRoom,
               onResolveRoomProfile: onResolveRoomProfile,
               onResolveRoomUserProfile: onResolveRoomUserProfile,
             ),
-          RoomNotificationItemType.applicationReviewed =>
-            _RoomApplicationReviewNotificationRow(
-              application: item.application!,
+            RoomNotificationItemType.applicationRequested =>
+              _RoomApplicationRequestNotificationRow(
+                application: item.application!,
+                query: query,
+                busy: busyApplicationId == item.application!.id,
+                busyApplicationId: busyApplicationId,
+                onWithdrawApplication: onWithdrawApplication,
+                currentUser: currentUser,
+                onOpenRoom: onOpenRoom,
+                onResolveRoomProfile: onResolveRoomProfile,
+                onResolveRoomUserProfile: onResolveRoomUserProfile,
+              ),
+            RoomNotificationItemType.applicationReviewed =>
+              _RoomApplicationReviewNotificationRow(
+                application: item.application!,
+                query: query,
+                currentUser: currentUser,
+                onOpenRoom: onOpenRoom,
+                onResolveRoomProfile: onResolveRoomProfile,
+                onResolveRoomUserProfile: onResolveRoomUserProfile,
+              ),
+            RoomNotificationItemType.roomEvent => _RoomEventNotificationRow(
+              notification: item.roomEvent!,
               query: query,
               currentUser: currentUser,
               onOpenRoom: onOpenRoom,
+              onOpenRoomEvent: onOpenRoomEvent,
               onResolveRoomProfile: onResolveRoomProfile,
               onResolveRoomUserProfile: onResolveRoomUserProfile,
             ),
-          RoomNotificationItemType.roomEvent => _RoomEventNotificationRow(
-            notification: item.roomEvent!,
-            query: query,
-            currentUser: currentUser,
-            onOpenRoom: onOpenRoom,
-            onOpenRoomEvent: onOpenRoomEvent,
-            onResolveRoomProfile: onResolveRoomProfile,
-            onResolveRoomUserProfile: onResolveRoomUserProfile,
-          ),
-        };
-      },
+          };
+        },
+      ),
     );
   }
 }
@@ -1477,40 +1494,6 @@ class _ProcessedApplicationLabel extends StatelessWidget {
                 : UiColors.textMuted,
             fontWeight: FontWeight.w600,
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _NotificationErrorStrip extends StatelessWidget {
-  const _NotificationErrorStrip({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: const Color(0xFF2E1F22),
-        borderRadius: BorderRadius.circular(UiRadii.lg),
-        border: Border.all(color: UiColors.dangerBorder),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Row(
-          children: [
-            const Icon(Icons.error_outline, color: UiColors.danger, size: 17),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                message,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: UiTypography.label.copyWith(color: UiColors.text),
-              ),
-            ),
-          ],
         ),
       ),
     );

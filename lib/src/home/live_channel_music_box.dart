@@ -870,6 +870,7 @@ class _MusicBoxSearchList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final message = error?.trim();
     if (!hasQuery) {
       return const _MusicBoxEmpty(icon: Icons.search, message: '搜索歌曲点歌吧');
     }
@@ -882,8 +883,17 @@ class _MusicBoxSearchList extends StatelessWidget {
         ),
       );
     }
-    if (error != null) {
-      return _MusicBoxEmpty(icon: Icons.error_outline, message: error!);
+    if (message != null && message.isNotEmpty) {
+      return FloatingNoticeEmitter(
+        notices: [
+          FloatingNotice(
+            message: message,
+            tone: FloatingNoticeTone.error,
+            duration: null,
+          ),
+        ],
+        child: const _MusicBoxEmpty(icon: Icons.error_outline, message: '搜索失败'),
+      );
     }
     if (results.isEmpty) {
       return const _MusicBoxEmpty(icon: Icons.search_off, message: '没有找到相关歌曲');

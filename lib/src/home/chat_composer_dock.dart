@@ -84,112 +84,105 @@ class _ComposerDock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      minimum: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          _composerHorizontalInset,
-          0,
-          _composerHorizontalInset,
-          _composerBottomInset,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (sendError != null) ...[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
-                child: Text(
-                  sendError!,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: UiTypography.label.copyWith(color: UiColors.danger),
-                ),
-              ),
-            ],
-            _ComposerMentionOverlay(
-              visible: mentionOptions.isNotEmpty || mentionLoading,
-              panel: _ComposerMentionPanel(
-                options: mentionOptions,
-                loading: mentionLoading,
-                selectedIndex: mentionSelectedIndex,
-                onHighlight: onHighlightMentionSelection,
-                onSelected: onSelectMention,
-              ),
-              child: ChatComposer(
-                key: dropKey,
-                controller: controller,
-                composerController: composerController,
-                hintText: '写点什么…',
-                maxLines: 5,
-                onSubmitted: onSubmit,
-                suggestionShortcutsEnabled: mentionOptions.isNotEmpty,
-                onSuggestionNavigationPressed: onNavigateMentionSelection,
-                onSuggestionActionPressed: onConfirmMentionSelection,
-                inputFormatters: inputFormatters,
-                onPasteFiles: onPasteFiles,
-                onCanPasteFiles: onCanPasteFiles,
-                attachments: attachments.isEmpty
-                    ? null
-                    : _ComposerAttachmentStrip(
-                        attachments: attachments,
-                        onRemove: onRemoveAttachment,
-                        onRetry: onRetryAttachment,
-                      ),
-                actions: [
-                  ComposerAction(
-                    id: 'stickers',
-                    icon: Icons.emoji_emotions_outlined,
-                    label: '表情',
-                    onPressed: onOpenStickers,
-                    panel: ComposerPanel.static(
-                      height: _stickerPanelHeight,
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                      child: _StickerPanel(
-                        state: stickerPanel,
-                        onSendSticker: onSendSticker,
-                        onRefresh: onRefreshStickers,
-                        onSourceChanged: onStickerSourceChanged,
-                      ),
-                    ),
-                  ),
-                  ComposerAction(
-                    id: 'voice',
-                    icon: Icons.mic_none,
-                    label: '语音',
-                    onPressed: onCancelVoice,
-                    panel: ComposerPanel.static(
-                      height: _voicePanelHeight,
-                      child: _VoicePanel(
-                        state: voiceState,
-                        onStart: onStartVoice,
-                        onSend: onSendVoice,
-                        onCancel: onCancelVoice,
-                      ),
-                    ),
-                  ),
-                  ComposerAction(
-                    id: 'file',
-                    icon: Icons.attach_file,
-                    label: '文件',
-                    selected: fileActionHighlighted,
-                    onPressed: onPickFile,
-                  ),
-                  ComposerAction(
-                    id: 'send',
-                    icon: Icons.send_rounded,
-                    label: '发送',
-                    tooltip: sending ? '发送中' : '发送',
-                    tone: ButtonTone.primary,
-                    alignment: ComposerActionAlignment.trailing,
-                    onPressed: () => onSubmit(controller.text),
-                  ),
-                ],
-              ),
+    return FloatingNoticeEmitter(
+      notices: [
+        if (sendError != null)
+          FloatingNotice(
+            message: sendError!,
+            tone: FloatingNoticeTone.error,
+            duration: null,
+          ),
+      ],
+      child: SafeArea(
+        top: false,
+        minimum: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            _composerHorizontalInset,
+            0,
+            _composerHorizontalInset,
+            _composerBottomInset,
+          ),
+          child: _ComposerMentionOverlay(
+            visible: mentionOptions.isNotEmpty || mentionLoading,
+            panel: _ComposerMentionPanel(
+              options: mentionOptions,
+              loading: mentionLoading,
+              selectedIndex: mentionSelectedIndex,
+              onHighlight: onHighlightMentionSelection,
+              onSelected: onSelectMention,
             ),
-          ],
+            child: ChatComposer(
+              key: dropKey,
+              controller: controller,
+              composerController: composerController,
+              hintText: '写点什么…',
+              maxLines: 5,
+              onSubmitted: onSubmit,
+              suggestionShortcutsEnabled: mentionOptions.isNotEmpty,
+              onSuggestionNavigationPressed: onNavigateMentionSelection,
+              onSuggestionActionPressed: onConfirmMentionSelection,
+              inputFormatters: inputFormatters,
+              onPasteFiles: onPasteFiles,
+              onCanPasteFiles: onCanPasteFiles,
+              attachments: attachments.isEmpty
+                  ? null
+                  : _ComposerAttachmentStrip(
+                      attachments: attachments,
+                      onRemove: onRemoveAttachment,
+                      onRetry: onRetryAttachment,
+                    ),
+              actions: [
+                ComposerAction(
+                  id: 'stickers',
+                  icon: Icons.emoji_emotions_outlined,
+                  label: '表情',
+                  onPressed: onOpenStickers,
+                  panel: ComposerPanel.static(
+                    height: _stickerPanelHeight,
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                    child: _StickerPanel(
+                      state: stickerPanel,
+                      onSendSticker: onSendSticker,
+                      onRefresh: onRefreshStickers,
+                      onSourceChanged: onStickerSourceChanged,
+                    ),
+                  ),
+                ),
+                ComposerAction(
+                  id: 'voice',
+                  icon: Icons.mic_none,
+                  label: '语音',
+                  onPressed: onCancelVoice,
+                  panel: ComposerPanel.static(
+                    height: _voicePanelHeight,
+                    child: _VoicePanel(
+                      state: voiceState,
+                      onStart: onStartVoice,
+                      onSend: onSendVoice,
+                      onCancel: onCancelVoice,
+                    ),
+                  ),
+                ),
+                ComposerAction(
+                  id: 'file',
+                  icon: Icons.attach_file,
+                  label: '文件',
+                  selected: fileActionHighlighted,
+                  onPressed: onPickFile,
+                ),
+                ComposerAction(
+                  id: 'send',
+                  icon: Icons.send_rounded,
+                  label: '发送',
+                  tooltip: sending ? '发送中' : '发送',
+                  tone: ButtonTone.primary,
+                  alignment: ComposerActionAlignment.trailing,
+                  onPressed: () => onSubmit(controller.text),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

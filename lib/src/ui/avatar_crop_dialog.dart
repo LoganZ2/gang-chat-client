@@ -6,6 +6,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import 'button.dart';
+import 'feedback.dart';
 import 'tokens.dart';
 
 class AvatarCropDialog extends StatefulWidget {
@@ -135,9 +136,7 @@ class _AvatarCropDialogState extends State<AvatarCropDialog> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _rendering = false);
-      ScaffoldMessenger.maybeOf(
-        context,
-      )?.showSnackBar(SnackBar(content: Text('裁剪图片失败：$e')));
+      showFloatingErrorNotice(context, '裁剪图片失败：$e');
     }
   }
 

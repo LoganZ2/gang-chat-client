@@ -197,6 +197,8 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _usernameAvailabilityQuery;
   bool _checkingUsernameAvailability = false;
   String? _usernameAvailabilityError;
+  int _floatingNoticeSerial = 0;
+  final Map<String, int> _floatingNoticeEventKeys = {};
 
   StreamSubscription<List<AudioDeviceInfo>>? _deviceSubscription;
   List<AudioDeviceInfo> _audioInputs = const [];
@@ -334,6 +336,15 @@ class _SettingsPageState extends State<SettingsPage> {
     _usernameAvailabilityQuery = null;
     _checkingUsernameAvailability = false;
     _usernameAvailabilityError = null;
+  }
+
+  void _markFloatingNoticeEvent(String channel, String? message) {
+    if (message == null || message.trim().isEmpty) return;
+    _floatingNoticeEventKeys[channel] = ++_floatingNoticeSerial;
+  }
+
+  Object? _floatingNoticeEventKey(String channel) {
+    return _floatingNoticeEventKeys[channel];
   }
 
   Future<void> _loadAccount() async {
@@ -543,7 +554,10 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() => _autoPromptUpdates = enabled);
     } catch (error) {
       if (!mounted) return;
-      setState(() => _aboutError = '读取自动提示更新失败：$error');
+      setState(() {
+        _aboutError = '读取自动提示更新失败：$error';
+        _markFloatingNoticeEvent('aboutError', _aboutError);
+      });
     }
   }
 
@@ -571,12 +585,16 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       await widget.autoUpdatePromptStore.write(value);
       if (!mounted) return;
-      setState(() => _notice = '自动提示更新已保存');
+      setState(() {
+        _notice = '自动提示更新已保存';
+        _markFloatingNoticeEvent('notice', _notice);
+      });
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _autoPromptUpdates = previous;
         _aboutError = '自动提示更新保存失败：$error';
+        _markFloatingNoticeEvent('aboutError', _aboutError);
       });
     }
   }
@@ -612,6 +630,7 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() {
         _savingCloseBehavior = false;
         _closeBehaviorError = error.toString();
+        _markFloatingNoticeEvent('closeBehaviorError', _closeBehaviorError);
       });
       return;
     }
@@ -619,7 +638,10 @@ class _SettingsPageState extends State<SettingsPage> {
     final user = _user;
     if (!_settingsController.hasApi || user == null) {
       if (!mounted) return;
-      setState(() => _notice = '偏好设置已保存');
+      setState(() {
+        _notice = '偏好设置已保存';
+        _markFloatingNoticeEvent('notice', _notice);
+      });
       return;
     }
 
@@ -630,7 +652,10 @@ class _SettingsPageState extends State<SettingsPage> {
     if (draft.error == null && draft.noChanges) {
       await _rememberLanguagePreference(_language);
       if (!mounted) return;
-      setState(() => _notice = '偏好设置已保存');
+      setState(() {
+        _notice = '偏好设置已保存';
+        _markFloatingNoticeEvent('notice', _notice);
+      });
       return;
     }
     await _saveAccount(target: AccountFormSaveTarget.preferences);
@@ -688,6 +713,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _selectedStickerIds = patch.selectedStickerIds;
     _loadingStickers = patch.loading;
     _stickerError = patch.error;
+    _markFloatingNoticeEvent('stickerError', _stickerError);
   }
 
   void _applyStickerSelectionPatch(StickerSelectionPatch patch) {
@@ -705,18 +731,22 @@ class _SettingsPageState extends State<SettingsPage> {
     _selectedStickerIds = patch.selectedStickerIds;
     _stickerError = patch.error;
     _notice = patch.notice;
+    _markFloatingNoticeEvent('stickerError', _stickerError);
+    _markFloatingNoticeEvent('notice', _notice);
   }
 
   void _applyAccountSessionsLoadPatch(AccountSessionsLoadPatch patch) {
     _sessions = patch.sessions;
     _loadingSessions = patch.loading;
     _securityError = patch.securityError;
+    _markFloatingNoticeEvent('securityError', _securityError);
   }
 
   void _applyAccountLoadPatch(AccountLoadPatch patch) {
     _user = patch.user;
     _loadingAccount = patch.loading;
     _accountError = patch.accountError;
+    _markFloatingNoticeEvent('accountError', _accountError);
   }
 
   void _applyAudioDeviceListPatch(AudioDeviceListPatch<AudioDeviceInfo> patch) {
@@ -726,6 +756,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _selectedOutput = patch.selectedOutput;
     _loading = patch.loading;
     _error = patch.error;
+    _markFloatingNoticeEvent('audioError', _error);
   }
 
   void _applyAudioDeviceSelectionPatch(
@@ -735,6 +766,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _selectedOutput = patch.selectedOutput;
     _busyDeviceId = patch.busyDeviceId;
     _error = patch.error;
+    _markFloatingNoticeEvent('audioError', _error);
   }
 
   void _applyAudioVolumePatch(AudioVolumePatch patch) {
@@ -756,6 +788,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _inputLevel = patch.inputLevel;
     _outputLevel = patch.outputLevel;
     _error = patch.error;
+    _markFloatingNoticeEvent('audioError', _error);
   }
 
   void _applyAccountFormSaveStatePatch(AccountFormSaveStatePatch patch) {
@@ -763,6 +796,8 @@ class _SettingsPageState extends State<SettingsPage> {
     _savingProfile = patch.savingProfile;
     _accountError = patch.accountError;
     _notice = patch.notice;
+    _markFloatingNoticeEvent('accountError', _accountError);
+    _markFloatingNoticeEvent('notice', _notice);
   }
 
   void _applyAccountEditableFieldsPatch(AccountEditableFieldsPatch patch) {
@@ -775,6 +810,8 @@ class _SettingsPageState extends State<SettingsPage> {
     _changingPassword = patch.changingPassword;
     _securityError = patch.securityError;
     _notice = patch.notice;
+    _markFloatingNoticeEvent('securityError', _securityError);
+    _markFloatingNoticeEvent('notice', _notice);
   }
 
   void _applyPasswordVisibilityPatch(PasswordVisibilityPatch patch) {
@@ -787,6 +824,8 @@ class _SettingsPageState extends State<SettingsPage> {
     _deletingAccount = patch.deletingAccount;
     _securityError = patch.securityError;
     _notice = patch.notice;
+    _markFloatingNoticeEvent('securityError', _securityError);
+    _markFloatingNoticeEvent('notice', _notice);
   }
 
   void _applyAccountAvatarStatePatch(AccountAvatarStatePatch patch) {
@@ -797,6 +836,9 @@ class _SettingsPageState extends State<SettingsPage> {
     _accountError = patch.accountError;
     _stickerError = patch.stickerError;
     _notice = patch.notice;
+    _markFloatingNoticeEvent('accountError', _accountError);
+    _markFloatingNoticeEvent('stickerError', _stickerError);
+    _markFloatingNoticeEvent('notice', _notice);
   }
 
   void _applyAccountPresetAvatarSelectionPatch(
@@ -807,11 +849,79 @@ class _SettingsPageState extends State<SettingsPage> {
     _pendingAvatarUrl = patch.pendingAvatarUrl;
     _clearUploadedAvatar = patch.clearUploadedAvatar;
     _notice = patch.notice;
+    _markFloatingNoticeEvent('notice', _notice);
   }
 
   void _applySettingsSectionPatch(SettingsSectionPatch patch) {
     _section = patch.section;
     _notice = patch.notice;
+    _markFloatingNoticeEvent('notice', _notice);
+  }
+
+  List<FloatingNotice> _floatingNotices() {
+    final notices = <FloatingNotice>[];
+
+    void add(
+      String? message,
+      FloatingNoticeTone tone, {
+      Duration? duration = floatingNoticeVisibleDuration,
+      required String channel,
+    }) {
+      if (message == null || message.trim().isEmpty) return;
+      notices.add(
+        FloatingNotice(
+          message: message,
+          tone: tone,
+          duration: duration,
+          eventKey: _floatingNoticeEventKey(channel),
+        ),
+      );
+    }
+
+    add(_notice, FloatingNoticeTone.success, channel: 'notice');
+    add(
+      _stickerError,
+      FloatingNoticeTone.error,
+      duration: null,
+      channel: 'stickerError',
+    );
+    add(
+      _accountError,
+      FloatingNoticeTone.error,
+      duration: null,
+      channel: 'accountError',
+    );
+    add(
+      _securityError,
+      FloatingNoticeTone.error,
+      duration: null,
+      channel: 'securityError',
+    );
+    add(
+      _aboutError,
+      FloatingNoticeTone.error,
+      duration: null,
+      channel: 'aboutError',
+    );
+    add(
+      _closeBehaviorError,
+      FloatingNoticeTone.error,
+      duration: null,
+      channel: 'closeBehaviorError',
+    );
+    add(
+      _updateDownloadError,
+      FloatingNoticeTone.error,
+      duration: null,
+      channel: 'updateDownloadError',
+    );
+    add(
+      _error,
+      FloatingNoticeTone.error,
+      duration: null,
+      channel: 'audioError',
+    );
+    return notices;
   }
 
   void _syncStickerOrderDrafts(List<StickerPack> packs) {
@@ -854,7 +964,10 @@ class _SettingsPageState extends State<SettingsPage> {
     if (_checkingAppVersion) return;
     final platform = _currentUpdatePlatform();
     if (platform == null) {
-      setState(() => _aboutError = '当前平台暂不支持自动检查更新');
+      setState(() {
+        _aboutError = '当前平台暂不支持自动检查更新';
+        _markFloatingNoticeEvent('aboutError', _aboutError);
+      });
       return;
     }
     setState(() {
@@ -874,12 +987,14 @@ class _SettingsPageState extends State<SettingsPage> {
         _availableAppUpdate = update;
         _resetUpdateDownloadState();
         _notice = update == null ? '当前已是最新版本' : null;
+        _markFloatingNoticeEvent('notice', _notice);
       });
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _checkingAppVersion = false;
         _aboutError = '检查更新失败：$error';
+        _markFloatingNoticeEvent('aboutError', _aboutError);
       });
     }
   }
@@ -921,12 +1036,14 @@ class _SettingsPageState extends State<SettingsPage> {
         _section = SettingsSection.about;
         _availableAppUpdate = null;
         _notice = '已忽略此版本 ${appVersionLabel(update.latestVersion)}';
+        _markFloatingNoticeEvent('notice', _notice);
         _resetUpdateDownloadState();
       });
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _updateDownloadError = '忽略此版本失败：$error';
+        _markFloatingNoticeEvent('updateDownloadError', _updateDownloadError);
       });
     }
   }
@@ -1007,6 +1124,7 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() {
         _downloadingAppUpdate = false;
         _updateDownloadError = '下载或启动安装器失败：$error';
+        _markFloatingNoticeEvent('updateDownloadError', _updateDownloadError);
       });
     }
   }
@@ -1021,7 +1139,10 @@ class _SettingsPageState extends State<SettingsPage> {
     if (_openingFeedbackMail) return;
     final senderEmail = boundEmailForFeedback(_user?.email);
     if (senderEmail == null) {
-      setState(() => _aboutError = '当前账号未绑定邮箱，无法发起意见反馈');
+      setState(() {
+        _aboutError = '当前账号未绑定邮箱，无法发起意见反馈';
+        _markFloatingNoticeEvent('aboutError', _aboutError);
+      });
       return;
     }
     final draft = FeedbackMailDraft(
@@ -1044,12 +1165,14 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() {
         _openingFeedbackMail = false;
         _notice = '已打开邮件客户端';
+        _markFloatingNoticeEvent('notice', _notice);
       });
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _openingFeedbackMail = false;
         _aboutError = '无法打开邮件客户端：$error';
+        _markFloatingNoticeEvent('aboutError', _aboutError);
       });
     }
   }
@@ -3074,8 +3197,6 @@ class _SettingsPageState extends State<SettingsPage> {
 
     return SettingsList(
       children: [
-        if (_notice != null) _SettingsNotice(message: _notice!),
-        if (_stickerError != null) _SettingsError(message: _stickerError!),
         if (unavailable)
           const _SettingsEmptyState(text: '表情包需要登录后从服务端读取')
         else
@@ -3233,10 +3354,6 @@ class _SettingsPageState extends State<SettingsPage> {
     final unavailable = !_settingsController.hasApi || _user == null;
     return SettingsList(
       children: [
-        if (_notice != null) _SettingsNotice(message: _notice!),
-        if (_accountError != null) _SettingsError(message: _accountError!),
-        if (_closeBehaviorError != null)
-          _SettingsError(message: _closeBehaviorError!),
         _SettingsGroup(
           title: '关闭方式',
           trailing: _savingCloseBehavior || _loadingCloseBehavior
@@ -3336,8 +3453,6 @@ class _SettingsPageState extends State<SettingsPage> {
         usernameAvailabilityApplies && _checkingUsernameAvailability;
     return SettingsList(
       children: [
-        if (_notice != null) _SettingsNotice(message: _notice!),
-        if (_accountError != null) _SettingsError(message: _accountError!),
         if (unavailable)
           const _SettingsEmptyState(text: '账号资料需要登录后从服务端读取')
         else ...[
@@ -3431,8 +3546,6 @@ class _SettingsPageState extends State<SettingsPage> {
     final unavailable = !_settingsController.hasApi || user == null;
     return SettingsList(
       children: [
-        if (_notice != null) _SettingsNotice(message: _notice!),
-        if (_securityError != null) _SettingsError(message: _securityError!),
         if (unavailable)
           const _SettingsEmptyState(text: '安全设置需要登录后从服务端读取')
         else ...[
@@ -3624,8 +3737,6 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _buildAboutContent() {
     return SettingsList(
       children: [
-        if (_notice != null) _SettingsNotice(message: _notice!),
-        if (_aboutError != null) _SettingsError(message: _aboutError!),
         _SettingsGroup(
           title: '版本信息',
           children: [
@@ -3768,7 +3879,6 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ],
         ),
-        if (_error != null) _SettingsError(message: _error!),
       ],
     );
   }
@@ -3777,32 +3887,38 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     final availableUpdate = _availableAppUpdate;
     if (_section == SettingsSection.about && availableUpdate != null) {
-      return Scaffold(
-        backgroundColor: _primaryDarkLow,
-        body: _buildAppUpdateContent(availableUpdate),
+      return FloatingNoticeEmitter(
+        notices: _floatingNotices(),
+        child: Scaffold(
+          backgroundColor: _primaryDarkLow,
+          body: _buildAppUpdateContent(availableUpdate),
+        ),
       );
     }
 
-    return Scaffold(
-      backgroundColor: _primaryDarkLow,
-      body: SettingsScaffold(
-        icon: Icons.settings_outlined,
-        title: '设置',
-        onBack: widget.onClose != null || !widget.isSubWindow
-            ? (widget.onClose ?? () => Navigator.of(context).pop())
-            : null,
-        headerAction: ButtonIcon(
-          tooltip: '刷新设置',
-          onPressed: _isRefreshing ? null : _refreshActiveSection,
-          icon: const Icon(Icons.refresh),
-          size: 38,
-          loading: _isRefreshing,
+    return FloatingNoticeEmitter(
+      notices: _floatingNotices(),
+      child: Scaffold(
+        backgroundColor: _primaryDarkLow,
+        body: SettingsScaffold(
+          icon: Icons.settings_outlined,
+          title: '设置',
+          onBack: widget.onClose != null || !widget.isSubWindow
+              ? (widget.onClose ?? () => Navigator.of(context).pop())
+              : null,
+          headerAction: ButtonIcon(
+            tooltip: '刷新设置',
+            onPressed: _isRefreshing ? null : _refreshActiveSection,
+            icon: const Icon(Icons.refresh),
+            size: 38,
+            loading: _isRefreshing,
+          ),
+          pinned: _SettingsNavigation(
+            selected: _section,
+            onChanged: _selectSection,
+          ),
+          body: _buildSectionContent(),
         ),
-        pinned: _SettingsNavigation(
-          selected: _section,
-          onChanged: _selectSection,
-        ),
-        body: _buildSectionContent(),
       ),
     );
   }

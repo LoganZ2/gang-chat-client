@@ -44,6 +44,8 @@ class GangApp extends StatelessWidget {
       child: MaterialApp(
         title: 'Gang Chat',
         theme: uiTheme(),
+        builder: (context, child) =>
+            AppNotificationHost(child: child ?? const SizedBox.shrink()),
         home: SelectionArea(
           child: _AuthGate(
             tokenStore: tokenStore,
