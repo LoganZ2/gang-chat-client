@@ -275,8 +275,34 @@ extension _HomeShellRoomActions on _HomeShellState {
     } catch (_) {}
   }
 
+  void _handleAppUpdateDownloadCancellationChanged(
+    ReleaseDownloadCancellationToken? token,
+  ) {
+    if (_appUpdateDownloadCancellationToken == token) return;
+    _setHomeState(() {
+      _appUpdateDownloadCancellationToken = token;
+      if (token != null) {
+        _searchExpanded = false;
+        _titleSearchContextMenuOpen = false;
+        _pendingTitleSearchContextMenuUpdate = null;
+      }
+    });
+    if (token != null) {
+      FocusManager.instance.primaryFocus?.unfocus();
+      unawaited(_leaveLiveForAppUpdateDownload());
+    }
+  }
+
+  Future<void> _leaveLiveForAppUpdateDownload() async {
+    if (_joinedLiveRoomId == null) return;
+    await _leaveLive();
+  }
+
   Future<bool> _handleWindowCloseRequest() async {
     if (_exitingApplication) return true;
+    if (_appUpdateDownloadInProgress) {
+      return _handleAppUpdateDownloadCloseRequest();
+    }
     final behavior = await _readCloseBehavior();
     if (!mounted) return true;
     if (behavior == CloseBehavior.askEveryTime) {
@@ -292,6 +318,46 @@ extension _HomeShellRoomActions on _HomeShellState {
     }
     await _performCloseBehavior(behavior);
     return true;
+  }
+
+  Future<bool> _handleAppUpdateDownloadCloseRequest() async {
+    if (_closeConfirming) return true;
+    _setHomeState(() => _closeConfirming = true);
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => DialogFrame(
+          title: '正在下载新版本',
+          icon: Icons.system_update_alt_outlined,
+          actions: [
+            Button(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('继续下载'),
+            ),
+            Button(
+              onPressed: () => Navigator.of(context).pop(true),
+              tone: ButtonTone.danger,
+              icon: const Icon(Icons.close),
+              child: const Text('中断下载并关闭'),
+            ),
+          ],
+          child: Text(
+            '正在下载新版本，关闭将中断下载。',
+            style: UiTypography.body.copyWith(
+              color: UiColors.textSecondary,
+              height: 1.55,
+            ),
+          ),
+        ),
+      );
+      if (!mounted || confirmed != true) return true;
+      final token = _appUpdateDownloadCancellationToken;
+      await token?.cancelAndDeletePartialFile();
+      await _exitApplication();
+      return true;
+    } finally {
+      if (mounted) _setHomeState(() => _closeConfirming = false);
+    }
   }
 
   Future<CloseBehavior> _readCloseBehavior() async {

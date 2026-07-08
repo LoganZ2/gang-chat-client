@@ -50,6 +50,7 @@ class _HomeTitleBar extends StatefulWidget {
     required this.micMuted,
     required this.headphonesMuted,
     required this.voiceBlocked,
+    required this.interactionLocked,
     required this.onActivateSearch,
     required this.onSearchTapOutside,
     required this.onSearchContextMenuOpenChanged,
@@ -67,6 +68,7 @@ class _HomeTitleBar extends StatefulWidget {
   final bool micMuted;
   final bool headphonesMuted;
   final bool voiceBlocked;
+  final bool interactionLocked;
   final VoidCallback onActivateSearch;
   final VoidCallback onSearchTapOutside;
   final ValueChanged<bool> onSearchContextMenuOpenChanged;
@@ -184,15 +186,21 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
                     right: nativeMacControls
                         ? _homeTitleBarLiveRoomHorizontalInset
                         : null,
-                    child: _TitleLiveRoomDock(
-                      room: widget.liveRoom!,
-                      micMuted: widget.micMuted,
-                      headphonesMuted: widget.headphonesMuted,
-                      voiceBlocked: widget.voiceBlocked,
-                      onOpen: widget.onOpenLiveRoom,
-                      onToggleMic: widget.onToggleMic,
-                      onToggleHeadphones: widget.onToggleHeadphones,
-                      onLeave: widget.onLeaveLive,
+                    child: IgnorePointer(
+                      ignoring: widget.interactionLocked,
+                      child: Opacity(
+                        opacity: widget.interactionLocked ? 0.54 : 1,
+                        child: _TitleLiveRoomDock(
+                          room: widget.liveRoom!,
+                          micMuted: widget.micMuted,
+                          headphonesMuted: widget.headphonesMuted,
+                          voiceBlocked: widget.voiceBlocked,
+                          onOpen: widget.onOpenLiveRoom,
+                          onToggleMic: widget.onToggleMic,
+                          onToggleHeadphones: widget.onToggleHeadphones,
+                          onLeave: widget.onLeaveLive,
+                        ),
+                      ),
                     ),
                   ),
                 if (showSearch)
@@ -208,6 +216,7 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
                         child: _TitleSearchField(
                           controller: widget.searchController,
                           tapRegionGroup: widget.searchTapRegionGroup,
+                          enabled: !widget.interactionLocked,
                           onContextMenuOpenChanged:
                               widget.onSearchContextMenuOpenChanged,
                           onActivated: widget.onActivateSearch,
@@ -394,6 +403,7 @@ class _TitleSearchField extends StatefulWidget {
   const _TitleSearchField({
     required this.controller,
     required this.tapRegionGroup,
+    required this.enabled,
     required this.onContextMenuOpenChanged,
     required this.onActivated,
     required this.onClearQuery,
@@ -401,6 +411,7 @@ class _TitleSearchField extends StatefulWidget {
 
   final TextEditingController controller;
   final Object tapRegionGroup;
+  final bool enabled;
   final ValueChanged<bool> onContextMenuOpenChanged;
   final VoidCallback onActivated;
   final VoidCallback onClearQuery;
@@ -426,6 +437,9 @@ class _TitleSearchFieldState extends State<_TitleSearchField> {
   @override
   void didUpdateWidget(_TitleSearchField oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.enabled && !widget.enabled) {
+      _focusNode.unfocus();
+    }
     if (oldWidget.controller == widget.controller) return;
     oldWidget.controller.removeListener(_handleTextChanged);
     _hasText = widget.controller.text.trim().isNotEmpty;
@@ -442,7 +456,7 @@ class _TitleSearchFieldState extends State<_TitleSearchField> {
   }
 
   void _handleFocusChange() {
-    if (_focusNode.hasFocus) widget.onActivated();
+    if (_focusNode.hasFocus && widget.enabled) widget.onActivated();
     if (_focused != _focusNode.hasFocus) {
       setState(() => _focused = _focusNode.hasFocus);
     }
@@ -456,17 +470,18 @@ class _TitleSearchFieldState extends State<_TitleSearchField> {
 
   @override
   Widget build(BuildContext context) {
-    final accent = _focused ? UiColors.accent : UiColors.textMuted;
+    final activeFocus = _focused && widget.enabled;
+    final accent = activeFocus ? UiColors.accent : UiColors.textMuted;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 90),
       curve: Curves.easeOutCubic,
       height: _homeTitleBarSearchHeight,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: _focused ? UiColors.selected : UiColors.surface,
+        color: activeFocus ? UiColors.selected : UiColors.surface,
         borderRadius: BorderRadius.circular(UiRadii.md),
         border: Border.all(
-          color: _focused ? UiColors.selectedBorder : UiColors.border,
+          color: activeFocus ? UiColors.selectedBorder : UiColors.border,
         ),
       ),
       child: Row(
@@ -482,9 +497,10 @@ class _TitleSearchFieldState extends State<_TitleSearchField> {
                 controller: widget.controller,
                 focusNode: _focusNode,
                 maxLines: 1,
+                enabled: widget.enabled,
                 textInputAction: TextInputAction.search,
                 undoController: _undoController,
-                onTap: widget.onActivated,
+                onTap: widget.enabled ? widget.onActivated : null,
                 cursorColor: UiColors.accent,
                 cursorWidth: 1.5,
                 style: UiTypography.body.copyWith(fontSize: 13, height: 1.2),
@@ -509,7 +525,7 @@ class _TitleSearchFieldState extends State<_TitleSearchField> {
               ),
             ),
           ),
-          if (_hasText) ...[
+          if (_hasText && widget.enabled) ...[
             const SizedBox(width: 6),
             Tooltip(
               message: '清空搜索',

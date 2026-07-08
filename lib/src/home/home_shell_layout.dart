@@ -38,6 +38,8 @@ extension _HomeShellLayout on _HomeShellState {
         initialAppUpdate: _settingsAppUpdate,
         stickerPackStore: widget.app.stickerPackStore,
         stickerImagePreviewOpener: _openStickerManagerImagePreview,
+        onAppUpdateDownloadCancellationChanged:
+            _handleAppUpdateDownloadCancellationChanged,
         currentUser: _currentUser,
         onUserUpdated: _handleUserUpdated,
         onAccountDeleted: _logout,

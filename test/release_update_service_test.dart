@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -111,6 +112,49 @@ void main() {
     },
   );
 
+  test('downloadUpdate cancellation deletes partial installer', () async {
+    final temp = await Directory.systemTemp.createTemp(
+      'gang_chat_release_update_cancel_test_',
+    );
+    addTearDown(() => temp.delete(recursive: true));
+    final token = ReleaseDownloadCancellationToken();
+    final service = ReleaseUpdateService(
+      httpClient: _ChunkedDownloadClient([
+        'partial '.codeUnits,
+        'installer'.codeUnits,
+      ]),
+      temporaryDirectoryProvider: () async => temp,
+    );
+    final update = AvailableAppUpdate(
+      currentVersion: '0.5.0',
+      latestVersion: '0.5.1',
+      asset: const ReleaseAsset(
+        key: 'releases/GangChat_v0.5.1.exe',
+        version: '0.5.1',
+        platform: AppUpdatePlatform.windows,
+      ),
+      downloadUrl: Uri.parse(
+        'https://os.example.test/gang-chat/releases/GangChat_v0.5.1.exe',
+      ),
+    );
+
+    await expectLater(
+      service.downloadUpdate(
+        update,
+        cancellationToken: token,
+        onProgress: ({required receivedBytes, totalBytes}) {
+          if (receivedBytes > 0) token.cancel();
+        },
+      ),
+      throwsA(isA<ReleaseDownloadCancelledException>()),
+    );
+
+    final partial = File(
+      '${temp.path}${Platform.pathSeparator}GangChat_v0.5.1.exe',
+    );
+    expect(await partial.exists(), isFalse);
+  });
+
   test(
     'startInstaller launches Windows installer through UAC shell',
     () async {
@@ -173,4 +217,15 @@ void main() {
     },
     skip: !Platform.isWindows ? 'Windows-only installer launcher' : false,
   );
+}
+
+class _ChunkedDownloadClient extends http.BaseClient {
+  _ChunkedDownloadClient(this.chunks);
+
+  final List<List<int>> chunks;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    return http.StreamedResponse(Stream<List<int>>.fromIterable(chunks), 200);
+  }
 }

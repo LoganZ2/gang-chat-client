@@ -54,6 +54,7 @@ import '../shell/clipboard_service.dart';
 import '../shell/desktop_window_controller.dart';
 import '../shell/file_drop_service.dart';
 import '../shell/file_selection_service.dart';
+import '../shell/release_update_service.dart';
 import '../shell/voice_playback_service.dart';
 import '../shell/window_controls.dart';
 import '../ui/ui.dart';
@@ -192,6 +193,7 @@ class _HomeShellState extends State<HomeShell> {
   bool _pickingAttachments = false;
   bool _settingsOpen = false;
   AvailableAppUpdate? _settingsAppUpdate;
+  ReleaseDownloadCancellationToken? _appUpdateDownloadCancellationToken;
   bool _logoutConfirming = false;
   bool _closeConfirming = false;
   bool _exitingApplication = false;
@@ -275,6 +277,8 @@ class _HomeShellState extends State<HomeShell> {
       _services.fileDownloads;
   MediaCacheController get _mediaCacheController => _services.mediaCache;
   DateTime get _serverNow => widget.app.serverClock.now();
+  bool get _appUpdateDownloadInProgress =>
+      _appUpdateDownloadCancellationToken != null;
 
   @override
   void initState() {
@@ -523,10 +527,12 @@ class _HomeShellState extends State<HomeShell> {
             ),
             child: LayoutBuilder(
               builder: (context, shellConstraints) {
-                final showSearchOverlay = _homeTitleBarCanShowSearch(
-                  context,
-                  shellConstraints.maxWidth,
-                );
+                final showSearchOverlay =
+                    _homeTitleBarCanShowSearch(
+                      context,
+                      shellConstraints.maxWidth,
+                    ) &&
+                    !_appUpdateDownloadInProgress;
                 return Stack(
                   fit: StackFit.expand,
                   children: [
@@ -542,6 +548,7 @@ class _HomeShellState extends State<HomeShell> {
                             micMuted: _micMuted,
                             headphonesMuted: _headphonesMuted,
                             voiceBlocked: _voiceBlocked,
+                            interactionLocked: _appUpdateDownloadInProgress,
                             onActivateSearch: _activateSearch,
                             onSearchTapOutside: _collapseSearch,
                             onSearchContextMenuOpenChanged:
@@ -554,28 +561,30 @@ class _HomeShellState extends State<HomeShell> {
                             onLeaveLive: () => unawaited(_leaveLive()),
                           ),
                           Expanded(
-                            child: LayoutBuilder(
-                              builder: (context, constraints) {
-                                final narrow =
-                                    constraints.maxWidth < narrowBreakpoint;
-                                if (narrow) {
-                                  return _buildNarrowLayout(
-                                    constraints.maxWidth,
-                                  );
-                                }
+                            child: _buildAppUpdateLockedBody(
+                              LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final narrow =
+                                      constraints.maxWidth < narrowBreakpoint;
+                                  if (narrow) {
+                                    return _buildNarrowLayout(
+                                      constraints.maxWidth,
+                                    );
+                                  }
 
-                                return Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    _buildSidebar(
-                                      width: sidebarWidth,
-                                      openContentOnSelect: false,
-                                    ),
-                                    Expanded(child: _buildContentPane()),
-                                  ],
-                                );
-                              },
+                                  return Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      _buildSidebar(
+                                        width: sidebarWidth,
+                                        openContentOnSelect: false,
+                                      ),
+                                      Expanded(child: _buildContentPane()),
+                                    ],
+                                  );
+                                },
+                              ),
                             ),
                           ),
                         ],
@@ -649,6 +658,15 @@ class _HomeShellState extends State<HomeShell> {
       if (server.id == _selectedServerId) return server;
     }
     return null;
+  }
+
+  Widget _buildAppUpdateLockedBody(Widget child) {
+    final locked = _appUpdateDownloadInProgress;
+    return Focus(
+      canRequestFocus: !locked,
+      descendantsAreFocusable: !locked,
+      child: AbsorbPointer(absorbing: locked, child: child),
+    );
   }
 }
 

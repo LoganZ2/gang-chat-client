@@ -14,6 +14,62 @@ typedef ReleaseInstallerProcessRunner =
 
 typedef ReleaseTemporaryDirectoryProvider = Future<Directory> Function();
 
+class ReleaseDownloadCancelledException implements Exception {
+  const ReleaseDownloadCancelledException();
+
+  @override
+  String toString() => 'release download cancelled';
+}
+
+class ReleaseDownloadCancellationToken {
+  bool _cancelled = false;
+  bool _active = false;
+  http.Client? _client;
+  File? _partialFile;
+  Completer<void>? _completion;
+
+  bool get isCancelled => _cancelled;
+
+  void cancel() {
+    _cancelled = true;
+    _client?.close();
+  }
+
+  Future<void> cancelAndDeletePartialFile() async {
+    cancel();
+    final completion = _completion;
+    if (_active && completion != null && !completion.isCompleted) {
+      try {
+        await completion.future.timeout(const Duration(seconds: 2));
+      } catch (_) {
+        // A still-open file can fail deletion on Windows; try anyway below.
+      }
+    }
+    await _deleteFileQuietly(_partialFile);
+  }
+
+  void _bind(http.Client client, File partialFile) {
+    _client = client;
+    _partialFile = partialFile;
+    _active = true;
+    _completion = Completer<void>();
+    if (_cancelled) client.close();
+  }
+
+  void _throwIfCancelled() {
+    if (_cancelled) throw const ReleaseDownloadCancelledException();
+  }
+
+  void _complete() {
+    _client = null;
+    _active = false;
+    final completion = _completion;
+    if (completion != null && !completion.isCompleted) {
+      completion.complete();
+    }
+  }
+}
+
 class ReleaseUpdateService {
   const ReleaseUpdateService({
     http.Client? httpClient,
@@ -63,12 +119,18 @@ class ReleaseUpdateService {
   Future<File> downloadUpdate(
     AvailableAppUpdate update, {
     ReleaseDownloadProgress? onProgress,
+    ReleaseDownloadCancellationToken? cancellationToken,
   }) async {
     final request = http.Request('GET', update.downloadUrl);
     final injected = _httpClient;
     final client = injected ?? http.Client();
+    File? file;
     try {
+      file = await _downloadTarget(update);
+      cancellationToken?._bind(client, file);
+      cancellationToken?._throwIfCancelled();
       final response = await client.send(request);
+      cancellationToken?._throwIfCancelled();
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw HttpException(
           'release download failed (${response.statusCode})',
@@ -76,7 +138,6 @@ class ReleaseUpdateService {
         );
       }
 
-      final file = await _downloadTarget(update);
       final sink = file.openWrite();
       var received = 0;
       final contentLength = response.contentLength;
@@ -86,15 +147,25 @@ class ReleaseUpdateService {
       onProgress?.call(receivedBytes: received, totalBytes: total);
       try {
         await for (final chunk in response.stream) {
+          cancellationToken?._throwIfCancelled();
           received += chunk.length;
           sink.add(chunk);
           onProgress?.call(receivedBytes: received, totalBytes: total);
         }
+        cancellationToken?._throwIfCancelled();
       } finally {
         await sink.close();
       }
       return file;
+    } catch (error) {
+      await _deleteFileQuietly(file);
+      if (error is ReleaseDownloadCancelledException ||
+          cancellationToken?.isCancelled == true) {
+        throw const ReleaseDownloadCancelledException();
+      }
+      rethrow;
     } finally {
+      cancellationToken?._complete();
       if (injected == null) client.close();
     }
   }
@@ -182,6 +253,13 @@ class ReleaseUpdateService {
       }
     }
   }
+}
+
+Future<void> _deleteFileQuietly(File? file) async {
+  if (file == null) return;
+  try {
+    if (await file.exists()) await file.delete();
+  } catch (_) {}
 }
 
 final _downloadedInstallerPattern = RegExp(

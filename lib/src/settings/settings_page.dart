@@ -84,6 +84,7 @@ class SettingsPage extends StatefulWidget {
     this.initialAppUpdate,
     this.stickerImagePreviewOpener,
     this.appVersion = gangChatClientVersion,
+    this.onAppUpdateDownloadCancellationChanged,
     this.currentUser,
     this.onUserUpdated,
     this.onDeviceSelected,
@@ -116,6 +117,8 @@ class SettingsPage extends StatefulWidget {
   final AvailableAppUpdate? initialAppUpdate;
   final StickerImagePreviewOpener? stickerImagePreviewOpener;
   final String appVersion;
+  final ValueChanged<ReleaseDownloadCancellationToken?>?
+  onAppUpdateDownloadCancellationChanged;
   final CurrentUser? currentUser;
   final ValueChanged<CurrentUser>? onUserUpdated;
   final void Function(String kind, String deviceId)? onDeviceSelected;
@@ -1098,6 +1101,8 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _downloadAndInstallAvailableUpdate() async {
     final update = _availableAppUpdate;
     if (update == null || _downloadingAppUpdate) return;
+    final cancellationToken = ReleaseDownloadCancellationToken();
+    widget.onAppUpdateDownloadCancellationChanged?.call(cancellationToken);
     setState(() {
       _downloadingAppUpdate = true;
       _updateDownloadError = null;
@@ -1107,6 +1112,7 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       final file = await widget.releaseUpdateService.downloadUpdate(
         update,
+        cancellationToken: cancellationToken,
         onProgress: ({required receivedBytes, totalBytes}) {
           if (!mounted) return;
           setState(() {
@@ -1119,6 +1125,15 @@ class _SettingsPageState extends State<SettingsPage> {
       await widget.releaseUpdateService.startInstaller(file);
       await Future<void>.delayed(const Duration(milliseconds: 280));
       await _windowController.terminateApplication();
+    } on ReleaseDownloadCancelledException {
+      if (!mounted) return;
+      setState(() {
+        _downloadingAppUpdate = false;
+        _updateDownloadedBytes = 0;
+        _updateDownloadTotalBytes = null;
+        _updateDownloadError = '下载已中断';
+        _markFloatingNoticeEvent('updateDownloadError', _updateDownloadError);
+      });
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -1126,6 +1141,8 @@ class _SettingsPageState extends State<SettingsPage> {
         _updateDownloadError = '下载或启动安装器失败：$error';
         _markFloatingNoticeEvent('updateDownloadError', _updateDownloadError);
       });
+    } finally {
+      widget.onAppUpdateDownloadCancellationChanged?.call(null);
     }
   }
 
