@@ -13,6 +13,8 @@ const String kSystemEventLiveLeft = 'live_left';
 const String kSystemEventRoomRoleChanged = 'room_role_changed';
 const String kSystemEventRoomNameChanged = 'room_name_changed';
 const String kSystemEventRoomDescriptionChanged = 'room_description_changed';
+const String kSystemEventRoomVisibilityChanged = 'room_visibility_changed';
+const String kSystemEventRoomJoinPolicyChanged = 'room_join_policy_changed';
 
 class SystemMessageEvent {
   const SystemMessageEvent({
@@ -260,6 +262,16 @@ String systemMessageCopyText(SystemMessageEvent event) {
       final value = _systemChangedValueLabel(event.newValue);
       if (actor == null) return '房间简介 修改为\n$value';
       return '房间简介 被 ${_systemUserLabel(actor)} 修改为\n$value';
+    case kSystemEventRoomVisibilityChanged:
+      final actor = event.actor ?? event.user;
+      final value = systemMessageVisibilityLabel(event.newValue);
+      if (actor == null) return '房间可见性 修改为 $value';
+      return '房间可见性 被 ${_systemUserLabel(actor)} 修改为 $value';
+    case kSystemEventRoomJoinPolicyChanged:
+      final actor = event.actor ?? event.user;
+      final value = systemMessageJoinPolicyLabel(event.newValue);
+      if (actor == null) return '房间加入方式 修改为 $value';
+      return '房间加入方式 被 ${_systemUserLabel(actor)} 修改为 $value';
     default:
       final fallback = event.message.body.trimRight();
       final subjectPart = _systemUserLabel(subject);
@@ -291,6 +303,21 @@ String _systemChangedValueLabel(String? value) {
   final normalized = value ?? '';
   if (normalized.isEmpty) return '（空）';
   return normalized;
+}
+
+String systemMessageVisibilityLabel(String? visibility) {
+  return switch ((visibility ?? '').trim().toLowerCase()) {
+    'private' => '私密',
+    _ => '公开',
+  };
+}
+
+String systemMessageJoinPolicyLabel(String? joinPolicy) {
+  return switch ((joinPolicy ?? '').trim().toLowerCase()) {
+    'open' => '开放',
+    'closed' => '关闭',
+    _ => '需审批',
+  };
 }
 
 bool shouldShowFileAttachmentBody({

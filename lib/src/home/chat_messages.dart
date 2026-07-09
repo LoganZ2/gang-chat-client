@@ -1864,6 +1864,42 @@ class _SystemMessageParts {
           _lineBreak(),
           _highlightText(_systemChangedValueLabel(event.newValue), maxLines: 4),
         ];
+      case message_display.kSystemEventRoomVisibilityChanged:
+        final actor = event.actor ?? event.user;
+        return [
+          _textWithInfoButton(
+            '房间可见性',
+            '原可见性：${message_display.systemMessageVisibilityLabel(event.oldValue)}',
+          ),
+          if (actor == null) ...[
+            _text('修改为'),
+          ] else ...[
+            _text('被'),
+            _userChip(actor),
+            _text('修改为'),
+          ],
+          _highlightText(
+            message_display.systemMessageVisibilityLabel(event.newValue),
+          ),
+        ];
+      case message_display.kSystemEventRoomJoinPolicyChanged:
+        final actor = event.actor ?? event.user;
+        return [
+          _textWithInfoButton(
+            '房间加入方式',
+            '原加入方式：${message_display.systemMessageJoinPolicyLabel(event.oldValue)}',
+          ),
+          if (actor == null) ...[
+            _text('修改为'),
+          ] else ...[
+            _text('被'),
+            _userChip(actor),
+            _text('修改为'),
+          ],
+          _highlightText(
+            message_display.systemMessageJoinPolicyLabel(event.newValue),
+          ),
+        ];
       default:
         final fallback = event.message.body.trim();
         return [_userChip(subject), if (fallback.isNotEmpty) _text(fallback)];

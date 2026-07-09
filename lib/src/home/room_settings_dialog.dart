@@ -256,10 +256,22 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
       });
       return;
     }
-    setState(() {
-      _saving = true;
-    });
     try {
+      setState(() {
+        _saving = true;
+      });
+      final confirmedJoinPolicyChange =
+          await _confirmJoinPolicyAutoReviewIfNeeded(draft.joinPolicy);
+      if (!mounted) return;
+      if (!confirmedJoinPolicyChange) {
+        setState(() {
+          _joinPolicy = 'approval_required';
+          _saving = false;
+          _error = null;
+          _notice = null;
+        });
+        return;
+      }
       final updated = _creating
           ? await widget.controller.createRoom(
               name: draft.name!,
@@ -310,6 +322,49 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
         _markFloatingNoticeEvent('error', _error);
       });
     }
+  }
+
+  Future<bool> _confirmJoinPolicyAutoReviewIfNeeded(
+    String? nextJoinPolicy,
+  ) async {
+    if (_creating) return true;
+    final currentPolicy = room_display.normalizeRoomJoinPolicy(
+      _room.joinPolicy,
+    );
+    final normalizedNext = room_display.normalizeRoomJoinPolicy(
+      nextJoinPolicy ?? currentPolicy,
+    );
+    if (currentPolicy != 'approval_required') return true;
+    if (normalizedNext != 'open' && normalizedNext != 'closed') return true;
+
+    final pendingRequests = await widget.controller.listJoinRequests(_room.id);
+    if (!mounted || pendingRequests.isEmpty) return true;
+
+    final decisionLabel = normalizedNext == 'open' ? '批准' : '拒绝';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => DialogFrame(
+        title: '确认修改加入方式？',
+        icon: Icons.warning_amber_outlined,
+        actions: [
+          Button(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          Button(
+            tone: ButtonTone.primary,
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('确认修改'),
+          ),
+        ],
+        child: Text(
+          '当前仍有 ${pendingRequests.length} 个未处理申请。'
+          '确认修改后，将自动$decisionLabel所有未处理申请。',
+          style: UiTypography.body.copyWith(color: UiColors.textSecondary),
+        ),
+      ),
+    );
+    return confirmed ?? false;
   }
 
   Future<void> _savePersonalPreferences() async {

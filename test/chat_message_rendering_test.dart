@@ -1302,6 +1302,36 @@ void main() {
                   ),
                 ],
               ),
+              _message(
+                type: 'system',
+                body: '房间可见性被Owner修改为私密',
+                clientMessageId: 'client_room_visibility_changed',
+                attachments: const [
+                  MessageAttachment(
+                    type: 'system',
+                    event: message_display.kSystemEventRoomVisibilityChanged,
+                    user: _systemActor,
+                    actor: _systemActor,
+                    oldValue: 'public',
+                    newValue: 'private',
+                  ),
+                ],
+              ),
+              _message(
+                type: 'system',
+                body: '房间加入方式被Owner修改为关闭',
+                clientMessageId: 'client_room_join_policy_changed',
+                attachments: const [
+                  MessageAttachment(
+                    type: 'system',
+                    event: message_display.kSystemEventRoomJoinPolicyChanged,
+                    user: _systemActor,
+                    actor: _systemActor,
+                    oldValue: 'approval_required',
+                    newValue: 'closed',
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -1340,6 +1370,24 @@ void main() {
         findsNothing,
       );
 
+      expect(find.text('房间可见性'), findsOneWidget);
+      final visibilityInfo = find.byKey(
+        const ValueKey(
+          'system-info-client_room_visibility_changed-room_visibility_changed',
+        ),
+      );
+      expect(visibilityInfo, findsOneWidget);
+      expect(find.text('私密'), findsOneWidget);
+
+      expect(find.text('房间加入方式'), findsOneWidget);
+      final joinPolicyInfo = find.byKey(
+        const ValueKey(
+          'system-info-client_room_join_policy_changed-room_join_policy_changed',
+        ),
+      );
+      expect(joinPolicyInfo, findsOneWidget);
+      expect(find.text('关闭'), findsOneWidget);
+
       final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
       await gesture.addPointer(location: Offset.zero);
       addTearDown(gesture.removePointer);
@@ -1353,6 +1401,18 @@ void main() {
       await tester.tap(descriptionInfo);
       await tester.pumpAndSettle();
       expect(find.text('原房间简介：Old intro'), findsOneWidget);
+
+      await tester.tapAt(Offset.zero);
+      await tester.pump(const Duration(milliseconds: 180));
+      await tester.tap(visibilityInfo);
+      await tester.pumpAndSettle();
+      expect(find.text('原可见性：公开'), findsOneWidget);
+
+      await tester.tapAt(Offset.zero);
+      await tester.pump(const Duration(milliseconds: 180));
+      await tester.tap(joinPolicyInfo);
+      await tester.pumpAndSettle();
+      expect(find.text('原加入方式：需审批'), findsOneWidget);
 
       expect(
         find.byWidgetPredicate(

@@ -3266,6 +3266,62 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'room settings confirms auto-reviewing pending applications before join policy change',
+    (WidgetTester tester) async {
+      final requestedPaths = <String>[];
+      final roomSettingsUpdates = <Map<String, Object?>>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: HomePage(
+            app: _homeTestAppContext(
+              requestedPaths: requestedPaths,
+              roomSettingsUpdates: roomSettingsUpdates,
+            ),
+            realtime: _NoopRealtimeService(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Alpha Room'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('房间设置'));
+      await tester.pumpAndSettle();
+
+      final openJoinPolicy = find.text('开放').last;
+      await tester.ensureVisible(openJoinPolicy);
+      await tester.pumpAndSettle();
+      await tester.tap(openJoinPolicy);
+      await tester.pumpAndSettle();
+
+      final saveButton = find.widgetWithText(ui.Button, '保存房间设置');
+      tester.widget<ui.Button>(saveButton).onPressed?.call();
+      await tester.pumpAndSettle();
+
+      expect(
+        requestedPaths,
+        contains('/api/v1/rooms/server-alpha/join-requests'),
+      );
+      expect(find.text('确认修改加入方式？'), findsOneWidget);
+      expect(find.textContaining('自动批准所有未处理申请'), findsOneWidget);
+      expect(roomSettingsUpdates, isEmpty);
+
+      await tester.tap(find.widgetWithText(ui.Button, '取消'));
+      await tester.pumpAndSettle();
+      expect(roomSettingsUpdates, isEmpty);
+
+      tester.widget<ui.Button>(saveButton).onPressed?.call();
+      await tester.pumpAndSettle();
+      expect(roomSettingsUpdates, hasLength(1));
+      expect(roomSettingsUpdates.single['join_policy'], 'approval_required');
+      expect(find.text('确认修改加入方式？'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('room settings info fields are read-only for regular members', (
     WidgetTester tester,
   ) async {
@@ -6110,6 +6166,7 @@ AuthenticatedAppContext _homeTestAppContext({
   List<Uri>? requestedUris,
   List<Map<String, Object?>>? accountUpdates,
   List<Map<String, Object?>>? roomCreations,
+  List<Map<String, Object?>>? roomSettingsUpdates,
   List<Map<String, Object?>>? myRoomSettingsUpdates,
   List<Map<String, Object?>>? liveJoinRequests,
   List<Map<String, Object?>>? liveStateUpdates,
@@ -6158,6 +6215,7 @@ AuthenticatedAppContext _homeTestAppContext({
       requestedUris: requestedUris,
       accountUpdates: accountUpdates,
       roomCreations: roomCreations,
+      roomSettingsUpdates: roomSettingsUpdates,
       myRoomSettingsUpdates: myRoomSettingsUpdates,
       liveJoinRequests: liveJoinRequests,
       liveStateUpdates: liveStateUpdates,
@@ -6180,6 +6238,7 @@ GangApi _roomsApi({
   List<Uri>? requestedUris,
   List<Map<String, Object?>>? accountUpdates,
   List<Map<String, Object?>>? roomCreations,
+  List<Map<String, Object?>>? roomSettingsUpdates,
   List<Map<String, Object?>>? myRoomSettingsUpdates,
   List<Map<String, Object?>>? liveJoinRequests,
   List<Map<String, Object?>>? liveStateUpdates,
@@ -6538,6 +6597,7 @@ GangApi _roomsApi({
           final body =
               jsonDecode(utf8.decode(request.bodyBytes))
                   as Map<String, Object?>;
+          roomSettingsUpdates?.add(body);
           alphaRoomName = body['name'] as String? ?? alphaRoomName;
           alphaRoomDescription =
               body['description'] as String? ?? alphaRoomDescription;

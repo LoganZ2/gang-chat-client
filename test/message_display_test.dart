@@ -249,9 +249,37 @@ void main() {
         ),
       ],
     );
+    final visibilityChanged = _message(
+      type: 'system',
+      body: '房间可见性修改为私密',
+      attachments: const [
+        MessageAttachment(
+          type: 'system',
+          event: kSystemEventRoomVisibilityChanged,
+          actor: actor,
+          oldValue: 'public',
+          newValue: 'private',
+        ),
+      ],
+    );
+    final joinPolicyChanged = _message(
+      type: 'system',
+      body: '房间加入方式修改为关闭',
+      attachments: const [
+        MessageAttachment(
+          type: 'system',
+          event: kSystemEventRoomJoinPolicyChanged,
+          actor: actor,
+          oldValue: 'approval_required',
+          newValue: 'closed',
+        ),
+      ],
+    );
 
     expect(messageCopyText(nameChanged), '房间名称 被 房内Owner 修改为 New Room');
     expect(messageCopyText(descriptionChanged), '房间简介 被 房内Owner 修改为\nHello');
+    expect(messageCopyText(visibilityChanged), '房间可见性 被 房内Owner 修改为 私密');
+    expect(messageCopyText(joinPolicyChanged), '房间加入方式 被 房内Owner 修改为 关闭');
   });
 
   test('messageCopyText renders removed message placeholders', () {

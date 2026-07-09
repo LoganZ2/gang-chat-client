@@ -76,6 +76,34 @@ void main() {
       ),
       '[系统] 房间简介 被 丁 修改为 新简介',
     );
+    expect(
+      roomSidebarSubtitle(
+        _roomCard(
+          lastMessage: LastMessagePreview(
+            id: 'message_5',
+            type: 'system',
+            senderDisplayName: '丁',
+            bodyPreview: '房间可见性修改为私密',
+            createdAt: DateTime.utc(2026, 6, 4),
+          ),
+        ),
+      ),
+      '[系统] 房间可见性 被 丁 修改为 私密',
+    );
+    expect(
+      roomSidebarSubtitle(
+        _roomCard(
+          lastMessage: LastMessagePreview(
+            id: 'message_6',
+            type: 'system',
+            senderDisplayName: '丁',
+            bodyPreview: '房间加入方式修改为关闭',
+            createdAt: DateTime.utc(2026, 6, 4),
+          ),
+        ),
+      ),
+      '[系统] 房间加入方式 被 丁 修改为 关闭',
+    );
   });
 
   test('room sidebar latest message time follows compact chat rules', () {

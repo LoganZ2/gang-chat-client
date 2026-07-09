@@ -144,12 +144,17 @@ String? _roomProfileSystemLastMessagePreview({
   required String? body,
 }) {
   if (body == null) return null;
-  if (body.startsWith('房间名称 被 ') || body.startsWith('房间简介 被 ')) {
+  if (body.startsWith('房间名称 被 ') ||
+      body.startsWith('房间简介 被 ') ||
+      body.startsWith('房间可见性 被 ') ||
+      body.startsWith('房间加入方式 被 ')) {
     return body;
   }
 
   const namePrefix = '房间名称修改为';
   const descriptionPrefix = '房间简介修改为';
+  const visibilityPrefix = '房间可见性修改为';
+  const joinPolicyPrefix = '房间加入方式修改为';
   if (body.startsWith(namePrefix)) {
     return _roomProfileChangedPreview(
       subject: '房间名称',
@@ -162,6 +167,20 @@ String? _roomProfileSystemLastMessagePreview({
       subject: '房间简介',
       sender: sender,
       value: body.substring(descriptionPrefix.length),
+    );
+  }
+  if (body.startsWith(visibilityPrefix)) {
+    return _roomProfileChangedPreview(
+      subject: '房间可见性',
+      sender: sender,
+      value: body.substring(visibilityPrefix.length),
+    );
+  }
+  if (body.startsWith(joinPolicyPrefix)) {
+    return _roomProfileChangedPreview(
+      subject: '房间加入方式',
+      sender: sender,
+      value: body.substring(joinPolicyPrefix.length),
     );
   }
   return null;
