@@ -663,6 +663,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
                 value: room_display.roomCreatedAtLabel(_room.createdAt),
               ),
             _LabeledSegmented<String>(
+              controlKey: const ValueKey('room-settings-visibility-segmented'),
               label: '可见性',
               value: _visibility,
               enabled: _canManageRoom && !_saving,
@@ -673,6 +674,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
               onChanged: (value) => setState(() => _visibility = value),
             ),
             _LabeledSegmented<String>(
+              controlKey: const ValueKey('room-settings-join-policy-segmented'),
               label: '加入方式',
               value: _joinPolicy,
               enabled: _canManageRoom && !_saving,
@@ -757,6 +759,9 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
               enabled: !_savingPreferences,
             ),
             _LabeledSegmented<String>(
+              controlKey: const ValueKey(
+                'room-settings-notification-policy-segmented',
+              ),
               label: '房间消息',
               value: _notificationPolicy,
               enabled: !_savingPreferences,

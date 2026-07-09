@@ -159,6 +159,7 @@ class _LabeledSegmented<T> extends StatelessWidget {
     required this.segments,
     required this.onChanged,
     this.enabled = true,
+    this.controlKey,
   });
 
   final String label;
@@ -166,6 +167,7 @@ class _LabeledSegmented<T> extends StatelessWidget {
   final List<Segment<T>> segments;
   final ValueChanged<T> onChanged;
   final bool enabled;
+  final Key? controlKey;
 
   @override
   Widget build(BuildContext context) {
@@ -179,6 +181,7 @@ class _LabeledSegmented<T> extends StatelessWidget {
           child: Opacity(
             opacity: enabled ? 1 : 0.5,
             child: SegmentedControl<T>(
+              key: controlKey,
               expanded: true,
               value: value,
               segments: segments,

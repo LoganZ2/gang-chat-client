@@ -240,6 +240,7 @@ class _SegmentOption {
 
 class _SegmentedSetting extends StatelessWidget {
   const _SegmentedSetting({
+    super.key,
     required this.label,
     required this.value,
     required this.options,

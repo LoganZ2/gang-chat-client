@@ -3384,6 +3384,7 @@ class _SettingsPageState extends State<SettingsPage> {
               : null,
           children: [
             _SegmentedSetting(
+              key: const ValueKey('settings-close-behavior-segmented'),
               label: '关闭方式',
               value: _closeBehavior.storageValue,
               options: CloseBehavior.values
@@ -3414,6 +3415,7 @@ class _SettingsPageState extends State<SettingsPage> {
             title: '语言切换',
             children: [
               _SegmentedSetting(
+                key: const ValueKey('settings-language-segmented'),
                 label: '语言',
                 value: _language,
                 options: const [
@@ -3504,6 +3506,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               const SizedBox(height: 14),
               _SegmentedSetting(
+                key: const ValueKey('settings-gender-segmented'),
                 label: '性别',
                 value: _gender,
                 options: const [

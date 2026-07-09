@@ -104,4 +104,63 @@ void main() {
     expect(segmentRects[0].width, closeTo(segmentRects[1].width, 0.01));
     expect(segmentRects[1].width, closeTo(segmentRects[2].width, 0.01));
   });
+
+  testWidgets(
+    'keyed segmented controls do not inherit previous thumb position',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(640, 120);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      Widget buildControl(Key key, int value) {
+        return MaterialApp(
+          theme: ui.uiTheme(),
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 300,
+                child: ui.SegmentedControl<int>(
+                  key: key,
+                  expanded: true,
+                  value: value,
+                  onChanged: (_) {},
+                  segments: const [
+                    ui.Segment(value: 0, label: 'One'),
+                    ui.Segment(value: 1, label: 'Two'),
+                    ui.Segment(value: 2, label: 'Three'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      await tester.pumpWidget(
+        buildControl(const ValueKey('first-segmented-setting'), 0),
+      );
+      await tester.pump();
+
+      await tester.pumpWidget(
+        buildControl(const ValueKey('second-segmented-setting'), 2),
+      );
+
+      final selectedThumb = find.byWidgetPredicate((widget) {
+        if (widget is! DecoratedBox) return false;
+        final decoration = widget.decoration;
+        return decoration is BoxDecoration &&
+            decoration.color == ui.UiColors.selected;
+      });
+      final selectedThumbRect = tester.getRect(selectedThumb);
+      final thirdSegmentRect = tester.getRect(
+        find.ancestor(
+          of: find.text('Three'),
+          matching: find.byType(GestureDetector),
+        ),
+      );
+
+      expect(thirdSegmentRect.contains(selectedThumbRect.center), isTrue);
+    },
+  );
 }
