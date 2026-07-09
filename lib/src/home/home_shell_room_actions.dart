@@ -23,13 +23,16 @@ extension _HomeShellRoomActions on _HomeShellState {
       room: room,
       currentUser: _currentUser,
     );
-    return withRole.copyWith(
-      commonRooms: room_display.roomUserInfoCommonRooms(
-        user: withRole,
-        selectedRoom: room,
-        currentUser: _currentUser,
-        includeSelectedRoom: false,
+    return _userWithLocalCommonRoomNames(
+      withRole.copyWith(
+        commonRooms: room_display.roomUserInfoCommonRooms(
+          user: withRole,
+          selectedRoom: room,
+          currentUser: _currentUser,
+          includeSelectedRoom: false,
+        ),
       ),
+      _servers,
     );
   }
 

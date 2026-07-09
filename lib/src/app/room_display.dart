@@ -403,6 +403,55 @@ String commonRoomDisplayName(UserCommonRoom room) {
   return remark;
 }
 
+UserSummary userWithLocalCommonRoomNames({
+  required UserSummary user,
+  required Iterable<RoomCard> rooms,
+}) {
+  return user.copyWith(
+    commonRooms: commonRoomsWithLocalRoomNames(
+      commonRooms: user.commonRooms,
+      rooms: rooms,
+    ),
+  );
+}
+
+List<UserCommonRoom> commonRoomsWithLocalRoomNames({
+  required List<UserCommonRoom> commonRooms,
+  required Iterable<RoomCard> rooms,
+}) {
+  if (commonRooms.isEmpty) return commonRooms;
+  final localRoomsById = {
+    for (final room in rooms)
+      if (room.id.trim().isNotEmpty) room.id: room,
+  };
+  if (localRoomsById.isEmpty) return commonRooms;
+
+  var changed = false;
+  final resolved = <UserCommonRoom>[];
+  for (final commonRoom in commonRooms) {
+    final localRoom = localRoomsById[commonRoom.id];
+    if (localRoom == null) {
+      resolved.add(commonRoom);
+      continue;
+    }
+    changed = true;
+    resolved.add(
+      UserCommonRoom(
+        id: commonRoom.id,
+        rid: localRoom.rid,
+        name: localRoom.name,
+        visibility: localRoom.visibility,
+        remarkName: localRoom.remarkName,
+        avatarUrl: localRoom.avatarUrl,
+        defaultAvatarKey: localRoom.defaultAvatarKey,
+        roomDisplayName: commonRoom.roomDisplayName,
+        roomRole: commonRoom.roomRole,
+      ),
+    );
+  }
+  return changed ? resolved : commonRooms;
+}
+
 String commonRoomAvatarLabel(UserCommonRoom room) {
   return _nonEmpty(room.name) ?? room.rid;
 }

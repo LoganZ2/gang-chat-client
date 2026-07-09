@@ -777,7 +777,9 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
         roomId: _room.id,
         userId: user.id,
       );
-      return profile.user.mergeMissing(user);
+      return _userWithCurrentRoomCommonRoomName(
+        profile.user.mergeMissing(user),
+      );
     } catch (_) {
       return _resolveUserProfile(user);
     }
@@ -786,10 +788,17 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
   Future<UserSummary> _resolveUserProfile(UserSummary user) async {
     try {
       final profile = await widget.controller.getUserProfile(user.id);
-      return profile.mergeMissing(user);
+      return _userWithCurrentRoomCommonRoomName(profile.mergeMissing(user));
     } catch (_) {
-      return user;
+      return _userWithCurrentRoomCommonRoomName(user);
     }
+  }
+
+  UserSummary _userWithCurrentRoomCommonRoomName(UserSummary user) {
+    return room_display.userWithLocalCommonRoomNames(
+      user: user,
+      rooms: [_room.toCard()],
+    );
   }
 
   Future<PublicRoom> _resolveRoomProfile(PublicRoom room) async {

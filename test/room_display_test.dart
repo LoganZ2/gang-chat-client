@@ -295,6 +295,86 @@ void main() {
     );
   });
 
+  test('common room names prefer the viewer local room remark', () {
+    const commonRooms = [
+      UserCommonRoom(
+        id: 'room_1',
+        rid: 'REMOTE',
+        name: 'Official Old',
+        remarkName: 'Other User Remark',
+        visibility: 'public',
+        avatarUrl: '/remote.png',
+        defaultAvatarKey: 'remote-1',
+        roomDisplayName: 'Room Logan',
+        roomRole: 'admin',
+      ),
+      UserCommonRoom(
+        id: 'room_2',
+        rid: 'R002',
+        name: 'Unmatched',
+        remarkName: 'Keep Remote',
+      ),
+    ];
+    final localRooms = [
+      RoomCard(
+        id: 'room_1',
+        rid: 'LOCAL',
+        name: 'Official Local',
+        visibility: 'private',
+        remarkName: 'Viewer Remark',
+        avatarUrl: '/local.png',
+        defaultAvatarKey: 'local-1',
+        memberCount: 3,
+        onlineMemberCount: 1,
+        liveParticipantCount: 0,
+        liveAvatarPreview: const [],
+        lastMessage: null,
+        unreadCount: 0,
+        updatedAt: DateTime.utc(2026, 7, 9),
+      ),
+    ];
+
+    final resolved = commonRoomsWithLocalRoomNames(
+      commonRooms: commonRooms,
+      rooms: localRooms,
+    );
+
+    expect(resolved.first.rid, 'LOCAL');
+    expect(resolved.first.name, 'Official Local');
+    expect(resolved.first.visibility, 'private');
+    expect(resolved.first.remarkName, 'Viewer Remark');
+    expect(resolved.first.avatarUrl, '/local.png');
+    expect(resolved.first.defaultAvatarKey, 'local-1');
+    expect(resolved.first.roomDisplayName, 'Room Logan');
+    expect(resolved.first.roomRole, 'admin');
+    expect(commonRoomDisplayName(resolved.first), 'Viewer Remark');
+    expect(commonRoomDisplayName(resolved.last), 'Keep Remote');
+
+    final noRemark = commonRoomsWithLocalRoomNames(
+      commonRooms: commonRooms,
+      rooms: [
+        RoomCard(
+          id: 'room_1',
+          rid: 'LOCAL',
+          name: 'Official Local',
+          visibility: 'private',
+          remarkName: null,
+          avatarUrl: null,
+          defaultAvatarKey: 'local-1',
+          memberCount: 3,
+          onlineMemberCount: 1,
+          liveParticipantCount: 0,
+          liveAvatarPreview: const [],
+          lastMessage: null,
+          unreadCount: 0,
+          updatedAt: DateTime.utc(2026, 7, 9),
+        ),
+      ],
+    );
+
+    expect(commonRoomDisplayName(noRemark.first), 'Official Local');
+  });
+
   test('room user info profile merges owner and current user fields', () {
     final creator = _user(
       id: 'creator',

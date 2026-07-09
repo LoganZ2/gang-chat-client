@@ -206,7 +206,10 @@ extension _HomeShellSearch on _HomeShellState {
         roomId: roomId,
         userId: user.id,
       );
-      return profile.user.mergeMissing(user);
+      return _userWithLocalCommonRoomNames(
+        profile.user.mergeMissing(user),
+        _servers,
+      );
     } catch (_) {
       return _resolveUserProfile(user);
     }
@@ -215,9 +218,12 @@ extension _HomeShellSearch on _HomeShellState {
   Future<UserSummary> _resolveUserProfile(UserSummary user) async {
     try {
       final profile = await _roomsController.getUserProfile(user.id);
-      return profile.mergeMissing(user);
+      return _userWithLocalCommonRoomNames(
+        profile.mergeMissing(user),
+        _servers,
+      );
     } catch (_) {
-      return user;
+      return _userWithLocalCommonRoomNames(user, _servers);
     }
   }
 
@@ -422,4 +428,11 @@ extension _HomeShellSearch on _HomeShellState {
       totalCounts: snapshot.totalCounts,
     );
   }
+}
+
+UserSummary _userWithLocalCommonRoomNames(
+  UserSummary user,
+  List<RoomCard> rooms,
+) {
+  return room_display.userWithLocalCommonRoomNames(user: user, rooms: rooms);
 }
