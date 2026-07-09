@@ -32,6 +32,7 @@ RoomCard roomCardWithLive(RoomCard room, LiveState live) {
     hasUnreadCount: room.hasUnreadCount,
     unreadMentionCount: room.unreadMentionCount,
     hasUnreadMentionCount: room.hasUnreadMentionCount,
+    hasPendingJoinRequests: room.hasPendingJoinRequests,
     updatedAt: room.updatedAt,
   );
 }

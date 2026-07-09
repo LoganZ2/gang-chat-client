@@ -1151,6 +1151,7 @@ class RoomsController {
                 hasUnreadCount: existing.hasUnreadCount,
                 unreadMentionCount: existing.unreadMentionCount,
                 hasUnreadMentionCount: existing.hasUnreadMentionCount,
+                hasPendingJoinRequests: existing.hasPendingJoinRequests,
                 updatedAt: card.updatedAt,
               ),
       ),
@@ -1336,6 +1337,7 @@ class RoomsController {
       hasUnreadCount: true,
       unreadMentionCount: unreadMentionCount,
       hasUnreadMentionCount: true,
+      hasPendingJoinRequests: incoming.hasPendingJoinRequests,
       updatedAt: incoming.updatedAt,
     );
   }
@@ -1412,6 +1414,7 @@ class RoomsController {
         hasUnreadCount: existing.hasUnreadCount,
         unreadMentionCount: existing.unreadMentionCount,
         hasUnreadMentionCount: existing.hasUnreadMentionCount,
+        hasPendingJoinRequests: existing.hasPendingJoinRequests,
         updatedAt: existing.updatedAt,
       );
       nextRooms = orderedRoomCards(nextRooms);

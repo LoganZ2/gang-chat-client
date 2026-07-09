@@ -541,6 +541,7 @@ class LiveController {
       hasUnreadCount: existing.hasUnreadCount,
       unreadMentionCount: existing.unreadMentionCount,
       hasUnreadMentionCount: existing.hasUnreadMentionCount,
+      hasPendingJoinRequests: existing.hasPendingJoinRequests,
       updatedAt: existing.updatedAt,
     );
     return next;

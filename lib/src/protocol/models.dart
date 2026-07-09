@@ -634,6 +634,7 @@ class RoomCard {
     this.hasUnreadCount = false,
     this.unreadMentionCount = 0,
     this.hasUnreadMentionCount = false,
+    this.hasPendingJoinRequests = false,
   });
 
   final String id;
@@ -655,11 +656,22 @@ class RoomCard {
   final bool hasUnreadCount;
   final int unreadMentionCount;
   final bool hasUnreadMentionCount;
+  final bool hasPendingJoinRequests;
   final DateTime updatedAt;
 
   factory RoomCard.fromJson(Map<String, Object?> json) {
     final hasUnreadCount = json.containsKey('unread_count');
     final hasUnreadMentionCount = json.containsKey('unread_mention_count');
+    final pendingJoinRequestCount = _intFromJson(json, const [
+      'pending_join_request_count',
+      'pending_join_requests_count',
+    ]);
+    final hasPendingJoinRequests =
+        _boolFromJson(json, const [
+          'has_pending_join_requests',
+          'pending_join_requests',
+        ]) ??
+        (pendingJoinRequestCount != null && pendingJoinRequestCount > 0);
     return RoomCard(
       id: json['id']! as String,
       name: json['name']! as String,
@@ -692,6 +704,7 @@ class RoomCard {
       hasUnreadCount: hasUnreadCount,
       unreadMentionCount: json['unread_mention_count'] as int? ?? 0,
       hasUnreadMentionCount: hasUnreadMentionCount,
+      hasPendingJoinRequests: hasPendingJoinRequests,
       updatedAt: DateTime.parse(json['updated_at']! as String),
     );
   }
@@ -712,6 +725,7 @@ class RoomCard {
     bool? isPinned,
     bool? hasUnreadCount,
     bool? hasUnreadMentionCount,
+    bool? hasPendingJoinRequests,
   }) {
     return RoomCard(
       id: id,
@@ -734,6 +748,8 @@ class RoomCard {
       unreadMentionCount: unreadMentionCount ?? this.unreadMentionCount,
       hasUnreadMentionCount:
           hasUnreadMentionCount ?? this.hasUnreadMentionCount,
+      hasPendingJoinRequests:
+          hasPendingJoinRequests ?? this.hasPendingJoinRequests,
       updatedAt: updatedAt,
     );
   }

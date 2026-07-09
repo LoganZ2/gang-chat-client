@@ -1845,6 +1845,46 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('room list shows pending join request dot without unread count', (
+    WidgetTester tester,
+  ) async {
+    const badgeKey = ValueKey(
+      'home-sidebar-room-pending-join-requests-server-alpha',
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(
+            alphaRoomUnreadCount: 0,
+            alphaRoomHasPendingJoinRequests: true,
+          ),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(badgeKey), findsOneWidget);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(
+            alphaRoomUnreadCount: 2,
+            alphaRoomHasPendingJoinRequests: true,
+          ),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(badgeKey), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('authenticated home shell sends messages through real API path', (
     WidgetTester tester,
   ) async {
@@ -6179,6 +6219,8 @@ AuthenticatedAppContext _homeTestAppContext({
   bool includeUnreadRoomNotification = false,
   bool includeFreshRoomNotificationOnRefresh = false,
   bool pinAlphaRoom = false,
+  int alphaRoomUnreadCount = 3,
+  bool alphaRoomHasPendingJoinRequests = false,
   Future<void> Function(String roomId)? beforeRoomDetailResponse,
 }) {
   final user = CurrentUser(
@@ -6228,6 +6270,8 @@ AuthenticatedAppContext _homeTestAppContext({
       includeFreshRoomNotificationOnRefresh:
           includeFreshRoomNotificationOnRefresh,
       pinAlphaRoom: pinAlphaRoom,
+      alphaRoomUnreadCount: alphaRoomUnreadCount,
+      alphaRoomHasPendingJoinRequests: alphaRoomHasPendingJoinRequests,
       beforeRoomDetailResponse: beforeRoomDetailResponse,
     ),
   );
@@ -6250,6 +6294,8 @@ GangApi _roomsApi({
   bool includeUnreadRoomNotification = false,
   bool includeFreshRoomNotificationOnRefresh = false,
   bool pinAlphaRoom = false,
+  int alphaRoomUnreadCount = 3,
+  bool alphaRoomHasPendingJoinRequests = false,
   Future<void> Function(String roomId)? beforeRoomDetailResponse,
 }) {
   var roomNotificationsMarkedRead = false;
@@ -6302,6 +6348,8 @@ GangApi _roomsApi({
             ..._serverListJson(
               currentRoomJoinPolicy: currentRoomJoinPolicy,
               pinAlphaRoom: pinAlphaRoom,
+              alphaRoomUnreadCount: alphaRoomUnreadCount,
+              alphaRoomHasPendingJoinRequests: alphaRoomHasPendingJoinRequests,
             ),
           ],
         });
@@ -7004,6 +7052,8 @@ http.Response _jsonResponse(Object body) {
 List<Map<String, Object?>> _serverListJson({
   String currentRoomJoinPolicy = 'approval_required',
   bool pinAlphaRoom = false,
+  int alphaRoomUnreadCount = 3,
+  bool alphaRoomHasPendingJoinRequests = false,
 }) {
   return [
     _roomCardJson(
@@ -7011,9 +7061,10 @@ List<Map<String, Object?>> _serverListJson({
       name: 'Alpha Room',
       memberCount: 2,
       liveParticipantCount: 1,
-      unreadCount: 3,
+      unreadCount: alphaRoomUnreadCount,
       joinPolicy: currentRoomJoinPolicy,
       isPinned: pinAlphaRoom,
+      hasPendingJoinRequests: alphaRoomHasPendingJoinRequests,
     ),
     _roomCardJson(id: 'server-beta', name: 'Beta Room', memberCount: 5),
   ];
@@ -7193,6 +7244,7 @@ Map<String, Object?> _roomCardJson({
   int liveParticipantCount = 0,
   int unreadCount = 0,
   bool isPinned = false,
+  bool hasPendingJoinRequests = false,
 }) {
   return {
     'id': id,
@@ -7209,6 +7261,7 @@ Map<String, Object?> _roomCardJson({
     'live_avatar_preview': <Object?>[],
     'last_message': null,
     'unread_count': unreadCount,
+    'has_pending_join_requests': hasPendingJoinRequests,
     'is_pinned': isPinned,
     'updated_at': '2026-06-05T00:00:00Z',
   };

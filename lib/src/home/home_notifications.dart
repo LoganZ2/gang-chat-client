@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../app/room_notifications.dart';
@@ -1019,7 +1017,7 @@ class _RoomEventInfoButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return HoverCardAnchor(
       resetKey: message,
-      cardWidth: _roomEventInfoCardWidth(context, message),
+      cardWidth: hoverInfoCardWidth(context, message),
       gap: 8,
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
@@ -1031,25 +1029,6 @@ class _RoomEventInfoButton extends StatelessWidget {
       cardBuilder: (context) => _RoomEventInfoCard(message: message),
     );
   }
-}
-
-double _roomEventInfoCardWidth(BuildContext context, String message) {
-  const horizontalPadding = 24.0;
-  const minWidth = 112.0;
-  const maxWidth = 360.0;
-  final direction = Directionality.maybeOf(context) ?? TextDirection.ltr;
-  final style = UiTypography.body.copyWith(fontSize: 12, height: 1.38);
-  final lines = message.trimRight().split('\n');
-  var longestLineWidth = 0.0;
-  for (final line in lines) {
-    final painter = TextPainter(
-      text: TextSpan(text: line.isEmpty ? ' ' : line, style: style),
-      textDirection: direction,
-      maxLines: 1,
-    )..layout();
-    longestLineWidth = math.max(longestLineWidth, painter.width);
-  }
-  return (longestLineWidth + horizontalPadding).clamp(minWidth, maxWidth);
 }
 
 class _RoomEventInfoCard extends StatelessWidget {

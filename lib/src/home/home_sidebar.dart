@@ -746,6 +746,14 @@ class _ServerAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasLiveParticipants = server.liveParticipantCount > 0;
+    final notificationPolicy = room_display.normalizeRoomNotificationPolicy(
+      server.notificationPolicy,
+    );
+    final mutedBadge = notificationPolicy == 'silent';
+    final showPendingJoinRequestBadge =
+        server.unreadCount <= 0 &&
+        server.hasPendingJoinRequests &&
+        notificationPolicy != 'blocked';
     return SizedBox.square(
       dimension: 44,
       child: Stack(
@@ -767,13 +775,17 @@ class _ServerAvatar extends StatelessWidget {
             Positioned(
               top: 0,
               right: 0,
-              child: _UnreadBadge(
-                count: server.unreadCount,
-                muted:
-                    room_display.normalizeRoomNotificationPolicy(
-                      server.notificationPolicy,
-                    ) ==
-                    'silent',
+              child: _UnreadBadge(count: server.unreadCount, muted: mutedBadge),
+            ),
+          if (showPendingJoinRequestBadge)
+            Positioned(
+              top: 3,
+              right: 3,
+              child: _PendingJoinRequestBadge(
+                key: ValueKey(
+                  'home-sidebar-room-pending-join-requests-${server.id}',
+                ),
+                muted: mutedBadge,
               ),
             ),
           if (hasLiveParticipants)
@@ -796,6 +808,27 @@ class _ServerAvatar extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+class _PendingJoinRequestBadge extends StatelessWidget {
+  const _PendingJoinRequestBadge({super.key, required this.muted});
+
+  final bool muted;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: muted ? const Color(0xFF737985) : const Color(0xFFE14747),
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: muted ? const Color(0xFF282D35) : const Color(0xFF35191D),
+          width: 1.1,
+        ),
+      ),
+      child: const SizedBox.square(dimension: 10),
     );
   }
 }

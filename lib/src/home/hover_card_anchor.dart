@@ -11,6 +11,34 @@ const double hoverCardDefaultGap = 10;
 
 typedef HoverCardBuilder = Widget Function(BuildContext context);
 
+double hoverInfoCardWidth(
+  BuildContext context,
+  String message, {
+  TextStyle? style,
+  double horizontalPadding = 24,
+  double minWidth = 132,
+  double maxWidth = 360,
+}) {
+  const editableTextLayoutSlack = 18.0;
+  final direction = Directionality.maybeOf(context) ?? TextDirection.ltr;
+  final textStyle =
+      style ?? UiTypography.body.copyWith(fontSize: 12, height: 1.38);
+  final lines = message.trimRight().split('\n');
+  var longestLineWidth = 0.0;
+  for (final line in lines) {
+    final painter = TextPainter(
+      text: TextSpan(text: line.isEmpty ? ' ' : line, style: textStyle),
+      textDirection: direction,
+      maxLines: 1,
+    )..layout();
+    longestLineWidth = math.max(longestLineWidth, painter.width);
+  }
+  return (longestLineWidth + horizontalPadding + editableTextLayoutSlack).clamp(
+    minWidth,
+    maxWidth,
+  );
+}
+
 class HoverCardTapRegionScope extends InheritedWidget {
   const HoverCardTapRegionScope({
     super.key,
