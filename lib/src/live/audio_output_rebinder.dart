@@ -44,7 +44,10 @@ class AudioOutputRebinder {
   /// no-op while already started.
   void start() {
     if (_subscription != null || _stopped) return;
-    _subscription = _deviceChanges.listen((_) => _scheduleRebind());
+    _subscription = _deviceChanges.listen(
+      (_) => _scheduleRebind(),
+      onError: (_, _) {},
+    );
   }
 
   /// Stops observing and cancels any pending rebind. After this the rebinder is

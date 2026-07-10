@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:client/src/live/audio_input_rebinder.dart';
 import 'package:client/src/live/audio_output_rebinder.dart';
 import 'package:client/src/live/live_session.dart';
 
@@ -198,6 +199,34 @@ void main() {
     expect(selected, ['speaker_1']);
   });
 
+  test('session starts the input rebinder while connected', () async {
+    final changes = StreamController<void>.broadcast();
+    addTearDown(changes.close);
+    final rebound = <String?>[];
+
+    AudioInputRebinder? built;
+    final session = LiveSession(
+      inputRebinderFactory: (s) {
+        built = AudioInputRebinder(
+          deviceChanges: changes.stream,
+          currentInputDeviceId: () async => 'mic_1',
+          rebindInput: (id) async => rebound.add(id),
+          debounce: const Duration(milliseconds: 10),
+        );
+        return built;
+      },
+      outputRebinderFactory: (_) => null,
+    );
+    addTearDown(session.dispose);
+
+    session.debugStartInputRebinder();
+    changes.add(null);
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+
+    expect(built, isNotNull);
+    expect(rebound, ['mic_1']);
+  });
+
   test('session stops the output rebinder so flips stop rebinding', () async {
     final changes = StreamController<void>.broadcast();
     addTearDown(changes.close);
@@ -222,6 +251,30 @@ void main() {
     expect(selects, 0);
   });
 
+  test('session stops the input rebinder so flips stop rebinding', () async {
+    final changes = StreamController<void>.broadcast();
+    addTearDown(changes.close);
+    var rebounds = 0;
+
+    final session = LiveSession(
+      inputRebinderFactory: (s) => AudioInputRebinder(
+        deviceChanges: changes.stream,
+        currentInputDeviceId: () async => 'mic_1',
+        rebindInput: (_) async => rebounds += 1,
+        debounce: const Duration(milliseconds: 10),
+      ),
+      outputRebinderFactory: (_) => null,
+    );
+    addTearDown(session.dispose);
+
+    session.debugStartInputRebinder();
+    session.debugStopInputRebinder();
+    changes.add(null);
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+
+    expect(rebounds, 0);
+  });
+
   test('a null factory disables output rebinding (non-macOS)', () async {
     final session = LiveSession(outputRebinderFactory: (_) => null);
     addTearDown(session.dispose);
@@ -229,6 +282,17 @@ void main() {
     // Should be a no-op rather than throwing when there's nothing to rebind.
     session.debugStartOutputRebinder();
     session.debugStopOutputRebinder();
+  });
+
+  test('a null factory disables input rebinding (non-desktop)', () async {
+    final session = LiveSession(
+      inputRebinderFactory: (_) => null,
+      outputRebinderFactory: (_) => null,
+    );
+    addTearDown(session.dispose);
+
+    session.debugStartInputRebinder();
+    session.debugStopInputRebinder();
   });
 
   test(

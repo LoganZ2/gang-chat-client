@@ -11,10 +11,11 @@ import '../app/audio_device_store.dart';
 import '../app/audio_levels.dart';
 import '../protocol/models.dart' show musicBoxBotIdentity;
 import 'audio_device_service.dart';
+import 'audio_input_rebinder.dart';
 import 'audio_output_rebinder.dart';
 import 'screen_share_quality.dart';
-import 'system_audio_devices.dart';
 import 'screen_audio_publisher.dart';
+import 'system_audio_devices.dart';
 
 /// Suffix of the hidden screen-audio aux participant identity
 /// (`<ownerId>--screen-audio`). These participants publish screen-share audio
@@ -299,16 +300,27 @@ class LiveVideoTrack {
 /// participant's [lk.Participant.identity] matches `UserSummary.id` from the
 /// protocol layer. The UI uses that as the join key.
 class LiveSession extends ChangeNotifier {
+  /// [inputRebinderFactory] builds the recovery hook that restarts local mic
+  /// capture when the OS removes/recreates audio input endpoints (for example a
+  /// Bluetooth headset dying and reconnecting).
+  ///
   /// [outputRebinderFactory] builds the recovery hook that re-routes WebRTC
   /// audio output after the OS rebuilds audio endpoints (for example a headset
   /// being unplugged/replugged, or a Bluetooth profile flip). It is started
   /// while connected and stopped on disconnect; null disables the recovery
   /// (tests, unsupported platforms).
   LiveSession({
+    AudioInputRebinder? Function(LiveSession session)? inputRebinderFactory,
     AudioOutputRebinder? Function(LiveSession session)? outputRebinderFactory,
     AudioDeviceStore? audioDeviceStore,
     ScreenAudioTokenProvider? screenAudioTokenProvider,
-  }) : _outputRebinderFactory =
+  }) : _inputRebinderFactory =
+           inputRebinderFactory ??
+           ((session) => _defaultInputRebinderFactory(
+             session,
+             audioDeviceStore: audioDeviceStore,
+           )),
+       _outputRebinderFactory =
            outputRebinderFactory ??
            ((session) => _defaultOutputRebinderFactory(
              session,
@@ -316,8 +328,10 @@ class LiveSession extends ChangeNotifier {
            )),
        _screenAudioTokenProvider = screenAudioTokenProvider;
 
+  final AudioInputRebinder? Function(LiveSession session) _inputRebinderFactory;
   final AudioOutputRebinder? Function(LiveSession session)
   _outputRebinderFactory;
+  AudioInputRebinder? _inputRebinder;
   AudioOutputRebinder? _outputRebinder;
   final ScreenAudioTokenProvider? _screenAudioTokenProvider;
   ScreenAudioPublisher? _screenAudioPublisher;
@@ -601,10 +615,12 @@ class LiveSession extends ChangeNotifier {
       await _applyCameraSubscriptions();
       await _applyScreenShareVolume();
       _refreshAllMicStates();
+      _startInputRebinder();
       _startOutputRebinder();
     } catch (e) {
       await _cancelEvents?.call();
       _cancelEvents = null;
+      _stopInputRebinder();
       _stopOutputRebinder();
       try {
         await room.dispose();
@@ -672,20 +688,55 @@ class LiveSession extends ChangeNotifier {
     // HFP transition on macOS). That is acceptable here: it only happens on an
     // explicit device change, not on a mute toggle. Restore the mute state
     // through LiveKit without touching the system input gain.
+    await _restartLocalMicrophoneCapture(
+      local,
+      markUnavailableOnFailure: false,
+    );
+  }
+
+  Future<void> _rebindInputDeviceId(String? deviceId) async {
+    _inputDeviceId = deviceId;
+    _localMicrophonePublishUnavailable = false;
+    final local = _room?.localParticipant;
+    if (local == null) return;
+    final hasTrack =
+        local.getTrackPublicationBySource(lk.TrackSource.microphone) != null;
+    if (!hasTrack) {
+      await _applyLocalMicrophoneState();
+      _refreshAllMicStates();
+      notifyListeners();
+      return;
+    }
+    await _restartLocalMicrophoneCapture(local, markUnavailableOnFailure: true);
+  }
+
+  Future<void> _restartLocalMicrophoneCapture(
+    lk.LocalParticipant local, {
+    required bool markUnavailableOnFailure,
+  }) async {
+    if (!_canPublish) return;
     try {
+      await _applyLocalInputVolume();
       await local.setMicrophoneEnabled(
         false,
         audioCaptureOptions: _audioCaptureOptions(),
       );
+      if (_room?.localParticipant != local) return;
+      await _applyLocalInputVolume();
       await local.setMicrophoneEnabled(
         true,
         audioCaptureOptions: _audioCaptureOptions(),
       );
+      if (_room?.localParticipant != local) return;
+      _localMicrophonePublishUnavailable = false;
       await _applyLocalMicrophoneState();
       _refreshAllMicStates();
       notifyListeners();
     } catch (_) {
-      // Selection is best-effort; keep the existing capture on failure.
+      if (markUnavailableOnFailure) {
+        _markLocalMicrophonePublishUnavailable();
+      }
+      // Capture recovery is best-effort; keep the room connected on failure.
     }
   }
 
@@ -967,6 +1018,7 @@ class LiveSession extends ChangeNotifier {
     final room = _room;
     final cancel = _cancelEvents;
     _cancelEvents = null;
+    _stopInputRebinder();
     _stopOutputRebinder();
     _room = null;
     _roomName = null;
@@ -1007,6 +1059,7 @@ class LiveSession extends ChangeNotifier {
     final room = _room;
     final cancel = _cancelEvents;
     _cancelEvents = null;
+    _stopInputRebinder();
     _stopOutputRebinder();
     _room = null;
     _roomName = null;
@@ -1448,6 +1501,19 @@ class LiveSession extends ChangeNotifier {
     await _applyScreenShareVolume();
   }
 
+  void _startInputRebinder() {
+    _stopInputRebinder();
+    final rebinder = _inputRebinderFactory(this);
+    _inputRebinder = rebinder;
+    rebinder?.start();
+  }
+
+  void _stopInputRebinder() {
+    final rebinder = _inputRebinder;
+    _inputRebinder = null;
+    if (rebinder != null) unawaited(rebinder.stop());
+  }
+
   void _startOutputRebinder() {
     _stopOutputRebinder();
     final rebinder = _outputRebinderFactory(this);
@@ -1465,10 +1531,37 @@ class LiveSession extends ChangeNotifier {
   /// the macOS A2DP/HFP recovery wiring can be exercised in tests. Production
   /// code reaches these through [connect]/[disconnect].
   @visibleForTesting
+  void debugStartInputRebinder() => _startInputRebinder();
+
+  @visibleForTesting
+  void debugStopInputRebinder() => _stopInputRebinder();
+
+  @visibleForTesting
   void debugStartOutputRebinder() => _startOutputRebinder();
 
   @visibleForTesting
   void debugStopOutputRebinder() => _stopOutputRebinder();
+}
+
+// Default desktop recovery for input hotplug/profile flips: resolve the
+// preferred mic against the current device list, then restart the local
+// microphone capture inside the existing room instead of reconnecting.
+AudioInputRebinder? _defaultInputRebinderFactory(
+  LiveSession session, {
+  required AudioDeviceStore? audioDeviceStore,
+}) {
+  if (kIsWeb || !(Platform.isMacOS || Platform.isWindows)) return null;
+  final systemAudio = SystemAudioDevices();
+  const audioDevices = LiveAudioDeviceService();
+  return AudioInputRebinder(
+    deviceChanges: lk.Hardware.instance.onDeviceChange.stream.map((_) {}),
+    currentInputDeviceId: () => preferredLiveInputDeviceId(
+      audioDeviceStore: audioDeviceStore,
+      audioDevices: audioDevices,
+      systemAudio: systemAudio,
+    ),
+    rebindInput: session._rebindInputDeviceId,
+  );
 }
 
 // Default desktop recovery for output hotplug/profile flips: re-select the
