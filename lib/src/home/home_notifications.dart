@@ -819,7 +819,7 @@ class _NotificationContextMenuRegionState
       widget.onSelectionDeleted?.call();
       showFloatingSuccessNotice(
         context,
-        items.length == 1 ? '已删除' : '已删除${items.length}条通知',
+        items.length == 1 ? '已删除' : '已删除 ${items.length} 条通知',
       );
     } catch (error) {
       if (!mounted) return;

@@ -1150,6 +1150,7 @@ void main() {
       expect(deletedBatches, [
         ['invite:invite_batch_second', 'invite:invite_batch_first'],
       ]);
+      expect(find.text('已删除 2 条通知'), findsOneWidget);
     },
   );
 }
