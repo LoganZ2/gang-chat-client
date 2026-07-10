@@ -114,6 +114,81 @@ void main() {
     );
   });
 
+  test('notification search does not match displayed timestamps', () {
+    final createdAt = DateTime(2026, 6, 5, 12);
+    final visible = roomNotificationsForView(
+      invites: [_invite('dated_invite', createdAt: createdAt)],
+      applications: [_application('dated_application', createdAt: createdAt)],
+      roomEvents: [_roomEvent('dated_room_event', createdAt: createdAt)],
+      query: '2026/06/05 12:00',
+      filter: RoomNotificationFilter.all,
+    );
+
+    expect(visible, isEmpty);
+  });
+
+  test('notification date range composes with text and type filters', () {
+    final application = _application(
+      'application_in_range',
+      status: 'approved',
+      roomName: 'Date Room',
+      createdAt: DateTime(2026, 6, 5, 23, 59),
+      reviewedAt: DateTime(2026, 6, 7, 8),
+      updatedAt: DateTime(2026, 6, 7, 8),
+      reviewer: _user('date_reviewer'),
+    );
+    final range = RoomNotificationDateRange(
+      startDate: DateTime(2026, 6, 5),
+      endDate: DateTime(2026, 6, 6),
+    );
+
+    final visible = roomNotificationsForView(
+      invites: [
+        _invite('invite_before_range', createdAt: DateTime(2026, 6, 4, 23, 59)),
+      ],
+      applications: [application],
+      roomEvents: [
+        _roomEvent(
+          'room_event_on_end_date',
+          roomName: 'Date Room',
+          createdAt: DateTime(2026, 6, 6, 23, 59),
+        ),
+      ],
+      query: 'Date Room',
+      filter: RoomNotificationFilter.all,
+      dateRange: range,
+    );
+    final applicationsOnly = roomNotificationsForView(
+      invites: const [],
+      applications: [application],
+      roomEvents: const [],
+      query: 'Date Room',
+      filter: RoomNotificationFilter.applications,
+      dateRange: range,
+    );
+
+    expect(visible.map((item) => item.id), [
+      'room-event:room_event_on_end_date',
+      'application-requested:application_in_range',
+    ]);
+    expect(applicationsOnly.map((item) => item.id), [
+      'application-requested:application_in_range',
+    ]);
+  });
+
+  test('default notification date range uses account date through today', () {
+    final range = RoomNotificationDateRange.defaultFor(
+      accountCreatedAt: DateTime(2025, 12, 3, 18, 30),
+      today: DateTime(2026, 7, 10, 23, 59),
+    );
+
+    expect(range.startDate, DateTime(2025, 12, 3));
+    expect(range.endDate, DateTime(2026, 7, 10));
+    expect(range.includes(DateTime(2025, 12, 3)), isTrue);
+    expect(range.includes(DateTime(2026, 7, 10, 23, 59)), isTrue);
+    expect(range.includes(DateTime(2025, 12, 2, 23, 59)), isFalse);
+  });
+
   test('room invite notification display helpers format labels', () {
     final pending = _invite('pending', status: 'pending');
     final invalid = _invite(

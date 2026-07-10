@@ -413,6 +413,264 @@ void main() {
     expect(find.text('@creator'), findsOneWidget);
   });
 
+  testWidgets('notification date filter sits to the right of search', (
+    tester,
+  ) async {
+    final invite = RoomInvite(
+      id: 'invite_date_filter',
+      status: 'accepted',
+      room: _joinedRoom,
+      inviter: _creator,
+      createdAt: DateTime(2026, 6, 1),
+    );
+
+    await tester.pumpWidget(
+      _host(
+        HomeNotificationsPane(
+          invites: [invite],
+          applications: const [],
+          roomNotifications: const [],
+          loading: false,
+          error: null,
+          busyInviteId: null,
+          busyApplicationId: null,
+          currentUser: _currentUser,
+          onClose: () {},
+          onRefresh: () {},
+          onReviewInvite: (_, _) async {},
+          onWithdrawApplication: (_) async {},
+          onOpenRoom: (_) {},
+          onOpenRoomEvent: (_) {},
+        ),
+      ),
+    );
+    await tester.enterText(find.byType(TextField).first, 'Launch');
+    await tester.pump();
+
+    final searchRect = tester.getRect(find.byType(Input).first);
+    final dateRect = tester.getRect(find.byTooltip('筛选通知日期'));
+    expect(searchRect.right, lessThan(dateRect.left));
+    expect(
+      tester
+          .widget<HighlightedText>(
+            find.byKey(const ValueKey('notification-time-invite_date_filter')),
+          )
+          .query,
+      isEmpty,
+    );
+
+    await tester.tap(find.byTooltip('筛选通知日期'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('筛选通知日期'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('notification-start-date-field')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('notification-end-date-field')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('notification-date-reset-button')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('当前区间：'), findsNothing);
+
+    final rangeDialogRect = tester.getRect(find.byType(DialogFrame));
+    final resetRect = tester.getRect(
+      find.byKey(const ValueKey('notification-date-reset-button')),
+    );
+    final applyRect = tester.getRect(
+      find.byKey(const ValueKey('notification-date-confirm-button')),
+    );
+    expect(resetRect.center.dx, lessThan(rangeDialogRect.center.dx));
+    expect(applyRect.center.dx, greaterThan(rangeDialogRect.center.dx));
+
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('notification-start-date-field')),
+        matching: find.byType(PressableSurface),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('选择开始日期'), findsOneWidget);
+    expect(find.text('1970 年 1 月'), findsOneWidget);
+    expect(find.text('一'), findsOneWidget);
+    expect(find.text('日'), findsOneWidget);
+    expect(find.text('SELECT DATE'), findsNothing);
+    expect(find.text('Cancel'), findsNothing);
+    expect(find.text('OK'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('notification-calendar-inline-date-input')),
+      findsNothing,
+    );
+    expect(find.byTooltip('切换到手动输入'), findsOneWidget);
+    expect(find.byTooltip('展开年份选择'), findsOneWidget);
+    for (var week = 0; week < 5; week++) {
+      expect(
+        find.byKey(ValueKey('notification-calendar-week-$week')),
+        findsOneWidget,
+      );
+    }
+    expect(
+      find.byKey(const ValueKey('notification-calendar-week-5')),
+      findsNothing,
+    );
+
+    final daySize = tester.getSize(
+      find.byKey(const ValueKey('notification-date-day-1970-1-2')),
+    );
+    expect(daySize.width, daySize.height);
+
+    await tester.tap(
+      find.byKey(const ValueKey('notification-calendar-year-picker-toggle')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('notification-calendar-year-picker')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('notification-calendar-year-1970')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('notification-calendar-input-mode-toggle')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('notification-calendar-inline-date-input')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('notification-calendar-year-picker')),
+      findsNothing,
+    );
+    expect(
+      tester
+          .widget<ButtonIcon>(
+            find.byKey(
+              const ValueKey('notification-calendar-input-mode-toggle'),
+            ),
+          )
+          .selected,
+      isTrue,
+    );
+
+    final inlineDateInput = find.descendant(
+      of: find.byKey(const ValueKey('notification-calendar-inline-date-input')),
+      matching: find.byType(TextField),
+    );
+    final dateField = tester.widget<TextField>(inlineDateInput);
+    expect(dateField.focusNode!.hasFocus, isTrue);
+    expect(dateField.keyboardType, TextInputType.datetime);
+    expect(dateField.textAlign, TextAlign.center);
+
+    await tester.enterText(inlineDateInput, '1971-01-01');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('notification-calendar-inline-date-input')),
+      findsNothing,
+    );
+    expect(find.text('1971 年 1 月'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('notification-calendar-input-mode-toggle')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('notification-calendar-inline-date-input')),
+      findsOneWidget,
+    );
+
+    final invalidInlineDateInput = find.descendant(
+      of: find.byKey(const ValueKey('notification-calendar-inline-date-input')),
+      matching: find.byType(TextField),
+    );
+
+    await tester.enterText(invalidInlineDateInput, '1971-02-30');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(find.text('请输入如 2026-07-10 的有效日期'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('notification-calendar-inline-date-input')),
+      findsOneWidget,
+    );
+
+    await tester.enterText(invalidInlineDateInput, '1971-02-02');
+    await tester.tap(
+      find.byKey(const ValueKey('notification-calendar-weekday-header')),
+    );
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('notification-calendar-inline-date-input')),
+      findsNothing,
+    );
+    expect(find.text('1971 年 2 月'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('notification-date-day-1971-2-2')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('notification-calendar-input-mode-toggle')),
+    );
+    await tester.pumpAndSettle();
+    final secondInlineDateInput = find.descendant(
+      of: find.byKey(const ValueKey('notification-calendar-inline-date-input')),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(secondInlineDateInput, '1971-03-03');
+    await tester.tap(
+      find.byKey(const ValueKey('notification-calendar-input-mode-toggle')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('1971 年 3 月'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('notification-calendar-confirm-button')),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('notification-date-confirm-button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<ButtonIcon>(
+            find.byKey(const ValueKey('home-notifications-date-filter-button')),
+          )
+          .selected,
+      isTrue,
+    );
+
+    await tester.tap(find.byTooltip('筛选通知日期'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('notification-date-reset-button')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('notification-start-date-field')),
+      findsNothing,
+    );
+    expect(
+      tester
+          .widget<ButtonIcon>(
+            find.byKey(const ValueKey('home-notifications-date-filter-button')),
+          )
+          .selected,
+      isFalse,
+    );
+  });
+
   testWidgets('room event notification avatars open profile cards', (
     tester,
   ) async {

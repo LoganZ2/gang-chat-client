@@ -3,6 +3,66 @@ import 'room_display.dart' as room_display;
 
 enum RoomNotificationFilter { all, invites, applications, roomNotifications }
 
+class RoomNotificationDateRange {
+  factory RoomNotificationDateRange({
+    required DateTime startDate,
+    required DateTime endDate,
+  }) {
+    final normalizedStart = _localDateOnly(startDate);
+    final normalizedEnd = _localDateOnly(endDate);
+    if (normalizedEnd.isBefore(normalizedStart)) {
+      throw ArgumentError.value(
+        endDate,
+        'endDate',
+        'must not be before startDate',
+      );
+    }
+    return RoomNotificationDateRange._(
+      startDate: normalizedStart,
+      endDate: normalizedEnd,
+    );
+  }
+
+  factory RoomNotificationDateRange.defaultFor({
+    required DateTime? accountCreatedAt,
+    required DateTime today,
+  }) {
+    final normalizedToday = _localDateOnly(today);
+    final accountDate = accountCreatedAt == null
+        ? DateTime(1970)
+        : _localDateOnly(accountCreatedAt);
+    return RoomNotificationDateRange(
+      startDate: accountDate.isAfter(normalizedToday)
+          ? normalizedToday
+          : accountDate,
+      endDate: normalizedToday,
+    );
+  }
+
+  const RoomNotificationDateRange._({
+    required this.startDate,
+    required this.endDate,
+  });
+
+  final DateTime startDate;
+  final DateTime endDate;
+
+  bool includes(DateTime value) {
+    final date = _localDateOnly(value);
+    return !date.isBefore(startDate) && !date.isAfter(endDate);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is RoomNotificationDateRange &&
+        other.startDate == startDate &&
+        other.endDate == endDate;
+  }
+
+  @override
+  int get hashCode => Object.hash(startDate, endDate);
+}
+
 enum RoomNotificationItemType {
   invite,
   applicationRequested,
@@ -278,6 +338,13 @@ String roomInviteTimestampLabel(DateTime value) {
       '${local.minute.toString().padLeft(2, '0')}';
 }
 
+String roomNotificationDateLabel(DateTime value) {
+  final local = value.toLocal();
+  return '${local.year.toString().padLeft(4, '0')}/'
+      '${local.month.toString().padLeft(2, '0')}/'
+      '${local.day.toString().padLeft(2, '0')}';
+}
+
 String roomNotificationRoomLabel(PublicRoom room, {required bool roomExists}) {
   return roomExists ? room.name : missingRoomNotificationRoomLabel;
 }
@@ -349,6 +416,7 @@ List<RoomNotificationItem> roomNotificationsForView({
   Iterable<RoomEventNotification> roomEvents = const [],
   required String query,
   required RoomNotificationFilter filter,
+  RoomNotificationDateRange? dateRange,
 }) {
   final normalizedQuery = query.trim().toLowerCase();
   final items = <RoomNotificationItem>[];
@@ -356,8 +424,10 @@ List<RoomNotificationItem> roomNotificationsForView({
   if (filter == RoomNotificationFilter.all ||
       filter == RoomNotificationFilter.invites) {
     for (final invite in invites) {
-      if (_matchesRoomInvite(invite, normalizedQuery)) {
-        items.add(RoomNotificationItem.invite(invite));
+      final item = RoomNotificationItem.invite(invite);
+      if (_matchesRoomInvite(invite, normalizedQuery) &&
+          _isInRoomNotificationDateRange(item, dateRange)) {
+        items.add(item);
       }
     }
   }
@@ -368,11 +438,17 @@ List<RoomNotificationItem> roomNotificationsForView({
       if (!_matchesRoomApplication(application, normalizedQuery)) {
         continue;
       }
-      items.add(RoomNotificationItem.applicationRequested(application));
+      final requested = RoomNotificationItem.applicationRequested(application);
+      if (_isInRoomNotificationDateRange(requested, dateRange)) {
+        items.add(requested);
+      }
       if (isReviewedRoomApplication(application) &&
           application.reviewedAt != null &&
           application.reviewer != null) {
-        items.add(RoomNotificationItem.applicationReviewed(application));
+        final reviewed = RoomNotificationItem.applicationReviewed(application);
+        if (_isInRoomNotificationDateRange(reviewed, dateRange)) {
+          items.add(reviewed);
+        }
       }
     }
   }
@@ -380,8 +456,10 @@ List<RoomNotificationItem> roomNotificationsForView({
   if (filter == RoomNotificationFilter.all ||
       filter == RoomNotificationFilter.roomNotifications) {
     for (final notification in roomEvents) {
-      if (_matchesRoomEventNotification(notification, normalizedQuery)) {
-        items.add(RoomNotificationItem.roomEvent(notification));
+      final item = RoomNotificationItem.roomEvent(notification);
+      if (_matchesRoomEventNotification(notification, normalizedQuery) &&
+          _isInRoomNotificationDateRange(item, dateRange)) {
+        items.add(item);
       }
     }
   }
@@ -394,6 +472,7 @@ List<RoomInvite> roomInviteNotificationsForView({
   required Iterable<RoomInvite> invites,
   required String query,
   required RoomNotificationFilter filter,
+  RoomNotificationDateRange? dateRange,
 }) {
   if (filter != RoomNotificationFilter.all &&
       filter != RoomNotificationFilter.invites) {
@@ -403,7 +482,9 @@ List<RoomInvite> roomInviteNotificationsForView({
   final normalizedQuery = query.trim().toLowerCase();
   final filtered = [
     for (final invite in invites)
-      if (_matchesRoomInvite(invite, normalizedQuery)) invite,
+      if (_matchesRoomInvite(invite, normalizedQuery) &&
+          (dateRange?.includes(invite.createdAt) ?? true))
+        invite,
   ];
   filtered.sort(compareRoomInviteNotifications);
   return filtered;
@@ -451,6 +532,13 @@ bool _matchesRoomEventNotification(
   ).contains(normalizedQuery);
 }
 
+bool _isInRoomNotificationDateRange(
+  RoomNotificationItem item,
+  RoomNotificationDateRange? dateRange,
+) {
+  return dateRange?.includes(item.time) ?? true;
+}
+
 int _itemPendingRank(RoomNotificationItem item) {
   return item.pending ? 0 : 1;
 }
@@ -484,10 +572,6 @@ String _roomInviteSearchText(RoomInvite invite) {
         ? null
         : '$missingRoomNotificationRoomLabel 不存在 房间已不存在 room missing',
   );
-  _addSearchValue(values, roomInviteTimestampLabel(invite.createdAt));
-  if (invite.updatedAt != null) {
-    _addSearchValue(values, roomInviteTimestampLabel(invite.updatedAt!));
-  }
   _addSearchValue(values, roomInviteDecisionLabel(invite));
   return values.join('\n');
 }
@@ -505,11 +589,6 @@ String _roomApplicationSearchText(RoomApplication application) {
   _addSearchValue(values, application.reason);
   _addSearchValue(values, roomApplicationStatusLabel(application));
   _addSearchValue(values, roomApplicationReviewActionLabel(application));
-  _addSearchValue(values, roomInviteTimestampLabel(application.createdAt));
-  _addSearchValue(values, roomInviteTimestampLabel(application.updatedAt));
-  if (application.reviewedAt != null) {
-    _addSearchValue(values, roomInviteTimestampLabel(application.reviewedAt!));
-  }
   final reviewer = application.reviewer;
   if (reviewer != null) {
     _addUserSearchValues(values, reviewer);
@@ -531,7 +610,6 @@ String _roomEventNotificationSearchText(RoomEventNotification notification) {
   _addSearchValue(values, notification.type);
   _addSearchValue(values, roomNotificationRoleLabel(notification.fromRole));
   _addSearchValue(values, roomNotificationRoleLabel(notification.toRole));
-  _addSearchValue(values, roomInviteTimestampLabel(notification.createdAt));
   _addSearchValue(
     values,
     notification.roomExists
@@ -617,4 +695,9 @@ void _addUserSearchValues(List<String> values, UserSummary user) {
 void _addSearchValue(List<String> values, Object? value) {
   final text = value?.toString().trim();
   if (text != null && text.isNotEmpty) values.add(text.toLowerCase());
+}
+
+DateTime _localDateOnly(DateTime value) {
+  final local = value.toLocal();
+  return DateTime(local.year, local.month, local.day);
 }

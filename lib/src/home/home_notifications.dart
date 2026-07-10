@@ -7,6 +7,8 @@ import '../ui/ui.dart';
 import 'hover_card_anchor.dart';
 import 'room_profile_card.dart';
 
+part 'home_notification_calendar.dart';
+
 typedef RoomInviteReviewCallback =
     Future<void> Function(RoomInvite invite, bool accept);
 typedef RoomApplicationWithdrawCallback =
@@ -60,13 +62,30 @@ class HomeNotificationsPane extends StatefulWidget {
 class _HomeNotificationsPaneState extends State<HomeNotificationsPane> {
   final TextEditingController _searchController = TextEditingController();
   RoomNotificationFilter _filter = RoomNotificationFilter.all;
+  late RoomNotificationDateRange _defaultDateRange;
+  late RoomNotificationDateRange _dateRange;
   String _query = '';
   String _lastSearchText = '';
 
   @override
   void initState() {
     super.initState();
+    _defaultDateRange = _defaultDateRangeFor(widget.currentUser);
+    _dateRange = _defaultDateRange;
     _searchController.addListener(_handleSearchChanged);
+  }
+
+  @override
+  void didUpdateWidget(HomeNotificationsPane oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentUser.createdAt == widget.currentUser.createdAt) return;
+    final wasUsingDefault = _dateRange == _defaultDateRange;
+    _defaultDateRange = _defaultDateRangeFor(widget.currentUser);
+    if (wasUsingDefault ||
+        _dateRange.startDate.isBefore(_defaultDateRange.startDate) ||
+        _dateRange.endDate.isAfter(_defaultDateRange.endDate)) {
+      _dateRange = _defaultDateRange;
+    }
   }
 
   @override
@@ -83,15 +102,45 @@ class _HomeNotificationsPaneState extends State<HomeNotificationsPane> {
     setState(() => _query = text);
   }
 
+  RoomNotificationDateRange _defaultDateRangeFor(CurrentUser user) {
+    return RoomNotificationDateRange.defaultFor(
+      accountCreatedAt: user.createdAt,
+      today: DateTime.now(),
+    );
+  }
+
+  void _refreshDefaultDateRangeForToday() {
+    final nextDefault = _defaultDateRangeFor(widget.currentUser);
+    if (nextDefault == _defaultDateRange) return;
+    final wasUsingDefault = _dateRange == _defaultDateRange;
+    _defaultDateRange = nextDefault;
+    if (wasUsingDefault) _dateRange = nextDefault;
+  }
+
+  Future<void> _showDateRangeFilter() async {
+    final result = await showDialog<RoomNotificationDateRange>(
+      context: context,
+      builder: (context) => _NotificationDateRangeDialog(
+        initialRange: _dateRange,
+        defaultRange: _defaultDateRange,
+      ),
+    );
+    if (!mounted || result == null || result == _dateRange) return;
+    setState(() => _dateRange = result);
+  }
+
   @override
   Widget build(BuildContext context) {
+    _refreshDefaultDateRangeForToday();
     final visibleItems = roomNotificationsForView(
       invites: widget.invites,
       applications: widget.applications,
       roomEvents: widget.roomNotifications,
       query: _query,
       filter: _filter,
+      dateRange: _dateRange,
     );
+    final hasActiveDateFilter = _dateRange != _defaultDateRange;
     final rawNotificationCount =
         widget.invites.length +
         widget.applications.length +
@@ -110,11 +159,27 @@ class _HomeNotificationsPaneState extends State<HomeNotificationsPane> {
       ),
       pinned: Column(
         children: [
-          Input(
-            controller: _searchController,
-            hintText: '搜索通知',
-            prefixIcon: Icons.search,
-            showClearButton: true,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Input(
+                  controller: _searchController,
+                  hintText: '搜索通知',
+                  prefixIcon: Icons.search,
+                  showClearButton: true,
+                ),
+              ),
+              const SizedBox(width: 10),
+              ButtonIcon(
+                key: const ValueKey('home-notifications-date-filter-button'),
+                tooltip: '筛选通知日期',
+                icon: const Icon(Icons.calendar_month_outlined),
+                selected: hasActiveDateFilter,
+                onPressed: _showDateRangeFilter,
+                size: Input.defaultHeight,
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           SegmentedControl<RoomNotificationFilter>(
@@ -153,6 +218,7 @@ class _HomeNotificationsPaneState extends State<HomeNotificationsPane> {
         rawNotificationCount: rawNotificationCount,
         query: _query,
         filter: _filter,
+        hasActiveDateFilter: hasActiveDateFilter,
         busyInviteId: widget.busyInviteId,
         busyApplicationId: widget.busyApplicationId,
         onRefresh: widget.onRefresh,
@@ -168,6 +234,162 @@ class _HomeNotificationsPaneState extends State<HomeNotificationsPane> {
   }
 }
 
+class _NotificationDateRangeDialog extends StatefulWidget {
+  const _NotificationDateRangeDialog({
+    required this.initialRange,
+    required this.defaultRange,
+  });
+
+  final RoomNotificationDateRange initialRange;
+  final RoomNotificationDateRange defaultRange;
+
+  @override
+  State<_NotificationDateRangeDialog> createState() =>
+      _NotificationDateRangeDialogState();
+}
+
+class _NotificationDateRangeDialogState
+    extends State<_NotificationDateRangeDialog> {
+  late DateTime _startDate;
+  late DateTime _endDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _startDate = widget.initialRange.startDate;
+    _endDate = widget.initialRange.endDate;
+  }
+
+  Future<void> _pickDate({required bool start}) async {
+    final selected = start ? _startDate : _endDate;
+    final picked = await showDialog<DateTime>(
+      context: context,
+      builder: (context) => _NotificationCalendarDialog(
+        title: start ? '选择开始日期' : '选择结束日期',
+        initialDate: selected,
+        firstDate: widget.defaultRange.startDate,
+        lastDate: widget.defaultRange.endDate,
+      ),
+    );
+    if (!mounted || picked == null) return;
+    setState(() {
+      if (start) {
+        _startDate = picked;
+        if (_endDate.isBefore(picked)) _endDate = picked;
+      } else {
+        _endDate = picked;
+        if (_startDate.isAfter(picked)) _startDate = picked;
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DialogFrame(
+      title: '筛选通知日期',
+      icon: Icons.calendar_month_outlined,
+      maxWidth: 420,
+      actions: [
+        Button(
+          key: const ValueKey('notification-date-reset-button'),
+          onPressed: () => Navigator.of(context).pop(widget.defaultRange),
+          icon: const Icon(Icons.restart_alt),
+          child: const Text('重置'),
+        ),
+        const Spacer(),
+        Button(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        Button(
+          key: const ValueKey('notification-date-confirm-button'),
+          onPressed: () => Navigator.of(context).pop(
+            RoomNotificationDateRange(startDate: _startDate, endDate: _endDate),
+          ),
+          tone: ButtonTone.primary,
+          icon: const Icon(Icons.check),
+          child: const Text('应用'),
+        ),
+      ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '选择包含首尾日期的通知时间区间。',
+            style: UiTypography.label.copyWith(color: UiColors.textMuted),
+          ),
+          const SizedBox(height: 16),
+          _NotificationDateField(
+            key: const ValueKey('notification-start-date-field'),
+            label: '开始日期',
+            date: _startDate,
+            onPressed: () => _pickDate(start: true),
+          ),
+          const SizedBox(height: 14),
+          _NotificationDateField(
+            key: const ValueKey('notification-end-date-field'),
+            label: '结束日期',
+            date: _endDate,
+            onPressed: () => _pickDate(start: false),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NotificationDateField extends StatelessWidget {
+  const _NotificationDateField({
+    super.key,
+    required this.label,
+    required this.date,
+    required this.onPressed,
+  });
+
+  final String label;
+  final DateTime date;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(label, style: UiTypography.label),
+        const SizedBox(height: 8),
+        PressableSurface(
+          height: 40,
+          onPressed: onPressed,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          backgroundColor: UiColors.background,
+          child: Row(
+            children: [
+              const Icon(
+                Icons.calendar_today_outlined,
+                size: 16,
+                color: UiColors.textMuted,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  roomNotificationDateLabel(date),
+                  style: UiTypography.body,
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right,
+                size: 18,
+                color: UiColors.textMuted,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _NotificationsBody extends StatelessWidget {
   const _NotificationsBody({
     required this.items,
@@ -176,6 +398,7 @@ class _NotificationsBody extends StatelessWidget {
     required this.rawNotificationCount,
     required this.query,
     required this.filter,
+    required this.hasActiveDateFilter,
     required this.busyInviteId,
     required this.busyApplicationId,
     required this.onRefresh,
@@ -195,6 +418,7 @@ class _NotificationsBody extends StatelessWidget {
   final int rawNotificationCount;
   final String query;
   final RoomNotificationFilter filter;
+  final bool hasActiveDateFilter;
   final String? busyInviteId;
   final String? busyApplicationId;
   final VoidCallback onRefresh;
@@ -252,7 +476,11 @@ class _NotificationsBody extends StatelessWidget {
       return withErrorNotice(
         _NotificationEmptyState(
           icon: _emptyIcon(filter),
-          title: _emptyTitle(filter: filter, query: query),
+          title: _emptyTitle(
+            filter: filter,
+            query: query,
+            hasActiveDateFilter: hasActiveDateFilter,
+          ),
         ),
       );
     }
@@ -400,7 +628,7 @@ class _RoomInviteNotificationRow extends StatelessWidget {
                 width: 116,
                 child: HighlightedText(
                   text: time,
-                  query: query,
+                  query: '',
                   key: ValueKey('notification-time-${invite.id}'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -541,7 +769,7 @@ class _RoomApplicationRequestNotificationRow extends StatelessWidget {
                 width: 116,
                 child: HighlightedText(
                   text: time,
-                  query: query,
+                  query: '',
                   key: ValueKey(
                     'notification-application-time-${application.id}',
                   ),
@@ -683,7 +911,7 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
               width: 116,
               child: HighlightedText(
                 text: time,
-                query: query,
+                query: '',
                 key: ValueKey(
                   'notification-application-review-time-${application.id}',
                 ),
@@ -806,7 +1034,7 @@ class _RoomEventNotificationRow extends StatelessWidget {
                 width: 116,
                 child: HighlightedText(
                   text: time,
-                  query: query,
+                  query: '',
                   key: ValueKey(
                     'notification-room-event-time-${notification.id}',
                   ),
@@ -1555,8 +1783,9 @@ IconData _emptyIcon(RoomNotificationFilter filter) {
 String _emptyTitle({
   required RoomNotificationFilter filter,
   required String query,
+  required bool hasActiveDateFilter,
 }) {
-  if (query.trim().isNotEmpty) return '没有匹配通知';
+  if (query.trim().isNotEmpty || hasActiveDateFilter) return '没有匹配通知';
   return switch (filter) {
     RoomNotificationFilter.all => '暂无通知',
     RoomNotificationFilter.invites => '暂无邀请',

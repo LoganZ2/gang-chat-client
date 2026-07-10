@@ -38,6 +38,9 @@ class Input extends StatefulWidget {
     this.inputFormatters,
     this.style = UiTypography.body,
     this.hintStyle = const TextStyle(color: UiColors.textMuted),
+    this.textAlign = TextAlign.start,
+    this.onTapOutside,
+    this.tapRegionGroupId,
     this.height = defaultHeight,
     this.undoController,
     this.canPasteNonText,
@@ -64,6 +67,9 @@ class Input extends StatefulWidget {
   final List<TextInputFormatter>? inputFormatters;
   final TextStyle style;
   final TextStyle hintStyle;
+  final TextAlign textAlign;
+  final TapRegionCallback? onTapOutside;
+  final Object? tapRegionGroupId;
   final UndoHistoryController? undoController;
   final Future<bool> Function()? canPasteNonText;
 
@@ -227,13 +233,17 @@ class _InputState extends State<Input> {
               ? SystemMouseCursors.text
               : SystemMouseCursors.basic,
           style: widget.style,
+          textAlign: widget.textAlign,
           textAlignVertical: TextAlignVertical.center,
+          onTapOutside: widget.onTapOutside,
+          groupId: widget.tapRegionGroupId ?? EditableText,
           contextMenuBuilder: (context, editableTextState) =>
               buildTextFieldContextMenu(
                 context,
                 editableTextState,
                 undoController: _effectiveUndoController,
                 canPasteNonText: widget.canPasteNonText,
+                tapRegionGroupId: widget.tapRegionGroupId,
               ),
           decoration: InputDecoration(
             isDense: true,

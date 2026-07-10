@@ -80,6 +80,29 @@ void main() {
     expect(submissions, ['alice']);
   });
 
+  testWidgets('input forwards explicit text alignment', (tester) async {
+    final controller = TextEditingController(text: '2026-07-10');
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 240,
+              child: Input(controller: controller, textAlign: TextAlign.center),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).textAlign,
+      TextAlign.center,
+    );
+  });
+
   testWidgets('input stays lifted while focused without hover', (tester) async {
     final controller = TextEditingController(text: 'hello');
     addTearDown(controller.dispose);
