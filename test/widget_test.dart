@@ -1259,7 +1259,10 @@ void main() {
       expect(find.text('Creator profile'), findsOneWidget);
 
       final sharedRoomAvatar = find.byWidgetPredicate(
-        (widget) => widget is ui.Avatar && widget.label == 'Shared Alpha',
+        (widget) =>
+            widget is ui.Avatar &&
+            widget.label == 'Alpha Room' &&
+            widget.size == 20,
       );
       expect(sharedRoomAvatar, findsOneWidget);
 

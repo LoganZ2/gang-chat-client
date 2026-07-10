@@ -15,7 +15,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
       ::CreateMutexW(nullptr, TRUE, L"gang_chat_single_instance_mutex");
   if (single_instance_mutex != nullptr &&
       ::GetLastError() == ERROR_ALREADY_EXISTS) {
-    HWND existing = ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", L"client");
+    HWND existing =
+        ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", L"Gang Chat");
     if (existing == nullptr) {
       existing = ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", nullptr);
     }
@@ -48,7 +49,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
-  if (!window.Create(L"client", origin, size)) {
+  if (!window.Create(L"Gang Chat", origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);
