@@ -81,4 +81,68 @@ void main() {
     expect(container.foregroundDecoration, isNull);
     expect(label.style?.color, UiColors.text);
   });
+
+  testWidgets('avatar picker opens preview only for uploaded images', (
+    tester,
+  ) async {
+    var previews = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 460,
+              child: AvatarPicker(
+                label: 'Avatar',
+                displayName: 'Kai',
+                imageUrl: 'uploaded-avatar',
+                defaultAvatarKey: 'blue-3',
+                usingPreset: false,
+                uploading: false,
+                enabled: true,
+                onUpload: () {},
+                onPresetSelected: (_) {},
+                onImagePreview: () => previews += 1,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('avatar-picker-preview')));
+    await tester.pump();
+
+    expect(previews, 1);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 460,
+              child: AvatarPicker(
+                label: 'Avatar',
+                displayName: 'Kai',
+                imageUrl: 'uploaded-avatar',
+                defaultAvatarKey: 'blue-3',
+                usingPreset: true,
+                uploading: false,
+                enabled: true,
+                onUpload: () {},
+                onPresetSelected: (_) {},
+                onImagePreview: () => previews += 1,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('avatar-picker-preview')));
+    await tester.pump();
+
+    expect(previews, 1);
+  });
 }

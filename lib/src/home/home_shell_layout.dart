@@ -5,12 +5,14 @@ extension _HomeShellLayout on _HomeShellState {
     BuildContext context, {
     required String imageUrl,
     required String suggestedName,
+    bool forceSquare = false,
   }) {
     return showChatImagePreview(
       context,
       imageUrl: imageUrl,
       suggestedName: suggestedName,
       actions: _imagePreviewActions,
+      forceSquare: forceSquare,
     );
   }
 
@@ -67,6 +69,7 @@ extension _HomeShellLayout on _HomeShellState {
         embedded: true,
         onClose: _closeCreateRoom,
         onResult: _handleCreateRoomResult,
+        stickerImagePreviewOpener: _openStickerManagerImagePreview,
       );
     }
 

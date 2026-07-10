@@ -30,6 +30,7 @@ typedef StickerImagePreviewOpener =
       BuildContext context, {
       required String imageUrl,
       required String suggestedName,
+      bool forceSquare,
     });
 
 const _stickerFileTypeGroups = [

@@ -46,6 +46,7 @@ class AvatarPicker extends StatelessWidget {
     required this.enabled,
     required this.onUpload,
     required this.onPresetSelected,
+    this.onImagePreview,
     this.presetKeys = kAvatarPresetKeys,
     this.uploadLabel = '上传图片',
   });
@@ -73,6 +74,7 @@ class AvatarPicker extends StatelessWidget {
 
   final VoidCallback onUpload;
   final ValueChanged<String> onPresetSelected;
+  final VoidCallback? onImagePreview;
   final List<String> presetKeys;
   final String uploadLabel;
 
@@ -97,6 +99,7 @@ class AvatarPicker extends StatelessWidget {
               imageUrl: usingPreset ? null : imageUrl,
               defaultAvatarKey: normalizedDefaultAvatarKey,
               size: 88,
+              onPreview: onImagePreview,
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -138,12 +141,14 @@ class _AvatarPickerPreview extends StatelessWidget {
     required this.imageUrl,
     required this.defaultAvatarKey,
     required this.size,
+    required this.onPreview,
   });
 
   final String label;
   final String? imageUrl;
   final String defaultAvatarKey;
   final double size;
+  final VoidCallback? onPreview;
 
   @override
   Widget build(BuildContext context) {
@@ -161,7 +166,8 @@ class _AvatarPickerPreview extends StatelessWidget {
       ),
     );
     final url = imageUrl;
-    return SizedBox.square(
+    final preview = SizedBox.square(
+      key: const ValueKey('avatar-picker-preview'),
       dimension: size,
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -177,6 +183,16 @@ class _AvatarPickerPreview extends StatelessWidget {
                   errorBuilder: (context, error, stackTrace) => fallback,
                 ),
         ),
+      ),
+    );
+    if (url == null || onPreview == null) return preview;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onPreview,
+        child: preview,
       ),
     );
   }

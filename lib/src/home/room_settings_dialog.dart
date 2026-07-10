@@ -30,6 +30,7 @@ class RoomSettingsDialog extends StatefulWidget {
     bool embedded = false,
     VoidCallback? onClose,
     ValueChanged<RoomManagementResult>? onResult,
+    StickerImagePreviewOpener? stickerImagePreviewOpener,
   }) {
     return RoomSettingsDialog(
       key: key,
@@ -42,6 +43,7 @@ class RoomSettingsDialog extends StatefulWidget {
       embedded: embedded,
       onClose: onClose,
       onResult: onResult,
+      stickerImagePreviewOpener: stickerImagePreviewOpener,
       createMode: true,
     );
   }
@@ -522,6 +524,18 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
     );
   }
 
+  Future<void> _openRoomAvatarPreview(String? imageUrl) async {
+    final url = imageUrl?.trim();
+    final opener = widget.stickerImagePreviewOpener;
+    if (url == null || url.isEmpty || opener == null) return;
+    await opener(
+      context,
+      imageUrl: url,
+      suggestedName: '$_avatarDisplayName-icon.png',
+      forceSquare: true,
+    );
+  }
+
   Future<void> _leaveRoom() async {
     if (_saving || _savingPreferences || _leaving || _deleting) return;
     final confirmation = room_display.roomLeaveConfirmationSpec(
@@ -709,6 +723,13 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
               enabled: _canManageRoom && !_saving,
               onUpload: _pickAvatar,
               onPresetSelected: _selectPreset,
+              onImagePreview: widget.stickerImagePreviewOpener == null
+                  ? null
+                  : () => unawaited(
+                      _openRoomAvatarPreview(
+                        _avatarPreviewUrl(AppConfigScope.of(context)),
+                      ),
+                    ),
               uploadLabel: '上传图标',
             ),
             if (!_creating)

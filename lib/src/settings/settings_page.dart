@@ -3443,6 +3443,25 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  Future<void> _openProfileAvatarPreview(String? imageUrl) async {
+    final url = imageUrl?.trim();
+    final opener = widget.stickerImagePreviewOpener;
+    if (url == null || url.isEmpty || opener == null) return;
+    final displayName = _displayNameController.text.trim();
+    final username = _user?.username.trim() ?? '';
+    final stem = displayName.isNotEmpty
+        ? displayName
+        : username.isNotEmpty
+        ? username
+        : 'avatar';
+    await opener(
+      context,
+      imageUrl: url,
+      suggestedName: '$stem-avatar.png',
+      forceSquare: true,
+    );
+  }
+
   Widget _buildProfileContent() {
     final user = _user;
     final unavailable = !_settingsController.hasApi || user == null;
@@ -3535,6 +3554,11 @@ class _SettingsPageState extends State<SettingsPage> {
                 enabled: !_uploadingAvatar,
                 onUpload: _pickAndUploadAvatar,
                 onPresetSelected: _selectDefaultAvatarKey,
+                onImagePreview: widget.stickerImagePreviewOpener == null
+                    ? null
+                    : () => unawaited(
+                        _openProfileAvatarPreview(avatarPreviewUrl),
+                      ),
                 uploadLabel: '上传头像',
               ),
               const SizedBox(height: 14),
