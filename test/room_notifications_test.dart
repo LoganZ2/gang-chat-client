@@ -640,6 +640,87 @@ void main() {
     expect(roomApplicationReviewActionLabel(rejected), '拒绝了您的申请');
   });
 
+  test(
+    'deleted application notification variants stay independently hidden',
+    () {
+      final application = _application(
+        'application_deleted_variants',
+        status: 'approved',
+        reviewedAt: DateTime.utc(2026, 6, 8, 9),
+        reviewer: _user('reviewer_deleted_variants'),
+        requestNotificationDeleted: true,
+      );
+
+      expect(
+        roomNotificationsForView(
+          invites: const [],
+          applications: [application],
+          query: '',
+          filter: RoomNotificationFilter.applications,
+        ).map((item) => item.type),
+        [RoomNotificationItemType.applicationReviewed],
+      );
+
+      final reviewDeleted = _application(
+        'application_review_deleted',
+        status: 'approved',
+        reviewedAt: DateTime.utc(2026, 6, 8, 9),
+        reviewer: _user('reviewer_review_deleted'),
+        reviewNotificationDeleted: true,
+      );
+      expect(
+        roomNotificationsForView(
+          invites: const [],
+          applications: [reviewDeleted],
+          query: '',
+          filter: RoomNotificationFilter.applications,
+        ).map((item) => item.type),
+        [RoomNotificationItemType.applicationRequested],
+      );
+    },
+  );
+
+  test('notification copy text omits user identity badges', () {
+    final invite = _invite(
+      'copy_invite',
+      status: 'accepted',
+      roomName: 'Copy Room',
+      inviter: _user(
+        'copy_inviter',
+        displayName: 'Alex Inviter',
+        roomRole: 'admin',
+      ),
+    );
+    final inviteItem = RoomNotificationItem.invite(invite);
+
+    expect(roomNotificationDeletionType(inviteItem), 'invite');
+    expect(roomNotificationDeletionId(inviteItem), invite.id);
+    expect(
+      roomNotificationCopyText(inviteItem),
+      contains('Alex Inviter 邀请您加入 Copy Room'),
+    );
+    expect(roomNotificationCopyText(inviteItem), contains('已接受'));
+    expect(roomNotificationCopyText(inviteItem), isNot(contains('管理员')));
+
+    final eventItem = RoomNotificationItem.roomEvent(
+      _roomEvent(
+        'copy_event',
+        type: kRoomEventNotificationRolePromoted,
+        roomName: 'Event Copy Room',
+        actor: _user(
+          'copy_actor',
+          displayName: 'Morgan Actor',
+          roomRole: 'owner',
+        ),
+        toRole: 'admin',
+      ),
+    );
+    expect(roomNotificationDeletionType(eventItem), 'room_event');
+    expect(roomNotificationCopyText(eventItem), contains('Morgan Actor'));
+    expect(roomNotificationCopyText(eventItem), contains('管理员'));
+    expect(roomNotificationCopyText(eventItem), isNot(contains('创建者')));
+  });
+
   test('room invite application gate follows inviter role', () {
     expect(
       roomInviteAcceptRequiresApplication(
@@ -745,6 +826,8 @@ RoomApplication _application(
   String roomRid = 'A-1',
   UserSummary? reviewer,
   bool reviewerExists = true,
+  bool requestNotificationDeleted = false,
+  bool reviewNotificationDeleted = false,
 }) {
   return RoomApplication(
     id: id,
@@ -768,6 +851,8 @@ RoomApplication _application(
     reviewedAt: reviewedAt,
     reviewer: reviewer,
     reviewerExists: reviewerExists,
+    requestNotificationDeleted: requestNotificationDeleted,
+    reviewNotificationDeleted: reviewNotificationDeleted,
   );
 }
 

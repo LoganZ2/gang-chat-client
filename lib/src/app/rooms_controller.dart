@@ -838,6 +838,16 @@ class RoomsController {
     return api.listRoomNotifications();
   }
 
+  Future<void> deleteRoomNotification({
+    required String notificationType,
+    required String notificationId,
+  }) {
+    return api.deleteRoomNotification(
+      notificationType: notificationType,
+      notificationId: notificationId,
+    );
+  }
+
   Future<void> markRoomNotificationsRead() {
     return api.markRoomNotificationsRead();
   }

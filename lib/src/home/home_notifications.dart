@@ -15,6 +15,10 @@ typedef RoomApplicationWithdrawCallback =
     Future<void> Function(RoomApplication application);
 typedef RoomEventOpenCallback =
     void Function(RoomEventNotification notification);
+typedef RoomNotificationCopyCallback =
+    Future<void> Function(RoomNotificationItem item);
+typedef RoomNotificationDeleteCallback =
+    Future<void> Function(RoomNotificationItem item);
 
 class HomeNotificationsPane extends StatefulWidget {
   const HomeNotificationsPane({
@@ -33,6 +37,8 @@ class HomeNotificationsPane extends StatefulWidget {
     required this.currentUser,
     required this.onOpenRoom,
     required this.onOpenRoomEvent,
+    this.onCopyNotification,
+    this.onDeleteNotification,
     this.onResolveRoomProfile,
     this.onResolveRoomUserProfile,
   });
@@ -51,6 +57,8 @@ class HomeNotificationsPane extends StatefulWidget {
   final RoomApplicationWithdrawCallback onWithdrawApplication;
   final ValueChanged<PublicRoom> onOpenRoom;
   final RoomEventOpenCallback onOpenRoomEvent;
+  final RoomNotificationCopyCallback? onCopyNotification;
+  final RoomNotificationDeleteCallback? onDeleteNotification;
   final RoomProfileResolver? onResolveRoomProfile;
   final Future<UserSummary> Function(String roomId, UserSummary user)?
   onResolveRoomUserProfile;
@@ -227,6 +235,8 @@ class _HomeNotificationsPaneState extends State<HomeNotificationsPane> {
         currentUser: widget.currentUser,
         onOpenRoom: widget.onOpenRoom,
         onOpenRoomEvent: widget.onOpenRoomEvent,
+        onCopyNotification: widget.onCopyNotification,
+        onDeleteNotification: widget.onDeleteNotification,
         onResolveRoomProfile: widget.onResolveRoomProfile,
         onResolveRoomUserProfile: widget.onResolveRoomUserProfile,
       ),
@@ -407,6 +417,8 @@ class _NotificationsBody extends StatelessWidget {
     required this.currentUser,
     required this.onOpenRoom,
     required this.onOpenRoomEvent,
+    this.onCopyNotification,
+    this.onDeleteNotification,
     required this.onResolveRoomProfile,
     required this.onResolveRoomUserProfile,
   });
@@ -426,6 +438,8 @@ class _NotificationsBody extends StatelessWidget {
   final RoomApplicationWithdrawCallback onWithdrawApplication;
   final ValueChanged<PublicRoom> onOpenRoom;
   final RoomEventOpenCallback onOpenRoomEvent;
+  final RoomNotificationCopyCallback? onCopyNotification;
+  final RoomNotificationDeleteCallback? onDeleteNotification;
   final RoomProfileResolver? onResolveRoomProfile;
   final Future<UserSummary> Function(String roomId, UserSummary user)?
   onResolveRoomUserProfile;
@@ -492,7 +506,7 @@ class _NotificationsBody extends StatelessWidget {
         separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
           final item = items[index];
-          return switch (item.type) {
+          final row = switch (item.type) {
             RoomNotificationItemType.invite => _RoomInviteNotificationRow(
               invite: item.invite!,
               query: query,
@@ -535,8 +549,157 @@ class _NotificationsBody extends StatelessWidget {
               onResolveRoomUserProfile: onResolveRoomUserProfile,
             ),
           };
+          return _NotificationContextMenuRegion(
+            key: ValueKey('notification-context-row-${item.id}'),
+            item: item,
+            onCopyNotification: onCopyNotification,
+            onDeleteNotification: onDeleteNotification,
+            child: row,
+          );
         },
       ),
+    );
+  }
+}
+
+class _NotificationContextMenuRegion extends StatefulWidget {
+  const _NotificationContextMenuRegion({
+    super.key,
+    required this.item,
+    required this.child,
+    this.onCopyNotification,
+    this.onDeleteNotification,
+  });
+
+  final RoomNotificationItem item;
+  final Widget child;
+  final RoomNotificationCopyCallback? onCopyNotification;
+  final RoomNotificationDeleteCallback? onDeleteNotification;
+
+  @override
+  State<_NotificationContextMenuRegion> createState() =>
+      _NotificationContextMenuRegionState();
+}
+
+class _NotificationContextMenuRegionState
+    extends State<_NotificationContextMenuRegion> {
+  bool _contextMenuActive = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onSecondaryTapDown: _showContextMenu,
+      child: Stack(
+        children: [
+          widget.child,
+          Positioned.fill(
+            child: IgnorePointer(
+              child: AnimatedOpacity(
+                key: ValueKey(
+                  'notification-context-highlight-${widget.item.id}',
+                ),
+                opacity: _contextMenuActive ? 1 : 0,
+                duration: const Duration(milliseconds: 70),
+                curve: Curves.easeOutCubic,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: UiColors.selected.withValues(alpha: 0.72),
+                    borderRadius: BorderRadius.circular(UiRadii.lg),
+                    border: Border.all(color: UiColors.accentBorder),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showContextMenu(TapDownDetails details) {
+    if (widget.onCopyNotification == null &&
+        widget.onDeleteNotification == null) {
+      return;
+    }
+    setState(() => _contextMenuActive = true);
+    unawaited(
+      showUiContextMenu(
+        context,
+        position: details.globalPosition,
+        sections: [
+          UiContextMenuSection([
+            UiContextMenuItem(
+              label: '复制',
+              shortcut: 'Ctrl+C',
+              onPressed: widget.onCopyNotification == null
+                  ? null
+                  : () => unawaited(_copyNotification()),
+            ),
+          ]),
+          UiContextMenuSection([
+            UiContextMenuItem(
+              label: '删除',
+              onPressed: widget.onDeleteNotification == null
+                  ? null
+                  : () => unawaited(_confirmDeleteNotification()),
+            ),
+          ]),
+        ],
+      ).whenComplete(() {
+        if (mounted) setState(() => _contextMenuActive = false);
+      }),
+    );
+  }
+
+  Future<void> _copyNotification() async {
+    try {
+      await widget.onCopyNotification!(widget.item);
+      if (!mounted) return;
+      showFloatingSuccessNotice(context, '已复制');
+    } catch (error) {
+      if (!mounted) return;
+      showFloatingErrorNotice(context, '$error');
+    }
+  }
+
+  Future<void> _confirmDeleteNotification() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => const _NotificationDeleteConfirmDialog(),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await widget.onDeleteNotification!(widget.item);
+      if (!mounted) return;
+      showFloatingSuccessNotice(context, '已删除');
+    } catch (error) {
+      if (!mounted) return;
+      showFloatingErrorNotice(context, '$error');
+    }
+  }
+}
+
+class _NotificationDeleteConfirmDialog extends StatelessWidget {
+  const _NotificationDeleteConfirmDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return DialogFrame(
+      title: '删除通知',
+      icon: Icons.warning_amber_outlined,
+      actions: [
+        Button(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('取消'),
+        ),
+        Button(
+          tone: ButtonTone.danger,
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('删除'),
+        ),
+      ],
+      child: Text('删除后将无法恢复', style: UiTypography.body),
     );
   }
 }

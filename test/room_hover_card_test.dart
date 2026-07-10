@@ -949,6 +949,79 @@ void main() {
     expect(avatar.label, '');
     expect(avatar.showFallbackText, isFalse);
   });
+
+  testWidgets('notification context menu copies text and confirms deletion', (
+    tester,
+  ) async {
+    final invite = RoomInvite(
+      id: 'invite_context_menu',
+      status: 'accepted',
+      room: _joinedRoom,
+      inviter: _creator,
+      createdAt: DateTime.utc(2026, 6, 1),
+    );
+    final copiedItems = <String>[];
+    final deletedItems = <String>[];
+
+    await tester.pumpWidget(
+      _host(
+        HomeNotificationsPane(
+          invites: [invite],
+          applications: const [],
+          roomNotifications: const [],
+          loading: false,
+          error: null,
+          busyInviteId: null,
+          busyApplicationId: null,
+          currentUser: _currentUser,
+          onClose: () {},
+          onRefresh: () {},
+          onReviewInvite: (_, _) async {},
+          onWithdrawApplication: (_) async {},
+          onOpenRoom: (_) {},
+          onOpenRoomEvent: (_) {},
+          onCopyNotification: (item) async => copiedItems.add(item.id),
+          onDeleteNotification: (item) async => deletedItems.add(item.id),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final row = find.byKey(
+      const ValueKey('notification-context-row-invite:invite_context_menu'),
+    );
+    await tester.tap(row, buttons: kSecondaryMouseButton);
+    await tester.pump();
+    expect(
+      tester
+          .widget<AnimatedOpacity>(
+            find.byKey(
+              const ValueKey(
+                'notification-context-highlight-invite:invite_context_menu',
+              ),
+            ),
+          )
+          .opacity,
+      1,
+    );
+    expect(find.text('复制'), findsOneWidget);
+    expect(find.text('删除'), findsOneWidget);
+
+    await tester.tap(find.text('复制'));
+    await tester.pumpAndSettle();
+    expect(copiedItems, ['invite:invite_context_menu']);
+
+    await tester.tap(row, buttons: kSecondaryMouseButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('删除'));
+    await tester.pumpAndSettle();
+    expect(find.text('删除通知'), findsOneWidget);
+    expect(find.text('删除后将无法恢复'), findsOneWidget);
+
+    await tester.tap(find.text('删除'));
+    await tester.pumpAndSettle();
+    expect(deletedItems, ['invite:invite_context_menu']);
+  });
 }
 
 Future<void> _ensureRoomProfileCardOpen(

@@ -70,6 +70,11 @@ enum RoomNotificationItemType {
   roomEvent,
 }
 
+const roomNotificationDeletionInvite = 'invite';
+const roomNotificationDeletionApplicationRequested = 'application_requested';
+const roomNotificationDeletionApplicationReviewed = 'application_reviewed';
+const roomNotificationDeletionRoomEvent = 'room_event';
+
 const kRoomEventNotificationMemberRemoved = 'member_removed';
 const kRoomEventNotificationRolePromoted = 'role_promoted';
 const kRoomEventNotificationRoleDemoted = 'role_demoted';
@@ -151,6 +156,26 @@ class RoomNotificationItem {
   final RoomInvite? invite;
   final RoomApplication? application;
   final RoomEventNotification? roomEvent;
+}
+
+String roomNotificationDeletionType(RoomNotificationItem item) {
+  return switch (item.type) {
+    RoomNotificationItemType.invite => roomNotificationDeletionInvite,
+    RoomNotificationItemType.applicationRequested =>
+      roomNotificationDeletionApplicationRequested,
+    RoomNotificationItemType.applicationReviewed =>
+      roomNotificationDeletionApplicationReviewed,
+    RoomNotificationItemType.roomEvent => roomNotificationDeletionRoomEvent,
+  };
+}
+
+String roomNotificationDeletionId(RoomNotificationItem item) {
+  return switch (item.type) {
+    RoomNotificationItemType.invite => item.invite!.id,
+    RoomNotificationItemType.applicationRequested ||
+    RoomNotificationItemType.applicationReviewed => item.application!.id,
+    RoomNotificationItemType.roomEvent => item.roomEvent!.id,
+  };
 }
 
 bool isPendingRoomInvite(RoomInvite invite) {
@@ -338,6 +363,71 @@ String roomInviteTimestampLabel(DateTime value) {
       '${local.minute.toString().padLeft(2, '0')}';
 }
 
+String roomNotificationCopyText(RoomNotificationItem item) {
+  final time = roomInviteTimestampLabel(item.time);
+  switch (item.type) {
+    case RoomNotificationItemType.invite:
+      final invite = item.invite!;
+      return _notificationCopyLines([
+        time,
+        '${roomNotificationUserLabel(invite.inviter, userExists: invite.inviterExists)} 邀请您加入 ${roomNotificationRoomLabel(invite.room, roomExists: invite.roomExists)}',
+        roomInviteDecisionLabel(invite),
+      ]);
+    case RoomNotificationItemType.applicationRequested:
+      final application = item.application!;
+      return _notificationCopyLines([
+        time,
+        '您已申请加入 ${roomNotificationRoomLabel(application.room, roomExists: true)}',
+        roomApplicationStatusLabel(application),
+      ]);
+    case RoomNotificationItemType.applicationReviewed:
+      final application = item.application!;
+      final reviewer = application.reviewer;
+      final reviewerName = reviewer == null
+          ? ''
+          : roomNotificationUserLabel(
+              reviewer,
+              userExists: application.reviewerExists,
+            );
+      return _notificationCopyLines([
+        time,
+        '$reviewerName ${roomApplicationReviewActionLabel(application)} ${roomNotificationRoomLabel(application.room, roomExists: true)}',
+      ]);
+    case RoomNotificationItemType.roomEvent:
+      final notification = item.roomEvent!;
+      final room = roomNotificationRoomLabel(
+        notification.room,
+        roomExists: notification.roomExists,
+      );
+      final actor = notification.actor;
+      final actorName = actor == null
+          ? ''
+          : roomNotificationUserLabel(
+              actor,
+              userExists: notification.actorExists,
+            );
+      final actorSegment = actorName.isEmpty ? '被' : '被$actorName';
+      final body = switch (notification.type) {
+        kRoomEventNotificationMemberRemoved => '您$actorSegment踢出了$room',
+        kRoomEventNotificationRolePromoted ||
+        kRoomEventNotificationRoleDemoted =>
+          '您在$room中$actorSegment${roomEventNotificationRoleActionLabel(notification)}${roomNotificationRoleLabel(notification.toRole)}',
+        kRoomEventNotificationCreatorTransferDemoted =>
+          '您在$room中降职为${roomNotificationRoleLabel(notification.toRole)}',
+        kRoomEventNotificationMentioned => '您在$room中$actorSegment提及',
+        _ => '您在$room收到了房间通知',
+      };
+      return _notificationCopyLines([time, body]);
+  }
+}
+
+String _notificationCopyLines(Iterable<String> lines) {
+  return lines
+      .map((line) => line.trim())
+      .where((line) => line.isNotEmpty)
+      .join('\n');
+}
+
 String roomNotificationDateLabel(DateTime value) {
   final local = value.toLocal();
   return '${local.year.toString().padLeft(4, '0')}/'
@@ -439,12 +529,14 @@ List<RoomNotificationItem> roomNotificationsForView({
         continue;
       }
       final requested = RoomNotificationItem.applicationRequested(application);
-      if (_isInRoomNotificationDateRange(requested, dateRange)) {
+      if (!application.requestNotificationDeleted &&
+          _isInRoomNotificationDateRange(requested, dateRange)) {
         items.add(requested);
       }
       if (isReviewedRoomApplication(application) &&
           application.reviewedAt != null &&
-          application.reviewer != null) {
+          application.reviewer != null &&
+          !application.reviewNotificationDeleted) {
         final reviewed = RoomNotificationItem.applicationReviewed(application);
         if (_isInRoomNotificationDateRange(reviewed, dateRange)) {
           items.add(reviewed);

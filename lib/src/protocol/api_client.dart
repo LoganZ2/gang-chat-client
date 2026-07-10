@@ -299,6 +299,11 @@ abstract interface class GangApi {
 
   Future<List<RoomEventNotification>> listRoomNotifications();
 
+  Future<void> deleteRoomNotification({
+    required String notificationType,
+    required String notificationId,
+  });
+
   Future<void> markRoomNotificationsRead();
 
   Future<List<UserSummary>> searchUsers({
@@ -1399,6 +1404,19 @@ class GangApiClient implements GangApi {
         .cast<Map<String, Object?>>()
         .map(RoomEventNotification.fromJson)
         .toList();
+  }
+
+  @override
+  Future<void> deleteRoomNotification({
+    required String notificationType,
+    required String notificationId,
+  }) async {
+    await _sendJson((token) {
+      return _httpClient.delete(
+        _uri('/room-notifications/$notificationType/$notificationId'),
+        headers: _headers(token),
+      );
+    });
   }
 
   @override

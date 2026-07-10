@@ -1312,6 +1312,8 @@ class RoomApplication {
     this.reviewedAt,
     this.reviewer,
     this.reviewerExists = true,
+    this.requestNotificationDeleted = false,
+    this.reviewNotificationDeleted = false,
   });
 
   final String id;
@@ -1323,6 +1325,8 @@ class RoomApplication {
   final DateTime? reviewedAt;
   final UserSummary? reviewer;
   final bool reviewerExists;
+  final bool requestNotificationDeleted;
+  final bool reviewNotificationDeleted;
 
   factory RoomApplication.fromJson(Map<String, Object?> json) {
     return RoomApplication(
@@ -1341,6 +1345,10 @@ class RoomApplication {
           ? null
           : UserSummary.fromJson(_nullableMap(json['reviewer'])!),
       reviewerExists: json['reviewer_exists'] as bool? ?? true,
+      requestNotificationDeleted:
+          json['request_notification_deleted'] as bool? ?? false,
+      reviewNotificationDeleted:
+          json['review_notification_deleted'] as bool? ?? false,
     );
   }
 }

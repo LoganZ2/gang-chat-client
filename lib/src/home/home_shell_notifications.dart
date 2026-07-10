@@ -343,6 +343,27 @@ extension _HomeShellNotifications on _HomeShellState {
     }
   }
 
+  Future<void> _copyNotification(
+    room_notifications.RoomNotificationItem item,
+  ) async {
+    final text = room_notifications.roomNotificationCopyText(item);
+    if (text.isEmpty) {
+      throw Exception('这条通知没有可复制的内容');
+    }
+    await _clipboardService.writeText(text);
+  }
+
+  Future<void> _deleteNotification(
+    room_notifications.RoomNotificationItem item,
+  ) async {
+    await _roomsController.deleteRoomNotification(
+      notificationType: room_notifications.roomNotificationDeletionType(item),
+      notificationId: room_notifications.roomNotificationDeletionId(item),
+    );
+    if (!mounted) return;
+    await _loadNotifications(silent: true);
+  }
+
   void _applyRoomInvitesUpdated() {
     unawaited(_refreshPendingRoomInviteBadge());
     if (_contentMode == _ContentMode.notifications) {

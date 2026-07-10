@@ -88,6 +88,8 @@ extension _HomeShellLayout on _HomeShellState {
             unawaited(_loadNotifications(clearVisualReadMarkers: true)),
         onReviewInvite: _reviewNotificationInvite,
         onWithdrawApplication: _withdrawNotificationApplication,
+        onCopyNotification: _copyNotification,
+        onDeleteNotification: _deleteNotification,
         onResolveRoomProfile: _resolveRoomProfile,
         onResolveRoomUserProfile: _resolveRoomUserProfile,
         onOpenRoom: _openNotificationRoom,
