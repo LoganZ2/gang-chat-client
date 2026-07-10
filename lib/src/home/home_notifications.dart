@@ -19,6 +19,8 @@ typedef RoomNotificationCopyCallback =
     Future<void> Function(RoomNotificationItem item);
 typedef RoomNotificationDeleteCallback =
     Future<void> Function(RoomNotificationItem item);
+typedef RoomNotificationsDeleteCallback =
+    Future<void> Function(List<RoomNotificationItem> items);
 
 class HomeNotificationsPane extends StatefulWidget {
   const HomeNotificationsPane({
@@ -39,6 +41,7 @@ class HomeNotificationsPane extends StatefulWidget {
     required this.onOpenRoomEvent,
     this.onCopyNotification,
     this.onDeleteNotification,
+    this.onDeleteNotifications,
     this.onResolveRoomProfile,
     this.onResolveRoomUserProfile,
   });
@@ -59,6 +62,7 @@ class HomeNotificationsPane extends StatefulWidget {
   final RoomEventOpenCallback onOpenRoomEvent;
   final RoomNotificationCopyCallback? onCopyNotification;
   final RoomNotificationDeleteCallback? onDeleteNotification;
+  final RoomNotificationsDeleteCallback? onDeleteNotifications;
   final RoomProfileResolver? onResolveRoomProfile;
   final Future<UserSummary> Function(String roomId, UserSummary user)?
   onResolveRoomUserProfile;
@@ -72,6 +76,8 @@ class _HomeNotificationsPaneState extends State<HomeNotificationsPane> {
   RoomNotificationFilter _filter = RoomNotificationFilter.all;
   late RoomNotificationDateRange _defaultDateRange;
   late RoomNotificationDateRange _dateRange;
+  bool _selectionMode = false;
+  Set<String> _selectedNotificationIds = <String>{};
   String _query = '';
   String _lastSearchText = '';
 
@@ -107,7 +113,10 @@ class _HomeNotificationsPaneState extends State<HomeNotificationsPane> {
     final text = _searchController.text;
     if (text == _lastSearchText) return;
     _lastSearchText = text;
-    setState(() => _query = text);
+    setState(() {
+      _query = text;
+      if (_selectionMode) _selectedNotificationIds = <String>{};
+    });
   }
 
   RoomNotificationDateRange _defaultDateRangeFor(CurrentUser user) {
@@ -134,7 +143,46 @@ class _HomeNotificationsPaneState extends State<HomeNotificationsPane> {
       ),
     );
     if (!mounted || result == null || result == _dateRange) return;
-    setState(() => _dateRange = result);
+    setState(() {
+      _dateRange = result;
+      if (_selectionMode) _selectedNotificationIds = <String>{};
+    });
+  }
+
+  void _toggleSelectionMode() {
+    setState(() {
+      _selectionMode = !_selectionMode;
+      if (!_selectionMode) _selectedNotificationIds = <String>{};
+    });
+  }
+
+  void _toggleNotificationSelection(RoomNotificationItem item) {
+    setState(() {
+      final ids = {..._selectedNotificationIds};
+      if (!ids.add(item.id)) ids.remove(item.id);
+      _selectedNotificationIds = ids;
+    });
+  }
+
+  void _toggleVisibleNotificationSelection(
+    List<RoomNotificationItem> visibleItems,
+  ) {
+    final visibleIds = visibleItems.map((item) => item.id).toSet();
+    if (visibleIds.isEmpty) return;
+    setState(() {
+      final ids = {..._selectedNotificationIds};
+      if (visibleIds.every(ids.contains)) {
+        ids.removeAll(visibleIds);
+      } else {
+        ids.addAll(visibleIds);
+      }
+      _selectedNotificationIds = ids;
+    });
+  }
+
+  void _clearSelectedNotifications() {
+    if (_selectedNotificationIds.isEmpty) return;
+    setState(() => _selectedNotificationIds = <String>{});
   }
 
   @override
@@ -187,35 +235,79 @@ class _HomeNotificationsPaneState extends State<HomeNotificationsPane> {
                 onPressed: _showDateRangeFilter,
                 size: Input.defaultHeight,
               ),
+              const SizedBox(width: 8),
+              ButtonIcon(
+                key: const ValueKey('home-notifications-select-button'),
+                tooltip: _selectionMode ? '退出批量管理' : '批量管理',
+                icon: const Icon(Icons.checklist_outlined),
+                selected: _selectionMode,
+                onPressed: _toggleSelectionMode,
+                size: Input.defaultHeight,
+              ),
             ],
           ),
           const SizedBox(height: 12),
-          SegmentedControl<RoomNotificationFilter>(
-            expanded: true,
-            value: _filter,
-            segments: const [
-              Segment(
-                value: RoomNotificationFilter.all,
-                label: '全部',
-                icon: Icons.inbox_outlined,
-              ),
-              Segment(
-                value: RoomNotificationFilter.invites,
-                label: '邀请',
-                icon: Icons.mail_outline,
-              ),
-              Segment(
-                value: RoomNotificationFilter.applications,
-                label: '申请',
-                icon: Icons.assignment_turned_in_outlined,
-              ),
-              Segment(
-                value: RoomNotificationFilter.roomNotifications,
-                label: '房间',
-                icon: Icons.meeting_room_outlined,
+          Row(
+            children: [
+              if (_selectionMode) ...[
+                UiCheckbox(
+                  key: const ValueKey('home-notifications-select-all'),
+                  value:
+                      visibleItems.isNotEmpty &&
+                      visibleItems.every(
+                        (item) => _selectedNotificationIds.contains(item.id),
+                      ),
+                  onChanged: visibleItems.isEmpty
+                      ? null
+                      : (_) =>
+                            _toggleVisibleNotificationSelection(visibleItems),
+                  tooltip:
+                      visibleItems.isNotEmpty &&
+                          visibleItems.every(
+                            (item) =>
+                                _selectedNotificationIds.contains(item.id),
+                          )
+                      ? '取消全选当前通知'
+                      : '全选当前通知',
+                  semanticLabel: '全选当前通知',
+                ),
+                const SizedBox(width: 8),
+              ],
+              Expanded(
+                child: SegmentedControl<RoomNotificationFilter>(
+                  expanded: true,
+                  value: _filter,
+                  segments: const [
+                    Segment(
+                      value: RoomNotificationFilter.all,
+                      label: '全部',
+                      icon: Icons.inbox_outlined,
+                    ),
+                    Segment(
+                      value: RoomNotificationFilter.invites,
+                      label: '邀请',
+                      icon: Icons.mail_outline,
+                    ),
+                    Segment(
+                      value: RoomNotificationFilter.applications,
+                      label: '申请',
+                      icon: Icons.assignment_turned_in_outlined,
+                    ),
+                    Segment(
+                      value: RoomNotificationFilter.roomNotifications,
+                      label: '房间',
+                      icon: Icons.meeting_room_outlined,
+                    ),
+                  ],
+                  onChanged: (value) => setState(() {
+                    _filter = value;
+                    if (_selectionMode) {
+                      _selectedNotificationIds = <String>{};
+                    }
+                  }),
+                ),
               ),
             ],
-            onChanged: (value) => setState(() => _filter = value),
           ),
         ],
       ),
@@ -237,6 +329,11 @@ class _HomeNotificationsPaneState extends State<HomeNotificationsPane> {
         onOpenRoomEvent: widget.onOpenRoomEvent,
         onCopyNotification: widget.onCopyNotification,
         onDeleteNotification: widget.onDeleteNotification,
+        onDeleteNotifications: widget.onDeleteNotifications,
+        selectionMode: _selectionMode,
+        selectedNotificationIds: _selectedNotificationIds,
+        onToggleNotificationSelection: _toggleNotificationSelection,
+        onClearSelectedNotifications: _clearSelectedNotifications,
         onResolveRoomProfile: widget.onResolveRoomProfile,
         onResolveRoomUserProfile: widget.onResolveRoomUserProfile,
       ),
@@ -419,6 +516,11 @@ class _NotificationsBody extends StatelessWidget {
     required this.onOpenRoomEvent,
     this.onCopyNotification,
     this.onDeleteNotification,
+    this.onDeleteNotifications,
+    required this.selectionMode,
+    required this.selectedNotificationIds,
+    required this.onToggleNotificationSelection,
+    required this.onClearSelectedNotifications,
     required this.onResolveRoomProfile,
     required this.onResolveRoomUserProfile,
   });
@@ -440,6 +542,11 @@ class _NotificationsBody extends StatelessWidget {
   final RoomEventOpenCallback onOpenRoomEvent;
   final RoomNotificationCopyCallback? onCopyNotification;
   final RoomNotificationDeleteCallback? onDeleteNotification;
+  final RoomNotificationsDeleteCallback? onDeleteNotifications;
+  final bool selectionMode;
+  final Set<String> selectedNotificationIds;
+  final ValueChanged<RoomNotificationItem> onToggleNotificationSelection;
+  final VoidCallback onClearSelectedNotifications;
   final RoomProfileResolver? onResolveRoomProfile;
   final Future<UserSummary> Function(String roomId, UserSummary user)?
   onResolveRoomUserProfile;
@@ -506,55 +613,85 @@ class _NotificationsBody extends StatelessWidget {
         separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
           final item = items[index];
-          final row = switch (item.type) {
-            RoomNotificationItemType.invite => _RoomInviteNotificationRow(
-              invite: item.invite!,
-              query: query,
-              busy: busyInviteId == item.invite!.id,
-              busyInviteId: busyInviteId,
-              onReviewInvite: onReviewInvite,
-              currentUser: currentUser,
-              onOpenRoom: onOpenRoom,
-              onResolveRoomProfile: onResolveRoomProfile,
-              onResolveRoomUserProfile: onResolveRoomUserProfile,
-            ),
-            RoomNotificationItemType.applicationRequested =>
-              _RoomApplicationRequestNotificationRow(
-                application: item.application!,
-                query: query,
-                busy: busyApplicationId == item.application!.id,
-                busyApplicationId: busyApplicationId,
-                onWithdrawApplication: onWithdrawApplication,
-                currentUser: currentUser,
-                onOpenRoom: onOpenRoom,
-                onResolveRoomProfile: onResolveRoomProfile,
-                onResolveRoomUserProfile: onResolveRoomUserProfile,
-              ),
-            RoomNotificationItemType.applicationReviewed =>
-              _RoomApplicationReviewNotificationRow(
-                application: item.application!,
-                query: query,
-                currentUser: currentUser,
-                onOpenRoom: onOpenRoom,
-                onResolveRoomProfile: onResolveRoomProfile,
-                onResolveRoomUserProfile: onResolveRoomUserProfile,
-              ),
-            RoomNotificationItemType.roomEvent => _RoomEventNotificationRow(
-              notification: item.roomEvent!,
-              query: query,
-              currentUser: currentUser,
-              onOpenRoom: onOpenRoom,
-              onOpenRoomEvent: onOpenRoomEvent,
-              onResolveRoomProfile: onResolveRoomProfile,
-              onResolveRoomUserProfile: onResolveRoomUserProfile,
-            ),
-          };
-          return _NotificationContextMenuRegion(
+          final selectedItems = [
+            for (final candidate in items)
+              if (selectedNotificationIds.contains(candidate.id)) candidate,
+          ];
+          final card = _NotificationContextMenuRegion(
             key: ValueKey('notification-context-row-${item.id}'),
             item: item,
+            selectionMode: selectionMode,
+            selectedItems: selectedItems,
+            onToggleSelection: selectionMode
+                ? () => onToggleNotificationSelection(item)
+                : null,
             onCopyNotification: onCopyNotification,
             onDeleteNotification: onDeleteNotification,
-            child: row,
+            onDeleteNotifications: onDeleteNotifications,
+            onSelectionDeleted: onClearSelectedNotifications,
+            childBuilder: (contextMenuActive) => switch (item.type) {
+              RoomNotificationItemType.invite => _RoomInviteNotificationRow(
+                invite: item.invite!,
+                query: query,
+                busy: busyInviteId == item.invite!.id,
+                busyInviteId: busyInviteId,
+                contextMenuActive: contextMenuActive,
+                onReviewInvite: onReviewInvite,
+                currentUser: currentUser,
+                onOpenRoom: onOpenRoom,
+                onResolveRoomProfile: onResolveRoomProfile,
+                onResolveRoomUserProfile: onResolveRoomUserProfile,
+              ),
+              RoomNotificationItemType.applicationRequested =>
+                _RoomApplicationRequestNotificationRow(
+                  application: item.application!,
+                  query: query,
+                  busy: busyApplicationId == item.application!.id,
+                  busyApplicationId: busyApplicationId,
+                  contextMenuActive: contextMenuActive,
+                  onWithdrawApplication: onWithdrawApplication,
+                  currentUser: currentUser,
+                  onOpenRoom: onOpenRoom,
+                  onResolveRoomProfile: onResolveRoomProfile,
+                  onResolveRoomUserProfile: onResolveRoomUserProfile,
+                ),
+              RoomNotificationItemType.applicationReviewed =>
+                _RoomApplicationReviewNotificationRow(
+                  application: item.application!,
+                  query: query,
+                  contextMenuActive: contextMenuActive,
+                  currentUser: currentUser,
+                  onOpenRoom: onOpenRoom,
+                  onResolveRoomProfile: onResolveRoomProfile,
+                  onResolveRoomUserProfile: onResolveRoomUserProfile,
+                ),
+              RoomNotificationItemType.roomEvent => _RoomEventNotificationRow(
+                notification: item.roomEvent!,
+                query: query,
+                contextMenuActive: contextMenuActive,
+                currentUser: currentUser,
+                onOpenRoom: onOpenRoom,
+                onOpenRoomEvent: onOpenRoomEvent,
+                onResolveRoomProfile: onResolveRoomProfile,
+                onResolveRoomUserProfile: onResolveRoomUserProfile,
+              ),
+            },
+          );
+          if (!selectionMode) return card;
+          final selected = selectedNotificationIds.contains(item.id);
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              UiCheckbox(
+                key: ValueKey('notification-selectbox-${item.id}'),
+                value: selected,
+                onChanged: (_) => onToggleNotificationSelection(item),
+                tooltip: selected ? '取消选择通知' : '选择通知',
+                semanticLabel: '选择通知',
+              ),
+              const SizedBox(width: 8),
+              Expanded(child: card),
+            ],
           );
         },
       ),
@@ -566,15 +703,25 @@ class _NotificationContextMenuRegion extends StatefulWidget {
   const _NotificationContextMenuRegion({
     super.key,
     required this.item,
-    required this.child,
+    required this.childBuilder,
+    required this.selectionMode,
+    required this.selectedItems,
+    this.onToggleSelection,
     this.onCopyNotification,
     this.onDeleteNotification,
+    this.onDeleteNotifications,
+    this.onSelectionDeleted,
   });
 
   final RoomNotificationItem item;
-  final Widget child;
+  final Widget Function(bool contextMenuActive) childBuilder;
+  final bool selectionMode;
+  final List<RoomNotificationItem> selectedItems;
+  final VoidCallback? onToggleSelection;
   final RoomNotificationCopyCallback? onCopyNotification;
   final RoomNotificationDeleteCallback? onDeleteNotification;
+  final RoomNotificationsDeleteCallback? onDeleteNotifications;
+  final VoidCallback? onSelectionDeleted;
 
   @override
   State<_NotificationContextMenuRegion> createState() =>
@@ -587,39 +734,26 @@ class _NotificationContextMenuRegionState
 
   @override
   Widget build(BuildContext context) {
+    final itemSelected = widget.selectedItems.any(
+      (selected) => selected.id == widget.item.id,
+    );
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
+      onTap: widget.selectionMode ? widget.onToggleSelection : null,
       onSecondaryTapDown: _showContextMenu,
-      child: Stack(
-        children: [
-          widget.child,
-          Positioned.fill(
-            child: IgnorePointer(
-              child: AnimatedOpacity(
-                key: ValueKey(
-                  'notification-context-highlight-${widget.item.id}',
-                ),
-                opacity: _contextMenuActive ? 1 : 0,
-                duration: const Duration(milliseconds: 70),
-                curve: Curves.easeOutCubic,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: UiColors.selected.withValues(alpha: 0.72),
-                    borderRadius: BorderRadius.circular(UiRadii.lg),
-                    border: Border.all(color: UiColors.accentBorder),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+      child: widget.childBuilder(_contextMenuActive || itemSelected),
     );
   }
 
   void _showContextMenu(TapDownDetails details) {
-    if (widget.onCopyNotification == null &&
-        widget.onDeleteNotification == null) {
+    final contextItems = widget.selectionMode
+        ? widget.selectedItems
+        : [widget.item];
+    final canDelete =
+        widget.onDeleteNotifications != null ||
+        widget.onDeleteNotification != null;
+    if (contextItems.isEmpty ||
+        (widget.onCopyNotification == null && !canDelete)) {
       return;
     }
     setState(() => _contextMenuActive = true);
@@ -628,23 +762,24 @@ class _NotificationContextMenuRegionState
         context,
         position: details.globalPosition,
         sections: [
-          UiContextMenuSection([
-            UiContextMenuItem(
-              label: '复制',
-              shortcut: 'Ctrl+C',
-              onPressed: widget.onCopyNotification == null
-                  ? null
-                  : () => unawaited(_copyNotification()),
-            ),
-          ]),
-          UiContextMenuSection([
-            UiContextMenuItem(
-              label: '删除',
-              onPressed: widget.onDeleteNotification == null
-                  ? null
-                  : () => unawaited(_confirmDeleteNotification()),
-            ),
-          ]),
+          if (contextItems.length == 1)
+            UiContextMenuSection([
+              UiContextMenuItem(
+                label: '复制',
+                shortcut: 'Ctrl+C',
+                onPressed: widget.onCopyNotification == null
+                    ? null
+                    : () => unawaited(_copyNotification(contextItems.single)),
+              ),
+            ]),
+          if (canDelete)
+            UiContextMenuSection([
+              UiContextMenuItem(
+                label: '删除',
+                onPressed: () =>
+                    unawaited(_confirmDeleteNotifications(contextItems)),
+              ),
+            ]),
         ],
       ).whenComplete(() {
         if (mounted) setState(() => _contextMenuActive = false);
@@ -652,9 +787,9 @@ class _NotificationContextMenuRegionState
     );
   }
 
-  Future<void> _copyNotification() async {
+  Future<void> _copyNotification(RoomNotificationItem item) async {
     try {
-      await widget.onCopyNotification!(widget.item);
+      await widget.onCopyNotification!(item);
       if (!mounted) return;
       showFloatingSuccessNotice(context, '已复制');
     } catch (error) {
@@ -663,16 +798,29 @@ class _NotificationContextMenuRegionState
     }
   }
 
-  Future<void> _confirmDeleteNotification() async {
+  Future<void> _confirmDeleteNotifications(
+    List<RoomNotificationItem> items,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => const _NotificationDeleteConfirmDialog(),
+      builder: (_) => _NotificationDeleteConfirmDialog(itemCount: items.length),
     );
     if (confirmed != true || !mounted) return;
     try {
-      await widget.onDeleteNotification!(widget.item);
+      final deleteNotifications = widget.onDeleteNotifications;
+      if (deleteNotifications != null) {
+        await deleteNotifications(items);
+      } else {
+        for (final item in items) {
+          await widget.onDeleteNotification!(item);
+        }
+      }
       if (!mounted) return;
-      showFloatingSuccessNotice(context, '已删除');
+      widget.onSelectionDeleted?.call();
+      showFloatingSuccessNotice(
+        context,
+        items.length == 1 ? '已删除' : '已删除${items.length}条通知',
+      );
     } catch (error) {
       if (!mounted) return;
       showFloatingErrorNotice(context, '$error');
@@ -680,13 +828,36 @@ class _NotificationContextMenuRegionState
   }
 }
 
+/// Keeps interactive notification controls from also toggling batch selection.
+///
+/// Some shared controls use [Listener] rather than a gesture recognizer.  This
+/// wrapper claims the primary tap before the row-level selection detector while
+/// allowing the control itself to continue receiving pointer events.
+class _NotificationInteractiveTarget extends StatelessWidget {
+  const _NotificationInteractiveTarget({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      excludeFromSemantics: true,
+      onTap: () {},
+      child: child,
+    );
+  }
+}
+
 class _NotificationDeleteConfirmDialog extends StatelessWidget {
-  const _NotificationDeleteConfirmDialog();
+  const _NotificationDeleteConfirmDialog({required this.itemCount});
+
+  final int itemCount;
 
   @override
   Widget build(BuildContext context) {
     return DialogFrame(
-      title: '删除通知',
+      title: itemCount == 1 ? '删除通知' : '删除选中的通知',
       icon: Icons.warning_amber_outlined,
       actions: [
         Button(
@@ -699,7 +870,10 @@ class _NotificationDeleteConfirmDialog extends StatelessWidget {
           child: const Text('删除'),
         ),
       ],
-      child: Text('删除后将无法恢复', style: UiTypography.body),
+      child: Text(
+        itemCount == 1 ? '删除后将无法恢复' : '确定删除所有选中的$itemCount条通知？',
+        style: UiTypography.body,
+      ),
     );
   }
 }
@@ -708,6 +882,7 @@ class _RoomInviteNotificationRow extends StatelessWidget {
   const _RoomInviteNotificationRow({
     required this.invite,
     required this.query,
+    required this.contextMenuActive,
     required this.busy,
     required this.busyInviteId,
     required this.onReviewInvite,
@@ -719,6 +894,7 @@ class _RoomInviteNotificationRow extends StatelessWidget {
 
   final RoomInvite invite;
   final String query;
+  final bool contextMenuActive;
   final bool busy;
   final String? busyInviteId;
   final RoomInviteReviewCallback onReviewInvite;
@@ -759,26 +935,33 @@ class _RoomInviteNotificationRow extends StatelessWidget {
       size: 34,
       showFallbackText: invite.inviterExists,
     );
-    final inviterAvatarTarget = invite.inviterExists
-        ? UserHoverCard(
-            user: inviter,
-            currentUser: currentUser,
-            onResolveProfile: onResolveRoomUserProfile == null
-                ? null
-                : (user) => onResolveRoomUserProfile!(room.id, user),
-            onResolveRoomProfile: onResolveRoomProfile,
-            onEnterCommonRoom: onOpenRoom,
-            child: inviterAvatar,
-          )
-        : inviterAvatar;
+    final inviterAvatarTarget = _NotificationInteractiveTarget(
+      child: invite.inviterExists
+          ? UserHoverCard(
+              user: inviter,
+              currentUser: currentUser,
+              onResolveProfile: onResolveRoomUserProfile == null
+                  ? null
+                  : (user) => onResolveRoomUserProfile!(room.id, user),
+              onResolveRoomProfile: onResolveRoomProfile,
+              onEnterCommonRoom: onOpenRoom,
+              child: inviterAvatar,
+            )
+          : inviterAvatar,
+    );
     return _NotificationNewMarker(
       show: isActionablePendingRoomInvite(invite),
-      child: DecoratedBox(
+      child: AnimatedContainer(
+        key: ValueKey('notification-row-surface-invite:${invite.id}'),
+        duration: const Duration(milliseconds: 90),
+        curve: Curves.easeOutCubic,
         decoration: BoxDecoration(
-          color: UiColors.surface,
+          color: contextMenuActive ? UiColors.selected : UiColors.surface,
           borderRadius: BorderRadius.circular(UiRadii.lg),
           border: Border.all(
-            color: isPendingRoomInvite(invite) && !invalid
+            color: contextMenuActive
+                ? UiColors.selectedBorder
+                : isPendingRoomInvite(invite) && !invalid
                 ? UiColors.accentBorder
                 : UiColors.border,
           ),
@@ -888,6 +1071,7 @@ class _RoomApplicationRequestNotificationRow extends StatelessWidget {
   const _RoomApplicationRequestNotificationRow({
     required this.application,
     required this.query,
+    required this.contextMenuActive,
     required this.busy,
     required this.busyApplicationId,
     required this.onWithdrawApplication,
@@ -899,6 +1083,7 @@ class _RoomApplicationRequestNotificationRow extends StatelessWidget {
 
   final RoomApplication application;
   final String query;
+  final bool contextMenuActive;
   final bool busy;
   final String? busyApplicationId;
   final RoomApplicationWithdrawCallback onWithdrawApplication;
@@ -914,12 +1099,19 @@ class _RoomApplicationRequestNotificationRow extends StatelessWidget {
     final time = roomInviteTimestampLabel(application.createdAt);
     return _NotificationNewMarker(
       show: isPendingRoomApplication(application),
-      child: DecoratedBox(
+      child: AnimatedContainer(
+        key: ValueKey(
+          'notification-row-surface-application-requested:${application.id}',
+        ),
+        duration: const Duration(milliseconds: 90),
+        curve: Curves.easeOutCubic,
         decoration: BoxDecoration(
-          color: UiColors.surface,
+          color: contextMenuActive ? UiColors.selected : UiColors.surface,
           borderRadius: BorderRadius.circular(UiRadii.lg),
           border: Border.all(
-            color: isPendingRoomApplication(application)
+            color: contextMenuActive
+                ? UiColors.selectedBorder
+                : isPendingRoomApplication(application)
                 ? UiColors.accentBorder
                 : UiColors.border,
           ),
@@ -1000,6 +1192,7 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
   const _RoomApplicationReviewNotificationRow({
     required this.application,
     required this.query,
+    required this.contextMenuActive,
     required this.currentUser,
     required this.onOpenRoom,
     required this.onResolveRoomProfile,
@@ -1008,6 +1201,7 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
 
   final RoomApplication application;
   final String query;
+  final bool contextMenuActive;
   final CurrentUser currentUser;
   final ValueChanged<PublicRoom> onOpenRoom;
   final RoomProfileResolver? onResolveRoomProfile;
@@ -1048,23 +1242,32 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
       size: 34,
       showFallbackText: application.reviewerExists,
     );
-    final reviewerAvatarTarget = application.reviewerExists
-        ? UserHoverCard(
-            user: reviewer,
-            currentUser: currentUser,
-            onResolveProfile: onResolveRoomUserProfile == null
-                ? null
-                : (user) => onResolveRoomUserProfile!(room.id, user),
-            onResolveRoomProfile: onResolveRoomProfile,
-            onEnterCommonRoom: onOpenRoom,
-            child: reviewerAvatar,
-          )
-        : reviewerAvatar;
-    return DecoratedBox(
+    final reviewerAvatarTarget = _NotificationInteractiveTarget(
+      child: application.reviewerExists
+          ? UserHoverCard(
+              user: reviewer,
+              currentUser: currentUser,
+              onResolveProfile: onResolveRoomUserProfile == null
+                  ? null
+                  : (user) => onResolveRoomUserProfile!(room.id, user),
+              onResolveRoomProfile: onResolveRoomProfile,
+              onEnterCommonRoom: onOpenRoom,
+              child: reviewerAvatar,
+            )
+          : reviewerAvatar,
+    );
+    return AnimatedContainer(
+      key: ValueKey(
+        'notification-row-surface-application-reviewed:${application.id}',
+      ),
+      duration: const Duration(milliseconds: 90),
+      curve: Curves.easeOutCubic,
       decoration: BoxDecoration(
-        color: UiColors.surface,
+        color: contextMenuActive ? UiColors.selected : UiColors.surface,
         borderRadius: BorderRadius.circular(UiRadii.lg),
-        border: Border.all(color: UiColors.border),
+        border: Border.all(
+          color: contextMenuActive ? UiColors.selectedBorder : UiColors.border,
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
@@ -1161,6 +1364,7 @@ class _RoomEventNotificationRow extends StatelessWidget {
   const _RoomEventNotificationRow({
     required this.notification,
     required this.query,
+    required this.contextMenuActive,
     required this.currentUser,
     required this.onOpenRoom,
     required this.onOpenRoomEvent,
@@ -1170,6 +1374,7 @@ class _RoomEventNotificationRow extends StatelessWidget {
 
   final RoomEventNotification notification;
   final String query;
+  final bool contextMenuActive;
   final CurrentUser currentUser;
   final ValueChanged<PublicRoom> onOpenRoom;
   final RoomEventOpenCallback onOpenRoomEvent;
@@ -1183,11 +1388,18 @@ class _RoomEventNotificationRow extends StatelessWidget {
     return _NotificationNewMarker(
       show: notification.isUnread,
       markerKey: ValueKey('notification-room-event-new-${notification.id}'),
-      child: DecoratedBox(
+      child: AnimatedContainer(
+        key: ValueKey('notification-row-surface-room-event:${notification.id}'),
+        duration: const Duration(milliseconds: 90),
+        curve: Curves.easeOutCubic,
         decoration: BoxDecoration(
-          color: UiColors.surface,
+          color: contextMenuActive ? UiColors.selected : UiColors.surface,
           borderRadius: BorderRadius.circular(UiRadii.lg),
-          border: Border.all(color: UiColors.border),
+          border: Border.all(
+            color: contextMenuActive
+                ? UiColors.selectedBorder
+                : UiColors.border,
+          ),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
@@ -1389,12 +1601,14 @@ class _RoomEventJumpAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = notification.roomExists && notification.room.joined;
-    return ButtonIcon(
-      tooltip: notification.messageId == null ? '进入房间' : '跳转到消息',
-      icon: const Icon(Icons.location_on_rounded),
-      tone: ButtonTone.primary,
-      onPressed: enabled ? () => onOpenRoomEvent(notification) : null,
-      size: 34,
+    return _NotificationInteractiveTarget(
+      child: ButtonIcon(
+        tooltip: notification.messageId == null ? '进入房间' : '跳转到消息',
+        icon: const Icon(Icons.location_on_rounded),
+        tone: ButtonTone.primary,
+        onPressed: enabled ? () => onOpenRoomEvent(notification) : null,
+        size: 34,
+      ),
     );
   }
 }
@@ -1406,18 +1620,20 @@ class _RoomEventInfoButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return HoverCardAnchor(
-      resetKey: message,
-      cardWidth: hoverInfoCardWidth(context, message),
-      gap: 8,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: SizedBox.square(
-          dimension: 16,
-          child: Icon(Icons.info_outline, size: 14, color: UiColors.accent),
+    return _NotificationInteractiveTarget(
+      child: HoverCardAnchor(
+        resetKey: message,
+        cardWidth: hoverInfoCardWidth(context, message),
+        gap: 8,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: SizedBox.square(
+            dimension: 16,
+            child: Icon(Icons.info_outline, size: 14, color: UiColors.accent),
+          ),
         ),
+        cardBuilder: (context) => _RoomEventInfoCard(message: message),
       ),
-      cardBuilder: (context) => _RoomEventInfoCard(message: message),
     );
   }
 }
@@ -1558,18 +1774,20 @@ class _InlineUserTarget extends StatelessWidget {
       size: 34,
       showFallbackText: userExists,
     );
-    final avatarTarget = userExists
-        ? UserHoverCard(
-            user: user,
-            currentUser: currentUser,
-            onResolveProfile: onResolveRoomUserProfile == null
-                ? null
-                : (target) => onResolveRoomUserProfile!(roomId, target),
-            onResolveRoomProfile: onResolveRoomProfile,
-            onEnterCommonRoom: onOpenRoom,
-            child: avatar,
-          )
-        : avatar;
+    final avatarTarget = _NotificationInteractiveTarget(
+      child: userExists
+          ? UserHoverCard(
+              user: user,
+              currentUser: currentUser,
+              onResolveProfile: onResolveRoomUserProfile == null
+                  ? null
+                  : (target) => onResolveRoomUserProfile!(roomId, target),
+              onResolveRoomProfile: onResolveRoomProfile,
+              onEnterCommonRoom: onOpenRoom,
+              child: avatar,
+            )
+          : avatar,
+    );
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1647,18 +1865,20 @@ class _InlineRoomTarget extends StatelessWidget {
       size: 34,
       showFallbackText: roomExists,
     );
-    final avatarTarget = roomNotificationRoomCardEnabled(roomExists: roomExists)
-        ? RoomHoverCard(
-            room: room,
-            currentUser: currentUser,
-            onResolveRoom: onResolveRoomProfile,
-            onResolveUserProfile: onResolveRoomUserProfile == null
-                ? null
-                : (user) => onResolveRoomUserProfile!(room.id, user),
-            onEnterRoom: room.joined ? onOpenRoom : null,
-            child: avatar,
-          )
-        : avatar;
+    final avatarTarget = _NotificationInteractiveTarget(
+      child: roomNotificationRoomCardEnabled(roomExists: roomExists)
+          ? RoomHoverCard(
+              room: room,
+              currentUser: currentUser,
+              onResolveRoom: onResolveRoomProfile,
+              onResolveUserProfile: onResolveRoomUserProfile == null
+                  ? null
+                  : (user) => onResolveRoomUserProfile!(room.id, user),
+              onEnterRoom: room.joined ? onOpenRoom : null,
+              child: avatar,
+            )
+          : avatar,
+    );
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1697,30 +1917,32 @@ class _InviteDecisionActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ButtonIcon(
-          tooltip: '拒绝邀请',
-          icon: const Icon(Icons.close),
-          tone: ButtonTone.danger,
-          onPressed: enabled
-              ? () => unawaited(onReviewInvite(invite, false))
-              : null,
-          size: 34,
-        ),
-        const SizedBox(width: 8),
-        ButtonIcon(
-          tooltip: '接受邀请',
-          icon: const Icon(Icons.check),
-          tone: ButtonTone.primary,
-          onPressed: enabled
-              ? () => unawaited(onReviewInvite(invite, true))
-              : null,
-          loading: busy,
-          size: 34,
-        ),
-      ],
+    return _NotificationInteractiveTarget(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ButtonIcon(
+            tooltip: '拒绝邀请',
+            icon: const Icon(Icons.close),
+            tone: ButtonTone.danger,
+            onPressed: enabled
+                ? () => unawaited(onReviewInvite(invite, false))
+                : null,
+            size: 34,
+          ),
+          const SizedBox(width: 8),
+          ButtonIcon(
+            tooltip: '接受邀请',
+            icon: const Icon(Icons.check),
+            tone: ButtonTone.primary,
+            onPressed: enabled
+                ? () => unawaited(onReviewInvite(invite, true))
+                : null,
+            loading: busy,
+            size: 34,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1740,16 +1962,18 @@ class _ApplicationWithdrawAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Button(
-      tooltip: '撤回申请',
-      tone: ButtonTone.danger,
-      onPressed: enabled
-          ? () => unawaited(onWithdrawApplication(application))
-          : null,
-      loading: busy,
-      height: 34,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      child: const Text('撤回'),
+    return _NotificationInteractiveTarget(
+      child: Button(
+        tooltip: '撤回申请',
+        tone: ButtonTone.danger,
+        onPressed: enabled
+            ? () => unawaited(onWithdrawApplication(application))
+            : null,
+        loading: busy,
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: const Text('撤回'),
+      ),
     );
   }
 }

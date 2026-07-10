@@ -90,6 +90,7 @@ extension _HomeShellLayout on _HomeShellState {
         onWithdrawApplication: _withdrawNotificationApplication,
         onCopyNotification: _copyNotification,
         onDeleteNotification: _deleteNotification,
+        onDeleteNotifications: _deleteNotifications,
         onResolveRoomProfile: _resolveRoomProfile,
         onResolveRoomUserProfile: _resolveRoomUserProfile,
         onOpenRoom: _openNotificationRoom,

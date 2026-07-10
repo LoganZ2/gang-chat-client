@@ -697,9 +697,9 @@ void main() {
     expect(roomNotificationDeletionId(inviteItem), invite.id);
     expect(
       roomNotificationCopyText(inviteItem),
-      contains('Alex Inviter 邀请您加入 Copy Room'),
+      'Alex Inviter 邀请您加入 Copy Room\n已接受',
     );
-    expect(roomNotificationCopyText(inviteItem), contains('已接受'));
+    expect(roomNotificationCopyText(inviteItem), isNot(contains('2026/06/05')));
     expect(roomNotificationCopyText(inviteItem), isNot(contains('管理员')));
 
     final eventItem = RoomNotificationItem.roomEvent(
@@ -716,8 +716,11 @@ void main() {
       ),
     );
     expect(roomNotificationDeletionType(eventItem), 'room_event');
-    expect(roomNotificationCopyText(eventItem), contains('Morgan Actor'));
-    expect(roomNotificationCopyText(eventItem), contains('管理员'));
+    expect(
+      roomNotificationCopyText(eventItem),
+      '您在 Event Copy Room 中被 Morgan Actor 晋升为 管理员',
+    );
+    expect(roomNotificationCopyText(eventItem), isNot(contains('2026/06/05')));
     expect(roomNotificationCopyText(eventItem), isNot(contains('创建者')));
   });
 

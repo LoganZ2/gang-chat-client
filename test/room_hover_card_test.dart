@@ -401,6 +401,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.tap(
+      find.byKey(const ValueKey('home-notifications-select-button')),
+    );
+    await tester.pumpAndSettle();
+    final selectionFinder = find.byKey(
+      const ValueKey('notification-selectbox-invite:invite_user_card'),
+    );
+    expect(selectionFinder, findsOneWidget);
+
     final avatarFinder = find.byKey(
       const ValueKey('notification-inviter-avatar-invite_user_card'),
     );
@@ -411,6 +420,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('@creator'), findsOneWidget);
+    await tester.tap(avatarFinder);
+    await tester.pumpAndSettle();
+    expect(tester.widget<UiCheckbox>(selectionFinder).value, isFalse);
   });
 
   testWidgets('notification date filter sits to the right of search', (
@@ -674,6 +686,7 @@ void main() {
   testWidgets('room event notification avatars open profile cards', (
     tester,
   ) async {
+    final openedEvents = <String>[];
     final notification = RoomEventNotification(
       id: 'event_user_card',
       type: kRoomEventNotificationRolePromoted,
@@ -713,13 +726,21 @@ void main() {
           onReviewInvite: (_, _) async {},
           onWithdrawApplication: (_) async {},
           onOpenRoom: (_) {},
-          onOpenRoomEvent: (_) {},
+          onOpenRoomEvent: (event) => openedEvents.add(event.id),
         ),
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.byType(BadgeDot), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('home-notifications-select-button')),
+    );
+    await tester.pumpAndSettle();
+    final selectionFinder = find.byKey(
+      const ValueKey('notification-selectbox-room-event:event_user_card'),
+    );
+    expect(selectionFinder, findsOneWidget);
 
     final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await gesture.addPointer(location: Offset.zero);
@@ -745,6 +766,11 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('RID: R200'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.location_on_rounded));
+    await tester.pumpAndSettle();
+    expect(openedEvents, ['event_user_card']);
+    expect(tester.widget<UiCheckbox>(selectionFinder).value, isFalse);
   });
 
   testWidgets(
@@ -798,6 +824,14 @@ void main() {
 
       expect(find.text('提及'), findsOneWidget);
       expect(find.text(preview), findsNothing);
+      await tester.tap(
+        find.byKey(const ValueKey('home-notifications-select-button')),
+      );
+      await tester.pumpAndSettle();
+      final selectionFinder = find.byKey(
+        const ValueKey('notification-selectbox-room-event:event_mention_info'),
+      );
+      expect(selectionFinder, findsOneWidget);
 
       final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
       await gesture.addPointer(location: Offset.zero);
@@ -806,6 +840,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text(preview), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.info_outline));
+      await tester.pumpAndSettle();
+      expect(tester.widget<UiCheckbox>(selectionFinder).value, isFalse);
     },
   );
 
@@ -992,18 +1029,14 @@ void main() {
     );
     await tester.tap(row, buttons: kSecondaryMouseButton);
     await tester.pump();
-    expect(
-      tester
-          .widget<AnimatedOpacity>(
-            find.byKey(
-              const ValueKey(
-                'notification-context-highlight-invite:invite_context_menu',
-              ),
-            ),
-          )
-          .opacity,
-      1,
+    final surface = tester.widget<AnimatedContainer>(
+      find.byKey(
+        const ValueKey('notification-row-surface-invite:invite_context_menu'),
+      ),
     );
+    final decoration = surface.decoration as BoxDecoration;
+    expect(decoration.color, UiColors.selected);
+    expect((decoration.border! as Border).top.color, UiColors.selectedBorder);
     expect(find.text('复制'), findsOneWidget);
     expect(find.text('删除'), findsOneWidget);
 
@@ -1022,6 +1055,103 @@ void main() {
     await tester.pumpAndSettle();
     expect(deletedItems, ['invite:invite_context_menu']);
   });
+
+  testWidgets(
+    'batch management selects notifications and confirms bulk delete',
+    (tester) async {
+      final first = RoomInvite(
+        id: 'invite_batch_first',
+        status: 'accepted',
+        room: _joinedRoom,
+        inviter: _creator,
+        createdAt: DateTime.utc(2026, 6, 1),
+      );
+      final second = RoomInvite(
+        id: 'invite_batch_second',
+        status: 'accepted',
+        room: _joinedRoom,
+        inviter: _creator,
+        createdAt: DateTime.utc(2026, 6, 2),
+      );
+      final deletedBatches = <List<String>>[];
+
+      await tester.pumpWidget(
+        _host(
+          HomeNotificationsPane(
+            invites: [first, second],
+            applications: const [],
+            roomNotifications: const [],
+            loading: false,
+            error: null,
+            busyInviteId: null,
+            busyApplicationId: null,
+            currentUser: _currentUser,
+            onClose: () {},
+            onRefresh: () {},
+            onReviewInvite: (_, _) async {},
+            onWithdrawApplication: (_) async {},
+            onOpenRoom: (_) {},
+            onOpenRoomEvent: (_) {},
+            onCopyNotification: (_) async {},
+            onDeleteNotifications: (items) async {
+              deletedBatches.add(items.map((item) => item.id).toList());
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('home-notifications-select-button')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('home-notifications-select-all')),
+        findsOneWidget,
+      );
+      expect(find.byTooltip('全选当前通知'), findsOneWidget);
+      expect(
+        find.byKey(
+          const ValueKey('notification-selectbox-invite:invite_batch_first'),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey('notification-selectbox-invite:invite_batch_first'),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(
+        find.byKey(
+          const ValueKey('notification-context-row-invite:invite_batch_second'),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey('notification-context-row-invite:invite_batch_second'),
+        ),
+        buttons: kSecondaryMouseButton,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('复制'), findsNothing);
+      expect(find.text('删除'), findsOneWidget);
+
+      await tester.tap(find.text('删除'));
+      await tester.pumpAndSettle();
+      expect(find.text('删除选中的通知'), findsOneWidget);
+      expect(find.text('确定删除所有选中的2条通知？'), findsOneWidget);
+
+      await tester.tap(find.text('删除'));
+      await tester.pumpAndSettle();
+      expect(deletedBatches, [
+        ['invite:invite_batch_second', 'invite:invite_batch_first'],
+      ]);
+    },
+  );
 }
 
 Future<void> _ensureRoomProfileCardOpen(

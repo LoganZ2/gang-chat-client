@@ -364,20 +364,27 @@ String roomInviteTimestampLabel(DateTime value) {
 }
 
 String roomNotificationCopyText(RoomNotificationItem item) {
-  final time = roomInviteTimestampLabel(item.time);
   switch (item.type) {
     case RoomNotificationItemType.invite:
       final invite = item.invite!;
       return _notificationCopyLines([
-        time,
-        '${roomNotificationUserLabel(invite.inviter, userExists: invite.inviterExists)} 邀请您加入 ${roomNotificationRoomLabel(invite.room, roomExists: invite.roomExists)}',
+        _notificationCopySentence([
+          roomNotificationUserLabel(
+            invite.inviter,
+            userExists: invite.inviterExists,
+          ),
+          '邀请您加入',
+          roomNotificationRoomLabel(invite.room, roomExists: invite.roomExists),
+        ]),
         roomInviteDecisionLabel(invite),
       ]);
     case RoomNotificationItemType.applicationRequested:
       final application = item.application!;
       return _notificationCopyLines([
-        time,
-        '您已申请加入 ${roomNotificationRoomLabel(application.room, roomExists: true)}',
+        _notificationCopySentence([
+          '您已申请加入',
+          roomNotificationRoomLabel(application.room, roomExists: true),
+        ]),
         roomApplicationStatusLabel(application),
       ]);
     case RoomNotificationItemType.applicationReviewed:
@@ -390,8 +397,11 @@ String roomNotificationCopyText(RoomNotificationItem item) {
               userExists: application.reviewerExists,
             );
       return _notificationCopyLines([
-        time,
-        '$reviewerName ${roomApplicationReviewActionLabel(application)} ${roomNotificationRoomLabel(application.room, roomExists: true)}',
+        _notificationCopySentence([
+          reviewerName,
+          roomApplicationReviewActionLabel(application),
+          roomNotificationRoomLabel(application.room, roomExists: true),
+        ]),
       ]);
     case RoomNotificationItemType.roomEvent:
       final notification = item.roomEvent!;
@@ -406,18 +416,39 @@ String roomNotificationCopyText(RoomNotificationItem item) {
               actor,
               userExists: notification.actorExists,
             );
-      final actorSegment = actorName.isEmpty ? '被' : '被$actorName';
       final body = switch (notification.type) {
-        kRoomEventNotificationMemberRemoved => '您$actorSegment踢出了$room',
+        kRoomEventNotificationMemberRemoved => _notificationCopySentence([
+          '您被',
+          actorName,
+          '踢出了',
+          room,
+        ]),
         kRoomEventNotificationRolePromoted ||
-        kRoomEventNotificationRoleDemoted =>
-          '您在$room中$actorSegment${roomEventNotificationRoleActionLabel(notification)}${roomNotificationRoleLabel(notification.toRole)}',
+        kRoomEventNotificationRoleDemoted => _notificationCopySentence([
+          '您在',
+          room,
+          '中被',
+          actorName,
+          roomEventNotificationRoleActionLabel(notification),
+          roomNotificationRoleLabel(notification.toRole),
+        ]),
         kRoomEventNotificationCreatorTransferDemoted =>
-          '您在$room中降职为${roomNotificationRoleLabel(notification.toRole)}',
-        kRoomEventNotificationMentioned => '您在$room中$actorSegment提及',
-        _ => '您在$room收到了房间通知',
+          _notificationCopySentence([
+            '您在',
+            room,
+            '中降职为',
+            roomNotificationRoleLabel(notification.toRole),
+          ]),
+        kRoomEventNotificationMentioned => _notificationCopySentence([
+          '您在',
+          room,
+          '中被',
+          actorName,
+          '提及',
+        ]),
+        _ => _notificationCopySentence(['您在', room, '收到了房间通知']),
       };
-      return _notificationCopyLines([time, body]);
+      return _notificationCopyLines([body]);
   }
 }
 
@@ -426,6 +457,13 @@ String _notificationCopyLines(Iterable<String> lines) {
       .map((line) => line.trim())
       .where((line) => line.isNotEmpty)
       .join('\n');
+}
+
+String _notificationCopySentence(Iterable<String> parts) {
+  return parts
+      .map((part) => part.trim())
+      .where((part) => part.isNotEmpty)
+      .join(' ');
 }
 
 String roomNotificationDateLabel(DateTime value) {

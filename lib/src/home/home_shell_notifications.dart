@@ -356,12 +356,29 @@ extension _HomeShellNotifications on _HomeShellState {
   Future<void> _deleteNotification(
     room_notifications.RoomNotificationItem item,
   ) async {
-    await _roomsController.deleteRoomNotification(
-      notificationType: room_notifications.roomNotificationDeletionType(item),
-      notificationId: room_notifications.roomNotificationDeletionId(item),
-    );
-    if (!mounted) return;
-    await _loadNotifications(silent: true);
+    await _deleteNotifications([item]);
+  }
+
+  Future<void> _deleteNotifications(
+    List<room_notifications.RoomNotificationItem> items,
+  ) async {
+    final uniqueItems = <String, room_notifications.RoomNotificationItem>{
+      for (final item in items) item.id: item,
+    }.values.toList(growable: false);
+    if (uniqueItems.isEmpty) return;
+    try {
+      await Future.wait([
+        for (final item in uniqueItems)
+          _roomsController.deleteRoomNotification(
+            notificationType: room_notifications.roomNotificationDeletionType(
+              item,
+            ),
+            notificationId: room_notifications.roomNotificationDeletionId(item),
+          ),
+      ]);
+    } finally {
+      if (mounted) await _loadNotifications(silent: true);
+    }
   }
 
   void _applyRoomInvitesUpdated() {
