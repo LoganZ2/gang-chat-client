@@ -1,5 +1,6 @@
 import 'auth_session_controller.dart';
 import '../auth/auth_client.dart';
+import '../auth/auth_transport.dart';
 import 'language_preference.dart';
 
 class AuthFormResult {
@@ -82,6 +83,7 @@ String authSubmitFailureMessage(
 }) {
   final copy = authFormCopy(language);
   if (failure is AuthException) return copy.authException(failure);
+  if (isTlsHandshakeFailure(failure)) return copy.secureConnectionFailed;
   return copy.connectionFailed(failure);
 }
 
@@ -99,6 +101,7 @@ class AuthFormCopy {
       missingUsername = '用户名不能为空',
       passwordMismatch = '两次输入的密码不一致',
       connectionFailedPrefix = '无法连接服务器：',
+      secureConnectionFailed = '无法建立安全连接，请检查网络、代理或系统时间后重试',
       invalidCredentials = '账号或密码不正确',
       rateLimited = '登录尝试次数过多，请稍后再试',
       conflict = '用户名或邮箱已被占用',
@@ -112,6 +115,7 @@ class AuthFormCopy {
       missingUsername = '使用者名稱不能為空',
       passwordMismatch = '兩次輸入的密碼不一致',
       connectionFailedPrefix = '無法連線伺服器：',
+      secureConnectionFailed = '無法建立安全連線，請檢查網路、代理或系統時間後重試',
       invalidCredentials = '帳號或密碼不正確',
       rateLimited = '登入嘗試次數過多，請稍後再試',
       conflict = '使用者名稱或電子郵件已被使用',
@@ -125,6 +129,8 @@ class AuthFormCopy {
       missingUsername = 'Username is required',
       passwordMismatch = 'The two passwords do not match',
       connectionFailedPrefix = 'Unable to connect to the server: ',
+      secureConnectionFailed =
+          'Could not establish a secure connection. Check your network, proxy, or system time and try again',
       invalidCredentials = 'Incorrect account or password',
       rateLimited = 'Too many login attempts, try again later',
       conflict = 'That username or email is already taken',
@@ -138,6 +144,7 @@ class AuthFormCopy {
   final String missingUsername;
   final String passwordMismatch;
   final String connectionFailedPrefix;
+  final String secureConnectionFailed;
   final String invalidCredentials;
   final String rateLimited;
   final String conflict;

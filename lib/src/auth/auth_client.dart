@@ -2,13 +2,27 @@ import 'package:http/http.dart' as http;
 
 import '../protocol/models.dart';
 import '../protocol/utf8_json.dart';
+import 'auth_transport.dart';
 
 class AuthClient {
-  AuthClient({required this.baseUrl, http.Client? httpClient})
-    : _httpClient = httpClient ?? http.Client();
+  AuthClient({
+    required this.baseUrl,
+    http.Client? httpClient,
+    AuthHttpClientFactory? environmentProxyClientFactory,
+    this.handshakeRetryDelays = const [
+      Duration(milliseconds: 250),
+      Duration(milliseconds: 750),
+    ],
+  }) : _httpClient = httpClient ?? http.Client(),
+       _environmentProxyClientFactory =
+           environmentProxyClientFactory ??
+           createEnvironmentProxyAuthHttpClient;
 
   final String baseUrl;
   final http.Client _httpClient;
+  final AuthHttpClientFactory _environmentProxyClientFactory;
+  final List<Duration> handshakeRetryDelays;
+  http.Client? _environmentProxyClient;
 
   Future<AuthSession> register({
     required String username,
@@ -93,15 +107,37 @@ class AuthClient {
   }
 
   Future<AuthSession> _postAuth(String path, Map<String, Object?> body) async {
-    final response = await _httpClient.post(
-      _uri(path),
-      headers: _headers(),
-      body: encodeJsonBody(body),
-    );
+    final response = await _postAuthWithHandshakeRetry(path, body);
     _throwIfFailed(response);
     return AuthSession.fromJson(
       decodeJsonBody(response)! as Map<String, Object?>,
     );
+  }
+
+  Future<http.Response> _postAuthWithHandshakeRetry(
+    String path,
+    Map<String, Object?> body,
+  ) async {
+    var client = _httpClient;
+    for (var attempt = 0; ; attempt += 1) {
+      try {
+        return await client.post(
+          _uri(path),
+          headers: _headers(),
+          body: encodeJsonBody(body),
+        );
+      } catch (error) {
+        if (!isTlsHandshakeFailure(error) ||
+            attempt >= handshakeRetryDelays.length) {
+          rethrow;
+        }
+
+        await Future<void>.delayed(handshakeRetryDelays[attempt]);
+        if (attempt == handshakeRetryDelays.length - 1) {
+          client = _environmentProxyClient ??= _environmentProxyClientFactory();
+        }
+      }
+    }
   }
 
   void _throwIfFailed(http.Response response) {
@@ -124,7 +160,14 @@ class AuthClient {
     };
   }
 
-  void close() => _httpClient.close();
+  void close() {
+    _httpClient.close();
+    final environmentProxyClient = _environmentProxyClient;
+    if (environmentProxyClient != null &&
+        !identical(environmentProxyClient, _httpClient)) {
+      environmentProxyClient.close();
+    }
+  }
 }
 
 class AuthSession {

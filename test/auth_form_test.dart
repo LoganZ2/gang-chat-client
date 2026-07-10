@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:client/src/app/auth_form.dart';
@@ -97,6 +99,14 @@ void main() {
 
     expect(failed.busy, isFalse);
     expect(failed.error, '无法连接服务器：Bad state: offline');
+  });
+
+  test('auth submit failure gives a concise TLS recovery message', () {
+    final failed = authSubmitFailed(
+      HandshakeException('Handshake error in client'),
+    );
+
+    expect(failed.error, '无法建立安全连接，请检查网络、代理或系统时间后重试');
   });
 
   test('auth submit failure localizes auth exception codes', () {
