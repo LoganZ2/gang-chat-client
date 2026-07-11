@@ -295,6 +295,8 @@ class _AuthGateState extends State<_AuthGate> {
         child: LoginPage(
           language: _authLanguage,
           onSubmit: _submitAuthRequest,
+          checkUsernameAvailability: _auth.isUsernameAvailable,
+          checkEmailAvailability: _auth.isEmailAvailable,
           sizeForMode: _window.authWidgetSize,
           consumeInitialWindowLock: _window.consumeSkipNextAuthWindowLock,
           lockAuthWindow: _window.lockAuthWindow,

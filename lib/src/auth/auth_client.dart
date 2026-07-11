@@ -40,6 +40,30 @@ class AuthClient {
     return _postAuth('/auth/login', {'login': login, 'password': password});
   }
 
+  Future<bool> isUsernameAvailable(String username) async {
+    final uri = _uri(
+      '/auth/username-availability',
+    ).replace(queryParameters: {'username': username.trim()});
+    final response = await _sendWithHandshakeRetry(
+      (client) => client.get(uri, headers: _headers()),
+    );
+    _throwIfFailed(response);
+    final body = decodeJsonBody(response)! as Map<String, Object?>;
+    return body['available'] as bool? ?? false;
+  }
+
+  Future<bool> isEmailAvailable(String email) async {
+    final uri = _uri(
+      '/auth/email-availability',
+    ).replace(queryParameters: {'email': email.trim()});
+    final response = await _sendWithHandshakeRetry(
+      (client) => client.get(uri, headers: _headers()),
+    );
+    _throwIfFailed(response);
+    final body = decodeJsonBody(response)! as Map<String, Object?>;
+    return body['available'] as bool? ?? false;
+  }
+
   Future<AuthSession> refresh(String refreshToken) {
     return _postAuth('/auth/refresh', {'refresh_token': refreshToken});
   }
@@ -117,15 +141,23 @@ class AuthClient {
   Future<http.Response> _postAuthWithHandshakeRetry(
     String path,
     Map<String, Object?> body,
+  ) {
+    return _sendWithHandshakeRetry(
+      (client) => client.post(
+        _uri(path),
+        headers: _headers(),
+        body: encodeJsonBody(body),
+      ),
+    );
+  }
+
+  Future<http.Response> _sendWithHandshakeRetry(
+    Future<http.Response> Function(http.Client client) send,
   ) async {
     var client = _httpClient;
     for (var attempt = 0; ; attempt += 1) {
       try {
-        return await client.post(
-          _uri(path),
-          headers: _headers(),
-          body: encodeJsonBody(body),
-        );
+        return await send(client);
       } catch (error) {
         if (!isTlsHandshakeFailure(error) ||
             attempt >= handshakeRetryDelays.length) {

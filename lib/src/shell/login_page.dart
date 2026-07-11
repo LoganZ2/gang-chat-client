@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../app/auth_form.dart';
 import '../app/auth_session_controller.dart';
+import '../app/account_forms.dart';
 import '../app/language_preference.dart';
 import '../app/login_account_history.dart';
 import '../ui/ui.dart';
@@ -23,6 +24,8 @@ typedef AuthSubmit =
       AuthRequest request, {
       required bool rememberPassword,
     });
+typedef AuthUsernameAvailabilityCheck = Future<bool> Function(String username);
+typedef AuthEmailAvailabilityCheck = Future<bool> Function(String email);
 
 enum _AuthMode { login, register }
 
@@ -64,6 +67,8 @@ class LoginPage extends StatefulWidget {
     required this.onSubmit,
     required this.consumeInitialWindowLock,
     required this.lockAuthWindow,
+    this.checkUsernameAvailability,
+    this.checkEmailAvailability,
     this.language = defaultLanguagePreference,
     this.accountHistoryStore = const NoopLoginAccountHistoryStore(),
     this.windowController,
@@ -73,6 +78,8 @@ class LoginPage extends StatefulWidget {
   final AuthSubmit onSubmit;
   final bool Function() consumeInitialWindowLock;
   final AuthWindowLock lockAuthWindow;
+  final AuthUsernameAvailabilityCheck? checkUsernameAvailability;
+  final AuthEmailAvailabilityCheck? checkEmailAvailability;
   final String language;
   final LoginAccountHistoryStore accountHistoryStore;
   final DesktopWindowController? windowController;
@@ -82,8 +89,8 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final _username = TextEditingController();
   final _login = TextEditingController();
+  final _email = TextEditingController();
   final _password = TextEditingController();
   final _confirmPassword = TextEditingController();
 
@@ -94,11 +101,20 @@ class _LoginPageState extends State<LoginPage> {
   List<LoginAccountRecord> _accountHistory = const [];
   bool _showAccountHistory = false;
   bool _rememberPassword = false;
+  String? _verifiedEmail;
+  bool _checkingEmailAvailability = false;
   String? _selectedHistoryLogin;
   final Object _accountHistoryTapRegion = Object();
+  Timer? _usernameAvailabilityDebounce;
+  String? _usernameAvailabilityQuery;
+  bool _checkingUsernameAvailability = false;
+  String? _usernameAvailabilityError;
 
   bool get _showingError =>
       _submitState.error != null && _submitState.error!.isNotEmpty;
+  bool get _emailVerified =>
+      _verifiedEmail != null &&
+      _verifiedEmail == _email.text.trim().toLowerCase();
   bool get _canShowAccountHistory =>
       !_registering && !_submitState.busy && _accountHistory.isNotEmpty;
 
@@ -124,10 +140,11 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   void dispose() {
-    _username.dispose();
     _login.dispose();
+    _email.dispose();
     _password.dispose();
     _confirmPassword.dispose();
+    _usernameAvailabilityDebounce?.cancel();
     super.dispose();
   }
 
@@ -164,10 +181,11 @@ class _LoginPageState extends State<LoginPage> {
 
     final result = authRequestFromForm(
       registering: _registering,
-      username: _username.text,
-      login: _login.text,
+      username: _registering ? _login.text : '',
+      login: _registering ? _email.text : _login.text,
       password: _password.text,
       confirmPassword: _confirmPassword.text,
+      emailVerified: _emailVerified,
       language: widget.language,
     );
     final request = result.request;
@@ -177,6 +195,17 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     setState(() => _submitState = authSubmitStarted());
+
+    if (_registering) {
+      final availabilityError = await _ensureUsernameAvailable(
+        request.username!,
+      );
+      if (!mounted) return;
+      if (availabilityError != null) {
+        await _showSubmitState(authSubmitInvalid(availabilityError));
+        return;
+      }
+    }
 
     try {
       await widget.onSubmit(
@@ -231,6 +260,7 @@ class _LoginPageState extends State<LoginPage> {
     }
     setState(() {
       _registering = false;
+      _resetUsernameAvailability();
       _submitState = const AuthSubmitState();
       _showAccountHistory = false;
     });
@@ -245,6 +275,7 @@ class _LoginPageState extends State<LoginPage> {
       _submitState = const AuthSubmitState();
       _showAccountHistory = false;
     });
+    _scheduleUsernameAvailabilityCheck(_login.text);
   }
 
   void _toggleAccountHistory() {
@@ -333,6 +364,141 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _submitState = state);
   }
 
+  Future<void> _showEmailVerification() async {
+    if (_submitState.busy || _checkingEmailAvailability) return;
+    final email = _email.text.trim();
+    final error = registerEmailValidationError(email);
+    if (error != null) {
+      showFloatingErrorNotice(context, error);
+      return;
+    }
+    final checker = widget.checkEmailAvailability;
+    if (checker == null) {
+      showFloatingErrorNotice(context, '暂时无法检测邮箱是否重复');
+      return;
+    }
+    setState(() => _checkingEmailAvailability = true);
+    bool? available;
+    try {
+      available = await checker(email);
+    } catch (_) {
+      available = null;
+    }
+    if (!mounted) return;
+    setState(() => _checkingEmailAvailability = false);
+    if (!_registering || _email.text.trim() != email) return;
+    if (available == null) {
+      showFloatingErrorNotice(context, '暂时无法检测邮箱是否重复');
+      return;
+    }
+    if (!available) {
+      showFloatingErrorNotice(context, '该邮箱已被其他用户使用');
+      return;
+    }
+    final verified = await showDialog<bool>(
+      context: context,
+      builder: (context) => _EmailVerificationDialog(email: email),
+    );
+    if (verified == true && mounted) {
+      setState(() => _verifiedEmail = email.toLowerCase());
+    }
+  }
+
+  void _handleRegisterEmailChanged(String value) {
+    if (_verifiedEmail == null ||
+        _verifiedEmail == value.trim().toLowerCase()) {
+      return;
+    }
+    setState(() => _verifiedEmail = null);
+  }
+
+  void _resetUsernameAvailability() {
+    _usernameAvailabilityDebounce?.cancel();
+    _usernameAvailabilityDebounce = null;
+    _usernameAvailabilityQuery = null;
+    _checkingUsernameAvailability = false;
+    _usernameAvailabilityError = null;
+  }
+
+  void _handleRegisterUsernameChanged(String value) {
+    final username = value.trim();
+    _usernameAvailabilityDebounce?.cancel();
+    final formatError = loginUsernameValidationError(username);
+    setState(() {
+      _usernameAvailabilityQuery = null;
+      _checkingUsernameAvailability = false;
+      _usernameAvailabilityError = formatError;
+    });
+    if (formatError != null || widget.checkUsernameAvailability == null) return;
+    _scheduleUsernameAvailabilityCheck(username);
+  }
+
+  void _scheduleUsernameAvailabilityCheck(String value) {
+    final username = value.trim();
+    if (loginUsernameValidationError(username) != null ||
+        widget.checkUsernameAvailability == null) {
+      return;
+    }
+    _usernameAvailabilityDebounce?.cancel();
+    if (mounted && _registering) {
+      setState(() {
+        _usernameAvailabilityQuery = username;
+        _checkingUsernameAvailability = true;
+        _usernameAvailabilityError = null;
+      });
+    }
+    _usernameAvailabilityDebounce = Timer(
+      const Duration(milliseconds: 350),
+      () => unawaited(_checkUsernameAvailability(username)),
+    );
+  }
+
+  Future<String?> _checkUsernameAvailability(String username) async {
+    final checker = widget.checkUsernameAvailability;
+    if (checker == null) return null;
+    final normalized = username.trim();
+    if (loginUsernameValidationError(normalized) case final error?) {
+      return error;
+    }
+    if (mounted) {
+      setState(() {
+        _usernameAvailabilityQuery = normalized;
+        _checkingUsernameAvailability = true;
+        _usernameAvailabilityError = null;
+      });
+    }
+    try {
+      final available = await checker(normalized);
+      final error = available ? null : '该登录 Username 已被其他用户使用';
+      if (mounted && _registering && _login.text.trim() == normalized) {
+        setState(() {
+          _checkingUsernameAvailability = false;
+          _usernameAvailabilityError = error;
+        });
+      }
+      return error;
+    } catch (_) {
+      const error = '暂时无法检测 Username 是否重复';
+      if (mounted && _registering && _login.text.trim() == normalized) {
+        setState(() {
+          _checkingUsernameAvailability = false;
+          _usernameAvailabilityError = error;
+        });
+      }
+      return error;
+    }
+  }
+
+  Future<String?> _ensureUsernameAvailable(String username) async {
+    final normalized = username.trim();
+    if (_usernameAvailabilityQuery == normalized &&
+        !_checkingUsernameAvailability) {
+      return _usernameAvailabilityError;
+    }
+    _usernameAvailabilityDebounce?.cancel();
+    return _checkUsernameAvailability(normalized);
+  }
+
   Future<void> _lockAuthSize({
     bool? registering,
     bool showingError = false,
@@ -354,7 +520,7 @@ class _LoginPageState extends State<LoginPage> {
     final showWindowControls =
         widget.windowController != null &&
         Theme.of(context).platform == TargetPlatform.windows;
-    return Scaffold(
+    final page = Scaffold(
       backgroundColor: UiColors.background,
       body: Align(
         alignment: Alignment.topCenter,
@@ -414,30 +580,21 @@ class _LoginPageState extends State<LoginPage> {
                                       },
                                     ),
                                     const SizedBox(height: _authModeGap),
-                                    if (_registering) ...[
-                                      Input(
-                                        controller: _username,
-                                        enabled: !_submitState.busy,
-                                        hintText: '用户名',
-                                        prefixIcon: Icons.person_outline,
-                                        autofillHints: const [
-                                          AutofillHints.username,
-                                        ],
-                                        maxLines: 1,
-                                        onSubmitted: (_) => _submit(),
-                                      ),
-                                      const SizedBox(height: _authFieldGap),
-                                    ],
                                     TapRegion(
                                       groupId: _accountHistoryTapRegion,
                                       onTapOutside: (_) =>
                                           _closeAccountHistory(),
-                                      child: _buildLoginInput(),
+                                      child: _buildPrimaryIdentityInput(),
                                     ),
+                                    if (_registering) ...[
+                                      const SizedBox(height: _authFieldGap),
+                                      _buildRegisterEmailInput(),
+                                    ],
                                     const SizedBox(height: _authFieldGap),
                                     Input(
                                       controller: _password,
                                       enabled: !_submitState.busy,
+                                      enableInteractiveSelection: false,
                                       hintText: '密码',
                                       prefixIcon: Icons.lock_outline,
                                       autofillHints: [
@@ -467,6 +624,7 @@ class _LoginPageState extends State<LoginPage> {
                                       Input(
                                         controller: _confirmPassword,
                                         enabled: !_submitState.busy,
+                                        enableInteractiveSelection: false,
                                         hintText: '确认密码',
                                         prefixIcon: Icons.lock_outline,
                                         autofillHints: const [
@@ -538,6 +696,10 @@ class _LoginPageState extends State<LoginPage> {
           ),
         ),
       ),
+    );
+    return SelectionContainer.disabled(
+      key: const ValueKey('auth-selection-disabled'),
+      child: page,
     );
   }
 
@@ -615,13 +777,22 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  Widget _buildLoginInput() {
+  Widget _buildPrimaryIdentityInput() {
     return Input(
       controller: _login,
       enabled: !_submitState.busy,
-      hintText: _registering ? '邮箱地址' : '用户名或邮箱地址',
-      prefixIcon: _registering ? Icons.alternate_email : Icons.person_outline,
-      suffix: _canShowAccountHistory
+      enableInteractiveSelection: false,
+      hintText: _registering ? '用户名' : '用户名或邮箱地址',
+      prefixIcon: Icons.person_outline,
+      suffix: _registering
+          ? _RegisterUsernameValidityIndicator(
+              controller: _login,
+              checking: _checkingUsernameAvailability,
+              availabilityQuery: _usernameAvailabilityQuery,
+              availabilityError: _usernameAvailabilityError,
+              checksAvailability: widget.checkUsernameAvailability != null,
+            )
+          : _canShowAccountHistory
           ? _AccountInputSuffix(
               controller: _login,
               expanded: _showAccountHistory,
@@ -631,14 +802,32 @@ class _LoginPageState extends State<LoginPage> {
             )
           : null,
       autofillHints: _registering
-          ? const [AutofillHints.email]
+          ? const [AutofillHints.username]
           : const [AutofillHints.username, AutofillHints.email],
-      keyboardType: _registering
-          ? TextInputType.emailAddress
-          : TextInputType.text,
+      keyboardType: TextInputType.text,
       maxLines: 1,
-      onChanged: _registering ? null : _handleLoginChanged,
-      onSubmitted: _registering ? null : (_) => _submit(),
+      onChanged: _registering
+          ? _handleRegisterUsernameChanged
+          : _handleLoginChanged,
+      onSubmitted: (_) => _submit(),
+    );
+  }
+
+  Widget _buildRegisterEmailInput() {
+    return Input(
+      controller: _email,
+      enabled: !_submitState.busy,
+      enableInteractiveSelection: false,
+      hintText: '邮箱地址',
+      prefixIcon: Icons.alternate_email,
+      suffix: _EmailVerificationAction(
+        enabled: !_submitState.busy && !_checkingEmailAvailability,
+        onPressed: _showEmailVerification,
+      ),
+      autofillHints: const [AutofillHints.email],
+      keyboardType: TextInputType.emailAddress,
+      maxLines: 1,
+      onChanged: _handleRegisterEmailChanged,
     );
   }
 
@@ -699,21 +888,40 @@ class _RememberPasswordRow extends StatelessWidget {
       height: _authRememberHeight,
       child: Row(
         children: [
-          const Text(
-            '记住密码',
-            style: TextStyle(
-              color: UiColors.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              letterSpacing: 0,
-            ),
-          ),
-          const SizedBox(width: 8),
-          UiCheckbox(
-            value: value,
+          Semantics(
+            toggled: value,
             enabled: enabled,
-            tooltip: '记住密码',
-            onChanged: enabled ? onChanged : null,
+            button: true,
+            onTap: enabled ? () => onChanged(!value) : null,
+            child: GestureDetector(
+              key: const ValueKey('auth-remember-password-hot-zone'),
+              behavior: HitTestBehavior.opaque,
+              onTap: enabled ? () => onChanged(!value) : null,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    '记住密码',
+                    style: TextStyle(
+                      color: UiColors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ExcludeSemantics(
+                    child: IgnorePointer(
+                      child: UiCheckbox(
+                        value: value,
+                        enabled: enabled,
+                        onChanged: enabled ? (_) {} : null,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
           const Spacer(),
           _AuthTextLink(
@@ -722,6 +930,167 @@ class _RememberPasswordRow extends StatelessWidget {
             onPressed: () {
               // Placeholder until the password reset API is wired.
             },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RegisterUsernameValidityIndicator extends StatelessWidget {
+  const _RegisterUsernameValidityIndicator({
+    required this.controller,
+    required this.checking,
+    required this.availabilityQuery,
+    required this.availabilityError,
+    required this.checksAvailability,
+  });
+
+  final TextEditingController controller;
+  final bool checking;
+  final String? availabilityQuery;
+  final String? availabilityError;
+  final bool checksAvailability;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        final username = controller.text.trim();
+        if (username.isEmpty) return const SizedBox.shrink();
+        final formatError = loginUsernameValidationError(username);
+        final availabilityApplies = availabilityQuery == username;
+        final pending = formatError == null && availabilityApplies && checking;
+        final error =
+            formatError ?? (availabilityApplies ? availabilityError : null);
+        final availabilityChecked =
+            !checksAvailability || (availabilityApplies && !checking);
+        final valid = error == null && availabilityChecked;
+        final message = pending
+            ? '正在检测 Username 是否可用'
+            : error ?? (valid ? 'Username 可用' : '等待检测 Username 是否可用');
+        return Tooltip(
+          message: message,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Icon(
+              pending || !valid && error == null
+                  ? Icons.hourglass_empty_outlined
+                  : valid
+                  ? Icons.check_circle_outline
+                  : Icons.error_outline,
+              key: ValueKey<String>(
+                pending || !valid && error == null
+                    ? 'auth-username-checking'
+                    : valid
+                    ? 'auth-username-valid'
+                    : 'auth-username-invalid',
+              ),
+              size: 18,
+              color: pending || !valid && error == null
+                  ? UiColors.textSecondary
+                  : valid
+                  ? UiColors.accent
+                  : UiColors.danger,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _EmailVerificationAction extends StatelessWidget {
+  const _EmailVerificationAction({
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: '验证邮箱',
+      onTap: enabled ? onPressed : null,
+      child: MouseRegion(
+        cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        child: GestureDetector(
+          key: const ValueKey('auth-email-verification-button'),
+          behavior: HitTestBehavior.opaque,
+          onTap: enabled ? onPressed : null,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+            child: Text(
+              '验证',
+              style: UiTypography.label.copyWith(
+                color: enabled ? UiColors.accent : UiColors.textMuted,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmailVerificationDialog extends StatefulWidget {
+  const _EmailVerificationDialog({required this.email});
+
+  final String email;
+
+  @override
+  State<_EmailVerificationDialog> createState() =>
+      _EmailVerificationDialogState();
+}
+
+class _EmailVerificationDialogState extends State<_EmailVerificationDialog> {
+  final _code = TextEditingController();
+
+  @override
+  void dispose() {
+    _code.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DialogFrame(
+      title: '邮箱验证',
+      icon: Icons.mark_email_read_outlined,
+      maxWidth: 420,
+      actions: [
+        Button(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        const Button(
+          onPressed: null,
+          tone: ButtonTone.primary,
+          child: Text('验证'),
+        ),
+      ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '已发送验证码到邮箱 ${widget.email}',
+            style: UiTypography.body.copyWith(color: UiColors.textSecondary),
+          ),
+          const SizedBox(height: 14),
+          Input(
+            key: const ValueKey('auth-email-verification-code'),
+            controller: _code,
+            hintText: '请输入验证码',
+            prefixIcon: Icons.password_outlined,
+            keyboardType: TextInputType.number,
+            textInputAction: TextInputAction.done,
+            maxLines: 1,
           ),
         ],
       ),

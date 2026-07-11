@@ -7,6 +7,78 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
+  test('auth checks normalized username availability', () async {
+    late Uri requestedUri;
+    final client = AuthClient(
+      baseUrl: 'https://api.example.test',
+      httpClient: MockClient((request) async {
+        requestedUri = request.url;
+        return http.Response(
+          jsonEncode({'available': false}),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }),
+    );
+
+    final available = await client.isUsernameAvailable(' Taken_Name ');
+
+    expect(available, isFalse);
+    expect(requestedUri.path, '/auth/username-availability');
+    expect(requestedUri.queryParameters['username'], 'Taken_Name');
+    client.close();
+  });
+
+  test('username availability uses the auth TLS fallback chain', () async {
+    var directCalls = 0;
+    var fallbackCalls = 0;
+    final client = AuthClient(
+      baseUrl: 'https://api.example.test',
+      httpClient: MockClient((request) async {
+        directCalls += 1;
+        throw HandshakeException('connection terminated');
+      }),
+      environmentProxyClientFactory: () => MockClient((request) async {
+        fallbackCalls += 1;
+        return http.Response(
+          jsonEncode({'available': true}),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }),
+      handshakeRetryDelays: const [Duration.zero, Duration.zero],
+    );
+
+    final available = await client.isUsernameAvailable('available_name');
+
+    expect(available, isTrue);
+    expect(directCalls, 2);
+    expect(fallbackCalls, 1);
+    client.close();
+  });
+
+  test('auth checks normalized email availability', () async {
+    late Uri requestedUri;
+    final client = AuthClient(
+      baseUrl: 'https://api.example.test',
+      httpClient: MockClient((request) async {
+        requestedUri = request.url;
+        return http.Response(
+          jsonEncode({'available': false}),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }),
+    );
+
+    final available = await client.isEmailAvailable(' Taken@Example.Test ');
+
+    expect(available, isFalse);
+    expect(requestedUri.path, '/auth/email-availability');
+    expect(requestedUri.queryParameters['email'], 'Taken@Example.Test');
+    client.close();
+  });
+
   test('auth retries a TLS handshake failure on the direct client', () async {
     var calls = 0;
     var fallbackCalls = 0;

@@ -52,6 +52,26 @@ void main() {
     expect(
       authRequestFromForm(
         registering: true,
+        username: 'logan.test',
+        login: 'a@example.test',
+        password: 'secret',
+        confirmPassword: 'secret',
+      ).error,
+      'Username 需为 3-32 位，只能包含英文字母、数字、下划线或连字符',
+    );
+    expect(
+      authRequestFromForm(
+        registering: true,
+        username: 'logan',
+        login: 'invalid-email',
+        password: 'secret',
+        confirmPassword: 'secret',
+      ).error,
+      '请输入有效的邮箱地址',
+    );
+    expect(
+      authRequestFromForm(
+        registering: true,
         login: 'a@example.test',
         password: 'secret',
       ).error,
@@ -69,6 +89,12 @@ void main() {
     );
   });
 
+  test('registerEmailValidationError validates normalized email format', () {
+    expect(registerEmailValidationError(' '), '邮箱不能为空');
+    expect(registerEmailValidationError('logan.example.test'), '请输入有效的邮箱地址');
+    expect(registerEmailValidationError(' logan@example.test '), isNull);
+  });
+
   test('authRequestFromForm builds register request', () {
     final result = authRequestFromForm(
       registering: true,
@@ -76,12 +102,26 @@ void main() {
       login: ' a@example.test ',
       password: 'secret',
       confirmPassword: 'secret',
+      emailVerified: true,
     );
 
     expect(result.error, isNull);
     expect(result.request?.registering, isTrue);
     expect(result.request?.username, 'logan');
     expect(result.request?.login, 'a@example.test');
+  });
+
+  test('authRequestFromForm requires email verification before register', () {
+    final result = authRequestFromForm(
+      registering: true,
+      username: 'logan',
+      login: 'a@example.test',
+      password: 'secret',
+      confirmPassword: 'secret',
+    );
+
+    expect(result.request, isNull);
+    expect(result.error, '请先验证邮箱');
   });
 
   test('auth submit state covers started invalid and generic failure', () {

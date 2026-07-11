@@ -122,6 +122,24 @@ class AuthSessionController {
     }
   }
 
+  Future<bool> isUsernameAvailable(String username) async {
+    final client = _authClientFactory(apiBaseUrl);
+    try {
+      return await client.isUsernameAvailable(username);
+    } finally {
+      client.close();
+    }
+  }
+
+  Future<bool> isEmailAvailable(String email) async {
+    final client = _authClientFactory(apiBaseUrl);
+    try {
+      return await client.isEmailAvailable(email);
+    } finally {
+      client.close();
+    }
+  }
+
   Future<void> acceptSession(AuthSession session) async {
     await _tokenStore.writeRefreshToken(session.refreshToken);
     await _tokenStore.writeApiBaseUrl(apiBaseUrl);

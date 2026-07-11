@@ -1,7 +1,19 @@
 import 'auth_session_controller.dart';
 import '../auth/auth_client.dart';
 import '../auth/auth_transport.dart';
+import 'account_forms.dart';
 import 'language_preference.dart';
+
+final _registerEmailPattern = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+
+String? registerEmailValidationError(String email) {
+  final normalized = email.trim();
+  if (normalized.isEmpty) return '邮箱不能为空';
+  if (normalized.length > 254 || !_registerEmailPattern.hasMatch(normalized)) {
+    return '请输入有效的邮箱地址';
+  }
+  return null;
+}
 
 class AuthFormResult {
   const AuthFormResult._({this.request, this.error});
@@ -29,6 +41,7 @@ AuthFormResult authRequestFromForm({
   required String password,
   String username = '',
   String confirmPassword = '',
+  bool emailVerified = false,
   String language = defaultLanguagePreference,
 }) {
   final copy = authFormCopy(language);
@@ -47,8 +60,19 @@ AuthFormResult authRequestFromForm({
   if (normalizedUsername.isEmpty) {
     return AuthFormResult.invalid(copy.missingUsername);
   }
+  final usernameError = loginUsernameValidationError(normalizedUsername);
+  if (usernameError != null) {
+    return AuthFormResult.invalid(usernameError);
+  }
+  final emailError = registerEmailValidationError(normalizedLogin);
+  if (emailError != null) {
+    return AuthFormResult.invalid(emailError);
+  }
   if (password != confirmPassword) {
     return AuthFormResult.invalid(copy.passwordMismatch);
+  }
+  if (!emailVerified) {
+    return AuthFormResult.invalid(copy.emailVerificationRequired);
   }
 
   return AuthFormResult.valid(
@@ -100,6 +124,7 @@ class AuthFormCopy {
     : missingCredentials = '请输入账号和密码后继续',
       missingUsername = '用户名不能为空',
       passwordMismatch = '两次输入的密码不一致',
+      emailVerificationRequired = '请先验证邮箱',
       connectionFailedPrefix = '无法连接服务器：',
       secureConnectionFailed = '无法建立安全连接，请检查网络、代理或系统时间后重试',
       invalidCredentials = '账号或密码不正确',
@@ -114,6 +139,7 @@ class AuthFormCopy {
     : missingCredentials = '請輸入帳號和密碼後繼續',
       missingUsername = '使用者名稱不能為空',
       passwordMismatch = '兩次輸入的密碼不一致',
+      emailVerificationRequired = '請先驗證電子郵件',
       connectionFailedPrefix = '無法連線伺服器：',
       secureConnectionFailed = '無法建立安全連線，請檢查網路、代理或系統時間後重試',
       invalidCredentials = '帳號或密碼不正確',
@@ -128,6 +154,7 @@ class AuthFormCopy {
     : missingCredentials = 'Enter your account and password to continue',
       missingUsername = 'Username is required',
       passwordMismatch = 'The two passwords do not match',
+      emailVerificationRequired = 'Verify your email first',
       connectionFailedPrefix = 'Unable to connect to the server: ',
       secureConnectionFailed =
           'Could not establish a secure connection. Check your network, proxy, or system time and try again',
@@ -143,6 +170,7 @@ class AuthFormCopy {
   final String missingCredentials;
   final String missingUsername;
   final String passwordMismatch;
+  final String emailVerificationRequired;
   final String connectionFailedPrefix;
   final String secureConnectionFailed;
   final String invalidCredentials;

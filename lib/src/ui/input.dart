@@ -44,6 +44,7 @@ class Input extends StatefulWidget {
     this.height = defaultHeight,
     this.undoController,
     this.canPasteNonText,
+    this.enableInteractiveSelection = true,
   });
 
   static const double defaultHeight = 40;
@@ -72,6 +73,7 @@ class Input extends StatefulWidget {
   final Object? tapRegionGroupId;
   final UndoHistoryController? undoController;
   final Future<bool> Function()? canPasteNonText;
+  final bool enableInteractiveSelection;
 
   /// The collapsed (single-line) height of the field. Defaults to
   /// [defaultHeight]; callers can shrink it for tighter, denser layouts.
@@ -228,6 +230,7 @@ class _InputState extends State<Input> {
           undoController: _effectiveUndoController,
           onSubmitted: widget.onSubmitted,
           onChanged: widget.onChanged,
+          enableInteractiveSelection: widget.enableInteractiveSelection,
           cursorColor: UiColors.accent,
           mouseCursor: widget.enabled
               ? SystemMouseCursors.text
@@ -237,14 +240,15 @@ class _InputState extends State<Input> {
           textAlignVertical: TextAlignVertical.center,
           onTapOutside: widget.onTapOutside,
           groupId: widget.tapRegionGroupId ?? EditableText,
-          contextMenuBuilder: (context, editableTextState) =>
-              buildTextFieldContextMenu(
-                context,
-                editableTextState,
-                undoController: _effectiveUndoController,
-                canPasteNonText: widget.canPasteNonText,
-                tapRegionGroupId: widget.tapRegionGroupId,
-              ),
+          contextMenuBuilder: widget.enableInteractiveSelection
+              ? (context, editableTextState) => buildTextFieldContextMenu(
+                  context,
+                  editableTextState,
+                  undoController: _effectiveUndoController,
+                  canPasteNonText: widget.canPasteNonText,
+                  tapRegionGroupId: widget.tapRegionGroupId,
+                )
+              : (_, _) => const SizedBox.shrink(),
           decoration: InputDecoration(
             isDense: true,
             hintText: widget.hintText,
