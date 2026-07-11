@@ -188,12 +188,14 @@ class ParticipantConnectedEvent with RoomEvent {
 /// Emitted by [Room].
 class ParticipantDisconnectedEvent with RoomEvent {
   final RemoteParticipant participant;
+  final DisconnectReason? reason;
   const ParticipantDisconnectedEvent({
     required this.participant,
+    this.reason,
   });
 
   @override
-  String toString() => '${runtimeType}(participant: ${participant})';
+  String toString() => '${runtimeType}(participant: ${participant}, reason: $reason)';
 }
 
 /// Active speakers changed. List of speakers are ordered by their audio level.

@@ -87,8 +87,12 @@ class LiveSessionController {
     required void Function() onChanged,
     required void Function() onForciblyRemoved,
     required void Function(bool canPublish) onPublishPermissionChanged,
-    required void Function() onParticipantJoined,
-    required void Function() onParticipantLeft,
+    required void Function(String participantIdentity) onParticipantJoined,
+    required void Function(
+      String participantIdentity,
+      LiveParticipantDepartureKind departureKind,
+    )
+    onParticipantLeft,
   }) {
     session.addListener(onChanged);
     session.onForciblyRemoved = onForciblyRemoved;

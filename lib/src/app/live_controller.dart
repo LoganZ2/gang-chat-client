@@ -542,6 +542,7 @@ class LiveController {
       unreadMentionCount: existing.unreadMentionCount,
       hasUnreadMentionCount: existing.hasUnreadMentionCount,
       hasPendingJoinRequests: existing.hasPendingJoinRequests,
+      aiVoiceAnnouncementsEnabled: existing.aiVoiceAnnouncementsEnabled,
       updatedAt: existing.updatedAt,
     );
     return next;

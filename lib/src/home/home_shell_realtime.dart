@@ -114,6 +114,15 @@ extension _HomeShellRealtime on _HomeShellState {
   }
 
   void _applyLiveSnapshot(Map<String, dynamic> data) {
+    final eventRoomId = data['room_id'] as String?;
+    final liveJson = data['live'];
+    if (eventRoomId == _joinedLiveRoomId && liveJson is Map) {
+      try {
+        _cacheJoinedLiveParticipantUsers(
+          LiveState.fromJson(Map<String, Object?>.from(liveJson)),
+        );
+      } catch (_) {}
+    }
     final patch = _roomsController.patchLiveSnapshot(
       rooms: _servers,
       selectedRoomId: _selectedServerId,
@@ -143,6 +152,9 @@ extension _HomeShellRealtime on _HomeShellState {
     final previousJoinPolicy = _selectedRoom?.joinPolicy;
     final room = _roomsController.roomCardFromSnapshot(data);
     if (room == null || !mounted) return;
+    if (room.id == _joinedLiveRoomId) {
+      _joinedLiveAiVoiceAnnouncementsEnabled = room.aiVoiceAnnouncementsEnabled;
+    }
     final shouldRefreshMessages =
         room.id == _selectedServerId &&
         room.lastMessage != null &&

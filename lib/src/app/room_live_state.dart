@@ -33,6 +33,7 @@ RoomCard roomCardWithLive(RoomCard room, LiveState live) {
     unreadMentionCount: room.unreadMentionCount,
     hasUnreadMentionCount: room.hasUnreadMentionCount,
     hasPendingJoinRequests: room.hasPendingJoinRequests,
+    aiVoiceAnnouncementsEnabled: room.aiVoiceAnnouncementsEnabled,
     updatedAt: room.updatedAt,
   );
 }

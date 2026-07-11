@@ -2,12 +2,28 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:livekit_client/livekit_client.dart' as lk;
 
 import 'package:client/src/live/audio_input_rebinder.dart';
 import 'package:client/src/live/audio_output_rebinder.dart';
 import 'package:client/src/live/live_session.dart';
 
 void main() {
+  test('participant removal maps to the kicked announcement kind', () {
+    expect(
+      liveParticipantDepartureKind(lk.DisconnectReason.participantRemoved),
+      LiveParticipantDepartureKind.removed,
+    );
+    expect(
+      liveParticipantDepartureKind(lk.DisconnectReason.clientInitiated),
+      LiveParticipantDepartureKind.left,
+    );
+    expect(
+      liveParticipantDepartureKind(null),
+      LiveParticipantDepartureKind.left,
+    );
+  });
+
   test('presence cues ignore hidden audio participants', () {
     expect(isLivePresenceSoundParticipantIdentity('user-2'), isTrue);
     expect(

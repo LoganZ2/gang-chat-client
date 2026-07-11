@@ -18,6 +18,7 @@ import 'package:client/src/app/authenticated_app_context.dart';
 import 'package:client/src/app/close_behavior.dart';
 import 'package:client/src/app/login_account_history.dart';
 import 'package:client/src/app/live_session_controller.dart';
+import 'package:client/src/app/live_presence_announcement.dart';
 import 'package:client/src/app/realtime_controller.dart';
 import 'package:client/src/app/room_display.dart' as room_display;
 import 'package:client/src/app/settings_about.dart';
@@ -1933,6 +1934,7 @@ void main() {
       session: liveSession,
     );
     final presenceSounds = _RecordingLivePresenceSoundPlayer();
+    final presenceSpeech = _RecordingLivePresenceSpeechPlayer();
     await tester.pumpWidget(
       MaterialApp(
         theme: ui.uiTheme(),
@@ -1944,6 +1946,7 @@ void main() {
           audioDeviceStore: const _FakeAudioDeviceStore(),
           liveSessionController: liveSessionController,
           livePresenceSoundPlayer: presenceSounds,
+          livePresenceSpeechPlayer: presenceSpeech,
           realtime: _NoopRealtimeService(),
         ),
       ),
@@ -1968,14 +1971,22 @@ void main() {
     expect(liveSession.connectAttempts, 1);
     expect(presenceSounds.sounds, [LivePresenceSound.joined]);
     expect(presenceSounds.volumes.single, closeTo(0.75, 0.001));
+    expect(presenceSpeech.announcements, isEmpty);
 
     liveSession.emitParticipantJoined();
     liveSession.emitParticipantLeft();
-    await tester.pump();
+    for (var index = 0; index < 8; index += 1) {
+      await tester.pump(const Duration(milliseconds: 500));
+    }
+    await tester.pumpAndSettle();
     expect(presenceSounds.sounds, [
       LivePresenceSound.joined,
       LivePresenceSound.joined,
       LivePresenceSound.left,
+    ]);
+    expect(presenceSpeech.announcements.map((item) => item.segments).toList(), [
+      ['成员', 'Morgan', '进入了语音频道'],
+      ['成员', 'Morgan', '离开了语音频道'],
     ]);
     final selfLiveMemberCard = find.ancestor(
       of: find.byKey(const ValueKey<String>('live-member-status:mic:user-1')),
@@ -2107,6 +2118,16 @@ void main() {
       ),
     );
     expect(find.text('Morgan'), findsNothing);
+    liveSession.emitParticipantLeft(removed: true);
+    for (var index = 0; index < 3; index += 1) {
+      await tester.pump(const Duration(milliseconds: 500));
+    }
+    await tester.pumpAndSettle();
+    expect(presenceSpeech.announcements.last.segments, [
+      '成员',
+      'Morgan',
+      '被踢出了语音频道',
+    ]);
 
     await tester.tap(_liveControl('mic'));
     await tester.pumpAndSettle();
@@ -2320,10 +2341,14 @@ void main() {
     );
 
     await tester.tap(_liveControl('leave'));
+    for (var index = 0; index < 3; index += 1) {
+      await tester.pump(const Duration(milliseconds: 500));
+    }
     await tester.pumpAndSettle();
 
     expect(liveSession.disconnects, 1);
     expect(presenceSounds.sounds.last, LivePresenceSound.left);
+    expect(presenceSpeech.announcements, hasLength(3));
     expect(find.widgetWithText(ui.Button, '加入'), findsOneWidget);
     expect(find.byTooltip('已加入语音'), findsNothing);
 
@@ -7523,6 +7548,23 @@ class _RecordingLivePresenceSoundPlayer implements LivePresenceSoundPlayer {
   Future<void> dispose() async {}
 }
 
+class _RecordingLivePresenceSpeechPlayer implements LivePresenceSpeechPlayer {
+  final announcements = <LivePresenceAnnouncement>[];
+  final volumes = <double>[];
+
+  @override
+  Future<void> speak(
+    LivePresenceAnnouncement announcement, {
+    required double volume,
+  }) async {
+    announcements.add(announcement);
+    volumes.add(volume);
+  }
+
+  @override
+  Future<void> dispose() async {}
+}
+
 class _FixedCloseBehaviorStore extends CloseBehaviorStore {
   const _FixedCloseBehaviorStore(this.behavior);
 
@@ -7702,9 +7744,14 @@ class _FakeLiveSession extends LiveSession {
   final screenShareEnables = <bool>[];
   final screenShareSourceIds = <String?>[];
 
-  void emitParticipantJoined() => onParticipantJoined?.call();
+  void emitParticipantJoined() => onParticipantJoined?.call('user-2');
 
-  void emitParticipantLeft() => onParticipantLeft?.call();
+  void emitParticipantLeft({bool removed = false}) => onParticipantLeft?.call(
+    'user-2',
+    removed
+        ? LiveParticipantDepartureKind.removed
+        : LiveParticipantDepartureKind.left,
+  );
 
   @override
   Future<void> connect({

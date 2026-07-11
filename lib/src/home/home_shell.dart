@@ -23,6 +23,7 @@ import '../app/media_cache_controller.dart';
 import '../app/composer_attachment_display.dart' as composer_attachment;
 import '../app/global_search_controller.dart';
 import '../app/live_controller.dart';
+import '../app/live_presence_announcement.dart';
 import '../app/live_display.dart' as live_display;
 import '../app/live_session_controller.dart';
 import '../app/language_preference.dart';
@@ -47,6 +48,7 @@ import '../app/voice_message_display.dart' as voice_display;
 import '../app/voice_recorder_controller.dart';
 import '../live/live_session.dart';
 import '../live/live_presence_sound_service.dart';
+import '../live/live_presence_audio_coordinator.dart';
 import '../protocol/api_client.dart'
     show ApiException, UploadCancelledException, UploadTransferController;
 import '../protocol/models.dart';
@@ -56,6 +58,7 @@ import '../shell/desktop_window_controller.dart';
 import '../shell/file_drop_service.dart';
 import '../shell/file_selection_service.dart';
 import '../shell/release_update_service.dart';
+import '../shell/system_live_presence_speech_player.dart';
 import '../shell/voice_playback_service.dart';
 import '../shell/window_controls.dart';
 import '../ui/ui.dart';
@@ -108,6 +111,7 @@ class HomeShell extends StatefulWidget {
     required this.windowController,
     this.liveSessionController,
     this.livePresenceSoundPlayer,
+    this.livePresenceSpeechPlayer,
     this.realtime,
     this.detectedAppUpdate,
     this.onDetectedAppUpdateShown,
@@ -120,6 +124,7 @@ class HomeShell extends StatefulWidget {
   final DesktopWindowController windowController;
   final LiveSessionController? liveSessionController;
   final LivePresenceSoundPlayer? livePresenceSoundPlayer;
+  final LivePresenceSpeechPlayer? livePresenceSpeechPlayer;
   final RealtimeService? realtime;
   final AvailableAppUpdate? detectedAppUpdate;
   final VoidCallback? onDetectedAppUpdateShown;
@@ -182,6 +187,9 @@ class _HomeShellState extends State<HomeShell> {
       const voice_display.VoiceRecorderState();
   final VoicePlaybackService _voicePlaybackService = VoicePlaybackService();
   late final LivePresenceSoundPlayer _livePresenceSoundPlayer;
+  late final LivePresenceSpeechPlayer _livePresenceSpeechPlayer;
+  late final LivePresenceAudioCoordinator _livePresenceAudioCoordinator;
+  Future<void> _livePresenceEventTail = Future<void>.value();
   VoicePlaybackSnapshot _voicePlayback = const VoicePlaybackSnapshot();
   Timer? _voiceTicker;
   DateTime? _voiceStartedAt;
@@ -222,6 +230,8 @@ class _HomeShellState extends State<HomeShell> {
   int _pendingRoomNotificationCount = 0;
   bool _selectedRoomHasPendingJoinRequests = false;
   String? _joinedLiveRoomId;
+  bool _joinedLiveAiVoiceAnnouncementsEnabled = true;
+  final Map<String, UserSummary> _joinedLiveParticipantUsers = {};
   bool _joiningLive = false;
   bool _syncingLiveConnectedParticipants = false;
   bool _micMuted = true;
@@ -290,6 +300,12 @@ class _HomeShellState extends State<HomeShell> {
     _currentUser = widget.app.currentUser;
     _livePresenceSoundPlayer =
         widget.livePresenceSoundPlayer ?? LivePresenceSoundService();
+    _livePresenceSpeechPlayer =
+        widget.livePresenceSpeechPlayer ?? SystemLivePresenceSpeechPlayer();
+    _livePresenceAudioCoordinator = LivePresenceAudioCoordinator(
+      soundPlayer: _livePresenceSoundPlayer,
+      speechPlayer: _livePresenceSpeechPlayer,
+    );
     _composerController.addListener(_handleComposerDraftChanged);
     _titleSearchController.addListener(_handleTitleSearchChanged);
     _musicBoxSearchController.addListener(_handleMusicBoxSearchChanged);
@@ -396,6 +412,8 @@ class _HomeShellState extends State<HomeShell> {
       _pendingRoomNotificationCount = 0;
       _selectedRoomHasPendingJoinRequests = false;
       _joinedLiveRoomId = null;
+      _joinedLiveAiVoiceAnnouncementsEnabled = true;
+      _joinedLiveParticipantUsers.clear();
       _joiningLive = false;
       _micMuted = true;
       _headphonesMuted = false;
@@ -445,7 +463,9 @@ class _HomeShellState extends State<HomeShell> {
     _composerPanelController.dispose();
     _voicePlaybackService.state.removeListener(_handleVoicePlaybackChanged);
     unawaited(_voicePlaybackService.dispose());
+    _livePresenceAudioCoordinator.dispose();
     unawaited(_livePresenceSoundPlayer.dispose());
+    unawaited(_livePresenceSpeechPlayer.dispose());
     widget.app.serverClock.removeListener(_handleServerClockChanged);
     _cancelActiveDownloads();
     _services.close();

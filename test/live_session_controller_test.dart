@@ -61,8 +61,8 @@ void main() {
     );
     var changes = 0;
     var removals = 0;
-    var joins = 0;
-    var leaves = 0;
+    final joins = <String>[];
+    final leaves = <String>[];
     final publishPermissions = <bool>[];
     void onChanged() => changes += 1;
 
@@ -70,20 +70,24 @@ void main() {
       onChanged: onChanged,
       onForciblyRemoved: () => removals += 1,
       onPublishPermissionChanged: publishPermissions.add,
-      onParticipantJoined: () => joins += 1,
-      onParticipantLeft: () => leaves += 1,
+      onParticipantJoined: joins.add,
+      onParticipantLeft: (identity, kind) =>
+          leaves.add('$identity:${kind.name}'),
     );
     session.emitChange();
     session.onForciblyRemoved?.call();
     session.onPublishPermissionChanged?.call(false);
-    session.onParticipantJoined?.call();
-    session.onParticipantLeft?.call();
+    session.onParticipantJoined?.call('user-2');
+    session.onParticipantLeft?.call(
+      'user-3',
+      LiveParticipantDepartureKind.removed,
+    );
 
     expect(changes, 1);
     expect(removals, 1);
     expect(publishPermissions, [false]);
-    expect(joins, 1);
-    expect(leaves, 1);
+    expect(joins, ['user-2']);
+    expect(leaves, ['user-3:removed']);
 
     controller.detachSessionCallbacks(onChanged: onChanged);
     session.emitChange();

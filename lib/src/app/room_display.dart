@@ -1,4 +1,5 @@
 import '../protocol/models.dart';
+import 'live_presence_announcement.dart';
 
 class RoomManagementPermissionState {
   const RoomManagementPermissionState({
@@ -407,6 +408,23 @@ String roomRoleLabel(UserSummary user, {String? ownerUserId}) {
   }
   if (role == 'admin' || role == 'administrator') return '管理员';
   return '成员';
+}
+
+LivePresenceAnnouncement livePresenceAnnouncementForUser({
+  required UserSummary user,
+  required LivePresenceAnnouncementAction action,
+  String? ownerUserId,
+}) {
+  final roomDisplayName =
+      _nonEmpty(user.roomDisplayName) ??
+      _nonEmpty(user.displayName) ??
+      _nonEmpty(user.username) ??
+      '用户';
+  return LivePresenceAnnouncement(
+    roleLabel: roomRoleLabel(user, ownerUserId: ownerUserId),
+    roomDisplayName: roomDisplayName,
+    action: action,
+  );
 }
 
 String commonRoomTitle(UserCommonRoom room) {

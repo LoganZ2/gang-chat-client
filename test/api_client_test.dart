@@ -2113,6 +2113,24 @@ void main() {
     },
   );
 
+  test('RoomCard parses the AI voice announcement room switch', () {
+    final room = RoomCard.fromJson({
+      'id': 'room_1',
+      'name': 'Alpha',
+      'avatar_url': null,
+      'default_avatar_key': 'blue-1',
+      'member_count': 2,
+      'live_participant_count': 1,
+      'live_avatar_preview': const [],
+      'last_message': null,
+      'unread_count': 0,
+      'ai_voice_announcements_enabled': false,
+      'updated_at': '2026-07-11T10:00:00Z',
+    });
+
+    expect(room.aiVoiceAnnouncementsEnabled, isFalse);
+  });
+
   test('RoomDetail parses room settings and nullable creator', () {
     final room = RoomDetail.fromJson({
       ..._roomDetailJson(),

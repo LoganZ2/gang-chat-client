@@ -635,6 +635,7 @@ class RoomCard {
     this.unreadMentionCount = 0,
     this.hasUnreadMentionCount = false,
     this.hasPendingJoinRequests = false,
+    this.aiVoiceAnnouncementsEnabled = true,
   });
 
   final String id;
@@ -657,6 +658,7 @@ class RoomCard {
   final int unreadMentionCount;
   final bool hasUnreadMentionCount;
   final bool hasPendingJoinRequests;
+  final bool aiVoiceAnnouncementsEnabled;
   final DateTime updatedAt;
 
   factory RoomCard.fromJson(Map<String, Object?> json) {
@@ -705,6 +707,12 @@ class RoomCard {
       unreadMentionCount: json['unread_mention_count'] as int? ?? 0,
       hasUnreadMentionCount: hasUnreadMentionCount,
       hasPendingJoinRequests: hasPendingJoinRequests,
+      aiVoiceAnnouncementsEnabled:
+          _boolFromJson(json, const [
+            'ai_voice_announcements_enabled',
+            'ai_voice_announce_enabled',
+          ]) ??
+          true,
       updatedAt: DateTime.parse(json['updated_at']! as String),
     );
   }
@@ -750,6 +758,7 @@ class RoomCard {
           hasUnreadMentionCount ?? this.hasUnreadMentionCount,
       hasPendingJoinRequests:
           hasPendingJoinRequests ?? this.hasPendingJoinRequests,
+      aiVoiceAnnouncementsEnabled: aiVoiceAnnouncementsEnabled,
       updatedAt: updatedAt,
     );
   }
@@ -1609,6 +1618,7 @@ class RoomDetail {
       onlineMemberCount: onlineMemberCount,
       liveParticipantCount: live.participantCount,
       liveAvatarPreview: live.participants.map((p) => p.user).take(5).toList(),
+      aiVoiceAnnouncementsEnabled: aiVoiceAnnouncementsEnabled,
       lastMessage: null,
       unreadCount: 0,
       updatedAt: updatedAt,

@@ -44,6 +44,16 @@ bool isLivePresenceSoundParticipantIdentity(String identity) {
       identity != musicBoxBotIdentity;
 }
 
+enum LiveParticipantDepartureKind { left, removed }
+
+LiveParticipantDepartureKind liveParticipantDepartureKind(
+  lk.DisconnectReason? reason,
+) {
+  return reason == lk.DisconnectReason.participantRemoved
+      ? LiveParticipantDepartureKind.removed
+      : LiveParticipantDepartureKind.left;
+}
+
 @visibleForTesting
 bool shouldApplyLivePublishPermissionUpdate({
   required bool currentCanPublish,
@@ -393,10 +403,14 @@ class LiveSession extends ChangeNotifier {
 
   /// Fired for real remote users after the initial room population is done.
   /// Hidden screen-audio and music-box participants are excluded.
-  void Function()? onParticipantJoined;
+  void Function(String participantIdentity)? onParticipantJoined;
 
   /// Fired when a real remote user leaves while the room is fully connected.
-  void Function()? onParticipantLeft;
+  void Function(
+    String participantIdentity,
+    LiveParticipantDepartureKind departureKind,
+  )?
+  onParticipantLeft;
 
   bool get isConnected =>
       _room?.connectionState == lk.ConnectionState.connected;
@@ -1155,7 +1169,7 @@ class LiveSession extends ChangeNotifier {
       notifyListeners();
       if (_presenceCallbacksEnabled &&
           isLivePresenceSoundParticipantIdentity(event.participant.identity)) {
-        onParticipantJoined?.call();
+        onParticipantJoined?.call(event.participant.identity);
       }
       return;
     }
@@ -1169,7 +1183,10 @@ class LiveSession extends ChangeNotifier {
       notifyListeners();
       if (_presenceCallbacksEnabled &&
           isLivePresenceSoundParticipantIdentity(event.participant.identity)) {
-        onParticipantLeft?.call();
+        onParticipantLeft?.call(
+          event.participant.identity,
+          liveParticipantDepartureKind(event.reason),
+        );
       }
       return;
     }

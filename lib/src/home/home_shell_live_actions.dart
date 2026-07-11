@@ -97,22 +97,98 @@ extension _HomeShellLiveActions on _HomeShellState {
     _setHomeState(() {});
   }
 
-  void _onLiveParticipantJoined() {
-    _playLivePresenceSound(LivePresenceSound.joined);
+  void _onLiveParticipantJoined(String participantIdentity) {
+    _playLivePresenceSound(
+      LivePresenceSound.joined,
+      participantIdentity: participantIdentity,
+      announcementAction: LivePresenceAnnouncementAction.joined,
+    );
   }
 
-  void _onLiveParticipantLeft() {
-    _playLivePresenceSound(LivePresenceSound.left);
+  void _onLiveParticipantLeft(
+    String participantIdentity,
+    LiveParticipantDepartureKind departureKind,
+  ) {
+    _playLivePresenceSound(
+      LivePresenceSound.left,
+      participantIdentity: participantIdentity,
+      announcementAction: departureKind == LiveParticipantDepartureKind.removed
+          ? LivePresenceAnnouncementAction.removed
+          : LivePresenceAnnouncementAction.left,
+    );
   }
 
-  void _playLivePresenceSound(LivePresenceSound sound) {
-    if (_joinedLiveRoomId == null) return;
+  void _playLivePresenceSound(
+    LivePresenceSound sound, {
+    String? participantIdentity,
+    LivePresenceAnnouncementAction? announcementAction,
+  }) {
+    final playback = _livePresenceEventTail.then(
+      (_) => _queueLivePresenceAudio(
+        sound,
+        participantIdentity: participantIdentity,
+        announcementAction: announcementAction,
+      ),
+    );
+    _livePresenceEventTail = playback.catchError((_) {});
+  }
+
+  Future<void> _queueLivePresenceAudio(
+    LivePresenceSound sound, {
+    required String? participantIdentity,
+    required LivePresenceAnnouncementAction? announcementAction,
+  }) async {
+    final roomId = _joinedLiveRoomId;
+    if (roomId == null) return;
     final volume = _headphonesMuted
         ? 0.0
         : normalizedAudioVolume(_liveSessionController.outputVolume);
-    unawaited(
-      _livePresenceSoundPlayer.play(sound, volume: volume).catchError((_) {}),
+    LivePresenceAnnouncement? announcement;
+    final shouldAnnounce = shouldSpeakLivePresenceAnnouncement(
+      enabled: _joinedLiveAiVoiceAnnouncementsEnabled,
+      participantIdentity: participantIdentity,
+      currentUserIdentity: _currentUser.id,
     );
+    if (shouldAnnounce && announcementAction != null) {
+      final user = await _resolveJoinedLiveParticipantUser(
+        roomId,
+        participantIdentity!,
+      );
+      if (user != null && _joinedLiveRoomId == roomId) {
+        announcement = room_display.livePresenceAnnouncementForUser(
+          user: user,
+          action: announcementAction,
+        );
+      }
+    }
+    await _livePresenceAudioCoordinator.play(
+      sound,
+      volume: volume,
+      announcement: announcement,
+    );
+  }
+
+  Future<UserSummary?> _resolveJoinedLiveParticipantUser(
+    String roomId,
+    String participantIdentity,
+  ) async {
+    final cached = _joinedLiveParticipantUsers[participantIdentity];
+    if (cached != null) return cached;
+    try {
+      final live = await _roomsController.getLiveState(roomId);
+      if (_joinedLiveRoomId != roomId) return null;
+      _cacheJoinedLiveParticipantUsers(live);
+      return _joinedLiveParticipantUsers[participantIdentity];
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _cacheJoinedLiveParticipantUsers(LiveState live) {
+    if (live.roomId != _joinedLiveRoomId) return;
+    for (final participant in live.participants) {
+      _joinedLiveParticipantUsers[participant.user.id] = participant.user;
+    }
   }
 
   Future<void> _syncLiveConnectedParticipants(String roomId) async {
@@ -153,6 +229,10 @@ extension _HomeShellLiveActions on _HomeShellState {
     _joiningLive = patch.joiningLive;
     _contentMode = patch.livePanelOpen ? _ContentMode.live : _contentMode;
     _roomError = patch.error;
+    if (patch.joinedLiveRoomId == null) {
+      _joinedLiveAiVoiceAnnouncementsEnabled = true;
+      _joinedLiveParticipantUsers.clear();
+    }
   }
 
   void _applyLiveJoinPreviousRoomDisconnectedPatch(
@@ -178,6 +258,10 @@ extension _HomeShellLiveActions on _HomeShellState {
     _cameraOn = patch.cameraOn;
     _screenSharing = patch.screenSharing;
     _voiceBlocked = patch.voiceBlocked;
+    if (patch.joinedLiveRoomId == null) {
+      _joinedLiveAiVoiceAnnouncementsEnabled = true;
+      _joinedLiveParticipantUsers.clear();
+    }
   }
 
   void _applyLivePublishPermissionPatch(LivePublishPermissionPatch patch) {
@@ -667,15 +751,21 @@ extension _HomeShellLiveActions on _HomeShellState {
         result,
         room.id,
       );
-      _setHomeState(
-        () => _applyLiveJoinResultPatch(
+      _setHomeState(() {
+        _applyLiveJoinResultPatch(
           _liveController.patchJoinResult(
             rooms: _servers,
             result: displayResult,
             showMicUnmutedWhenAllowed: true,
           ),
-        ),
-      );
+        );
+        _joinedLiveAiVoiceAnnouncementsEnabled =
+            room.aiVoiceAnnouncementsEnabled;
+        _joinedLiveParticipantUsers.clear();
+        for (final participant in displayResult.live.participants) {
+          _joinedLiveParticipantUsers[participant.user.id] = participant.user;
+        }
+      });
       try {
         await _liveSessionController.connectWithRetry(
           displayResult,

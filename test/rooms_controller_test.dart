@@ -989,6 +989,7 @@ void main() {
         name: 'Renamed',
         memberCount: 4,
         onlineMemberCount: 2,
+        aiVoiceAnnouncementsEnabled: false,
       ),
       selectedRoom: _roomDetail('room_1', onlineMemberCount: 1),
     );
@@ -998,6 +999,8 @@ void main() {
     expect(patch.selectedRoom?.name, 'Renamed');
     expect(patch.selectedRoom?.memberCount, 4);
     expect(patch.selectedRoom?.onlineMemberCount, 2);
+    expect(patch.rooms.single.aiVoiceAnnouncementsEnabled, isFalse);
+    expect(patch.selectedRoom?.aiVoiceAnnouncementsEnabled, isFalse);
     expect(patch.shouldReloadMembers, isTrue);
   });
 
@@ -1175,6 +1178,7 @@ RoomCard _roomCard(
   int liveParticipantCount = 0,
   DateTime? lastMessageAt,
   DateTime? updatedAt,
+  bool aiVoiceAnnouncementsEnabled = true,
 }) {
   return RoomCard(
     id: id,
@@ -1198,6 +1202,7 @@ RoomCard _roomCard(
           ),
     unreadCount: unreadCount,
     hasUnreadCount: hasUnreadCount,
+    aiVoiceAnnouncementsEnabled: aiVoiceAnnouncementsEnabled,
     updatedAt: updatedAt ?? DateTime.utc(2026, 6, 4),
   );
 }

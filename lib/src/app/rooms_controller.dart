@@ -1162,6 +1162,7 @@ class RoomsController {
                 unreadMentionCount: existing.unreadMentionCount,
                 hasUnreadMentionCount: existing.hasUnreadMentionCount,
                 hasPendingJoinRequests: existing.hasPendingJoinRequests,
+                aiVoiceAnnouncementsEnabled: card.aiVoiceAnnouncementsEnabled,
                 updatedAt: card.updatedAt,
               ),
       ),
@@ -1348,6 +1349,7 @@ class RoomsController {
       unreadMentionCount: unreadMentionCount,
       hasUnreadMentionCount: true,
       hasPendingJoinRequests: incoming.hasPendingJoinRequests,
+      aiVoiceAnnouncementsEnabled: incoming.aiVoiceAnnouncementsEnabled,
       updatedAt: incoming.updatedAt,
     );
   }
@@ -1364,7 +1366,7 @@ class RoomsController {
       notificationPolicy: room.notificationPolicy,
       isPinned: room.isPinned,
       personalProfile: room.personalProfile,
-      aiVoiceAnnouncementsEnabled: room.aiVoiceAnnouncementsEnabled,
+      aiVoiceAnnouncementsEnabled: incoming.aiVoiceAnnouncementsEnabled,
       messageRecallPolicy: room.messageRecallPolicy,
       messageRecallWindowSeconds: room.messageRecallWindowSeconds,
       canDeleteRoom: room.canDeleteRoom,
@@ -1425,6 +1427,7 @@ class RoomsController {
         unreadMentionCount: existing.unreadMentionCount,
         hasUnreadMentionCount: existing.hasUnreadMentionCount,
         hasPendingJoinRequests: existing.hasPendingJoinRequests,
+        aiVoiceAnnouncementsEnabled: existing.aiVoiceAnnouncementsEnabled,
         updatedAt: existing.updatedAt,
       );
       nextRooms = orderedRoomCards(nextRooms);
