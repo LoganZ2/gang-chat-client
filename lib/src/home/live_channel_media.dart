@@ -3,17 +3,20 @@ part of 'live_channel_pane.dart';
 enum _LiveMediaKind { camera, screenShare }
 
 class _LiveMediaVideo extends StatelessWidget {
-  const _LiveMediaVideo({required this.track});
+  const _LiveMediaVideo({required this.track, this.fit});
 
   final LiveVideoTrack track;
+  final LiveVideoTrackFit? fit;
 
   @override
   Widget build(BuildContext context) {
     return LiveVideoTrackView(
       track: track,
-      fit: track.isScreenShare
-          ? LiveVideoTrackFit.contain
-          : LiveVideoTrackFit.cover,
+      fit:
+          fit ??
+          (track.isScreenShare
+              ? LiveVideoTrackFit.contain
+              : LiveVideoTrackFit.cover),
       mirrorLocal: true,
     );
   }
@@ -47,7 +50,7 @@ class _LiveMediaStage extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          _LiveMediaVideo(track: track),
+          _LiveMediaVideo(track: track, fit: LiveVideoTrackFit.contain),
           Positioned(
             left: 0,
             top: 0,
@@ -196,7 +199,10 @@ class _LiveFullScreenStageState extends State<LiveFullScreenStage> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            _LiveMediaVideo(track: widget.track),
+            _LiveMediaVideo(
+              track: widget.track,
+              fit: LiveVideoTrackFit.contain,
+            ),
             Positioned(
               left: 14,
               top: 14,

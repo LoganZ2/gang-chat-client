@@ -601,10 +601,33 @@ void main() {
       _expectMediaMemberCard(
         tester,
         activityIcon: Icons.videocam,
-        stoppedThumbnailKey: 'live-member:camera-thumbnail',
+        stoppedThumbnailKey: null,
       );
+      final cameraThumbnail = find.byKey(
+        const ValueKey<String>(
+          'live-member:video-thumbnail:current_user:false',
+        ),
+      );
+      final cameraHover = find.byKey(
+        const ValueKey<String>('live-member:video-hover:current_user:false'),
+      );
+      expect(tester.widget<AnimatedOpacity>(cameraHover).opacity, 0);
+      final hover = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await hover.addPointer(location: tester.getCenter(cameraThumbnail));
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(tester.widget<AnimatedOpacity>(cameraHover).opacity, 1);
+      expect(
+        find.descendant(
+          of: cameraThumbnail,
+          matching: find.byIcon(Icons.search),
+        ),
+        findsOneWidget,
+      );
+      await hover.removePointer();
       await tester.tap(
-        find.byKey(const ValueKey<String>('live-member:camera-thumbnail')),
+        find.byKey(
+          const ValueKey<String>('live-video-renderer:current_user:false'),
+        ),
       );
       expect(stageSelections, 1);
 
@@ -739,7 +762,9 @@ void main() {
   ) async {
     final searchController = TextEditingController();
     addTearDown(searchController.dispose);
+    LiveVideoTrackFit? renderedFit;
     liveVideoTrackRendererForTest = (track, fit, mirrorLocal) {
+      renderedFit = fit;
       return ColoredBox(
         key: ValueKey<String>(
           'live-video-renderer:${track.identity}:${track.isScreenShare}',
@@ -797,6 +822,7 @@ void main() {
       ),
       findsNothing,
     );
+    expect(renderedFit, LiveVideoTrackFit.contain);
   });
 
   testWidgets('remote screen share stage exposes bottom-right mute control', (

@@ -299,7 +299,11 @@ class _LiveMemberCard extends StatelessWidget {
               kind: _StoppedLiveMediaKind.screenShare,
             )
           : showCameraPreview
-          ? const _StoppedLiveMediaThumbnail(kind: _StoppedLiveMediaKind.camera)
+          ? previewTrack != null && previewTrack.isScreenShare == false
+                ? _LiveMemberVideo(track: previewTrack)
+                : const _StoppedLiveMediaThumbnail(
+                    kind: _StoppedLiveMediaKind.camera,
+                  )
           : _LiveMemberVideo(track: previewTrack!);
       return SizedBox(
         width: _memberCardWidth,
@@ -743,18 +747,60 @@ IconData? _participantMetaIcon(
   return null;
 }
 
-class _LiveMemberVideo extends StatelessWidget {
+class _LiveMemberVideo extends StatefulWidget {
   const _LiveMemberVideo({required this.track});
 
   final LiveVideoTrack track;
 
   @override
+  State<_LiveMemberVideo> createState() => _LiveMemberVideoState();
+}
+
+class _LiveMemberVideoState extends State<_LiveMemberVideo> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
+    final track = widget.track;
     final video = _LiveMediaVideo(track: track);
-    if (track.isScreenShare) return video;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(UiRadii.lg),
-      child: video,
+    final content = track.isScreenShare
+        ? video
+        : ClipRRect(
+            borderRadius: BorderRadius.circular(UiRadii.lg),
+            child: video,
+          );
+    return MouseRegion(
+      key: ValueKey<String>(
+        'live-member:video-thumbnail:${track.identity}:${track.isScreenShare}',
+      ),
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          content,
+          IgnorePointer(
+            child: AnimatedOpacity(
+              key: ValueKey<String>(
+                'live-member:video-hover:${track.identity}:${track.isScreenShare}',
+              ),
+              opacity: _hovered ? 1 : 0,
+              duration: const Duration(milliseconds: 120),
+              child: ColoredBox(
+                color: Colors.black.withValues(alpha: 0.32),
+                child: Center(
+                  child: Icon(
+                    Icons.search,
+                    color: Colors.white.withValues(alpha: 0.92),
+                    size: 32,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
