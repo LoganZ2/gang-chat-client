@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../app/auth_form.dart';
 import '../app/auth_session_controller.dart';
 import '../app/account_forms.dart';
+import '../app/email_verification_cooldowns.dart';
 import '../app/language_preference.dart';
 import '../app/login_account_history.dart';
 import '../ui/ui.dart';
@@ -69,6 +70,7 @@ class LoginPage extends StatefulWidget {
     required this.lockAuthWindow,
     this.checkUsernameAvailability,
     this.checkEmailAvailability,
+    this.emailVerificationCooldowns,
     this.language = defaultLanguagePreference,
     this.accountHistoryStore = const NoopLoginAccountHistoryStore(),
     this.windowController,
@@ -80,6 +82,7 @@ class LoginPage extends StatefulWidget {
   final AuthWindowLock lockAuthWindow;
   final AuthUsernameAvailabilityCheck? checkUsernameAvailability;
   final AuthEmailAvailabilityCheck? checkEmailAvailability;
+  final EmailVerificationCooldowns? emailVerificationCooldowns;
   final String language;
   final LoginAccountHistoryStore accountHistoryStore;
   final DesktopWindowController? windowController;
@@ -109,6 +112,7 @@ class _LoginPageState extends State<LoginPage> {
   String? _usernameAvailabilityQuery;
   bool _checkingUsernameAvailability = false;
   String? _usernameAvailabilityError;
+  late final EmailVerificationCooldowns _emailVerificationCooldowns;
 
   bool get _showingError =>
       _submitState.error != null && _submitState.error!.isNotEmpty;
@@ -121,6 +125,8 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
+    _emailVerificationCooldowns =
+        widget.emailVerificationCooldowns ?? EmailVerificationCooldowns();
     unawaited(_loadAccountHistory());
     if (widget.consumeInitialWindowLock()) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -397,7 +403,10 @@ class _LoginPageState extends State<LoginPage> {
     }
     final verified = await showDialog<bool>(
       context: context,
-      builder: (context) => _EmailVerificationDialog(email: email),
+      builder: (context) => _EmailVerificationDialog(
+        email: email,
+        cooldowns: _emailVerificationCooldowns,
+      ),
     );
     if (verified == true && mounted) {
       setState(() => _verifiedEmail = email.toLowerCase());
@@ -594,7 +603,6 @@ class _LoginPageState extends State<LoginPage> {
                                     Input(
                                       controller: _password,
                                       enabled: !_submitState.busy,
-                                      enableInteractiveSelection: false,
                                       hintText: '密码',
                                       prefixIcon: Icons.lock_outline,
                                       autofillHints: [
@@ -624,7 +632,6 @@ class _LoginPageState extends State<LoginPage> {
                                       Input(
                                         controller: _confirmPassword,
                                         enabled: !_submitState.busy,
-                                        enableInteractiveSelection: false,
                                         hintText: '确认密码',
                                         prefixIcon: Icons.lock_outline,
                                         autofillHints: const [
@@ -697,10 +704,7 @@ class _LoginPageState extends State<LoginPage> {
         ),
       ),
     );
-    return SelectionContainer.disabled(
-      key: const ValueKey('auth-selection-disabled'),
-      child: page,
-    );
+    return page;
   }
 
   Widget _buildLoginTail() {
@@ -781,7 +785,6 @@ class _LoginPageState extends State<LoginPage> {
     return Input(
       controller: _login,
       enabled: !_submitState.busy,
-      enableInteractiveSelection: false,
       hintText: _registering ? '用户名' : '用户名或邮箱地址',
       prefixIcon: Icons.person_outline,
       suffix: _registering
@@ -817,13 +820,20 @@ class _LoginPageState extends State<LoginPage> {
     return Input(
       controller: _email,
       enabled: !_submitState.busy,
-      enableInteractiveSelection: false,
       hintText: '邮箱地址',
       prefixIcon: Icons.alternate_email,
-      suffix: _EmailVerificationAction(
-        enabled: !_submitState.busy && !_checkingEmailAvailability,
-        onPressed: _showEmailVerification,
-      ),
+      suffix: _checkingEmailAvailability
+          ? const _InputCheckingIndicator(
+              iconKey: ValueKey('auth-email-checking'),
+              message: '正在检测邮箱是否可用',
+            )
+          : _InputSuffixAction(
+              actionKey: const ValueKey('auth-email-verification-button'),
+              label: '验证',
+              semanticsLabel: '验证邮箱',
+              enabled: !_submitState.busy,
+              onPressed: _showEmailVerification,
+            ),
       autofillHints: const [AutofillHints.email],
       keyboardType: TextInputType.emailAddress,
       maxLines: 1,
@@ -970,29 +980,23 @@ class _RegisterUsernameValidityIndicator extends StatelessWidget {
         final message = pending
             ? '正在检测 Username 是否可用'
             : error ?? (valid ? 'Username 可用' : '等待检测 Username 是否可用');
+        if (pending || !valid && error == null) {
+          return _InputCheckingIndicator(
+            iconKey: const ValueKey('auth-username-checking'),
+            message: message,
+          );
+        }
         return Tooltip(
           message: message,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Icon(
-              pending || !valid && error == null
-                  ? Icons.hourglass_empty_outlined
-                  : valid
-                  ? Icons.check_circle_outline
-                  : Icons.error_outline,
+              valid ? Icons.check_circle_outline : Icons.error_outline,
               key: ValueKey<String>(
-                pending || !valid && error == null
-                    ? 'auth-username-checking'
-                    : valid
-                    ? 'auth-username-valid'
-                    : 'auth-username-invalid',
+                valid ? 'auth-username-valid' : 'auth-username-invalid',
               ),
               size: 18,
-              color: pending || !valid && error == null
-                  ? UiColors.textSecondary
-                  : valid
-                  ? UiColors.accent
-                  : UiColors.danger,
+              color: valid ? UiColors.accent : UiColors.danger,
             ),
           ),
         );
@@ -1001,12 +1005,41 @@ class _RegisterUsernameValidityIndicator extends StatelessWidget {
   }
 }
 
-class _EmailVerificationAction extends StatelessWidget {
-  const _EmailVerificationAction({
+class _InputCheckingIndicator extends StatelessWidget {
+  const _InputCheckingIndicator({required this.iconKey, required this.message});
+
+  final Key iconKey;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: message,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Icon(
+          Icons.hourglass_empty_outlined,
+          key: iconKey,
+          size: 18,
+          color: UiColors.textSecondary,
+        ),
+      ),
+    );
+  }
+}
+
+class _InputSuffixAction extends StatelessWidget {
+  const _InputSuffixAction({
+    required this.actionKey,
+    required this.label,
+    required this.semanticsLabel,
     required this.enabled,
     required this.onPressed,
   });
 
+  final Key actionKey;
+  final String label;
+  final String semanticsLabel;
   final bool enabled;
   final VoidCallback onPressed;
 
@@ -1015,18 +1048,18 @@ class _EmailVerificationAction extends StatelessWidget {
     return Semantics(
       button: true,
       enabled: enabled,
-      label: '验证邮箱',
+      label: semanticsLabel,
       onTap: enabled ? onPressed : null,
       child: MouseRegion(
         cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
         child: GestureDetector(
-          key: const ValueKey('auth-email-verification-button'),
+          key: actionKey,
           behavior: HitTestBehavior.opaque,
           onTap: enabled ? onPressed : null,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
             child: Text(
-              '验证',
+              label,
               style: UiTypography.label.copyWith(
                 color: enabled ? UiColors.accent : UiColors.textMuted,
               ),
@@ -1039,9 +1072,13 @@ class _EmailVerificationAction extends StatelessWidget {
 }
 
 class _EmailVerificationDialog extends StatefulWidget {
-  const _EmailVerificationDialog({required this.email});
+  const _EmailVerificationDialog({
+    required this.email,
+    required this.cooldowns,
+  });
 
   final String email;
+  final EmailVerificationCooldowns cooldowns;
 
   @override
   State<_EmailVerificationDialog> createState() =>
@@ -1050,9 +1087,40 @@ class _EmailVerificationDialog extends StatefulWidget {
 
 class _EmailVerificationDialogState extends State<_EmailVerificationDialog> {
   final _code = TextEditingController();
+  Timer? _cooldownTimer;
+  late int _remainingSeconds;
+
+  @override
+  void initState() {
+    super.initState();
+    _remainingSeconds = widget.cooldowns.remainingSeconds(widget.email);
+    _startCooldownTimer();
+  }
+
+  void _sendVerificationCode() {
+    if (_remainingSeconds > 0) return;
+    setState(() {
+      _remainingSeconds = widget.cooldowns.start(widget.email);
+    });
+    _startCooldownTimer();
+  }
+
+  void _startCooldownTimer() {
+    _cooldownTimer?.cancel();
+    if (_remainingSeconds <= 0) return;
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      final remaining = widget.cooldowns.remainingSeconds(widget.email);
+      if (!mounted) return;
+      if (remaining <= 0) _cooldownTimer?.cancel();
+      if (remaining != _remainingSeconds) {
+        setState(() => _remainingSeconds = remaining);
+      }
+    });
+  }
 
   @override
   void dispose() {
+    _cooldownTimer?.cancel();
     _code.dispose();
     super.dispose();
   }
@@ -1079,7 +1147,7 @@ class _EmailVerificationDialogState extends State<_EmailVerificationDialog> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            '已发送验证码到邮箱 ${widget.email}',
+            '请确认您的邮箱地址为 ${widget.email}',
             style: UiTypography.body.copyWith(color: UiColors.textSecondary),
           ),
           const SizedBox(height: 14),
@@ -1088,6 +1156,15 @@ class _EmailVerificationDialogState extends State<_EmailVerificationDialog> {
             controller: _code,
             hintText: '请输入验证码',
             prefixIcon: Icons.password_outlined,
+            suffix: _InputSuffixAction(
+              actionKey: const ValueKey('auth-email-send-code-button'),
+              label: _remainingSeconds > 0
+                  ? '重新发送($_remainingSeconds)'
+                  : '发送验证码',
+              semanticsLabel: _remainingSeconds > 0 ? '验证码发送冷却中' : '发送验证码',
+              enabled: _remainingSeconds <= 0,
+              onPressed: _sendVerificationCode,
+            ),
             keyboardType: TextInputType.number,
             textInputAction: TextInputAction.done,
             maxLines: 1,

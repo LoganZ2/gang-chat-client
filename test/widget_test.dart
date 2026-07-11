@@ -17,6 +17,7 @@ import 'package:client/src/app/audio_device_info.dart';
 import 'package:client/src/app/audio_device_store.dart';
 import 'package:client/src/app/authenticated_app_context.dart';
 import 'package:client/src/app/close_behavior.dart';
+import 'package:client/src/app/email_verification_cooldowns.dart';
 import 'package:client/src/app/login_account_history.dart';
 import 'package:client/src/app/live_session_controller.dart';
 import 'package:client/src/app/live_presence_announcement.dart';
@@ -712,7 +713,7 @@ void main() {
   });
 
   testWidgets(
-    'auth disables selection while email verification keeps the input menu',
+    'auth inputs support selection cursor placement and context menus',
     (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -737,25 +738,47 @@ void main() {
 
       expect(
         find.byKey(const ValueKey('auth-selection-disabled')),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         tester
             .widgetList<TextField>(find.byType(TextField))
-            .every((field) => field.enableInteractiveSelection == false),
+            .every((field) => field.enableInteractiveSelection),
         isTrue,
       );
       final loginField = _textFieldWithHint('用户名或邮箱地址');
       final loginFieldTop = tester.getTopLeft(loginField).dy;
-      await tester.enterText(loginField, 'logan');
+      const loginText = 'logan@example.test';
+      await tester.enterText(loginField, loginText);
       await tester.tap(loginField);
       await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
       await tester.sendKeyEvent(LogicalKeyboardKey.keyA);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-      expect(
-        tester.widget<TextField>(loginField).controller!.selection.isCollapsed,
-        isTrue,
+      final selected = tester
+          .widget<TextField>(loginField)
+          .controller!
+          .selection;
+      expect(selected.start, 0);
+      expect(selected.end, loginText.length);
+
+      final loginRect = tester.getRect(loginField);
+      await tester.tapAt(Offset(loginRect.left + 80, loginRect.center.dy));
+      await tester.pump();
+      final repositioned = tester
+          .widget<TextField>(loginField)
+          .controller!
+          .selection;
+      expect(repositioned.isCollapsed, isTrue);
+      expect(repositioned.baseOffset, lessThan(loginText.length));
+
+      final inputSecondaryClick = await tester.startGesture(
+        tester.getCenter(loginField),
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryMouseButton,
       );
+      await inputSecondaryClick.up();
+      await tester.pumpAndSettle();
+      expect(find.text('全选'), findsOneWidget);
 
       await tester.tap(find.text('记住密码'));
       await tester.pump();
@@ -776,7 +799,13 @@ void main() {
       expect(find.text('全选'), findsNothing);
 
       await tester.tap(find.text('注册'));
-      await tester.pump();
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widgetList<TextField>(find.byType(TextField))
+            .every((field) => field.enableInteractiveSelection),
+        isTrue,
+      );
       final emailVerificationAction = find.byKey(
         const ValueKey('auth-email-verification-button'),
       );
@@ -804,7 +833,7 @@ void main() {
       );
       expect(
         tester.widget<TextField>(registerUsernameField).controller!.text,
-        'logan',
+        loginText,
       );
 
       await tester.enterText(registerUsernameField, 'logan.test');
@@ -844,7 +873,17 @@ void main() {
       await tester.tap(emailVerificationAction);
       await tester.pumpAndSettle();
       expect(find.text('邮箱验证'), findsOneWidget);
-      expect(find.text('已发送验证码到邮箱 logan@example.test'), findsOneWidget);
+      expect(find.text('请确认您的邮箱地址为 logan@example.test'), findsOneWidget);
+      final sendCodeAction = find.byKey(
+        const ValueKey('auth-email-send-code-button'),
+      );
+      expect(find.text('发送验证码'), findsOneWidget);
+      expect(tester.widget<GestureDetector>(sendCodeAction).onTap, isNotNull);
+
+      await tester.tap(sendCodeAction);
+      await tester.pump();
+      expect(find.text('重新发送(59)'), findsOneWidget);
+      expect(tester.widget<GestureDetector>(sendCodeAction).onTap, isNull);
 
       final verificationCodeField = _textFieldWithHint('请输入验证码');
       expect(
@@ -900,6 +939,126 @@ void main() {
 
     expect(find.text('该邮箱已被其他用户使用'), findsOneWidget);
     expect(find.text('邮箱验证'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'email verification shows checking icon while request is pending',
+    (WidgetTester tester) async {
+      final availability = Completer<bool>();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: LoginPage(
+            sizeForMode: (_, {showingError = false}) => const Size(430, 500),
+            consumeInitialWindowLock: () => true,
+            lockAuthWindow:
+                ({
+                  bool registering = false,
+                  bool moveWindow = false,
+                  bool centerWindow = false,
+                  Size? size,
+                }) async {},
+            checkUsernameAvailability: (_) async => true,
+            checkEmailAvailability: (_) => availability.future,
+            onSubmit: (_, {required rememberPassword}) async {},
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.text('注册'));
+      await tester.pumpAndSettle();
+      await tester.enterText(_textFieldWithHint('邮箱地址'), 'logan@example.test');
+
+      await tester.tap(
+        find.byKey(const ValueKey('auth-email-verification-button')),
+      );
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('auth-email-checking')), findsOneWidget);
+      expect(find.byTooltip('正在检测邮箱是否可用'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('auth-email-verification-button')),
+        findsNothing,
+      );
+
+      availability.complete(true);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('auth-email-checking')), findsNothing);
+      expect(find.text('邮箱验证'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('email verification cooldown is inherited per email', (
+    WidgetTester tester,
+  ) async {
+    var now = DateTime(2026, 7, 12, 12);
+    final cooldowns = EmailVerificationCooldowns(now: () => now);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: LoginPage(
+          sizeForMode: (_, {showingError = false}) => const Size(430, 500),
+          consumeInitialWindowLock: () => true,
+          lockAuthWindow:
+              ({
+                bool registering = false,
+                bool moveWindow = false,
+                bool centerWindow = false,
+                Size? size,
+              }) async {},
+          checkUsernameAvailability: (_) async => true,
+          checkEmailAvailability: (_) async => true,
+          emailVerificationCooldowns: cooldowns,
+          onSubmit: (_, {required rememberPassword}) async {},
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('注册'));
+    await tester.pumpAndSettle();
+    final emailField = _textFieldWithHint('邮箱地址');
+    final verifyAction = find.byKey(
+      const ValueKey('auth-email-verification-button'),
+    );
+
+    await tester.enterText(emailField, 'first@example.test');
+    await tester.tap(verifyAction);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('auth-email-send-code-button')));
+    await tester.pump();
+    expect(find.text('重新发送(59)'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ui.Button, '取消'));
+    await tester.pumpAndSettle();
+    await tester.tap(verifyAction);
+    await tester.pumpAndSettle();
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is Text && widget.data?.startsWith('重新发送(') == true,
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.widgetWithText(ui.Button, '取消'));
+    await tester.pumpAndSettle();
+    await tester.enterText(emailField, 'second@example.test');
+    await tester.tap(verifyAction);
+    await tester.pumpAndSettle();
+    expect(find.text('发送验证码'), findsOneWidget);
+    expect(find.textContaining('重新发送('), findsNothing);
+
+    await tester.tap(find.widgetWithText(ui.Button, '取消'));
+    await tester.pumpAndSettle();
+    await tester.enterText(emailField, 'first@example.test');
+    await tester.tap(verifyAction);
+    await tester.pumpAndSettle();
+    expect(find.text('重新发送(59)'), findsOneWidget);
+    now = now.add(const Duration(seconds: 59));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('发送验证码'), findsOneWidget);
+    expect(find.textContaining('重新发送('), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
