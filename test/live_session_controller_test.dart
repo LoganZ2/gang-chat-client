@@ -61,6 +61,8 @@ void main() {
     );
     var changes = 0;
     var removals = 0;
+    var joins = 0;
+    var leaves = 0;
     final publishPermissions = <bool>[];
     void onChanged() => changes += 1;
 
@@ -68,20 +70,28 @@ void main() {
       onChanged: onChanged,
       onForciblyRemoved: () => removals += 1,
       onPublishPermissionChanged: publishPermissions.add,
+      onParticipantJoined: () => joins += 1,
+      onParticipantLeft: () => leaves += 1,
     );
     session.emitChange();
     session.onForciblyRemoved?.call();
     session.onPublishPermissionChanged?.call(false);
+    session.onParticipantJoined?.call();
+    session.onParticipantLeft?.call();
 
     expect(changes, 1);
     expect(removals, 1);
     expect(publishPermissions, [false]);
+    expect(joins, 1);
+    expect(leaves, 1);
 
     controller.detachSessionCallbacks(onChanged: onChanged);
     session.emitChange();
     expect(changes, 1);
     expect(session.onForciblyRemoved, isNull);
     expect(session.onPublishPermissionChanged, isNull);
+    expect(session.onParticipantJoined, isNull);
+    expect(session.onParticipantLeft, isNull);
   });
 
   test('live session media controls proxy through controller', () async {

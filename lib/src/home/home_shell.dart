@@ -46,6 +46,7 @@ import '../app/sticker_packs_controller.dart';
 import '../app/voice_message_display.dart' as voice_display;
 import '../app/voice_recorder_controller.dart';
 import '../live/live_session.dart';
+import '../live/live_presence_sound_service.dart';
 import '../protocol/api_client.dart'
     show ApiException, UploadCancelledException, UploadTransferController;
 import '../protocol/models.dart';
@@ -106,6 +107,7 @@ class HomeShell extends StatefulWidget {
     required this.languageStore,
     required this.windowController,
     this.liveSessionController,
+    this.livePresenceSoundPlayer,
     this.realtime,
     this.detectedAppUpdate,
     this.onDetectedAppUpdateShown,
@@ -117,6 +119,7 @@ class HomeShell extends StatefulWidget {
   final LanguagePreferenceStore languageStore;
   final DesktopWindowController windowController;
   final LiveSessionController? liveSessionController;
+  final LivePresenceSoundPlayer? livePresenceSoundPlayer;
   final RealtimeService? realtime;
   final AvailableAppUpdate? detectedAppUpdate;
   final VoidCallback? onDetectedAppUpdateShown;
@@ -178,6 +181,7 @@ class _HomeShellState extends State<HomeShell> {
   voice_display.VoiceRecorderState _voiceState =
       const voice_display.VoiceRecorderState();
   final VoicePlaybackService _voicePlaybackService = VoicePlaybackService();
+  late final LivePresenceSoundPlayer _livePresenceSoundPlayer;
   VoicePlaybackSnapshot _voicePlayback = const VoicePlaybackSnapshot();
   Timer? _voiceTicker;
   DateTime? _voiceStartedAt;
@@ -284,6 +288,8 @@ class _HomeShellState extends State<HomeShell> {
   void initState() {
     super.initState();
     _currentUser = widget.app.currentUser;
+    _livePresenceSoundPlayer =
+        widget.livePresenceSoundPlayer ?? LivePresenceSoundService();
     _composerController.addListener(_handleComposerDraftChanged);
     _titleSearchController.addListener(_handleTitleSearchChanged);
     _musicBoxSearchController.addListener(_handleMusicBoxSearchChanged);
@@ -439,6 +445,7 @@ class _HomeShellState extends State<HomeShell> {
     _composerPanelController.dispose();
     _voicePlaybackService.state.removeListener(_handleVoicePlaybackChanged);
     unawaited(_voicePlaybackService.dispose());
+    unawaited(_livePresenceSoundPlayer.dispose());
     widget.app.serverClock.removeListener(_handleServerClockChanged);
     _cancelActiveDownloads();
     _services.close();
@@ -498,6 +505,8 @@ class _HomeShellState extends State<HomeShell> {
       onChanged: _onLiveSessionChanged,
       onForciblyRemoved: _onForciblyRemovedFromLive,
       onPublishPermissionChanged: _onPublishPermissionChanged,
+      onParticipantJoined: _onLiveParticipantJoined,
+      onParticipantLeft: _onLiveParticipantLeft,
     );
   }
 

@@ -8,6 +8,16 @@ import 'package:client/src/live/audio_output_rebinder.dart';
 import 'package:client/src/live/live_session.dart';
 
 void main() {
+  test('presence cues ignore hidden audio participants', () {
+    expect(isLivePresenceSoundParticipantIdentity('user-2'), isTrue);
+    expect(
+      isLivePresenceSoundParticipantIdentity('user-2--screen-audio'),
+      isFalse,
+    );
+    expect(isLivePresenceSoundParticipantIdentity('__musicbox__'), isFalse);
+    expect(isLivePresenceSoundParticipantIdentity(''), isFalse);
+  });
+
   test('screen-share source picker keeps screens without thumbnails', () {
     final sources = filterScreenSourcesForPicker([
       const ScreenSource(

@@ -38,6 +38,12 @@ bool _isOwnScreenAudioAux(String identity, String? localIdentity) {
   return identity == '$localIdentity$_screenAudioAuxSuffix';
 }
 
+bool isLivePresenceSoundParticipantIdentity(String identity) {
+  return identity.isNotEmpty &&
+      !_isScreenAudioAux(identity) &&
+      identity != musicBoxBotIdentity;
+}
+
 @visibleForTesting
 bool shouldApplyLivePublishPermissionUpdate({
   required bool currentCanPublish,
@@ -344,6 +350,7 @@ class LiveSession extends ChangeNotifier {
   bool _localMicrophonePublishUnavailable = false;
   String? _resolvedLiveKitUrl;
   bool _canPublish = true;
+  bool _presenceCallbacksEnabled = false;
   double _inputVolume = defaultAudioVolume;
   double _outputVolume = defaultAudioVolume;
   double _musicBoxVolume = defaultAudioVolume;
@@ -383,6 +390,13 @@ class LiveSession extends ChangeNotifier {
   /// canPublish=true). [canPublish] is the new value. The UI reconciles the
   /// mic button: disabled while false, re-enabled (still muted) when restored.
   void Function(bool canPublish)? onPublishPermissionChanged;
+
+  /// Fired for real remote users after the initial room population is done.
+  /// Hidden screen-audio and music-box participants are excluded.
+  void Function()? onParticipantJoined;
+
+  /// Fired when a real remote user leaves while the room is fully connected.
+  void Function()? onParticipantLeft;
 
   bool get isConnected =>
       _room?.connectionState == lk.ConnectionState.connected;
@@ -584,6 +598,7 @@ class LiveSession extends ChangeNotifier {
     _screenSharing = false;
     _localMicrophonePublishUnavailable = false;
     _canPublish = true;
+    _presenceCallbacksEnabled = false;
     _cancelEvents = room.events.listen(_onEvent);
 
     try {
@@ -632,6 +647,7 @@ class LiveSession extends ChangeNotifier {
       _localMicrophonePublishUnavailable = false;
       _watchedScreenShareIdentity = null;
       _watchedCameraIdentity = null;
+      _presenceCallbacksEnabled = false;
       unawaited(_stopScreenAudioPublisher());
       _speakingIdentities.clear();
       _micMutedByIdentity.clear();
@@ -640,6 +656,7 @@ class LiveSession extends ChangeNotifier {
       throw LiveSessionConnectException(url: url, cause: e);
     }
 
+    _presenceCallbacksEnabled = true;
     _connecting = false;
     notifyListeners();
   }
@@ -1029,6 +1046,7 @@ class LiveSession extends ChangeNotifier {
     _watchedCameraIdentity = null;
     _localMicrophonePublishUnavailable = false;
     _canPublish = true;
+    _presenceCallbacksEnabled = false;
     _speakingIdentities.clear();
     _micMutedByIdentity.clear();
     await _resetLocalInputVolume();
@@ -1067,6 +1085,7 @@ class LiveSession extends ChangeNotifier {
     _watchedScreenShareIdentity = null;
     _watchedCameraIdentity = null;
     _localMicrophonePublishUnavailable = false;
+    _presenceCallbacksEnabled = false;
     unawaited(_stopScreenAudioPublisher());
     _speakingIdentities.clear();
     _micMutedByIdentity.clear();
@@ -1099,6 +1118,14 @@ class LiveSession extends ChangeNotifier {
   // ---- Event handling -------------------------------------------------------
 
   void _onEvent(lk.RoomEvent event) {
+    if (event is lk.ReconnectingEvent) {
+      _presenceCallbacksEnabled = false;
+      return;
+    }
+    if (event is lk.RoomReconnectedEvent) {
+      _presenceCallbacksEnabled = true;
+      return;
+    }
     if (event is lk.ActiveSpeakersChangedEvent) {
       _speakingIdentities
         ..clear()
@@ -1126,6 +1153,10 @@ class LiveSession extends ChangeNotifier {
       unawaited(_applyCameraSubscriptions());
       unawaited(_applyScreenShareVolume());
       notifyListeners();
+      if (_presenceCallbacksEnabled &&
+          isLivePresenceSoundParticipantIdentity(event.participant.identity)) {
+        onParticipantJoined?.call();
+      }
       return;
     }
     if (event is lk.ParticipantDisconnectedEvent) {
@@ -1136,6 +1167,10 @@ class LiveSession extends ChangeNotifier {
       _micMutedByIdentity.remove(event.participant.identity);
       _speakingIdentities.remove(event.participant.identity);
       notifyListeners();
+      if (_presenceCallbacksEnabled &&
+          isLivePresenceSoundParticipantIdentity(event.participant.identity)) {
+        onParticipantLeft?.call();
+      }
       return;
     }
     // An admin mute_mic / restore_voice flips the local participant's publish
@@ -1194,6 +1229,7 @@ class LiveSession extends ChangeNotifier {
       return;
     }
     if (event is lk.RoomDisconnectedEvent) {
+      _presenceCallbacksEnabled = false;
       _screenSharing = false;
       _watchedScreenShareIdentity = null;
       _watchedCameraIdentity = null;

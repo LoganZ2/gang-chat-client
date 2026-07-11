@@ -87,16 +87,22 @@ class LiveSessionController {
     required void Function() onChanged,
     required void Function() onForciblyRemoved,
     required void Function(bool canPublish) onPublishPermissionChanged,
+    required void Function() onParticipantJoined,
+    required void Function() onParticipantLeft,
   }) {
     session.addListener(onChanged);
     session.onForciblyRemoved = onForciblyRemoved;
     session.onPublishPermissionChanged = onPublishPermissionChanged;
+    session.onParticipantJoined = onParticipantJoined;
+    session.onParticipantLeft = onParticipantLeft;
   }
 
   void detachSessionCallbacks({required void Function() onChanged}) {
     session.removeListener(onChanged);
     session.onForciblyRemoved = null;
     session.onPublishPermissionChanged = null;
+    session.onParticipantJoined = null;
+    session.onParticipantLeft = null;
   }
 
   Future<void> setMicMuted(bool muted) => session.setMicMuted(muted);

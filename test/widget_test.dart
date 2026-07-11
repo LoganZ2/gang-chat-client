@@ -26,6 +26,7 @@ import 'package:client/src/auth/auth_client.dart';
 import 'package:client/src/auth/token_store.dart';
 import 'package:client/src/live/audio_device_service.dart';
 import 'package:client/src/live/live_session.dart';
+import 'package:client/src/live/live_presence_sound_service.dart';
 import 'package:client/src/live/system_audio_devices.dart';
 import 'package:client/src/protocol/api_client.dart';
 import 'package:client/src/protocol/models.dart';
@@ -1931,6 +1932,7 @@ void main() {
     final liveSessionController = _FakeLiveSessionController(
       session: liveSession,
     );
+    final presenceSounds = _RecordingLivePresenceSoundPlayer();
     await tester.pumpWidget(
       MaterialApp(
         theme: ui.uiTheme(),
@@ -1941,6 +1943,7 @@ void main() {
           ),
           audioDeviceStore: const _FakeAudioDeviceStore(),
           liveSessionController: liveSessionController,
+          livePresenceSoundPlayer: presenceSounds,
           realtime: _NoopRealtimeService(),
         ),
       ),
@@ -1963,6 +1966,17 @@ void main() {
 
     expect(requestedPaths, contains('/api/v1/rooms/server-alpha/live/join'));
     expect(liveSession.connectAttempts, 1);
+    expect(presenceSounds.sounds, [LivePresenceSound.joined]);
+    expect(presenceSounds.volumes.single, closeTo(0.75, 0.001));
+
+    liveSession.emitParticipantJoined();
+    liveSession.emitParticipantLeft();
+    await tester.pump();
+    expect(presenceSounds.sounds, [
+      LivePresenceSound.joined,
+      LivePresenceSound.joined,
+      LivePresenceSound.left,
+    ]);
     final selfLiveMemberCard = find.ancestor(
       of: find.byKey(const ValueKey<String>('live-member-status:mic:user-1')),
       matching: find.byType(ui.PressableSurface),
@@ -2309,6 +2323,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(liveSession.disconnects, 1);
+    expect(presenceSounds.sounds.last, LivePresenceSound.left);
     expect(find.widgetWithText(ui.Button, '加入'), findsOneWidget);
     expect(find.byTooltip('已加入语音'), findsNothing);
 
@@ -7494,6 +7509,20 @@ class _FakeAudioDeviceStore extends AudioDeviceStore {
   Future<void> writeOutputVolume(double volume) async {}
 }
 
+class _RecordingLivePresenceSoundPlayer implements LivePresenceSoundPlayer {
+  final sounds = <LivePresenceSound>[];
+  final volumes = <double>[];
+
+  @override
+  Future<void> play(LivePresenceSound sound, {required double volume}) async {
+    sounds.add(sound);
+    volumes.add(volume);
+  }
+
+  @override
+  Future<void> dispose() async {}
+}
+
 class _FixedCloseBehaviorStore extends CloseBehaviorStore {
   const _FixedCloseBehaviorStore(this.behavior);
 
@@ -7672,6 +7701,10 @@ class _FakeLiveSession extends LiveSession {
   final cameraEnables = <bool>[];
   final screenShareEnables = <bool>[];
   final screenShareSourceIds = <String?>[];
+
+  void emitParticipantJoined() => onParticipantJoined?.call();
+
+  void emitParticipantLeft() => onParticipantLeft?.call();
 
   @override
   Future<void> connect({

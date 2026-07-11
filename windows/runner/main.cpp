@@ -11,8 +11,18 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // account corrupts the shared session (logging out of one breaks the other),
   // so if an instance is already running we just surface its window and exit.
   // The handle is intentionally never released; the OS frees it on exit.
+#if defined(_DEBUG)
+  // Let a development build run alongside the installed app. It still keeps
+  // its own single-instance guard, but no longer exits before Flutter can
+  // attach the debug service protocol.
+  constexpr wchar_t kSingleInstanceMutex[] =
+      L"gang_chat_debug_single_instance_mutex";
+#else
+  constexpr wchar_t kSingleInstanceMutex[] =
+      L"gang_chat_single_instance_mutex";
+#endif
   HANDLE single_instance_mutex =
-      ::CreateMutexW(nullptr, TRUE, L"gang_chat_single_instance_mutex");
+      ::CreateMutexW(nullptr, TRUE, kSingleInstanceMutex);
   if (single_instance_mutex != nullptr &&
       ::GetLastError() == ERROR_ALREADY_EXISTS) {
     HWND existing =

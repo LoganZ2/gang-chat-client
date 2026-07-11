@@ -97,6 +97,24 @@ extension _HomeShellLiveActions on _HomeShellState {
     _setHomeState(() {});
   }
 
+  void _onLiveParticipantJoined() {
+    _playLivePresenceSound(LivePresenceSound.joined);
+  }
+
+  void _onLiveParticipantLeft() {
+    _playLivePresenceSound(LivePresenceSound.left);
+  }
+
+  void _playLivePresenceSound(LivePresenceSound sound) {
+    if (_joinedLiveRoomId == null) return;
+    final volume = _headphonesMuted
+        ? 0.0
+        : normalizedAudioVolume(_liveSessionController.outputVolume);
+    unawaited(
+      _livePresenceSoundPlayer.play(sound, volume: volume).catchError((_) {}),
+    );
+  }
+
   Future<void> _syncLiveConnectedParticipants(String roomId) async {
     if (_syncingLiveConnectedParticipants) return;
     _syncingLiveConnectedParticipants = true;
@@ -109,6 +127,7 @@ extension _HomeShellLiveActions on _HomeShellState {
 
   void _onForciblyRemovedFromLive() {
     if (!mounted) return;
+    _playLivePresenceSound(LivePresenceSound.left);
     final patch = _liveController.patchLocalDeparture(
       live: _live,
       rooms: _servers,
@@ -619,6 +638,7 @@ extension _HomeShellLiveActions on _HomeShellState {
       targetRoomId: room.id,
     );
     if (previousLiveRoomId != null) {
+      _playLivePresenceSound(LivePresenceSound.left);
       await _notifyLiveLeft(previousLiveRoomId);
       await _liveSessionController.disconnect();
       if (mounted) {
@@ -676,6 +696,7 @@ extension _HomeShellLiveActions on _HomeShellState {
           ),
         ),
       );
+      _playLivePresenceSound(LivePresenceSound.joined);
       // Publish the ready state atomically so other clients do not render the
       // server's initial `joining + muted` placeholder as a visible member.
       await _patchLiveState(
@@ -843,6 +864,7 @@ extension _HomeShellLiveActions on _HomeShellState {
   Future<void> _leaveLive() async {
     final roomId = _joinedLiveRoomId;
     if (roomId == null) return;
+    _playLivePresenceSound(LivePresenceSound.left);
     final shouldKeepLivePanelOpen = _contentMode == _ContentMode.live;
     final patch = _liveController.patchLocalDeparture(
       live: _live,
