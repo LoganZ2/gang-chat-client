@@ -2340,15 +2340,28 @@ void main() {
       greaterThanOrEqualTo(3),
     );
 
+    final queuedPresencePlayback = Completer<void>();
+    presenceSounds.nextPlaybackCompletion = queuedPresencePlayback;
+    liveSession.emitParticipantJoined();
+    await tester.pump();
+    expect(presenceSounds.sounds.last, LivePresenceSound.joined);
+    final soundCountBeforeExit = presenceSounds.sounds.length;
+    liveSession.emitParticipantLeft();
+    await tester.pump();
+    expect(presenceSounds.sounds, hasLength(soundCountBeforeExit));
+
     await tester.tap(_liveControl('leave'));
+    await tester.pump();
+    queuedPresencePlayback.complete();
     for (var index = 0; index < 3; index += 1) {
       await tester.pump(const Duration(milliseconds: 500));
     }
     await tester.pumpAndSettle();
 
     expect(liveSession.disconnects, 1);
+    expect(presenceSounds.sounds, hasLength(soundCountBeforeExit + 1));
     expect(presenceSounds.sounds.last, LivePresenceSound.left);
-    expect(presenceSpeech.announcements, hasLength(3));
+    expect(presenceSpeech.announcements, hasLength(4));
     expect(find.widgetWithText(ui.Button, '加入'), findsOneWidget);
     expect(find.byTooltip('已加入语音'), findsNothing);
 
@@ -7537,11 +7550,15 @@ class _FakeAudioDeviceStore extends AudioDeviceStore {
 class _RecordingLivePresenceSoundPlayer implements LivePresenceSoundPlayer {
   final sounds = <LivePresenceSound>[];
   final volumes = <double>[];
+  Completer<void>? nextPlaybackCompletion;
 
   @override
   Future<void> play(LivePresenceSound sound, {required double volume}) async {
     sounds.add(sound);
     volumes.add(volume);
+    final completion = nextPlaybackCompletion;
+    nextPlaybackCompletion = null;
+    if (completion != null) await completion.future;
   }
 
   @override

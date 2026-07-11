@@ -122,12 +122,17 @@ extension _HomeShellLiveActions on _HomeShellState {
     LivePresenceSound sound, {
     String? participantIdentity,
     LivePresenceAnnouncementAction? announcementAction,
+    bool continueAfterRoomExit = false,
   }) {
+    final roomId = _joinedLiveRoomId;
+    if (roomId == null) return;
     final playback = _livePresenceEventTail.then(
       (_) => _queueLivePresenceAudio(
         sound,
+        roomId: roomId,
         participantIdentity: participantIdentity,
         announcementAction: announcementAction,
+        continueAfterRoomExit: continueAfterRoomExit,
       ),
     );
     _livePresenceEventTail = playback.catchError((_) {});
@@ -135,11 +140,12 @@ extension _HomeShellLiveActions on _HomeShellState {
 
   Future<void> _queueLivePresenceAudio(
     LivePresenceSound sound, {
+    required String roomId,
     required String? participantIdentity,
     required LivePresenceAnnouncementAction? announcementAction,
+    required bool continueAfterRoomExit,
   }) async {
-    final roomId = _joinedLiveRoomId;
-    if (roomId == null) return;
+    if (!continueAfterRoomExit && _joinedLiveRoomId != roomId) return;
     final volume = _headphonesMuted
         ? 0.0
         : normalizedAudioVolume(_liveSessionController.outputVolume);
@@ -203,7 +209,7 @@ extension _HomeShellLiveActions on _HomeShellState {
 
   void _onForciblyRemovedFromLive() {
     if (!mounted) return;
-    _playLivePresenceSound(LivePresenceSound.left);
+    _playLivePresenceSound(LivePresenceSound.left, continueAfterRoomExit: true);
     final patch = _liveController.patchLocalDeparture(
       live: _live,
       rooms: _servers,
@@ -722,7 +728,10 @@ extension _HomeShellLiveActions on _HomeShellState {
       targetRoomId: room.id,
     );
     if (previousLiveRoomId != null) {
-      _playLivePresenceSound(LivePresenceSound.left);
+      _playLivePresenceSound(
+        LivePresenceSound.left,
+        continueAfterRoomExit: true,
+      );
       await _notifyLiveLeft(previousLiveRoomId);
       await _liveSessionController.disconnect();
       if (mounted) {
@@ -954,7 +963,7 @@ extension _HomeShellLiveActions on _HomeShellState {
   Future<void> _leaveLive() async {
     final roomId = _joinedLiveRoomId;
     if (roomId == null) return;
-    _playLivePresenceSound(LivePresenceSound.left);
+    _playLivePresenceSound(LivePresenceSound.left, continueAfterRoomExit: true);
     final shouldKeepLivePanelOpen = _contentMode == _ContentMode.live;
     final patch = _liveController.patchLocalDeparture(
       live: _live,
