@@ -3,6 +3,7 @@ import '../protocol/api_client.dart';
 import '../protocol/models.dart';
 import '../protocol/sticker_pack_store.dart';
 import 'server_clock.dart';
+import 'password_reset_controller.dart';
 
 typedef LogoutCallback = Future<void> Function();
 typedef ExitSessionCallback = Future<void> Function();
@@ -15,6 +16,7 @@ class AuthenticatedAppContext {
     required this.logout,
     required this.exitSessionForAppExit,
     required this.serverClock,
+    this.passwordResetController,
     this.api,
     this.stickerPackStore = const StickerPackStore(),
   });
@@ -25,6 +27,7 @@ class AuthenticatedAppContext {
   final LogoutCallback logout;
   final ExitSessionCallback exitSessionForAppExit;
   final ServerClock serverClock;
+  final PasswordResetController? passwordResetController;
   final GangApi? api;
   final StickerPackStore stickerPackStore;
 

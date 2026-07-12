@@ -30,6 +30,7 @@ extension _HomeShellLayout on _HomeShellState {
         isSubWindow: true,
         api: _services.api,
         apiBaseUrl: widget.app.apiBaseUrl,
+        passwordResetController: widget.app.passwordResetController,
         audioDeviceStore: widget.audioDeviceStore,
         closeBehaviorStore: widget.closeBehaviorStore,
         languageStore: widget.languageStore,

@@ -737,11 +737,14 @@ PasswordChangeDraft passwordChangeDraftFromForm({
   required String currentPassword,
   required String newPassword,
   required String confirmPassword,
+  bool currentPasswordRequired = true,
 }) {
-  if (currentPassword.isEmpty ||
+  if ((currentPasswordRequired && currentPassword.isEmpty) ||
       newPassword.isEmpty ||
       confirmPassword.isEmpty) {
-    return const PasswordChangeDraft.invalid('请完整填写当前密码、新密码和确认密码');
+    return PasswordChangeDraft.invalid(
+      currentPasswordRequired ? '请完整填写当前密码、新密码和确认密码' : '请完整填写新密码和确认密码',
+    );
   }
   if (newPassword.length < 8) {
     return const PasswordChangeDraft.invalid('新密码至少需要 8 个字符');

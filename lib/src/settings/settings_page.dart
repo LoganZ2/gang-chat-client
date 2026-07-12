@@ -17,6 +17,7 @@ import '../app/audio_levels.dart';
 import '../app/close_behavior.dart';
 import '../app/confirmation.dart';
 import '../app/language_preference.dart';
+import '../app/password_reset_controller.dart';
 import '../app/settings_about.dart';
 import '../app/settings_controller.dart';
 import '../app/settings_shell_state.dart';
@@ -42,6 +43,7 @@ import '../shell/local_close_behavior_store.dart';
 import '../shell/local_audio_device_store.dart';
 import '../shell/local_language_preference_store.dart';
 import '../shell/release_update_service.dart';
+import '../shell/password_reset_flow.dart';
 import '../ui/avatar_crop_dialog.dart';
 import '../ui/sticker_upload_adapter.dart';
 import '../ui/ui.dart';
@@ -70,6 +72,7 @@ class SettingsPage extends StatefulWidget {
     this.controller,
     this.api,
     this.apiBaseUrl = '',
+    this.passwordResetController,
     this.stickerPackStore = const StickerPackStore(),
     this.clipboardService = const ClipboardService(),
     this.fileSelectionService = const FileSelectionService(),
@@ -103,6 +106,7 @@ class SettingsPage extends StatefulWidget {
   final SettingsController? controller;
   final GangApi? api;
   final String apiBaseUrl;
+  final PasswordResetController? passwordResetController;
   final StickerPackStore stickerPackStore;
   final ClipboardService clipboardService;
   final FileSelectionService fileSelectionService;
@@ -199,6 +203,8 @@ class _SettingsPageState extends State<SettingsPage> {
   int _usernameAvailabilityRequestId = 0;
   String? _usernameAvailabilityQuery;
   bool _checkingUsernameAvailability = false;
+  bool _verifyingPasswordReset = false;
+  String? _passwordResetAuthorizedEmail;
   String? _usernameAvailabilityError;
   int _floatingNoticeSerial = 0;
   final Map<String, int> _floatingNoticeEventKeys = {};
@@ -317,6 +323,11 @@ class _SettingsPageState extends State<SettingsPage> {
 
   void _syncUserFields(CurrentUser? user) {
     if (user == null) return;
+    final authorizedEmail = _passwordResetAuthorizedEmail;
+    if (authorizedEmail != null &&
+        authorizedEmail != (user.email ?? '').trim().toLowerCase()) {
+      _passwordResetAuthorizedEmail = null;
+    }
     _usernameController.text = user.username;
     _displayNameController.text = user.displayName;
     _bioController.text = user.bio;
@@ -2663,6 +2674,7 @@ class _SettingsPageState extends State<SettingsPage> {
       currentPassword: _currentPasswordController.text,
       newPassword: _newPasswordController.text,
       confirmPassword: _confirmPasswordController.text,
+      currentPasswordRequired: !_canResetPasswordWithoutCurrentPassword,
     );
     if (!draft.isValid) {
       setState(
@@ -2692,6 +2704,52 @@ class _SettingsPageState extends State<SettingsPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _applyPasswordChangeStatePatch(passwordChangeFailed(e)));
+    }
+  }
+
+  bool get _canResetPasswordWithoutCurrentPassword {
+    final authorizedEmail = _passwordResetAuthorizedEmail;
+    final currentEmail = (_user?.email ?? '').trim().toLowerCase();
+    return authorizedEmail != null &&
+        currentEmail.isNotEmpty &&
+        authorizedEmail == currentEmail;
+  }
+
+  Future<void> _verifyEmailForPasswordReset() async {
+    if (_verifyingPasswordReset) return;
+    final controller = widget.passwordResetController;
+    final user = _user;
+    if (controller == null || user == null) {
+      showFloatingErrorNotice(context, '暂时无法使用忘记密码功能');
+      return;
+    }
+    final login = user.username.trim().isNotEmpty
+        ? user.username
+        : (user.email ?? '');
+    setState(() => _verifyingPasswordReset = true);
+    final resetToken = await verifyPasswordResetEmail(
+      context: context,
+      login: login,
+      controller: controller,
+    );
+    if (!mounted) return;
+    if (resetToken == null) {
+      setState(() => _verifyingPasswordReset = false);
+      return;
+    }
+    try {
+      await controller.claimForCurrentSession(resetToken);
+      if (!mounted) return;
+      setState(() {
+        _verifyingPasswordReset = false;
+        _passwordResetAuthorizedEmail = (user.email ?? '').trim().toLowerCase();
+        _currentPasswordController.clear();
+      });
+      showFloatingSuccessNotice(context, '邮箱验证成功，可以直接设置新密码');
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _verifyingPasswordReset = false);
+      showFloatingErrorNotice(context, '$error');
     }
   }
 
@@ -3653,22 +3711,24 @@ class _SettingsPageState extends State<SettingsPage> {
           _SettingsGroup(
             title: '重置密码',
             children: [
-              _LabeledTextField(
-                label: '当前密码',
-                controller: _currentPasswordController,
-                obscureText: _obscureCurrentPassword,
-                onTogglePasswordVisibility: () => setState(
-                  () => _applyPasswordVisibilityPatch(
-                    passwordVisibilityToggled(
-                      field: PasswordVisibilityField.current,
-                      obscureCurrentPassword: _obscureCurrentPassword,
-                      obscureNewPassword: _obscureNewPassword,
-                      obscureConfirmPassword: _obscureConfirmPassword,
+              if (!_canResetPasswordWithoutCurrentPassword) ...[
+                _LabeledTextField(
+                  label: '当前密码',
+                  controller: _currentPasswordController,
+                  obscureText: _obscureCurrentPassword,
+                  onTogglePasswordVisibility: () => setState(
+                    () => _applyPasswordVisibilityPatch(
+                      passwordVisibilityToggled(
+                        field: PasswordVisibilityField.current,
+                        obscureCurrentPassword: _obscureCurrentPassword,
+                        obscureNewPassword: _obscureNewPassword,
+                        obscureConfirmPassword: _obscureConfirmPassword,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
+                const SizedBox(height: 12),
+              ],
               _LabeledTextField(
                 label: '新密码',
                 controller: _newPasswordController,
@@ -3705,7 +3765,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 children: [
                   Expanded(
                     child: Button(
-                      onPressed: null,
+                      onPressed: _verifyingPasswordReset
+                          ? null
+                          : _verifyEmailForPasswordReset,
+                      loading: _verifyingPasswordReset,
                       icon: const Icon(Icons.help_outline),
                       child: const Text('忘记密码'),
                     ),

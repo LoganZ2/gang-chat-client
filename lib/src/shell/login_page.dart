@@ -8,9 +8,11 @@ import '../app/account_forms.dart';
 import '../app/email_verification_cooldowns.dart';
 import '../app/language_preference.dart';
 import '../app/login_account_history.dart';
+import '../app/password_reset_controller.dart';
 import '../ui/ui.dart';
 import 'desktop_window_controller.dart';
 import 'window_controls.dart';
+import 'password_reset_flow.dart';
 
 typedef AuthWindowLock =
     Future<void> Function({
@@ -71,6 +73,7 @@ class LoginPage extends StatefulWidget {
     this.checkUsernameAvailability,
     this.checkEmailAvailability,
     this.emailVerificationCooldowns,
+    this.passwordResetController,
     this.language = defaultLanguagePreference,
     this.accountHistoryStore = const NoopLoginAccountHistoryStore(),
     this.windowController,
@@ -83,6 +86,7 @@ class LoginPage extends StatefulWidget {
   final AuthUsernameAvailabilityCheck? checkUsernameAvailability;
   final AuthEmailAvailabilityCheck? checkEmailAvailability;
   final EmailVerificationCooldowns? emailVerificationCooldowns;
+  final PasswordResetController? passwordResetController;
   final String language;
   final LoginAccountHistoryStore accountHistoryStore;
   final DesktopWindowController? windowController;
@@ -106,6 +110,7 @@ class _LoginPageState extends State<LoginPage> {
   bool _rememberPassword = false;
   String? _verifiedEmail;
   bool _checkingEmailAvailability = false;
+  bool _checkingPasswordReset = false;
   String? _selectedHistoryLogin;
   final Object _accountHistoryTapRegion = Object();
   Timer? _usernameAvailabilityDebounce;
@@ -411,6 +416,26 @@ class _LoginPageState extends State<LoginPage> {
     if (verified == true && mounted) {
       setState(() => _verifiedEmail = email.toLowerCase());
     }
+  }
+
+  Future<void> _forgotPassword() async {
+    if (_submitState.busy || _checkingPasswordReset) return;
+    final controller = widget.passwordResetController;
+    if (controller == null) {
+      showFloatingErrorNotice(context, '暂时无法使用忘记密码功能');
+      return;
+    }
+    if (_login.text.trim().isEmpty) {
+      showFloatingErrorNotice(context, '请先输入用户名或邮箱');
+      return;
+    }
+    setState(() => _checkingPasswordReset = true);
+    await showPasswordResetFlow(
+      context: context,
+      login: _login.text,
+      controller: controller,
+    );
+    if (mounted) setState(() => _checkingPasswordReset = false);
   }
 
   void _handleRegisterEmailChanged(String value) {
@@ -725,6 +750,8 @@ class _LoginPageState extends State<LoginPage> {
               value: _rememberPassword,
               enabled: !_submitState.busy,
               onChanged: _setRememberPassword,
+              onForgotPassword: _forgotPassword,
+              checkingPasswordReset: _checkingPasswordReset,
             ),
           ),
           Positioned(
@@ -886,11 +913,15 @@ class _RememberPasswordRow extends StatelessWidget {
     required this.value,
     required this.enabled,
     required this.onChanged,
+    required this.onForgotPassword,
+    required this.checkingPasswordReset,
   });
 
   final bool value;
   final bool enabled;
   final ValueChanged<bool> onChanged;
+  final VoidCallback onForgotPassword;
+  final bool checkingPasswordReset;
 
   @override
   Widget build(BuildContext context) {
@@ -936,10 +967,8 @@ class _RememberPasswordRow extends StatelessWidget {
           const Spacer(),
           _AuthTextLink(
             label: '忘记密码？',
-            enabled: enabled,
-            onPressed: () {
-              // Placeholder until the password reset API is wired.
-            },
+            enabled: enabled && !checkingPasswordReset,
+            onPressed: onForgotPassword,
           ),
         ],
       ),

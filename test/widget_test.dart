@@ -19,11 +19,13 @@ import 'package:client/src/app/authenticated_app_context.dart';
 import 'package:client/src/app/close_behavior.dart';
 import 'package:client/src/app/email_verification_cooldowns.dart';
 import 'package:client/src/app/login_account_history.dart';
+import 'package:client/src/app/password_reset_controller.dart';
 import 'package:client/src/app/live_session_controller.dart';
 import 'package:client/src/app/live_presence_announcement.dart';
 import 'package:client/src/app/realtime_controller.dart';
 import 'package:client/src/app/room_display.dart' as room_display;
 import 'package:client/src/app/settings_about.dart';
+import 'package:client/src/app/settings_shell_state.dart';
 import 'package:client/src/app/server_clock.dart';
 import 'package:client/src/auth/auth_client.dart';
 import 'package:client/src/auth/token_store.dart';
@@ -266,6 +268,180 @@ void main() {
     expect(attempts, 2);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('forgot password verifies email and opens reset dialog', (
+    WidgetTester tester,
+  ) async {
+    final requestedPaths = <String>[];
+    final controller = PasswordResetController(
+      apiBaseUrl: 'https://api.example.test/api/v1',
+      authClientFactory: (baseUrl) => AuthClient(
+        baseUrl: baseUrl,
+        httpClient: MockClient((request) async {
+          requestedPaths.add(request.url.path);
+          switch (request.url.path) {
+            case '/api/v1/auth/password-reset/start':
+              return _jsonResponse({
+                'challenge_id': 'challenge-1',
+                'masked_email': 'k***@example.test',
+                'retry_after': 59,
+              });
+            case '/api/v1/auth/password-reset/verify':
+              return _jsonResponse({'reset_token': 'reset-token'});
+            case '/api/v1/auth/password-reset/complete':
+              return _jsonResponse({'ok': true});
+          }
+          return http.Response('unexpected request', 404);
+        }),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: LoginPage(
+          sizeForMode: (_, {showingError = false}) => const Size(430, 368),
+          consumeInitialWindowLock: () => true,
+          lockAuthWindow:
+              ({
+                bool registering = false,
+                bool moveWindow = false,
+                bool centerWindow = false,
+                Size? size,
+              }) async {},
+          passwordResetController: controller,
+          onSubmit: (_, {required rememberPassword}) async {},
+        ),
+      ),
+    );
+    await tester.enterText(_textFieldWithHint('用户名或邮箱地址'), 'kai');
+    await tester.tap(find.text('忘记密码？'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('邮箱验证'), findsOneWidget);
+    expect(find.text('已发送验证码到该账号绑定的邮箱 k***@example.test'), findsOneWidget);
+    expect(find.text('重新发送(59)'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('password-reset-code-input')),
+      '123456',
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('password-reset-verify-button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('重置密码'), findsWidgets);
+    await tester.enterText(
+      find.byKey(const ValueKey('password-reset-new-password')),
+      'new-password',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('password-reset-confirm-password')),
+      'new-password',
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('password-reset-submit-button')),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(requestedPaths, [
+      '/api/v1/auth/password-reset/start',
+      '/api/v1/auth/password-reset/verify',
+      '/api/v1/auth/password-reset/complete',
+    ]);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'settings email verification hides current password for the session',
+    (WidgetTester tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(900, 900);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final requestedPaths = <String>[];
+      final controller = PasswordResetController(
+        apiBaseUrl: 'https://api.example.test/api/v1',
+        accessTokenProvider: () async => 'access-token',
+        authClientFactory: (baseUrl) => AuthClient(
+          baseUrl: baseUrl,
+          httpClient: MockClient((request) async {
+            requestedPaths.add(request.url.path);
+            switch (request.url.path) {
+              case '/api/v1/auth/password-reset/start':
+                return _jsonResponse({
+                  'challenge_id': 'challenge-1',
+                  'masked_email': 'k***@example.com',
+                  'retry_after': 59,
+                });
+              case '/api/v1/auth/password-reset/verify':
+                return _jsonResponse({'reset_token': 'reset-token'});
+              case '/api/v1/auth/password-reset/claim':
+                expect(request.headers['authorization'], 'Bearer access-token');
+                return _jsonResponse({'ok': true});
+            }
+            return http.Response('unexpected request', 404);
+          }),
+        ),
+      );
+      final settingsApi = GangApiClient(
+        baseUrl: 'https://api.example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async =>
+            'access-token',
+        httpClient: MockClient((request) async {
+          if (request.url.path == '/api/v1/me') {
+            return _jsonResponse(_currentUserJson);
+          }
+          if (request.url.path == '/api/v1/auth/sessions') {
+            return _jsonResponse([]);
+          }
+          return http.Response('unexpected settings request', 404);
+        }),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: SettingsPage(
+            isSubWindow: true,
+            initialSection: SettingsSection.security,
+            currentUser: CurrentUser.fromJson(_currentUserJson),
+            api: settingsApi,
+            passwordResetController: controller,
+            systemAudioDevices: SystemAudioDevices(supported: false),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('当前密码'), findsOneWidget);
+      await tester.ensureVisible(find.widgetWithText(ui.Button, '忘记密码'));
+      await tester.tap(find.widgetWithText(ui.Button, '忘记密码'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('password-reset-code-input')),
+        '123456',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('password-reset-verify-button')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('当前密码'), findsNothing);
+      expect(find.text('新密码'), findsOneWidget);
+      expect(find.text('确认新密码'), findsOneWidget);
+      expect(find.text('重置密码'), findsOneWidget);
+      expect(requestedPaths, [
+        '/api/v1/auth/password-reset/start',
+        '/api/v1/auth/password-reset/verify',
+        '/api/v1/auth/password-reset/claim',
+      ]);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('windows auth page shows compact custom window controls', (
     WidgetTester tester,
@@ -4977,7 +5153,7 @@ void main() {
     expect(find.text('密码'), findsOneWidget);
     expect(find.byTooltip('显示密码'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '登录'), findsOneWidget);
-    expect(find.byType(SelectionArea), findsOneWidget);
+    expect(find.byType(SelectionArea), findsNothing);
 
     await tester.tap(find.byTooltip('显示密码'));
     await tester.pump();

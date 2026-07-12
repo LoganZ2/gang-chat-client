@@ -130,6 +130,66 @@ class AuthClient {
     _throwIfFailed(response);
   }
 
+  Future<PasswordResetChallenge> startPasswordReset(String login) async {
+    final response = await _postAuthWithHandshakeRetry(
+      '/auth/password-reset/start',
+      {'login': login.trim()},
+    );
+    _throwIfFailed(response);
+    return PasswordResetChallenge.fromJson(
+      decodeJsonBody(response)! as Map<String, Object?>,
+    );
+  }
+
+  Future<PasswordResetChallenge> resendPasswordResetCode(
+    String challengeId,
+  ) async {
+    final response = await _postAuthWithHandshakeRetry(
+      '/auth/password-reset/resend',
+      {'challenge_id': challengeId},
+    );
+    _throwIfFailed(response);
+    return PasswordResetChallenge.fromJson(
+      decodeJsonBody(response)! as Map<String, Object?>,
+    );
+  }
+
+  Future<String> verifyPasswordResetCode({
+    required String challengeId,
+    required String code,
+  }) async {
+    final response = await _postAuthWithHandshakeRetry(
+      '/auth/password-reset/verify',
+      {'challenge_id': challengeId, 'code': code.trim()},
+    );
+    _throwIfFailed(response);
+    final body = decodeJsonBody(response)! as Map<String, Object?>;
+    return body['reset_token']! as String;
+  }
+
+  Future<void> completePasswordReset({
+    required String resetToken,
+    required String newPassword,
+  }) async {
+    final response = await _postAuthWithHandshakeRetry(
+      '/auth/password-reset/complete',
+      {'reset_token': resetToken, 'new_password': newPassword},
+    );
+    _throwIfFailed(response);
+  }
+
+  Future<void> claimPasswordResetForSession({
+    required String accessToken,
+    required String resetToken,
+  }) async {
+    final response = await _httpClient.post(
+      _uri('/auth/password-reset/claim'),
+      headers: _headers(accessToken: accessToken),
+      body: encodeJsonBody({'reset_token': resetToken}),
+    );
+    _throwIfFailed(response);
+  }
+
   Future<AuthSession> _postAuth(String path, Map<String, Object?> body) async {
     final response = await _postAuthWithHandshakeRetry(path, body);
     _throwIfFailed(response);
@@ -199,6 +259,32 @@ class AuthClient {
         !identical(environmentProxyClient, _httpClient)) {
       environmentProxyClient.close();
     }
+  }
+}
+
+class PasswordResetChallenge {
+  const PasswordResetChallenge({
+    required this.id,
+    required this.maskedEmail,
+    required this.retryAfterSeconds,
+  });
+
+  final String id;
+  final String maskedEmail;
+  final int retryAfterSeconds;
+
+  factory PasswordResetChallenge.fromJson(Map<String, Object?> json) {
+    final retryAfter = json['retry_after'];
+    return PasswordResetChallenge(
+      id: json['challenge_id']! as String,
+      maskedEmail: json['masked_email']! as String,
+      retryAfterSeconds: switch (retryAfter) {
+        int value => value,
+        num value => value.toInt(),
+        String value => int.tryParse(value) ?? 0,
+        _ => 0,
+      },
+    );
   }
 }
 

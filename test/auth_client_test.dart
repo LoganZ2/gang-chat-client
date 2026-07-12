@@ -153,6 +153,69 @@ void main() {
     expect(fallbackCalls, 0);
     client.close();
   });
+
+  test('password reset client sends the complete protocol payloads', () async {
+    final requests = <http.Request>[];
+    final client = AuthClient(
+      baseUrl: 'https://api.example.test/api/v1',
+      httpClient: MockClient((request) async {
+        requests.add(request);
+        switch (request.url.path) {
+          case '/api/v1/auth/password-reset/start':
+          case '/api/v1/auth/password-reset/resend':
+            return http.Response(
+              jsonEncode({
+                'challenge_id': 'challenge-1',
+                'masked_email': 'k***@example.test',
+                'retry_after': 59,
+              }),
+              200,
+              headers: {'content-type': 'application/json; charset=utf-8'},
+            );
+          case '/api/v1/auth/password-reset/verify':
+            return http.Response(
+              jsonEncode({'reset_token': 'reset-token'}),
+              200,
+              headers: {'content-type': 'application/json; charset=utf-8'},
+            );
+          case '/api/v1/auth/password-reset/complete':
+          case '/api/v1/auth/password-reset/claim':
+            return http.Response(
+              jsonEncode({'ok': true}),
+              200,
+              headers: {'content-type': 'application/json; charset=utf-8'},
+            );
+        }
+        return http.Response('not found', 404);
+      }),
+    );
+
+    final started = await client.startPasswordReset(' kai ');
+    final resent = await client.resendPasswordResetCode(started.id);
+    final token = await client.verifyPasswordResetCode(
+      challengeId: started.id,
+      code: '123456',
+    );
+    await client.completePasswordReset(
+      resetToken: token,
+      newPassword: 'new-password',
+    );
+    await client.claimPasswordResetForSession(
+      accessToken: 'access-token',
+      resetToken: token,
+    );
+
+    expect(started.maskedEmail, 'k***@example.test');
+    expect(resent.retryAfterSeconds, 59);
+    expect(token, 'reset-token');
+    expect(jsonDecode(requests.first.body), {'login': 'kai'});
+    expect(jsonDecode(requests[2].body), {
+      'challenge_id': 'challenge-1',
+      'code': '123456',
+    });
+    expect(requests.last.headers['authorization'], 'Bearer access-token');
+    client.close();
+  });
 }
 
 http.Response _authResponse() {

@@ -12,6 +12,7 @@ import '../app/app_update.dart';
 import '../app/authenticated_app_context.dart';
 import '../app/language_preference.dart';
 import '../app/login_account_history.dart';
+import '../app/password_reset_controller.dart';
 import '../app/server_clock.dart';
 import 'app_update_gate.dart';
 import 'desktop_window_controller.dart';
@@ -46,15 +47,13 @@ class GangApp extends StatelessWidget {
         theme: uiTheme(),
         builder: (context, child) =>
             AppNotificationHost(child: child ?? const SizedBox.shrink()),
-        home: SelectionArea(
-          child: _AuthGate(
-            tokenStore: tokenStore,
-            config: config,
-            startsAuthenticated: startsAuthenticated,
-            languageStore: languageStore,
-            loginAccountHistoryStore: loginAccountHistoryStore,
-            windowController: windowController,
-          ),
+        home: _AuthGate(
+          tokenStore: tokenStore,
+          config: config,
+          startsAuthenticated: startsAuthenticated,
+          languageStore: languageStore,
+          loginAccountHistoryStore: loginAccountHistoryStore,
+          windowController: windowController,
         ),
       ),
     );
@@ -86,6 +85,10 @@ class _AuthGateState extends State<_AuthGate> {
   late final AuthSessionController _auth = AuthSessionController(
     tokenStore: widget.tokenStore,
     apiBaseUrl: widget.config.apiBaseUrl,
+  );
+  late final PasswordResetController _passwordReset = PasswordResetController(
+    apiBaseUrl: widget.config.apiBaseUrl,
+    accessTokenProvider: _auth.accessToken,
   );
   final ServerClock _serverClock = ServerClock();
   // Tracks whether initial auth restore has finished so an authenticated start
@@ -297,6 +300,7 @@ class _AuthGateState extends State<_AuthGate> {
           onSubmit: _submitAuthRequest,
           checkUsernameAvailability: _auth.isUsernameAvailable,
           checkEmailAvailability: _auth.isEmailAvailable,
+          passwordResetController: _passwordReset,
           sizeForMode: _window.authWidgetSize,
           consumeInitialWindowLock: _window.consumeSkipNextAuthWindowLock,
           lockAuthWindow: _window.lockAuthWindow,
@@ -313,25 +317,28 @@ class _AuthGateState extends State<_AuthGate> {
       logout: _logout,
       exitSessionForAppExit: _exitSessionForAppExit,
       serverClock: _serverClock,
+      passwordResetController: _passwordReset,
     );
 
-    return SelectionContainer.disabled(
-      child: AppUpdateGate(
-        releaseBucketUrl: widget.config.releaseBucketUrl,
-        windowController: widget.windowController,
-        onUpdateAvailable: (update) {
-          if (!mounted) return;
-          setState(() => _detectedAppUpdate = update);
-        },
-        child: HomePage(
-          app: app,
-          languageStore: widget.languageStore,
+    return SelectionArea(
+      child: SelectionContainer.disabled(
+        child: AppUpdateGate(
+          releaseBucketUrl: widget.config.releaseBucketUrl,
           windowController: widget.windowController,
-          detectedAppUpdate: _detectedAppUpdate,
-          onDetectedAppUpdateShown: () {
-            if (!mounted || _detectedAppUpdate == null) return;
-            setState(() => _detectedAppUpdate = null);
+          onUpdateAvailable: (update) {
+            if (!mounted) return;
+            setState(() => _detectedAppUpdate = update);
           },
+          child: HomePage(
+            app: app,
+            languageStore: widget.languageStore,
+            windowController: widget.windowController,
+            detectedAppUpdate: _detectedAppUpdate,
+            onDetectedAppUpdateShown: () {
+              if (!mounted || _detectedAppUpdate == null) return;
+              setState(() => _detectedAppUpdate = null);
+            },
+          ),
         ),
       ),
     );

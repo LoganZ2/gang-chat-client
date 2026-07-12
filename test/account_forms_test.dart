@@ -260,6 +260,15 @@ void main() {
     expect(draft.isValid, isTrue);
     expect(draft.currentPassword, ' old-password ');
     expect(draft.newPassword, ' new-password ');
+
+    final verifiedDraft = passwordChangeDraftFromForm(
+      currentPassword: '',
+      newPassword: 'new-password',
+      confirmPassword: 'new-password',
+      currentPasswordRequired: false,
+    );
+    expect(verifiedDraft.isValid, isTrue);
+    expect(verifiedDraft.currentPassword, isEmpty);
   });
 
   test('passwordVisibilityToggled flips only the requested field', () {
