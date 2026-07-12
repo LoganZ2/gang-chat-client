@@ -41,7 +41,7 @@ AuthFormResult authRequestFromForm({
   required String password,
   String username = '',
   String confirmPassword = '',
-  bool emailVerified = false,
+  String emailVerificationToken = '',
   String language = defaultLanguagePreference,
 }) {
   final copy = authFormCopy(language);
@@ -71,7 +71,7 @@ AuthFormResult authRequestFromForm({
   if (password != confirmPassword) {
     return AuthFormResult.invalid(copy.passwordMismatch);
   }
-  if (!emailVerified) {
+  if (emailVerificationToken.trim().isEmpty) {
     return AuthFormResult.invalid(copy.emailVerificationRequired);
   }
 
@@ -80,6 +80,7 @@ AuthFormResult authRequestFromForm({
       username: normalizedUsername,
       login: normalizedLogin,
       password: password,
+      emailVerificationToken: emailVerificationToken,
     ),
   );
 }
@@ -191,6 +192,7 @@ class AuthFormCopy {
       'rate_limited' => rateLimited,
       'conflict' => conflict,
       'bad_request' || 'validation_failed' => badRequest,
+      'email_verification_required' => emailVerificationRequired,
       'internal_error' => serverError,
       'request_failed' => requestFailed(failure.statusCode),
       _ => fallback,

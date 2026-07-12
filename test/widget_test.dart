@@ -16,8 +16,9 @@ import 'package:client/src/app/app_update.dart';
 import 'package:client/src/app/audio_device_info.dart';
 import 'package:client/src/app/audio_device_store.dart';
 import 'package:client/src/app/authenticated_app_context.dart';
+import 'package:client/src/app/auth_session_controller.dart';
 import 'package:client/src/app/close_behavior.dart';
-import 'package:client/src/app/email_verification_cooldowns.dart';
+import 'package:client/src/app/email_verification_controller.dart';
 import 'package:client/src/app/login_account_history.dart';
 import 'package:client/src/app/password_reset_controller.dart';
 import 'package:client/src/app/live_session_controller.dart';
@@ -507,6 +508,41 @@ void main() {
         '/api/v1/auth/password-reset/verify',
         '/api/v1/auth/password-reset/claim',
       ]);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: SettingsPage(
+            isSubWindow: true,
+            initialSection: SettingsSection.security,
+            currentUser: CurrentUser.fromJson(_currentUserJson),
+            api: settingsApi,
+            passwordResetController: controller,
+            systemAudioDevices: SystemAudioDevices(supported: false),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('当前密码'), findsNothing);
+
+      controller.clearCurrentSessionAuthorization();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: SettingsPage(
+            isSubWindow: true,
+            initialSection: SettingsSection.security,
+            currentUser: CurrentUser.fromJson(_currentUserJson),
+            api: settingsApi,
+            passwordResetController: controller,
+            systemAudioDevices: SystemAudioDevices(supported: false),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('当前密码'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -959,6 +995,7 @@ void main() {
   testWidgets(
     'auth inputs support selection cursor placement and context menus',
     (WidgetTester tester) async {
+      final emailVerification = _FakeEmailVerificationController();
       await tester.pumpWidget(
         MaterialApp(
           theme: ui.uiTheme(),
@@ -974,6 +1011,7 @@ void main() {
                 }) async {},
             checkUsernameAvailability: (_) async => true,
             checkEmailAvailability: (_) async => true,
+            emailVerificationController: emailVerification,
             onSubmit: (_, {required rememberPassword}) async {},
           ),
         ),
@@ -1117,17 +1155,16 @@ void main() {
       await tester.tap(emailVerificationAction);
       await tester.pumpAndSettle();
       expect(find.text('邮箱验证'), findsOneWidget);
-      expect(find.text('请确认您的邮箱地址为 logan@example.test'), findsOneWidget);
+      expect(find.text('已发送验证码到您的邮箱 logan@example.test'), findsOneWidget);
       final sendCodeAction = find.byKey(
         const ValueKey('auth-email-send-code-button'),
       );
-      expect(find.text('发送验证码'), findsOneWidget);
-      expect(tester.widget<GestureDetector>(sendCodeAction).onTap, isNotNull);
-
-      await tester.tap(sendCodeAction);
-      await tester.pump();
       expect(find.text('重新发送(60)'), findsOneWidget);
       expect(tester.widget<GestureDetector>(sendCodeAction).onTap, isNull);
+      expect(emailVerification.calls, [
+        'inspect:logan@example.test',
+        'start:logan@example.test',
+      ]);
 
       final verificationCodeField = _textFieldWithHint('请输入验证码');
       expect(
@@ -1190,6 +1227,7 @@ void main() {
     'email verification shows checking icon while request is pending',
     (WidgetTester tester) async {
       final availability = Completer<bool>();
+      final emailVerification = _FakeEmailVerificationController();
       await tester.pumpWidget(
         MaterialApp(
           theme: ui.uiTheme(),
@@ -1205,6 +1243,7 @@ void main() {
                 }) async {},
             checkUsernameAvailability: (_) async => true,
             checkEmailAvailability: (_) => availability.future,
+            emailVerificationController: emailVerification,
             onSubmit: (_, {required rememberPassword}) async {},
           ),
         ),
@@ -1234,11 +1273,16 @@ void main() {
     },
   );
 
-  testWidgets('email verification cooldown is inherited per email', (
+  testWidgets('email verification inspects and inherits server cooldown', (
     WidgetTester tester,
   ) async {
-    var now = DateTime(2026, 7, 12, 12);
-    final cooldowns = EmailVerificationCooldowns(now: () => now);
+    final emailVerification = _FakeEmailVerificationController(
+      onInspect: (email) async => const EmailVerificationInspection(
+        canSend: false,
+        challengeId: 'existing-challenge',
+        retryAfterSeconds: 42,
+      ),
+    );
     await tester.pumpWidget(
       MaterialApp(
         theme: ui.uiTheme(),
@@ -1254,7 +1298,7 @@ void main() {
               }) async {},
           checkUsernameAvailability: (_) async => true,
           checkEmailAvailability: (_) async => true,
-          emailVerificationCooldowns: cooldowns,
+          emailVerificationController: emailVerification,
           onSubmit: (_, {required rememberPassword}) async {},
         ),
       ),
@@ -1262,47 +1306,15 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('注册'));
     await tester.pumpAndSettle();
-    final emailField = _textFieldWithHint('邮箱地址');
+    await tester.enterText(_textFieldWithHint('邮箱地址'), 'first@example.test');
     final verifyAction = find.byKey(
       const ValueKey('auth-email-verification-button'),
     );
-
-    await tester.enterText(emailField, 'first@example.test');
     await tester.tap(verifyAction);
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('auth-email-send-code-button')));
-    await tester.pump();
-    expect(find.text('重新发送(60)'), findsOneWidget);
-
-    await tester.tap(find.widgetWithText(ui.Button, '取消'));
-    await tester.pumpAndSettle();
-    await tester.tap(verifyAction);
-    await tester.pumpAndSettle();
-    expect(
-      find.byWidgetPredicate(
-        (widget) => widget is Text && widget.data?.startsWith('重新发送(') == true,
-      ),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.widgetWithText(ui.Button, '取消'));
-    await tester.pumpAndSettle();
-    await tester.enterText(emailField, 'second@example.test');
-    await tester.tap(verifyAction);
-    await tester.pumpAndSettle();
-    expect(find.text('发送验证码'), findsOneWidget);
-    expect(find.textContaining('重新发送('), findsNothing);
-
-    await tester.tap(find.widgetWithText(ui.Button, '取消'));
-    await tester.pumpAndSettle();
-    await tester.enterText(emailField, 'first@example.test');
-    await tester.tap(verifyAction);
-    await tester.pumpAndSettle();
-    expect(find.text('重新发送(60)'), findsOneWidget);
-    now = now.add(const Duration(seconds: 60));
-    await tester.pump(const Duration(seconds: 1));
-    expect(find.text('发送验证码'), findsOneWidget);
-    expect(find.textContaining('重新发送('), findsNothing);
+    expect(find.text('重新发送(42)'), findsOneWidget);
+    expect(emailVerification.calls, ['inspect:first@example.test']);
+    expect(find.text('已发送验证码到您的邮箱 first@example.test'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -1363,6 +1375,63 @@ void main() {
     expect(submissions, 0);
     expect(find.text('请先验证邮箱'), findsOneWidget);
     expect(checkedUsernames, containsAll(['taken_name', 'available_name']));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('register submits the server email verification token', (
+    WidgetTester tester,
+  ) async {
+    final emailVerification = _FakeEmailVerificationController();
+    AuthRequest? submitted;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: LoginPage(
+          sizeForMode: (_, {showingError = false}) => const Size(430, 500),
+          consumeInitialWindowLock: () => true,
+          lockAuthWindow:
+              ({
+                bool registering = false,
+                bool moveWindow = false,
+                bool centerWindow = false,
+                Size? size,
+              }) async {},
+          checkUsernameAvailability: (_) async => true,
+          checkEmailAvailability: (_) async => true,
+          emailVerificationController: emailVerification,
+          onSubmit: (request, {required rememberPassword}) async {
+            submitted = request;
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('注册'));
+    await tester.pumpAndSettle();
+    await tester.enterText(_textFieldWithHint('用户名'), 'verified_user');
+    await tester.enterText(_textFieldWithHint('邮箱地址'), 'verified@example.test');
+    await tester.enterText(_textFieldWithHint('密码'), 'secret123');
+    await tester.enterText(_textFieldWithHint('确认密码'), 'secret123');
+
+    await tester.tap(
+      find.byKey(const ValueKey('auth-email-verification-button')),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('auth-email-verification-code')),
+      '123456',
+    );
+    await tester.tap(find.widgetWithText(ui.Button, '验证'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ui.Button, '创建账号'));
+    await tester.pumpAndSettle();
+
+    expect(submitted?.emailVerificationToken, 'email-verification-token');
+    expect(emailVerification.calls, [
+      'inspect:verified@example.test',
+      'start:verified@example.test',
+      'verify:email-challenge:123456',
+    ]);
     expect(tester.takeException(), isNull);
   });
 
@@ -8520,6 +8589,49 @@ LiveVideoTrack _liveVideoTrack({
 class _FakeVideoTrack implements lk.VideoTrack {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakeEmailVerificationController extends EmailVerificationController {
+  _FakeEmailVerificationController({this.onInspect})
+    : super(apiBaseUrl: 'https://unused.test');
+
+  final Future<EmailVerificationInspection> Function(String email)? onInspect;
+  final List<String> calls = [];
+
+  @override
+  Future<EmailVerificationInspection> inspect(String email) async {
+    calls.add('inspect:$email');
+    final inspect = onInspect;
+    if (inspect != null) return inspect(email);
+    return const EmailVerificationInspection(
+      canSend: true,
+      retryAfterSeconds: 0,
+    );
+  }
+
+  @override
+  Future<EmailVerificationChallenge> start(String email) async {
+    calls.add('start:$email');
+    return const EmailVerificationChallenge(
+      id: 'email-challenge',
+      retryAfterSeconds: 60,
+    );
+  }
+
+  @override
+  Future<EmailVerificationChallenge> resend(String challengeId) async {
+    calls.add('resend:$challengeId');
+    return EmailVerificationChallenge(id: challengeId, retryAfterSeconds: 60);
+  }
+
+  @override
+  Future<String> verify({
+    required String challengeId,
+    required String code,
+  }) async {
+    calls.add('verify:$challengeId:$code');
+    return 'email-verification-token';
+  }
 }
 
 class _MemoryTokenStore extends TokenStore {

@@ -28,11 +28,13 @@ class AuthClient {
     required String username,
     required String email,
     required String password,
+    required String emailVerificationToken,
   }) {
     return _postAuth('/auth/register', {
       'username': username,
       'email': email,
       'password': password,
+      'email_verification_token': emailVerificationToken,
     });
   }
 
@@ -62,6 +64,58 @@ class AuthClient {
     _throwIfFailed(response);
     final body = decodeJsonBody(response)! as Map<String, Object?>;
     return body['available'] as bool? ?? false;
+  }
+
+  Future<EmailVerificationInspection> inspectEmailVerification(
+    String email,
+  ) async {
+    final response = await _postAuthWithHandshakeRetry(
+      '/auth/email-verification/inspect',
+      {'email': email.trim()},
+    );
+    _throwIfFailed(response);
+    return EmailVerificationInspection.fromJson(
+      decodeJsonBody(response)! as Map<String, Object?>,
+    );
+  }
+
+  Future<EmailVerificationChallenge> startEmailVerification(
+    String email,
+  ) async {
+    final response = await _postAuthWithHandshakeRetry(
+      '/auth/email-verification/start',
+      {'email': email.trim()},
+    );
+    _throwIfFailed(response);
+    return EmailVerificationChallenge.fromJson(
+      decodeJsonBody(response)! as Map<String, Object?>,
+    );
+  }
+
+  Future<EmailVerificationChallenge> resendEmailVerificationCode(
+    String challengeId,
+  ) async {
+    final response = await _postAuthWithHandshakeRetry(
+      '/auth/email-verification/resend',
+      {'challenge_id': challengeId},
+    );
+    _throwIfFailed(response);
+    return EmailVerificationChallenge.fromJson(
+      decodeJsonBody(response)! as Map<String, Object?>,
+    );
+  }
+
+  Future<String> verifyEmailVerificationCode({
+    required String challengeId,
+    required String code,
+  }) async {
+    final response = await _postAuthWithHandshakeRetry(
+      '/auth/email-verification/verify',
+      {'challenge_id': challengeId, 'code': code.trim()},
+    );
+    _throwIfFailed(response);
+    final body = decodeJsonBody(response)! as Map<String, Object?>;
+    return body['verification_token']! as String;
   }
 
   Future<AuthSession> refresh(String refreshToken) {
@@ -289,6 +343,64 @@ class PasswordResetChallenge {
     return PasswordResetChallenge(
       id: json['challenge_id']! as String,
       maskedEmail: json['masked_email']! as String,
+      retryAfterSeconds: switch (retryAfter) {
+        int value => value,
+        num value => value.toInt(),
+        String value => int.tryParse(value) ?? 0,
+        _ => 0,
+      },
+    );
+  }
+}
+
+class EmailVerificationChallenge {
+  const EmailVerificationChallenge({
+    required this.id,
+    required this.retryAfterSeconds,
+  });
+
+  final String id;
+  final int retryAfterSeconds;
+
+  factory EmailVerificationChallenge.fromJson(Map<String, Object?> json) {
+    final retryAfter = json['retry_after'];
+    return EmailVerificationChallenge(
+      id: json['challenge_id']! as String,
+      retryAfterSeconds: switch (retryAfter) {
+        int value => value,
+        num value => value.toInt(),
+        String value => int.tryParse(value) ?? 0,
+        _ => 0,
+      },
+    );
+  }
+}
+
+class EmailVerificationInspection {
+  const EmailVerificationInspection({
+    required this.canSend,
+    required this.retryAfterSeconds,
+    this.challengeId,
+  });
+
+  final bool canSend;
+  final int retryAfterSeconds;
+  final String? challengeId;
+
+  EmailVerificationChallenge? get reusableChallenge {
+    final id = challengeId;
+    if (id == null || id.isEmpty) return null;
+    return EmailVerificationChallenge(
+      id: id,
+      retryAfterSeconds: retryAfterSeconds,
+    );
+  }
+
+  factory EmailVerificationInspection.fromJson(Map<String, Object?> json) {
+    final retryAfter = json['retry_after'];
+    return EmailVerificationInspection(
+      canSend: json['can_send'] as bool? ?? false,
+      challengeId: json['challenge_id'] as String?,
       retryAfterSeconds: switch (retryAfter) {
         int value => value,
         num value => value.toInt(),

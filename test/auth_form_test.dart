@@ -102,13 +102,14 @@ void main() {
       login: ' a@example.test ',
       password: 'secret',
       confirmPassword: 'secret',
-      emailVerified: true,
+      emailVerificationToken: 'verification-token',
     );
 
     expect(result.error, isNull);
     expect(result.request?.registering, isTrue);
     expect(result.request?.username, 'logan');
     expect(result.request?.login, 'a@example.test');
+    expect(result.request?.emailVerificationToken, 'verification-token');
   });
 
   test('authRequestFromForm requires email verification before register', () {

@@ -9,16 +9,19 @@ typedef AuthSessionListener = void Function();
 class AuthRequest {
   const AuthRequest.login({required this.login, required this.password})
     : username = null,
+      emailVerificationToken = null,
       registering = false;
 
   const AuthRequest.register({
     required this.username,
     required this.login,
     required this.password,
+    required this.emailVerificationToken,
   }) : registering = true;
 
   final bool registering;
   final String? username;
+  final String? emailVerificationToken;
   final String login;
   final String password;
 }
@@ -111,6 +114,7 @@ class AuthSessionController {
           username: request.username!,
           email: request.login,
           password: request.password,
+          emailVerificationToken: request.emailVerificationToken!,
         );
       }
       return await client.login(

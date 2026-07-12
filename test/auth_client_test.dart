@@ -154,6 +154,75 @@ void main() {
     client.close();
   });
 
+  test('registration email verification sends the complete protocol', () async {
+    final requests = <http.Request>[];
+    final client = AuthClient(
+      baseUrl: 'https://api.example.test/api/v1',
+      httpClient: MockClient((request) async {
+        requests.add(request);
+        switch (request.url.path) {
+          case '/api/v1/auth/email-verification/inspect':
+            return http.Response(
+              jsonEncode({'can_send': true, 'retry_after': 0}),
+              200,
+              headers: {'content-type': 'application/json; charset=utf-8'},
+            );
+          case '/api/v1/auth/email-verification/start':
+          case '/api/v1/auth/email-verification/resend':
+            return http.Response(
+              jsonEncode({
+                'challenge_id': 'email-challenge',
+                'retry_after': 60,
+              }),
+              200,
+              headers: {'content-type': 'application/json; charset=utf-8'},
+            );
+          case '/api/v1/auth/email-verification/verify':
+            return http.Response(
+              jsonEncode({'verification_token': 'verified-email-token'}),
+              200,
+              headers: {'content-type': 'application/json; charset=utf-8'},
+            );
+          case '/api/v1/auth/register':
+            return _authResponse();
+        }
+        return http.Response('not found', 404);
+      }),
+    );
+
+    final inspection = await client.inspectEmailVerification(
+      ' kai@example.test ',
+    );
+    final started = await client.startEmailVerification('kai@example.test');
+    final resent = await client.resendEmailVerificationCode(started.id);
+    final token = await client.verifyEmailVerificationCode(
+      challengeId: resent.id,
+      code: '123456',
+    );
+    await client.register(
+      username: 'kai',
+      email: 'kai@example.test',
+      password: 'secret-password',
+      emailVerificationToken: token,
+    );
+
+    expect(inspection.canSend, isTrue);
+    expect(started.retryAfterSeconds, 60);
+    expect(token, 'verified-email-token');
+    expect(jsonDecode(requests.first.body), {'email': 'kai@example.test'});
+    expect(jsonDecode(requests[3].body), {
+      'challenge_id': 'email-challenge',
+      'code': '123456',
+    });
+    expect(jsonDecode(requests.last.body), {
+      'username': 'kai',
+      'email': 'kai@example.test',
+      'password': 'secret-password',
+      'email_verification_token': 'verified-email-token',
+    });
+    client.close();
+  });
+
   test('password reset client sends the complete protocol payloads', () async {
     final requests = <http.Request>[];
     final client = AuthClient(

@@ -14,6 +14,24 @@ class PasswordResetController {
   final String apiBaseUrl;
   final PasswordResetAuthClientFactory _authClientFactory;
   final PasswordResetAccessTokenProvider? accessTokenProvider;
+  String? _sessionAuthorizedEmail;
+
+  bool isCurrentSessionAuthorizedFor(String? email) {
+    final normalized = email?.trim().toLowerCase() ?? '';
+    return normalized.isNotEmpty && _sessionAuthorizedEmail == normalized;
+  }
+
+  void clearCurrentSessionAuthorization() {
+    _sessionAuthorizedEmail = null;
+  }
+
+  void invalidateAuthorizationIfEmailChanged(String? email) {
+    final authorizedEmail = _sessionAuthorizedEmail;
+    if (authorizedEmail == null) return;
+    if (authorizedEmail != (email?.trim().toLowerCase() ?? '')) {
+      clearCurrentSessionAuthorization();
+    }
+  }
 
   Future<PasswordResetChallenge> start(String login) {
     return _withClient((client) => client.startPasswordReset(login));
@@ -46,18 +64,22 @@ class PasswordResetController {
     );
   }
 
-  Future<void> claimForCurrentSession(String resetToken) async {
+  Future<void> claimForCurrentSession(
+    String resetToken, {
+    required String email,
+  }) async {
     final tokenProvider = accessTokenProvider;
     if (tokenProvider == null) {
       throw StateError('当前页面没有可用的登录会话');
     }
     final accessToken = await tokenProvider();
-    return _withClient(
+    await _withClient(
       (client) => client.claimPasswordResetForSession(
         accessToken: accessToken,
         resetToken: resetToken,
       ),
     );
+    _sessionAuthorizedEmail = email.trim().toLowerCase();
   }
 
   Future<T> _withClient<T>(Future<T> Function(AuthClient client) action) async {

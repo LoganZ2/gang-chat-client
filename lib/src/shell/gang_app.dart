@@ -10,6 +10,7 @@ import '../home/home_page.dart';
 import '../app/auth_session_controller.dart';
 import '../app/app_update.dart';
 import '../app/authenticated_app_context.dart';
+import '../app/email_verification_controller.dart';
 import '../app/language_preference.dart';
 import '../app/login_account_history.dart';
 import '../app/password_reset_controller.dart';
@@ -90,6 +91,8 @@ class _AuthGateState extends State<_AuthGate> {
     apiBaseUrl: widget.config.apiBaseUrl,
     accessTokenProvider: _auth.accessToken,
   );
+  late final EmailVerificationController _emailVerification =
+      EmailVerificationController(apiBaseUrl: widget.config.apiBaseUrl);
   final ServerClock _serverClock = ServerClock();
   // Tracks whether initial auth restore has finished so an authenticated start
   // does not briefly mount LoginPage and shrink the prepared app window.
@@ -120,6 +123,7 @@ class _AuthGateState extends State<_AuthGate> {
 
   void _onAuthChanged() {
     if (_auth.session == null) {
+      _passwordReset.clearCurrentSessionAuthorization();
       unawaited(_loadAuthLanguage());
     }
     if (mounted) setState(() {});
@@ -300,6 +304,7 @@ class _AuthGateState extends State<_AuthGate> {
           onSubmit: _submitAuthRequest,
           checkUsernameAvailability: _auth.isUsernameAvailable,
           checkEmailAvailability: _auth.isEmailAvailable,
+          emailVerificationController: _emailVerification,
           passwordResetController: _passwordReset,
           sizeForMode: _window.authWidgetSize,
           consumeInitialWindowLock: _window.consumeSkipNextAuthWindowLock,

@@ -5,10 +5,11 @@ import 'package:flutter/material.dart';
 import '../app/auth_form.dart';
 import '../app/auth_session_controller.dart';
 import '../app/account_forms.dart';
-import '../app/email_verification_cooldowns.dart';
+import '../app/email_verification_controller.dart';
 import '../app/language_preference.dart';
 import '../app/login_account_history.dart';
 import '../app/password_reset_controller.dart';
+import '../auth/auth_client.dart';
 import '../ui/ui.dart';
 import 'desktop_window_controller.dart';
 import 'window_controls.dart';
@@ -72,7 +73,7 @@ class LoginPage extends StatefulWidget {
     required this.lockAuthWindow,
     this.checkUsernameAvailability,
     this.checkEmailAvailability,
-    this.emailVerificationCooldowns,
+    this.emailVerificationController,
     this.passwordResetController,
     this.language = defaultLanguagePreference,
     this.accountHistoryStore = const NoopLoginAccountHistoryStore(),
@@ -85,7 +86,7 @@ class LoginPage extends StatefulWidget {
   final AuthWindowLock lockAuthWindow;
   final AuthUsernameAvailabilityCheck? checkUsernameAvailability;
   final AuthEmailAvailabilityCheck? checkEmailAvailability;
-  final EmailVerificationCooldowns? emailVerificationCooldowns;
+  final EmailVerificationController? emailVerificationController;
   final PasswordResetController? passwordResetController;
   final String language;
   final LoginAccountHistoryStore accountHistoryStore;
@@ -109,6 +110,7 @@ class _LoginPageState extends State<LoginPage> {
   bool _showAccountHistory = false;
   bool _rememberPassword = false;
   String? _verifiedEmail;
+  String? _emailVerificationToken;
   bool _checkingEmailAvailability = false;
   bool _checkingPasswordReset = false;
   String? _selectedHistoryLogin;
@@ -117,7 +119,6 @@ class _LoginPageState extends State<LoginPage> {
   String? _usernameAvailabilityQuery;
   bool _checkingUsernameAvailability = false;
   String? _usernameAvailabilityError;
-  late final EmailVerificationCooldowns _emailVerificationCooldowns;
 
   bool get _showingError =>
       _submitState.error != null && _submitState.error!.isNotEmpty;
@@ -130,8 +131,6 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
-    _emailVerificationCooldowns =
-        widget.emailVerificationCooldowns ?? EmailVerificationCooldowns();
     unawaited(_loadAccountHistory());
     if (widget.consumeInitialWindowLock()) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -196,7 +195,9 @@ class _LoginPageState extends State<LoginPage> {
       login: _registering ? _email.text : _login.text,
       password: _password.text,
       confirmPassword: _confirmPassword.text,
-      emailVerified: _emailVerified,
+      emailVerificationToken: _emailVerified
+          ? _emailVerificationToken ?? ''
+          : '',
       language: widget.language,
     );
     final request = result.request;
@@ -229,6 +230,12 @@ class _LoginPageState extends State<LoginPage> {
       }
     } catch (e) {
       if (!mounted) return;
+      if (request.registering &&
+          e is AuthException &&
+          e.code == 'email_verification_required') {
+        _verifiedEmail = null;
+        _emailVerificationToken = null;
+      }
       await _showSubmitState(authSubmitFailed(e, language: widget.language));
     }
   }
@@ -396,25 +403,63 @@ class _LoginPageState extends State<LoginPage> {
       available = null;
     }
     if (!mounted) return;
-    setState(() => _checkingEmailAvailability = false);
-    if (!_registering || _email.text.trim() != email) return;
+    if (!_registering || _email.text.trim() != email) {
+      setState(() => _checkingEmailAvailability = false);
+      return;
+    }
     if (available == null) {
+      setState(() => _checkingEmailAvailability = false);
       showFloatingErrorNotice(context, '暂时无法检测邮箱是否重复');
       return;
     }
     if (!available) {
+      setState(() => _checkingEmailAvailability = false);
       showFloatingErrorNotice(context, '该邮箱已被其他用户使用');
       return;
     }
-    final verified = await showDialog<bool>(
+    final controller = widget.emailVerificationController;
+    if (controller == null) {
+      setState(() => _checkingEmailAvailability = false);
+      showFloatingErrorNotice(context, '暂时无法使用邮箱验证功能');
+      return;
+    }
+    EmailVerificationChallenge? challenge;
+    try {
+      final inspection = await controller.inspect(email);
+      if (!mounted) return;
+      challenge = inspection.reusableChallenge;
+      if (challenge == null && inspection.canSend) {
+        challenge = await controller.start(email);
+        if (!mounted) return;
+      } else if (challenge == null) {
+        showFloatingErrorNotice(
+          context,
+          '验证码已发送，请在 ${inspection.retryAfterSeconds} 秒后重试',
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        showFloatingErrorNotice(context, _emailVerificationErrorMessage(error));
+      }
+    }
+    if (!mounted) return;
+    setState(() => _checkingEmailAvailability = false);
+    if (challenge == null || !_registering || _email.text.trim() != email) {
+      return;
+    }
+    final verificationToken = await showDialog<String>(
       context: context,
       builder: (context) => _EmailVerificationDialog(
         email: email,
-        cooldowns: _emailVerificationCooldowns,
+        challenge: challenge!,
+        controller: controller,
       ),
     );
-    if (verified == true && mounted) {
-      setState(() => _verifiedEmail = email.toLowerCase());
+    if (verificationToken != null && mounted) {
+      setState(() {
+        _verifiedEmail = email.toLowerCase();
+        _emailVerificationToken = verificationToken;
+      });
     }
   }
 
@@ -443,7 +488,10 @@ class _LoginPageState extends State<LoginPage> {
         _verifiedEmail == value.trim().toLowerCase()) {
       return;
     }
-    setState(() => _verifiedEmail = null);
+    setState(() {
+      _verifiedEmail = null;
+      _emailVerificationToken = null;
+    });
   }
 
   void _resetUsernameAvailability() {
@@ -1103,11 +1151,13 @@ class _InputSuffixAction extends StatelessWidget {
 class _EmailVerificationDialog extends StatefulWidget {
   const _EmailVerificationDialog({
     required this.email,
-    required this.cooldowns,
+    required this.challenge,
+    required this.controller,
   });
 
   final String email;
-  final EmailVerificationCooldowns cooldowns;
+  final EmailVerificationChallenge challenge;
+  final EmailVerificationController controller;
 
   @override
   State<_EmailVerificationDialog> createState() =>
@@ -1117,28 +1167,85 @@ class _EmailVerificationDialog extends StatefulWidget {
 class _EmailVerificationDialogState extends State<_EmailVerificationDialog> {
   final _code = TextEditingController();
   Timer? _cooldownTimer;
-  late int _remainingSeconds;
+  late EmailVerificationChallenge _challenge;
+  late DateTime _resendAvailableAt;
+  int _remainingSeconds = 0;
+  bool _sending = false;
+  bool _verifying = false;
 
   @override
   void initState() {
     super.initState();
-    _remainingSeconds = widget.cooldowns.remainingSeconds(widget.email);
+    _code.addListener(_codeChanged);
+    _applyChallenge(widget.challenge);
     _startCooldownTimer();
   }
 
-  void _sendVerificationCode() {
-    if (_remainingSeconds > 0) return;
-    setState(() {
-      _remainingSeconds = widget.cooldowns.start(widget.email);
-    });
-    _startCooldownTimer();
+  void _codeChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _applyChallenge(EmailVerificationChallenge challenge) {
+    _challenge = challenge;
+    _remainingSeconds = challenge.retryAfterSeconds;
+    _resendAvailableAt = DateTime.now().add(
+      Duration(seconds: challenge.retryAfterSeconds),
+    );
+  }
+
+  int _currentRemainingSeconds() {
+    final milliseconds = _resendAvailableAt
+        .difference(DateTime.now())
+        .inMilliseconds;
+    if (milliseconds <= 0) return 0;
+    return (milliseconds / 1000).ceil();
+  }
+
+  Future<void> _sendVerificationCode() async {
+    if (_remainingSeconds > 0 || _sending || _verifying) return;
+    setState(() => _sending = true);
+    try {
+      final challenge = await widget.controller.resend(_challenge.id);
+      if (!mounted) return;
+      setState(() {
+        _sending = false;
+        _applyChallenge(challenge);
+      });
+      _startCooldownTimer();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _sending = false);
+      showFloatingErrorNotice(context, _emailVerificationErrorMessage(error));
+    }
+  }
+
+  Future<void> _verify() async {
+    if (_verifying || _sending) return;
+    final code = _code.text.trim();
+    if (!RegExp(r'^\d{6}$').hasMatch(code)) {
+      showFloatingErrorNotice(context, '请输入 6 位数字验证码');
+      return;
+    }
+    setState(() => _verifying = true);
+    try {
+      final token = await widget.controller.verify(
+        challengeId: _challenge.id,
+        code: code,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop(token);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _verifying = false);
+      showFloatingErrorNotice(context, _emailVerificationErrorMessage(error));
+    }
   }
 
   void _startCooldownTimer() {
     _cooldownTimer?.cancel();
     if (_remainingSeconds <= 0) return;
     _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      final remaining = widget.cooldowns.remainingSeconds(widget.email);
+      final remaining = _currentRemainingSeconds();
       if (!mounted) return;
       if (remaining <= 0) _cooldownTimer?.cancel();
       if (remaining != _remainingSeconds) {
@@ -1150,6 +1257,7 @@ class _EmailVerificationDialogState extends State<_EmailVerificationDialog> {
   @override
   void dispose() {
     _cooldownTimer?.cancel();
+    _code.removeListener(_codeChanged);
     _code.dispose();
     super.dispose();
   }
@@ -1165,10 +1273,11 @@ class _EmailVerificationDialogState extends State<_EmailVerificationDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('取消'),
         ),
-        const Button(
-          onPressed: null,
+        Button(
+          onPressed: _verifying ? null : _verify,
           tone: ButtonTone.primary,
-          child: Text('验证'),
+          loading: _verifying,
+          child: const Text('验证'),
         ),
       ],
       child: Column(
@@ -1176,7 +1285,7 @@ class _EmailVerificationDialogState extends State<_EmailVerificationDialog> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            '请确认您的邮箱地址为 ${widget.email}',
+            '已发送验证码到您的邮箱 ${widget.email}',
             style: UiTypography.body.copyWith(color: UiColors.textSecondary),
           ),
           const SizedBox(height: 14),
@@ -1189,19 +1298,27 @@ class _EmailVerificationDialogState extends State<_EmailVerificationDialog> {
               actionKey: const ValueKey('auth-email-send-code-button'),
               label: _remainingSeconds > 0
                   ? '重新发送($_remainingSeconds)'
+                  : _sending
+                  ? '发送中'
                   : '发送验证码',
               semanticsLabel: _remainingSeconds > 0 ? '验证码发送冷却中' : '发送验证码',
-              enabled: _remainingSeconds <= 0,
+              enabled: _remainingSeconds <= 0 && !_sending && !_verifying,
               onPressed: _sendVerificationCode,
             ),
             keyboardType: TextInputType.number,
             textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _verify(),
             maxLines: 1,
           ),
         ],
       ),
     );
   }
+}
+
+String _emailVerificationErrorMessage(Object error) {
+  if (error is AuthException) return error.message;
+  return '邮箱验证失败，请稍后重试';
 }
 
 class _AuthTextLink extends StatefulWidget {

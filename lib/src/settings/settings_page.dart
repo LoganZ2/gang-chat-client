@@ -204,7 +204,6 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _usernameAvailabilityQuery;
   bool _checkingUsernameAvailability = false;
   bool _verifyingPasswordReset = false;
-  String? _passwordResetAuthorizedEmail;
   String? _usernameAvailabilityError;
   int _floatingNoticeSerial = 0;
   final Map<String, int> _floatingNoticeEventKeys = {};
@@ -323,11 +322,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
   void _syncUserFields(CurrentUser? user) {
     if (user == null) return;
-    final authorizedEmail = _passwordResetAuthorizedEmail;
-    if (authorizedEmail != null &&
-        authorizedEmail != (user.email ?? '').trim().toLowerCase()) {
-      _passwordResetAuthorizedEmail = null;
-    }
+    widget.passwordResetController?.invalidateAuthorizationIfEmailChanged(
+      user.email,
+    );
     _usernameController.text = user.username;
     _displayNameController.text = user.displayName;
     _bioController.text = user.bio;
@@ -2708,11 +2705,10 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   bool get _canResetPasswordWithoutCurrentPassword {
-    final authorizedEmail = _passwordResetAuthorizedEmail;
-    final currentEmail = (_user?.email ?? '').trim().toLowerCase();
-    return authorizedEmail != null &&
-        currentEmail.isNotEmpty &&
-        authorizedEmail == currentEmail;
+    return widget.passwordResetController?.isCurrentSessionAuthorizedFor(
+          _user?.email,
+        ) ??
+        false;
   }
 
   Future<void> _verifyEmailForPasswordReset() async {
@@ -2738,11 +2734,13 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
     try {
-      await controller.claimForCurrentSession(resetToken);
+      await controller.claimForCurrentSession(
+        resetToken,
+        email: user.email ?? '',
+      );
       if (!mounted) return;
       setState(() {
         _verifyingPasswordReset = false;
-        _passwordResetAuthorizedEmail = (user.email ?? '').trim().toLowerCase();
         _currentPasswordController.clear();
       });
       showFloatingSuccessNotice(context, '邮箱验证成功，可以直接设置新密码');
