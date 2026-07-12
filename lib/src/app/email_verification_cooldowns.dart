@@ -2,7 +2,7 @@ typedef EmailVerificationClock = DateTime Function();
 
 class EmailVerificationCooldowns {
   EmailVerificationCooldowns({
-    this.duration = const Duration(seconds: 59),
+    this.duration = const Duration(seconds: 60),
     EmailVerificationClock? now,
   }) : _now = now ?? DateTime.now;
 

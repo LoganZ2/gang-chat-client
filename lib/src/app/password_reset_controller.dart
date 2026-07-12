@@ -19,6 +19,10 @@ class PasswordResetController {
     return _withClient((client) => client.startPasswordReset(login));
   }
 
+  Future<PasswordResetInspection> inspect(String login) {
+    return _withClient((client) => client.inspectPasswordReset(login));
+  }
+
   Future<PasswordResetChallenge> resend(String challengeId) {
     return _withClient((client) => client.resendPasswordResetCode(challengeId));
   }

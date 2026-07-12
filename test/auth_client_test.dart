@@ -161,13 +161,23 @@ void main() {
       httpClient: MockClient((request) async {
         requests.add(request);
         switch (request.url.path) {
+          case '/api/v1/auth/password-reset/inspect':
+            return http.Response(
+              jsonEncode({
+                'can_send': true,
+                'masked_email': 'k***@example.test',
+                'retry_after': 0,
+              }),
+              200,
+              headers: {'content-type': 'application/json; charset=utf-8'},
+            );
           case '/api/v1/auth/password-reset/start':
           case '/api/v1/auth/password-reset/resend':
             return http.Response(
               jsonEncode({
                 'challenge_id': 'challenge-1',
                 'masked_email': 'k***@example.test',
-                'retry_after': 59,
+                'retry_after': 60,
               }),
               200,
               headers: {'content-type': 'application/json; charset=utf-8'},
@@ -190,6 +200,7 @@ void main() {
       }),
     );
 
+    final inspection = await client.inspectPasswordReset(' kai ');
     final started = await client.startPasswordReset(' kai ');
     final resent = await client.resendPasswordResetCode(started.id);
     final token = await client.verifyPasswordResetCode(
@@ -205,11 +216,12 @@ void main() {
       resetToken: token,
     );
 
+    expect(inspection.canSend, isTrue);
     expect(started.maskedEmail, 'k***@example.test');
-    expect(resent.retryAfterSeconds, 59);
+    expect(resent.retryAfterSeconds, 60);
     expect(token, 'reset-token');
     expect(jsonDecode(requests.first.body), {'login': 'kai'});
-    expect(jsonDecode(requests[2].body), {
+    expect(jsonDecode(requests[3].body), {
       'challenge_id': 'challenge-1',
       'code': '123456',
     });

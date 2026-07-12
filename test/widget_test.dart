@@ -280,11 +280,17 @@ void main() {
         httpClient: MockClient((request) async {
           requestedPaths.add(request.url.path);
           switch (request.url.path) {
+            case '/api/v1/auth/password-reset/inspect':
+              return _jsonResponse({
+                'can_send': true,
+                'masked_email': 'k***@example.test',
+                'retry_after': 0,
+              });
             case '/api/v1/auth/password-reset/start':
               return _jsonResponse({
                 'challenge_id': 'challenge-1',
                 'masked_email': 'k***@example.test',
-                'retry_after': 59,
+                'retry_after': 60,
               });
             case '/api/v1/auth/password-reset/verify':
               return _jsonResponse({'reset_token': 'reset-token'});
@@ -320,7 +326,7 @@ void main() {
 
     expect(find.text('邮箱验证'), findsOneWidget);
     expect(find.text('已发送验证码到该账号绑定的邮箱 k***@example.test'), findsOneWidget);
-    expect(find.text('重新发送(59)'), findsOneWidget);
+    expect(find.text('重新发送(60)'), findsOneWidget);
 
     await tester.enterText(
       find.byKey(const ValueKey('password-reset-code-input')),
@@ -347,10 +353,65 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
 
     expect(requestedPaths, [
+      '/api/v1/auth/password-reset/inspect',
       '/api/v1/auth/password-reset/start',
       '/api/v1/auth/password-reset/verify',
       '/api/v1/auth/password-reset/complete',
     ]);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('forgot password inspects and inherits an existing cooldown', (
+    WidgetTester tester,
+  ) async {
+    final requestedPaths = <String>[];
+    final controller = PasswordResetController(
+      apiBaseUrl: 'https://api.example.test/api/v1',
+      authClientFactory: (baseUrl) => AuthClient(
+        baseUrl: baseUrl,
+        httpClient: MockClient((request) async {
+          requestedPaths.add(request.url.path);
+          if (request.url.path == '/api/v1/auth/password-reset/inspect') {
+            return _jsonResponse({
+              'can_send': false,
+              'challenge_id': 'challenge-existing',
+              'masked_email': 'k***@example.test',
+              'retry_after': 42,
+            });
+          }
+          return http.Response('must not send during cooldown', 409);
+        }),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: LoginPage(
+          sizeForMode: (_, {showingError = false}) => const Size(430, 368),
+          consumeInitialWindowLock: () => true,
+          lockAuthWindow:
+              ({
+                bool registering = false,
+                bool moveWindow = false,
+                bool centerWindow = false,
+                Size? size,
+              }) async {},
+          passwordResetController: controller,
+          onSubmit: (_, {required rememberPassword}) async {},
+        ),
+      ),
+    );
+    await tester.enterText(_textFieldWithHint('用户名或邮箱地址'), 'kai');
+    await tester.tap(find.text('忘记密码？'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('邮箱验证'), findsOneWidget);
+    expect(find.text('重新发送(42)'), findsOneWidget);
+    expect(requestedPaths, ['/api/v1/auth/password-reset/inspect']);
+
+    await tester.tap(find.widgetWithText(ui.Button, '取消'));
+    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
 
@@ -371,11 +432,17 @@ void main() {
           httpClient: MockClient((request) async {
             requestedPaths.add(request.url.path);
             switch (request.url.path) {
+              case '/api/v1/auth/password-reset/inspect':
+                return _jsonResponse({
+                  'can_send': true,
+                  'masked_email': 'k***@example.com',
+                  'retry_after': 0,
+                });
               case '/api/v1/auth/password-reset/start':
                 return _jsonResponse({
                   'challenge_id': 'challenge-1',
                   'masked_email': 'k***@example.com',
-                  'retry_after': 59,
+                  'retry_after': 60,
                 });
               case '/api/v1/auth/password-reset/verify':
                 return _jsonResponse({'reset_token': 'reset-token'});
@@ -435,6 +502,7 @@ void main() {
       expect(find.text('确认新密码'), findsOneWidget);
       expect(find.text('重置密码'), findsOneWidget);
       expect(requestedPaths, [
+        '/api/v1/auth/password-reset/inspect',
         '/api/v1/auth/password-reset/start',
         '/api/v1/auth/password-reset/verify',
         '/api/v1/auth/password-reset/claim',
@@ -1058,7 +1126,7 @@ void main() {
 
       await tester.tap(sendCodeAction);
       await tester.pump();
-      expect(find.text('重新发送(59)'), findsOneWidget);
+      expect(find.text('重新发送(60)'), findsOneWidget);
       expect(tester.widget<GestureDetector>(sendCodeAction).onTap, isNull);
 
       final verificationCodeField = _textFieldWithHint('请输入验证码');
@@ -1204,7 +1272,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('auth-email-send-code-button')));
     await tester.pump();
-    expect(find.text('重新发送(59)'), findsOneWidget);
+    expect(find.text('重新发送(60)'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(ui.Button, '取消'));
     await tester.pumpAndSettle();
@@ -1230,8 +1298,8 @@ void main() {
     await tester.enterText(emailField, 'first@example.test');
     await tester.tap(verifyAction);
     await tester.pumpAndSettle();
-    expect(find.text('重新发送(59)'), findsOneWidget);
-    now = now.add(const Duration(seconds: 59));
+    expect(find.text('重新发送(60)'), findsOneWidget);
+    now = now.add(const Duration(seconds: 60));
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('发送验证码'), findsOneWidget);
     expect(find.textContaining('重新发送('), findsNothing);

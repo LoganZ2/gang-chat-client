@@ -50,7 +50,18 @@ Future<String?> verifyPasswordResetEmail({
   }
   PasswordResetChallenge challenge;
   try {
-    challenge = await controller.start(normalizedLogin);
+    final inspection = await controller.inspect(normalizedLogin);
+    final reusableChallenge = inspection.reusableChallenge;
+    if (!inspection.canSend && reusableChallenge == null) {
+      if (context.mounted) {
+        showFloatingErrorNotice(
+          context,
+          '验证码已发送，请在 ${inspection.retryAfterSeconds} 秒后重试',
+        );
+      }
+      return null;
+    }
+    challenge = reusableChallenge ?? await controller.start(normalizedLogin);
   } catch (error) {
     if (context.mounted) {
       showFloatingErrorNotice(context, _passwordResetErrorMessage(error));

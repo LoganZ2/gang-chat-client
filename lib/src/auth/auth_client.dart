@@ -141,6 +141,17 @@ class AuthClient {
     );
   }
 
+  Future<PasswordResetInspection> inspectPasswordReset(String login) async {
+    final response = await _postAuthWithHandshakeRetry(
+      '/auth/password-reset/inspect',
+      {'login': login.trim()},
+    );
+    _throwIfFailed(response);
+    return PasswordResetInspection.fromJson(
+      decodeJsonBody(response)! as Map<String, Object?>,
+    );
+  }
+
   Future<PasswordResetChallenge> resendPasswordResetCode(
     String challengeId,
   ) async {
@@ -277,6 +288,45 @@ class PasswordResetChallenge {
     final retryAfter = json['retry_after'];
     return PasswordResetChallenge(
       id: json['challenge_id']! as String,
+      maskedEmail: json['masked_email']! as String,
+      retryAfterSeconds: switch (retryAfter) {
+        int value => value,
+        num value => value.toInt(),
+        String value => int.tryParse(value) ?? 0,
+        _ => 0,
+      },
+    );
+  }
+}
+
+class PasswordResetInspection {
+  const PasswordResetInspection({
+    required this.canSend,
+    required this.maskedEmail,
+    required this.retryAfterSeconds,
+    this.challengeId,
+  });
+
+  final bool canSend;
+  final String maskedEmail;
+  final int retryAfterSeconds;
+  final String? challengeId;
+
+  PasswordResetChallenge? get reusableChallenge {
+    final id = challengeId;
+    if (id == null || id.isEmpty) return null;
+    return PasswordResetChallenge(
+      id: id,
+      maskedEmail: maskedEmail,
+      retryAfterSeconds: retryAfterSeconds,
+    );
+  }
+
+  factory PasswordResetInspection.fromJson(Map<String, Object?> json) {
+    final retryAfter = json['retry_after'];
+    return PasswordResetInspection(
+      canSend: json['can_send'] as bool? ?? false,
+      challengeId: json['challenge_id'] as String?,
       maskedEmail: json['masked_email']! as String,
       retryAfterSeconds: switch (retryAfter) {
         int value => value,
