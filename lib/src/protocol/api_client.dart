@@ -75,6 +75,7 @@ abstract interface class GangApi {
   Future<CurrentUser> updateAccount({
     String? username,
     String? email,
+    String? emailVerificationToken,
     bool? emailPublic,
     String? phoneNumber,
     bool? phoneNumberPublic,
@@ -487,6 +488,7 @@ class GangApiClient implements GangApi {
   Future<CurrentUser> updateAccount({
     String? username,
     String? email,
+    String? emailVerificationToken,
     bool? emailPublic,
     String? phoneNumber,
     bool? phoneNumberPublic,
@@ -495,6 +497,9 @@ class GangApiClient implements GangApi {
     final body = <String, Object?>{};
     if (username != null) body['username'] = username;
     if (email != null) body['email'] = email;
+    if (emailVerificationToken != null) {
+      body['email_verification_token'] = emailVerificationToken;
+    }
     if (emailPublic != null) body['email_public'] = emailPublic;
     if (phoneNumber != null) body['phone_number'] = phoneNumber;
     if (phoneNumberPublic != null) {

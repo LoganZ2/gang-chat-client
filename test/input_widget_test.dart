@@ -206,6 +206,26 @@ void main() {
     expect(find.text('Ctrl+A'), findsOneWidget);
   });
 
+  testWidgets('obscured input context menu hides cut and copy', (tester) async {
+    _mockClipboardText('replacement');
+    final controller = TextEditingController(text: 'secret-password');
+    controller.selection = const TextSelection(baseOffset: 0, extentOffset: 6);
+    addTearDown(controller.dispose);
+
+    await _pumpInput(tester, controller, obscureText: true);
+    await _showInputContextMenu(
+      tester,
+      selection: const TextSelection(baseOffset: 0, extentOffset: 6),
+    );
+
+    expect(find.text('剪切'), findsNothing);
+    expect(find.text('Ctrl+X'), findsNothing);
+    expect(find.text('复制'), findsNothing);
+    expect(find.text('Ctrl+C'), findsNothing);
+    expect(find.text('粘贴'), findsOneWidget);
+    expect(find.text('全选'), findsOneWidget);
+  });
+
   testWidgets('input context menu shows paste for selection when pasteable', (
     tester,
   ) async {
@@ -674,6 +694,7 @@ Future<void> _pumpInput(
   TextEditingController controller, {
   FocusNode? focusNode,
   UndoHistoryController? undoController,
+  bool obscureText = false,
 }) {
   return tester.pumpWidget(
     MaterialApp(
@@ -685,6 +706,7 @@ Future<void> _pumpInput(
               controller: controller,
               focusNode: focusNode,
               undoController: undoController,
+              obscureText: obscureText,
             ),
           ),
         ),

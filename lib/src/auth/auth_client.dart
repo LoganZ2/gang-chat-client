@@ -67,11 +67,15 @@ class AuthClient {
   }
 
   Future<EmailVerificationInspection> inspectEmailVerification(
-    String email,
-  ) async {
+    String email, {
+    String? accessToken,
+  }) async {
     final response = await _postAuthWithHandshakeRetry(
-      '/auth/email-verification/inspect',
+      accessToken == null
+          ? '/auth/email-verification/inspect'
+          : '/users/me/email-verification/inspect',
       {'email': email.trim()},
+      accessToken: accessToken,
     );
     _throwIfFailed(response);
     return EmailVerificationInspection.fromJson(
@@ -80,11 +84,15 @@ class AuthClient {
   }
 
   Future<EmailVerificationChallenge> startEmailVerification(
-    String email,
-  ) async {
+    String email, {
+    String? accessToken,
+  }) async {
     final response = await _postAuthWithHandshakeRetry(
-      '/auth/email-verification/start',
+      accessToken == null
+          ? '/auth/email-verification/start'
+          : '/users/me/email-verification/start',
       {'email': email.trim()},
+      accessToken: accessToken,
     );
     _throwIfFailed(response);
     return EmailVerificationChallenge.fromJson(
@@ -265,12 +273,13 @@ class AuthClient {
 
   Future<http.Response> _postAuthWithHandshakeRetry(
     String path,
-    Map<String, Object?> body,
-  ) {
+    Map<String, Object?> body, {
+    String? accessToken,
+  }) {
     return _sendWithHandshakeRetry(
       (client) => client.post(
         _uri(path),
-        headers: _headers(),
+        headers: _headers(accessToken: accessToken),
         body: encodeJsonBody(body),
       ),
     );

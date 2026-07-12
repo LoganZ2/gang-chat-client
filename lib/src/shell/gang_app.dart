@@ -92,7 +92,10 @@ class _AuthGateState extends State<_AuthGate> {
     accessTokenProvider: _auth.accessToken,
   );
   late final EmailVerificationController _emailVerification =
-      EmailVerificationController(apiBaseUrl: widget.config.apiBaseUrl);
+      EmailVerificationController(
+        apiBaseUrl: widget.config.apiBaseUrl,
+        accessTokenProvider: _auth.accessToken,
+      );
   final ServerClock _serverClock = ServerClock();
   // Tracks whether initial auth restore has finished so an authenticated start
   // does not briefly mount LoginPage and shrink the prepared app window.
@@ -322,6 +325,7 @@ class _AuthGateState extends State<_AuthGate> {
       logout: _logout,
       exitSessionForAppExit: _exitSessionForAppExit,
       serverClock: _serverClock,
+      emailVerificationController: _emailVerification,
       passwordResetController: _passwordReset,
     );
 

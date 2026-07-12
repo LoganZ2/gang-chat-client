@@ -9,12 +9,14 @@ import '../app/app_update.dart';
 import '../app/account_forms.dart';
 import '../app/account_sessions.dart';
 import '../app/account_state.dart';
+import '../app/auth_form.dart';
 import '../app/audio_device_display.dart';
 import '../app/audio_device_info.dart';
 import '../app/audio_device_state.dart';
 import '../app/audio_device_store.dart';
 import '../app/audio_levels.dart';
 import '../app/close_behavior.dart';
+import '../app/email_verification_controller.dart';
 import '../app/confirmation.dart';
 import '../app/language_preference.dart';
 import '../app/password_reset_controller.dart';
@@ -35,6 +37,7 @@ import '../protocol/sticker_pack_store.dart';
 import '../shell/clipboard_service.dart';
 import '../shell/app_update_gate.dart';
 import '../shell/desktop_window_controller.dart';
+import '../shell/email_verification_flow.dart';
 import '../shell/file_selection_service.dart';
 import '../shell/feedback_mail_service.dart';
 import '../shell/install_info_service.dart';
@@ -72,6 +75,7 @@ class SettingsPage extends StatefulWidget {
     this.controller,
     this.api,
     this.apiBaseUrl = '',
+    this.emailVerificationController,
     this.passwordResetController,
     this.stickerPackStore = const StickerPackStore(),
     this.clipboardService = const ClipboardService(),
@@ -106,6 +110,7 @@ class SettingsPage extends StatefulWidget {
   final SettingsController? controller;
   final GangApi? api;
   final String apiBaseUrl;
+  final EmailVerificationController? emailVerificationController;
   final PasswordResetController? passwordResetController;
   final StickerPackStore stickerPackStore;
   final ClipboardService clipboardService;
@@ -203,6 +208,10 @@ class _SettingsPageState extends State<SettingsPage> {
   int _usernameAvailabilityRequestId = 0;
   String? _usernameAvailabilityQuery;
   bool _checkingUsernameAvailability = false;
+  bool _checkingEmailAvailability = false;
+  int _emailVerificationRequestId = 0;
+  String? _verifiedEmail;
+  String? _emailVerificationToken;
   bool _verifyingPasswordReset = false;
   String? _usernameAvailabilityError;
   int _floatingNoticeSerial = 0;
@@ -329,6 +338,10 @@ class _SettingsPageState extends State<SettingsPage> {
     _displayNameController.text = user.displayName;
     _bioController.text = user.bio;
     _emailController.text = user.email ?? '';
+    _emailVerificationRequestId++;
+    _checkingEmailAvailability = false;
+    _verifiedEmail = null;
+    _emailVerificationToken = null;
     _phoneController.text = user.phoneNumber ?? '';
     _gender = account_display.normalizeGender(user.gender);
     _defaultAvatarKey = user.defaultAvatarKey;
@@ -339,6 +352,24 @@ class _SettingsPageState extends State<SettingsPage> {
     _pendingAvatarAssetId = null;
     _pendingAvatarUrl = null;
     _resetUsernameAvailabilityCheck();
+  }
+
+  String get _normalizedAccountEmail =>
+      _emailController.text.trim().toLowerCase();
+
+  bool get _accountEmailMatchesUser {
+    final user = _user;
+    return user != null &&
+        _normalizedAccountEmail == (user.email ?? '').trim().toLowerCase();
+  }
+
+  bool get _accountEmailVerified {
+    if (_normalizedAccountEmail.isEmpty) return false;
+    if (_accountEmailMatchesUser && (_user?.emailVerified ?? false)) {
+      return true;
+    }
+    return _verifiedEmail == _normalizedAccountEmail &&
+        _emailVerificationToken != null;
   }
 
   void _resetUsernameAvailabilityCheck() {
@@ -420,6 +451,71 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       ),
     );
+  }
+
+  void _onAccountEmailChanged(String value) {
+    final normalized = value.trim().toLowerCase();
+    _emailVerificationRequestId++;
+    setState(() {
+      _checkingEmailAvailability = false;
+      if (_verifiedEmail != normalized) {
+        _verifiedEmail = null;
+        _emailVerificationToken = null;
+      }
+    });
+  }
+
+  Future<void> _showAccountEmailVerification() async {
+    if (_savingAccount || _checkingEmailAvailability) return;
+    final email = _emailController.text.trim();
+    final validationError = registerEmailValidationError(email);
+    if (validationError != null) {
+      showFloatingErrorNotice(context, validationError);
+      return;
+    }
+    final controller = widget.emailVerificationController;
+    if (controller == null) {
+      showFloatingErrorNotice(context, '暂时无法使用邮箱验证功能');
+      return;
+    }
+
+    final requestId = ++_emailVerificationRequestId;
+    setState(() => _checkingEmailAvailability = true);
+    try {
+      if (!_accountEmailMatchesUser) {
+        final available = await controller.isEmailAvailable(email);
+        if (!mounted || requestId != _emailVerificationRequestId) return;
+        if (!available) {
+          setState(() => _checkingEmailAvailability = false);
+          showFloatingErrorNotice(context, '该邮箱已被其他用户使用');
+          return;
+        }
+      }
+
+      final challenge = await controller.inspectOrStartForCurrentUser(email);
+      if (!mounted || requestId != _emailVerificationRequestId) return;
+      setState(() => _checkingEmailAvailability = false);
+      final verificationToken = await showEmailVerificationDialog(
+        context: context,
+        email: email,
+        challenge: challenge,
+        controller: controller,
+      );
+      if (!mounted ||
+          verificationToken == null ||
+          requestId != _emailVerificationRequestId ||
+          _emailController.text.trim() != email) {
+        return;
+      }
+      setState(() {
+        _verifiedEmail = email.toLowerCase();
+        _emailVerificationToken = verificationToken;
+      });
+    } catch (error) {
+      if (!mounted || requestId != _emailVerificationRequestId) return;
+      setState(() => _checkingEmailAvailability = false);
+      showFloatingErrorNotice(context, emailVerificationErrorMessage(error));
+    }
   }
 
   Future<void> _checkLoginUsernameAvailability({
@@ -1279,7 +1375,18 @@ class _SettingsPageState extends State<SettingsPage> {
       );
       return;
     }
-    if (draft.noChanges) {
+    final accountEmailUpdate = target == AccountFormSaveTarget.account;
+    final emailIdentityChanged =
+        accountEmailUpdate && !_accountEmailMatchesUser;
+    final emailVerificationRequired =
+        accountEmailUpdate && (emailIdentityChanged || !user.emailVerified);
+    if (emailVerificationRequired && !_accountEmailVerified) {
+      showFloatingErrorNotice(context, '请先验证邮箱');
+      return;
+    }
+    final emailVerificationOnlyUpdate =
+        emailVerificationRequired && draft.email == null;
+    if (draft.noChanges && !emailVerificationOnlyUpdate) {
       if (target == AccountFormSaveTarget.preferences) {
         await _rememberLanguagePreference(_language);
         if (!mounted) return;
@@ -1309,7 +1416,12 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       final updated = await _settingsController.updateAccount(
         username: draft.username,
-        email: draft.email,
+        email:
+            draft.email ??
+            (emailVerificationOnlyUpdate ? _emailController.text.trim() : null),
+        emailVerificationToken: emailVerificationRequired
+            ? _emailVerificationToken
+            : null,
         emailPublic: draft.emailPublic,
         phoneNumber: draft.phoneNumber,
         phoneNumberPublic: draft.phoneNumberPublic,
@@ -3644,6 +3756,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _buildSecurityContent() {
     final user = _user;
     final unavailable = !_settingsController.hasApi || user == null;
+    final emailEmpty = _normalizedAccountEmail.isEmpty;
     return SettingsList(
       children: [
         if (unavailable)
@@ -3653,10 +3766,27 @@ class _SettingsPageState extends State<SettingsPage> {
             title: '绑定信息',
             children: [
               _LabeledTextField(
+                key: const ValueKey('settings-email-input'),
                 label: '邮箱绑定',
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
                 helperText: '用于登录、账号找回和安全通知。',
+                suffix: emailEmpty
+                    ? null
+                    : _checkingEmailAvailability
+                    ? const _EmailVerificationStatusIndicator(checking: true)
+                    : _accountEmailVerified
+                    ? const _EmailVerificationStatusIndicator(checking: false)
+                    : EmailVerificationInputAction(
+                        actionKey: const ValueKey(
+                          'settings-email-verification-button',
+                        ),
+                        label: '验证',
+                        semanticsLabel: '验证邮箱',
+                        enabled: !_savingAccount,
+                        onPressed: _showAccountEmailVerification,
+                      ),
+                onChanged: _onAccountEmailChanged,
               ),
               const SizedBox(height: 10),
               _ToggleSetting(

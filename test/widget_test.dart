@@ -1088,11 +1088,19 @@ void main() {
             .every((field) => field.enableInteractiveSelection),
         isTrue,
       );
-      final emailVerificationAction = find.byKey(
+      var emailVerificationAction = find.byKey(
         const ValueKey('auth-email-verification-button'),
       );
-      expect(find.text('验证'), findsOneWidget);
+      expect(emailVerificationAction, findsNothing);
+      expect(find.text('验证'), findsNothing);
       final emailField = _textFieldWithHint('邮箱地址');
+      await tester.enterText(emailField, 'register@example.test');
+      await tester.pump();
+      emailVerificationAction = find.byKey(
+        const ValueKey('auth-email-verification-button'),
+      );
+      expect(emailVerificationAction, findsOneWidget);
+      expect(find.text('验证'), findsOneWidget);
       final emailFieldRect = tester.getRect(emailField);
       final emailActionRect = tester.getRect(emailVerificationAction);
       expect(emailActionRect.center.dx, greaterThan(emailFieldRect.center.dx));
@@ -1212,6 +1220,7 @@ void main() {
     await tester.tap(find.text('注册'));
     await tester.pump();
     await tester.enterText(_textFieldWithHint('邮箱地址'), 'taken@example.test');
+    await tester.pump();
 
     await tester.tap(
       find.byKey(const ValueKey('auth-email-verification-button')),
@@ -1252,6 +1261,7 @@ void main() {
       await tester.tap(find.text('注册'));
       await tester.pumpAndSettle();
       await tester.enterText(_textFieldWithHint('邮箱地址'), 'logan@example.test');
+      await tester.pump();
 
       await tester.tap(
         find.byKey(const ValueKey('auth-email-verification-button')),
@@ -1307,6 +1317,7 @@ void main() {
     await tester.tap(find.text('注册'));
     await tester.pumpAndSettle();
     await tester.enterText(_textFieldWithHint('邮箱地址'), 'first@example.test');
+    await tester.pump();
     final verifyAction = find.byKey(
       const ValueKey('auth-email-verification-button'),
     );
@@ -1410,6 +1421,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(_textFieldWithHint('用户名'), 'verified_user');
     await tester.enterText(_textFieldWithHint('邮箱地址'), 'verified@example.test');
+    await tester.pump();
     await tester.enterText(_textFieldWithHint('密码'), 'secret123');
     await tester.enterText(_textFieldWithHint('确认密码'), 'secret123');
 
@@ -1423,6 +1435,12 @@ void main() {
     );
     await tester.tap(find.widgetWithText(ui.Button, '验证'));
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('auth-email-verified')), findsOneWidget);
+    expect(find.byTooltip('邮箱已验证'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('auth-email-verification-button')),
+      findsNothing,
+    );
     await tester.tap(find.widgetWithText(ui.Button, '创建账号'));
     await tester.pumpAndSettle();
 
@@ -1432,6 +1450,66 @@ void main() {
       'start:verified@example.test',
       'verify:email-challenge:123456',
     ]);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('editing a verified registration email restores verify action', (
+    WidgetTester tester,
+  ) async {
+    final emailVerification = _FakeEmailVerificationController();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: LoginPage(
+          sizeForMode: (_, {showingError = false}) => const Size(430, 500),
+          consumeInitialWindowLock: () => true,
+          lockAuthWindow:
+              ({
+                bool registering = false,
+                bool moveWindow = false,
+                bool centerWindow = false,
+                Size? size,
+              }) async {},
+          checkUsernameAvailability: (_) async => true,
+          checkEmailAvailability: (_) async => true,
+          emailVerificationController: emailVerification,
+          onSubmit: (_, {required rememberPassword}) async {},
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('注册'));
+    await tester.pumpAndSettle();
+    final emailField = _textFieldWithHint('邮箱地址');
+    await tester.enterText(emailField, 'verified@example.test');
+    await tester.pump();
+    await tester.tap(
+      find.byKey(const ValueKey('auth-email-verification-button')),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('auth-email-verification-code')),
+      '123456',
+    );
+    await tester.tap(find.widgetWithText(ui.Button, '验证'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('auth-email-verified')), findsOneWidget);
+
+    await tester.enterText(emailField, 'changed@example.test');
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('auth-email-verified')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('auth-email-verification-button')),
+      findsOneWidget,
+    );
+
+    await tester.enterText(emailField, '');
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('auth-email-verification-button')),
+      findsNothing,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -3377,6 +3455,141 @@ void main() {
 
     expect(accountUpdates, isEmpty);
   });
+
+  testWidgets(
+    'settings email binding requires verification and keeps verified status',
+    (WidgetTester tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(900, 900);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final accountUpdates = <Map<String, Object?>>[];
+      final emailVerification = _FakeEmailVerificationController();
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async =>
+            'access-token',
+        httpClient: MockClient((request) async {
+          if (request.url.path == '/api/v1/me') {
+            return _jsonResponse(_currentUserJson);
+          }
+          if (request.url.path == '/api/v1/auth/sessions') {
+            return _jsonResponse([]);
+          }
+          if (request.url.path == '/api/v1/users/me/account') {
+            final body =
+                jsonDecode(utf8.decode(request.bodyBytes))
+                    as Map<String, Object?>;
+            accountUpdates.add(body);
+            return _jsonResponse({
+              'user': {
+                ..._currentUserJson,
+                'email': body['email'],
+                'email_verified': true,
+              },
+            });
+          }
+          return http.Response('unexpected request: ${request.url}', 404);
+        }),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: SettingsPage(
+            isSubWindow: true,
+            initialSection: SettingsSection.security,
+            currentUser: CurrentUser.fromJson(_currentUserJson),
+            api: api,
+            apiBaseUrl: 'http://example.test/api/v1',
+            emailVerificationController: emailVerification,
+            systemAudioDevices: SystemAudioDevices(supported: false),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final emailField = find.descendant(
+        of: find.byKey(const ValueKey('settings-email-input')),
+        matching: find.byType(TextField),
+      );
+      final verifyButton = find.byKey(
+        const ValueKey('settings-email-verification-button'),
+      );
+      expect(
+        find.byKey(const ValueKey('settings-email-verified')),
+        findsOneWidget,
+      );
+      expect(verifyButton, findsNothing);
+
+      await tester.enterText(emailField, '');
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('settings-email-verified')),
+        findsNothing,
+      );
+      expect(verifyButton, findsNothing);
+
+      await tester.enterText(emailField, 'new@example.test');
+      await tester.pump();
+      expect(verifyButton, findsOneWidget);
+
+      final saveButton = find.widgetWithText(ui.Button, '保存绑定信息');
+      await tester.ensureVisible(saveButton);
+      await tester.tap(saveButton);
+      await tester.pump();
+      expect(find.text('请先验证邮箱'), findsOneWidget);
+      expect(accountUpdates, isEmpty);
+
+      await tester.ensureVisible(verifyButton);
+      await tester.pumpAndSettle();
+      await tester.tap(verifyButton);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('auth-email-verification-code')),
+        '123456',
+      );
+      await tester.tap(find.widgetWithText(ui.Button, '验证'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('settings-email-verified')),
+        findsOneWidget,
+      );
+      expect(verifyButton, findsNothing);
+
+      await tester.ensureVisible(saveButton);
+      await tester.tap(saveButton);
+      await tester.pumpAndSettle();
+      expect(accountUpdates, [
+        {
+          'email': 'new@example.test',
+          'email_verification_token': 'email-verification-token',
+        },
+      ]);
+      expect(
+        find.byKey(const ValueKey('settings-email-verified')),
+        findsOneWidget,
+      );
+
+      await tester.ensureVisible(emailField);
+      await tester.pumpAndSettle();
+      await tester.enterText(emailField, 'changed-again@example.test');
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('settings-email-verified')),
+        findsNothing,
+      );
+      expect(verifyButton, findsOneWidget);
+      expect(emailVerification.calls, [
+        'available:new@example.test',
+        'inspect:new@example.test',
+        'start:new@example.test',
+        'verify:email-challenge:123456',
+      ]);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('settings about section checks updates and opens feedback mail', (
     WidgetTester tester,
@@ -7861,6 +8074,7 @@ final _currentUserJson = {
   'bio': '',
   'gender': 'secret',
   'email': 'kai@example.com',
+  'email_verified': true,
   'email_public': false,
   'phone_number': null,
   'phone_number_public': false,
@@ -8597,6 +8811,12 @@ class _FakeEmailVerificationController extends EmailVerificationController {
 
   final Future<EmailVerificationInspection> Function(String email)? onInspect;
   final List<String> calls = [];
+
+  @override
+  Future<bool> isEmailAvailable(String email) async {
+    calls.add('available:$email');
+    return true;
+  }
 
   @override
   Future<EmailVerificationInspection> inspect(String email) async {

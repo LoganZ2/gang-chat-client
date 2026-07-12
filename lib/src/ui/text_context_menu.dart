@@ -285,6 +285,8 @@ Widget buildTextFieldContextMenu(
   Future<bool> Function()? canPasteNonText,
   bool readOnly = false,
   bool showReadOnlySelectAll = true,
+  bool allowCut = true,
+  bool allowCopy = true,
 }) {
   return _TextFieldContextMenu(
     editableTextState: editableTextState,
@@ -295,6 +297,8 @@ Widget buildTextFieldContextMenu(
     canPasteNonText: canPasteNonText,
     readOnly: readOnly,
     showReadOnlySelectAll: showReadOnlySelectAll,
+    allowCut: allowCut,
+    allowCopy: allowCopy,
   );
 }
 
@@ -308,6 +312,8 @@ class _TextFieldContextMenu extends StatefulWidget {
     required this.canPasteNonText,
     required this.readOnly,
     required this.showReadOnlySelectAll,
+    required this.allowCut,
+    required this.allowCopy,
   });
 
   final EditableTextState editableTextState;
@@ -318,6 +324,8 @@ class _TextFieldContextMenu extends StatefulWidget {
   final Future<bool> Function()? canPasteNonText;
   final bool readOnly;
   final bool showReadOnlySelectAll;
+  final bool allowCut;
+  final bool allowCopy;
 
   @override
   State<_TextFieldContextMenu> createState() => _TextFieldContextMenuState();
@@ -443,39 +451,36 @@ class _TextFieldContextMenuState extends State<_TextFieldContextMenu> {
     final selectAllAction = selectAllItem?.onPressed ?? _selectAllFallback;
 
     if (selected) {
-      editItems
-        ..add(
+      editItems.addAll([
+        if (widget.allowCut)
           _entry(
             context,
             label: '剪切',
             shortcut: _ShortcutKind.cut,
             action: _itemOfType(ContextMenuButtonType.cut)?.onPressed,
           ),
-        )
-        ..add(
+        if (widget.allowCopy)
           _entry(
             context,
             label: '复制',
             shortcut: _ShortcutKind.copy,
             action: _itemOfType(ContextMenuButtonType.copy)?.onPressed,
           ),
-        )
-        ..addAll([
-          if (canPaste)
-            _entry(
-              context,
-              label: '粘贴',
-              shortcut: _ShortcutKind.paste,
-              action: pasteAction,
-            ),
-          if (selectAllAction != null)
-            _entry(
-              context,
-              label: '全选',
-              shortcut: _ShortcutKind.selectAll,
-              action: selectAllAction,
-            ),
-        ]);
+        if (canPaste)
+          _entry(
+            context,
+            label: '粘贴',
+            shortcut: _ShortcutKind.paste,
+            action: pasteAction,
+          ),
+        if (selectAllAction != null)
+          _entry(
+            context,
+            label: '全选',
+            shortcut: _ShortcutKind.selectAll,
+            action: selectAllAction,
+          ),
+      ]);
     } else {
       if (canPaste) {
         editItems.add(

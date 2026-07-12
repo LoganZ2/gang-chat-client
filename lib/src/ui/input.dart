@@ -247,6 +247,8 @@ class _InputState extends State<Input> {
                   undoController: _effectiveUndoController,
                   canPasteNonText: widget.canPasteNonText,
                   tapRegionGroupId: widget.tapRegionGroupId,
+                  allowCut: !widget.obscureText,
+                  allowCopy: !widget.obscureText,
                 )
               : (_, _) => const SizedBox.shrink(),
           decoration: InputDecoration(

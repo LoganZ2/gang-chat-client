@@ -214,6 +214,33 @@ class _UsernameValidityIndicator extends StatelessWidget {
   }
 }
 
+class _EmailVerificationStatusIndicator extends StatelessWidget {
+  const _EmailVerificationStatusIndicator({required this.checking});
+
+  final bool checking;
+
+  @override
+  Widget build(BuildContext context) {
+    final message = checking ? '正在检测邮箱是否可用' : '邮箱已验证';
+    return Tooltip(
+      message: message,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Icon(
+          checking
+              ? Icons.hourglass_empty_outlined
+              : Icons.check_circle_outline,
+          key: ValueKey(
+            checking ? 'settings-email-checking' : 'settings-email-verified',
+          ),
+          size: 18,
+          color: checking ? _textSecondary : UiColors.accent,
+        ),
+      ),
+    );
+  }
+}
+
 class _FieldLabel extends StatelessWidget {
   const _FieldLabel(this.text);
 

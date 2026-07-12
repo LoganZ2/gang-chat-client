@@ -94,6 +94,7 @@ class _SettingsSubPanel extends StatelessWidget {
 
 class _LabeledTextField extends StatelessWidget {
   const _LabeledTextField({
+    super.key,
     required this.label,
     required this.controller,
     this.enabled = true,

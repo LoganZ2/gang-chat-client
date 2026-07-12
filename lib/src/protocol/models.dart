@@ -252,6 +252,7 @@ class CurrentUser {
     required this.bio,
     required this.gender,
     required this.email,
+    this.emailVerified = false,
     required this.emailPublic,
     required this.phoneNumber,
     required this.phoneNumberPublic,
@@ -272,6 +273,7 @@ class CurrentUser {
   final String bio;
   final String gender;
   final String? email;
+  final bool emailVerified;
   final bool emailPublic;
   final String? phoneNumber;
   final bool phoneNumberPublic;
@@ -295,6 +297,7 @@ class CurrentUser {
       bio: json['bio'] as String? ?? '',
       gender: json['gender'] as String? ?? 'secret',
       email: json['email'] as String?,
+      emailVerified: json['email_verified'] as bool? ?? false,
       emailPublic: json['email_public'] as bool? ?? false,
       phoneNumber: json['phone_number'] as String?,
       phoneNumberPublic: json['phone_number_public'] as bool? ?? false,

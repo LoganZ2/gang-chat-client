@@ -1332,6 +1332,47 @@ void main() {
     api.close();
   });
 
+  test('updateAccount sends the email verification token', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(jsonDecode(request.body) as Map<String, Object?>, {
+          'email': 'new@example.test',
+          'email_verification_token': 'verification-token',
+        });
+        return http.Response(
+          jsonEncode({
+            'user': {
+              'id': 'user_1',
+              'uid': '1000001',
+              'username': 'alice',
+              'display_name': 'Alice',
+              'bio': '',
+              'gender': 'secret',
+              'email': 'new@example.test',
+              'email_verified': true,
+              'email_public': false,
+              'phone_number_public': false,
+              'avatar_url': null,
+              'default_avatar_key': 'blue-3',
+            },
+          }),
+          200,
+        );
+      }),
+    );
+
+    final user = await api.updateAccount(
+      email: 'new@example.test',
+      emailVerificationToken: 'verification-token',
+    );
+
+    expect(user.email, 'new@example.test');
+    expect(user.emailVerified, isTrue);
+    api.close();
+  });
+
   test('uploadImageAsset posts multipart image data', () async {
     final api = GangApiClient(
       baseUrl: 'http://example.test/api/v1',

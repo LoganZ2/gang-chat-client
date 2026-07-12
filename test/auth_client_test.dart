@@ -223,6 +223,51 @@ void main() {
     client.close();
   });
 
+  test(
+    'authenticated email verification uses the current-user routes',
+    () async {
+      final requests = <http.Request>[];
+      final client = AuthClient(
+        baseUrl: 'https://api.example.test/api/v1',
+        httpClient: MockClient((request) async {
+          requests.add(request);
+          if (request.url.path.endsWith('/inspect')) {
+            return http.Response(
+              jsonEncode({'can_send': true, 'retry_after': 0}),
+              200,
+            );
+          }
+          return http.Response(
+            jsonEncode({'challenge_id': 'challenge', 'retry_after': 60}),
+            200,
+          );
+        }),
+      );
+
+      await client.inspectEmailVerification(
+        'bound@example.test',
+        accessToken: 'access-token',
+      );
+      await client.startEmailVerification(
+        'bound@example.test',
+        accessToken: 'access-token',
+      );
+
+      expect(requests.map((request) => request.url.path), [
+        '/api/v1/users/me/email-verification/inspect',
+        '/api/v1/users/me/email-verification/start',
+      ]);
+      expect(
+        requests.every(
+          (request) =>
+              request.headers['authorization'] == 'Bearer access-token',
+        ),
+        isTrue,
+      );
+      client.close();
+    },
+  );
+
   test('password reset client sends the complete protocol payloads', () async {
     final requests = <http.Request>[];
     final client = AuthClient(

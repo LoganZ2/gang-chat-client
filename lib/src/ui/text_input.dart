@@ -127,6 +127,8 @@ class _TextInputState extends State<TextInput> {
                       context,
                       editableTextState,
                       undoController: _effectiveUndoController,
+                      allowCut: !widget.obscureText,
+                      allowCopy: !widget.obscureText,
                     ),
                 decoration: InputDecoration(
                   isDense: true,

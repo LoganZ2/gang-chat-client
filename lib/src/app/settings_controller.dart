@@ -82,6 +82,7 @@ class SettingsController {
   Future<CurrentUser?> updateAccount({
     String? username,
     String? email,
+    String? emailVerificationToken,
     bool? emailPublic,
     String? phoneNumber,
     bool? phoneNumberPublic,
@@ -92,6 +93,7 @@ class SettingsController {
     return client.updateAccount(
       username: username,
       email: email,
+      emailVerificationToken: emailVerificationToken,
       emailPublic: emailPublic,
       phoneNumber: phoneNumber,
       phoneNumberPublic: phoneNumberPublic,
