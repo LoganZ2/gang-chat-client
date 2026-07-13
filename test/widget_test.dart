@@ -4149,6 +4149,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final requestedPaths = <String>[];
+    final requestedUris = <Uri>[];
     final myRoomSettingsUpdates = <Map<String, Object?>>[];
 
     await tester.pumpWidget(
@@ -4157,6 +4158,7 @@ void main() {
         home: HomePage(
           app: _homeTestAppContext(
             requestedPaths: requestedPaths,
+            requestedUris: requestedUris,
             myRoomSettingsUpdates: myRoomSettingsUpdates,
           ),
           realtime: _NoopRealtimeService(),
@@ -4444,6 +4446,7 @@ void main() {
     final historyAvatar = find.byKey(
       const ValueKey('room-message-history-avatar-msg-1'),
     );
+    expect(tester.getRect(historyRow).height, greaterThanOrEqualTo(64));
     expect(
       find.ancestor(of: historyTime, matching: historyRow),
       findsOneWidget,
@@ -4465,6 +4468,10 @@ void main() {
         matching: find.byKey(const ValueKey('message-bubble-surface-msg-1')),
       ),
       findsNothing,
+    );
+    expect(
+      find.ancestor(of: historyAvatar, matching: find.byType(UserHoverCard)),
+      findsOneWidget,
     );
     final historyContentPointer = tester.widget<IgnorePointer>(
       find.byKey(
@@ -4522,6 +4529,57 @@ void main() {
     expect(
       find.descendant(of: systemHistoryRow, matching: find.byType(ui.Avatar)),
       findsOneWidget,
+    );
+    final systemHistoryContent = find.descendant(
+      of: systemHistoryRow,
+      matching: find.byType(ChatSystemMessageContent),
+    );
+    expect(
+      find.descendant(
+        of: systemHistoryContent,
+        matching: find.byType(AnimatedContainer),
+      ),
+      findsNothing,
+    );
+    final systemHistoryAvatar = find.descendant(
+      of: systemHistoryContent,
+      matching: find.byType(ui.Avatar),
+    );
+    expect(
+      tester.getRect(systemHistoryAvatar).left,
+      closeTo(tester.getRect(historyAvatar).left, 0.01),
+    );
+    final systemJumpButton = find.byKey(
+      const ValueKey('room-message-history-jump-msg-system'),
+    );
+    expect(
+      tester.getRect(systemJumpButton).top,
+      greaterThanOrEqualTo(tester.getRect(systemHistoryRow).top),
+    );
+    expect(
+      tester.getRect(systemJumpButton).bottom,
+      lessThanOrEqualTo(tester.getRect(systemHistoryRow).bottom),
+    );
+
+    await tester.tap(find.text('图片'));
+    await tester.pumpAndSettle();
+    expect(
+      requestedUris.any(
+        (uri) =>
+            uri.path == '/api/v1/rooms/server-alpha/message-history' &&
+            uri.queryParameters['category'] == 'images',
+      ),
+      isTrue,
+    );
+    await tester.tap(find.text('文件'));
+    await tester.pumpAndSettle();
+    expect(
+      requestedUris.any(
+        (uri) =>
+            uri.path == '/api/v1/rooms/server-alpha/message-history' &&
+            uri.queryParameters['category'] == 'files',
+      ),
+      isTrue,
     );
 
     await tester.tap(
@@ -4615,6 +4673,30 @@ void main() {
     );
     expect(selectBox.center.dy, closeTo(row.center.dy, 0.01));
     expect(jumpButton.center.dy, closeTo(row.center.dy, 0.01));
+    expect(
+      tester
+          .widget<ui.UiCheckbox>(
+            find.byKey(const ValueKey('room-message-history-select-msg-1')),
+          )
+          .value,
+      isFalse,
+    );
+    await tester.tap(historyAvatar);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('user-profile-card-avatar-preview')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<ui.UiCheckbox>(
+            find.byKey(const ValueKey('room-message-history-select-msg-1')),
+          )
+          .value,
+      isFalse,
+    );
+    await tester.tap(historyAvatar);
+    await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey('room-message-history-row-msg-1')),
     );

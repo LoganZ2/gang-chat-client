@@ -296,6 +296,9 @@ class _RoomMessageHistoryPaneState extends State<_RoomMessageHistoryPane> {
           ownerUserId: widget.room.createdBy?.id,
           live: widget.room.live,
           enableContextMenu: false,
+          showSurface: false,
+          alignment: Alignment.centerLeft,
+          wrapAlignment: WrapAlignment.start,
           onResolveSenderProfile: widget.onResolveRoomUserProfile == null
               ? null
               : (user) =>
@@ -317,6 +320,9 @@ class _RoomMessageHistoryPaneState extends State<_RoomMessageHistoryPane> {
           live: widget.room.live,
           messageActions: widget.messageActions,
           enableContextMenu: false,
+          showSurface: false,
+          alignment: Alignment.centerLeft,
+          wrapAlignment: WrapAlignment.start,
           onResolveSenderProfile: widget.onResolveRoomUserProfile == null
               ? null
               : (user) =>
@@ -579,6 +585,9 @@ class _RoomMessageHistoryPaneState extends State<_RoomMessageHistoryPane> {
           message: message,
           content: renderedContent.content,
           inlineContent: renderedContent.inline,
+          senderAvatar: renderedContent.inline
+              ? null
+              : _buildSenderAvatar(message),
           senderColor: chatRoomUsernameColor(
             user: message.sender,
             currentUser: widget.currentUser,
@@ -595,6 +604,35 @@ class _RoomMessageHistoryPaneState extends State<_RoomMessageHistoryPane> {
       },
     );
   }
+
+  Widget _buildSenderAvatar(Message message) {
+    return UserHoverCard(
+      user: message.sender,
+      currentUser: widget.currentUser,
+      onResolveProfile: widget.onResolveRoomUserProfile == null
+          ? null
+          : (user) => widget.onResolveRoomUserProfile!(widget.room.id, user),
+      onResolveRoomProfile: widget.onResolveRoomProfile,
+      onEnterCommonRoom: widget.onOpenRoom,
+      profileActionBuilder: widget.profileActionBuilder,
+      inLive:
+          live_display.liveParticipantByUserId(
+            widget.room.live,
+            message.sender.id,
+          ) !=
+          null,
+      showRoomRole: true,
+      child: Avatar(
+        key: ValueKey('room-message-history-avatar-${message.id}'),
+        label: _historySenderName(message.sender),
+        imageUrl: AppConfigScope.of(
+          context,
+        ).resolveAssetUrl(message.sender.avatarUrl),
+        defaultAvatarKey: message.sender.defaultAvatarKey,
+        size: 38,
+      ),
+    );
+  }
 }
 
 class _HistoryMessageRow extends StatefulWidget {
@@ -602,6 +640,7 @@ class _HistoryMessageRow extends StatefulWidget {
     required this.message,
     required this.content,
     required this.inlineContent,
+    required this.senderAvatar,
     required this.senderColor,
     required this.selectionMode,
     required this.selected,
@@ -615,6 +654,7 @@ class _HistoryMessageRow extends StatefulWidget {
   final Message message;
   final Widget content;
   final bool inlineContent;
+  final Widget? senderAvatar;
   final Color senderColor;
   final bool selectionMode;
   final bool selected;
@@ -640,6 +680,7 @@ class _HistoryMessageRowState extends State<_HistoryMessageRow> {
       key: ValueKey('room-message-history-row-${message.id}'),
       duration: const Duration(milliseconds: 90),
       curve: Curves.easeOutCubic,
+      constraints: const BoxConstraints(minHeight: 64),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: UiColors.surface,
@@ -657,15 +698,7 @@ class _HistoryMessageRowState extends State<_HistoryMessageRow> {
               const SizedBox(width: 82),
               const SizedBox(width: 8),
               if (!widget.inlineContent) ...[
-                Avatar(
-                  key: ValueKey('room-message-history-avatar-${message.id}'),
-                  label: senderName,
-                  imageUrl: AppConfigScope.of(
-                    context,
-                  ).resolveAssetUrl(message.sender.avatarUrl),
-                  defaultAvatarKey: message.sender.defaultAvatarKey,
-                  size: 38,
-                ),
+                widget.senderAvatar!,
                 const SizedBox(width: 10),
               ],
               Expanded(

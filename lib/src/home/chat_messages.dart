@@ -1372,6 +1372,9 @@ class ChatSystemMessageContent extends StatelessWidget {
     required this.live,
     this.messageActions,
     this.enableContextMenu = true,
+    this.showSurface = true,
+    this.alignment = Alignment.center,
+    this.wrapAlignment = WrapAlignment.center,
     this.onResolveSenderProfile,
     this.onResolveRoomProfile,
     this.onEnterProfileRoom,
@@ -1385,6 +1388,9 @@ class ChatSystemMessageContent extends StatelessWidget {
   final LiveState? live;
   final ChatMessageActions? messageActions;
   final bool enableContextMenu;
+  final bool showSurface;
+  final AlignmentGeometry alignment;
+  final WrapAlignment wrapAlignment;
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
   final RoomProfileResolver? onResolveRoomProfile;
@@ -1396,6 +1402,9 @@ class ChatSystemMessageContent extends StatelessWidget {
     return _SystemMessageContainer(
       message: enableContextMenu ? message : null,
       actions: enableContextMenu ? messageActions : null,
+      showSurface: showSurface,
+      alignment: alignment,
+      wrapAlignment: wrapAlignment,
       children: _SystemMessageParts(
         event: event,
         currentUser: currentUser,
@@ -1415,11 +1424,17 @@ class _SystemMessageContainer extends StatefulWidget {
     required this.children,
     this.message,
     this.actions,
+    this.showSurface = true,
+    this.alignment = Alignment.center,
+    this.wrapAlignment = WrapAlignment.center,
   });
 
   final List<Widget> children;
   final Message? message;
   final ChatMessageActions? actions;
+  final bool showSurface;
+  final AlignmentGeometry alignment;
+  final WrapAlignment wrapAlignment;
 
   @override
   State<_SystemMessageContainer> createState() =>
@@ -1434,33 +1449,36 @@ class _SystemMessageContainerState extends State<_SystemMessageContainer> {
     final active = _contextMenuActive;
     final contentColor = UiColors.surfacePressed.withValues(alpha: 0.82);
     final highlightColor = active ? UiColors.selected : contentColor;
-    final content = AnimatedContainer(
-      duration: const Duration(milliseconds: 90),
-      curve: Curves.easeOutCubic,
-      decoration: BoxDecoration(
-        color: highlightColor,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: active ? UiColors.selectedBorder : UiColors.border,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: highlightColor,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Wrap(
-            alignment: WrapAlignment.center,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 5,
-            runSpacing: 5,
-            children: widget.children,
-          ),
-        ),
-      ),
+    final parts = Wrap(
+      alignment: widget.wrapAlignment,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 5,
+      runSpacing: 5,
+      children: widget.children,
     );
+    final content = widget.showSurface
+        ? AnimatedContainer(
+            duration: const Duration(milliseconds: 90),
+            curve: Curves.easeOutCubic,
+            decoration: BoxDecoration(
+              color: highlightColor,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: active ? UiColors.selectedBorder : UiColors.border,
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: highlightColor,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: parts,
+              ),
+            ),
+          )
+        : parts;
     final menuMessage = widget.message;
     final menuActions = widget.actions;
     final wrappedContent = menuMessage == null || menuActions == null
@@ -1472,7 +1490,8 @@ class _SystemMessageContainerState extends State<_SystemMessageContainer> {
             child: content,
           );
 
-    return Center(
+    return Align(
+      alignment: widget.alignment,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: _messageMaxWidth + 96),
         child: wrappedContent,
@@ -1496,6 +1515,9 @@ class ChatRemovedMessageContent extends StatelessWidget {
     required this.live,
     required this.messageActions,
     this.enableContextMenu = true,
+    this.showSurface = true,
+    this.alignment = Alignment.center,
+    this.wrapAlignment = WrapAlignment.center,
     this.onResolveSenderProfile,
     this.onResolveRoomProfile,
     this.onEnterProfileRoom,
@@ -1508,6 +1530,9 @@ class ChatRemovedMessageContent extends StatelessWidget {
   final LiveState? live;
   final ChatMessageActions messageActions;
   final bool enableContextMenu;
+  final bool showSurface;
+  final AlignmentGeometry alignment;
+  final WrapAlignment wrapAlignment;
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
   final RoomProfileResolver? onResolveRoomProfile;
@@ -1519,6 +1544,9 @@ class ChatRemovedMessageContent extends StatelessWidget {
     return _SystemMessageContainer(
       message: enableContextMenu ? message : null,
       actions: enableContextMenu ? messageActions : null,
+      showSurface: showSurface,
+      alignment: alignment,
+      wrapAlignment: wrapAlignment,
       children: _buildParts(),
     );
   }
