@@ -12,6 +12,37 @@ import 'package:client/src/protocol/models.dart';
 
 void main() {
   test(
+    'hideMessageHistory deletes large selections in server-sized batches',
+    () async {
+      final batchSizes = <int>[];
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          expect(request.url.path, '/api/v1/rooms/room_1/message-history/hide');
+          final body = jsonDecode(utf8.decode(request.bodyBytes));
+          final ids = (body['message_ids'] as List<Object?>).cast<String>();
+          expect(body['confirm'], isTrue);
+          batchSizes.add(ids.length);
+          return http.Response(
+            jsonEncode({'ok': true, 'deleted_count': ids.length}),
+            200,
+          );
+        }),
+      );
+      addTearDown(api.close);
+
+      final deleted = await MessagesController(api: api).hideMessageHistory(
+        roomId: 'room_1',
+        messageIds: List.generate(205, (index) => 'msg_$index'),
+      );
+
+      expect(deleted, 205);
+      expect(batchSizes, [100, 100, 5]);
+    },
+  );
+
+  test(
     'sendComposedMessage publishes a local pending message before sending',
     () async {
       String? pendingClientId;

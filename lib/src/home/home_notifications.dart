@@ -345,10 +345,14 @@ class _NotificationDateRangeDialog extends StatefulWidget {
   const _NotificationDateRangeDialog({
     required this.initialRange,
     required this.defaultRange,
+    this.title = '筛选通知日期',
+    this.description = '选择包含首尾日期的通知时间区间。',
   });
 
   final RoomNotificationDateRange initialRange;
   final RoomNotificationDateRange defaultRange;
+  final String title;
+  final String description;
 
   @override
   State<_NotificationDateRangeDialog> createState() =>
@@ -393,7 +397,7 @@ class _NotificationDateRangeDialogState
   @override
   Widget build(BuildContext context) {
     return DialogFrame(
-      title: '筛选通知日期',
+      title: widget.title,
       icon: Icons.calendar_month_outlined,
       maxWidth: 420,
       actions: [
@@ -423,7 +427,7 @@ class _NotificationDateRangeDialogState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            '选择包含首尾日期的通知时间区间。',
+            widget.description,
             style: UiTypography.label.copyWith(color: UiColors.textMuted),
           ),
           const SizedBox(height: 16),
@@ -444,6 +448,24 @@ class _NotificationDateRangeDialogState
       ),
     );
   }
+}
+
+Future<RoomNotificationDateRange?> showDateRangeFilterDialog(
+  BuildContext context, {
+  required RoomNotificationDateRange initialRange,
+  required RoomNotificationDateRange defaultRange,
+  String title = '筛选日期',
+  String description = '选择包含首尾日期的时间区间。',
+}) {
+  return showDialog<RoomNotificationDateRange>(
+    context: context,
+    builder: (context) => _NotificationDateRangeDialog(
+      initialRange: initialRange,
+      defaultRange: defaultRange,
+      title: title,
+      description: description,
+    ),
+  );
 }
 
 class _NotificationDateField extends StatelessWidget {

@@ -183,6 +183,87 @@ void main() {
     },
   );
 
+  test('listMessageHistory sends all filters and parses the page', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/api/v1/rooms/room_1/message-history');
+        expect(request.url.queryParameters, {
+          'limit': '25',
+          'category': 'links',
+          'query': 'needle',
+          'sender_user_id': 'user_2',
+          'start_at': '2026-07-01T00:00:00.000Z',
+          'end_at': '2026-07-14T00:00:00.000Z',
+          'before': 'msg_older',
+        });
+        return http.Response(
+          jsonEncode({
+            'messages': [
+              {
+                'id': 'msg_1',
+                'room_id': 'room_1',
+                'sender': {
+                  'id': 'user_2',
+                  'username': 'alice',
+                  'display_name': 'Alice',
+                },
+                'client_message_id': 'cmsg_1',
+                'body': 'needle',
+                'created_at': '2026-07-10T12:00:00Z',
+              },
+            ],
+            'has_more': true,
+            'next_before': 'msg_1',
+          }),
+          200,
+        );
+      }),
+    );
+    addTearDown(api.close);
+
+    final page = await api.listMessageHistory(
+      roomId: 'room_1',
+      query: '  needle  ',
+      category: 'links',
+      senderUserId: 'user_2',
+      startAt: DateTime.utc(2026, 7, 1),
+      endAt: DateTime.utc(2026, 7, 14),
+      limit: 25,
+      before: 'msg_older',
+    );
+
+    expect(page.messages.single.id, 'msg_1');
+    expect(page.hasMore, isTrue);
+    expect(page.nextBefore, 'msg_1');
+  });
+
+  test('hideMessageHistory confirms current-account record deletion', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/v1/rooms/room_1/message-history/hide');
+        expect(jsonDecode(utf8.decode(request.bodyBytes)), {
+          'message_ids': ['msg_1', 'msg_2'],
+          'confirm': true,
+        });
+        return http.Response(jsonEncode({'ok': true, 'deleted_count': 2}), 200);
+      }),
+    );
+    addTearDown(api.close);
+
+    final deleted = await api.hideMessageHistory(
+      roomId: 'room_1',
+      messageIds: const ['msg_1', 'msg_2'],
+    );
+
+    expect(deleted, 2);
+  });
+
   test(
     'sendMessage keeps Chinese JSON UTF-8 without response charset',
     () async {

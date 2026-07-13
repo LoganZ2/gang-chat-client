@@ -3,7 +3,7 @@ part of 'room_management.dart';
 enum _RoomSettingsDialogMode { create, edit }
 
 /// 房间设置的分段:房间信息、个人偏好与房间表情包管理。
-enum _RoomSettingsSection { info, preferences, stickers }
+enum _RoomSettingsSection { info, preferences, messageHistory, stickers }
 
 class RoomSettingsDialog extends StatefulWidget {
   const RoomSettingsDialog({
@@ -18,6 +18,7 @@ class RoomSettingsDialog extends StatefulWidget {
     this.onClose,
     this.onResult,
     this.stickerImagePreviewOpener,
+    this.messageHistoryBuilder,
     bool createMode = false,
   }) : _mode = createMode
            ? _RoomSettingsDialogMode.create
@@ -58,6 +59,7 @@ class RoomSettingsDialog extends StatefulWidget {
   final VoidCallback? onClose;
   final ValueChanged<RoomManagementResult>? onResult;
   final StickerImagePreviewOpener? stickerImagePreviewOpener;
+  final WidgetBuilder? messageHistoryBuilder;
   final _RoomSettingsDialogMode _mode;
 
   @override
@@ -653,18 +655,24 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
                 expanded: true,
                 value: _section,
                 onChanged: (section) => setState(() => _section = section),
-                segments: const [
-                  Segment(
+                segments: [
+                  const Segment(
                     value: _RoomSettingsSection.info,
                     label: '房间信息',
                     icon: Icons.info_outline,
                   ),
-                  Segment(
+                  const Segment(
                     value: _RoomSettingsSection.preferences,
                     label: '个人偏好',
                     icon: Icons.tune_outlined,
                   ),
-                  Segment(
+                  if (widget.messageHistoryBuilder != null)
+                    const Segment(
+                      value: _RoomSettingsSection.messageHistory,
+                      label: '消息记录',
+                      icon: Icons.history_outlined,
+                    ),
+                  const Segment(
                     value: _RoomSettingsSection.stickers,
                     label: '表情包',
                     icon: Icons.emoji_emotions_outlined,
@@ -676,6 +684,9 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
             : switch (_section) {
                 _RoomSettingsSection.info => _buildSettingsBody(context),
                 _RoomSettingsSection.preferences => _buildPreferencesBody(),
+                _RoomSettingsSection.messageHistory =>
+                  widget.messageHistoryBuilder?.call(context) ??
+                      _buildPreferencesBody(),
                 _RoomSettingsSection.stickers => StickerManagerPanel(
                   backend: _RoomStickerBackend(
                     controller: widget.controller,

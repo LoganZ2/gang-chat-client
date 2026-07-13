@@ -329,6 +329,24 @@ abstract interface class GangApi {
     String? before,
   });
 
+  Future<MessagePage> listMessageHistory({
+    required String roomId,
+    String query = '',
+    String category = 'all',
+    String? senderUserId,
+    DateTime? startAt,
+    DateTime? endAt,
+    int limit = 50,
+    String? before,
+  });
+
+  /// Hides message records only for the current account's room-history view.
+  /// It does not recall or force-delete the underlying messages.
+  Future<int> hideMessageHistory({
+    required String roomId,
+    required List<String> messageIds,
+  });
+
   Future<Message> sendMessage({
     required String roomId,
     required String clientMessageId,
@@ -1498,6 +1516,60 @@ class GangApiClient implements GangApi {
       );
     }, retryTransientFailures: true);
     return MessagePage.fromJson(decoded);
+  }
+
+  @override
+  Future<MessagePage> listMessageHistory({
+    required String roomId,
+    String query = '',
+    String category = 'all',
+    String? senderUserId,
+    DateTime? startAt,
+    DateTime? endAt,
+    int limit = 50,
+    String? before,
+  }) async {
+    final parameters = <String, String>{
+      'limit': '$limit',
+      'category': category,
+    };
+    final trimmedQuery = query.trim();
+    if (trimmedQuery.isNotEmpty) parameters['query'] = trimmedQuery;
+    final trimmedSender = senderUserId?.trim();
+    if (trimmedSender != null && trimmedSender.isNotEmpty) {
+      parameters['sender_user_id'] = trimmedSender;
+    }
+    if (startAt != null) {
+      parameters['start_at'] = startAt.toUtc().toIso8601String();
+    }
+    if (endAt != null) {
+      parameters['end_at'] = endAt.toUtc().toIso8601String();
+    }
+    if (before != null && before.trim().isNotEmpty) {
+      parameters['before'] = before.trim();
+    }
+    final decoded = await _sendJson((token) {
+      return _httpClient.get(
+        _uri('/rooms/$roomId/message-history', parameters),
+        headers: _headers(token),
+      );
+    }, retryTransientFailures: true);
+    return MessagePage.fromJson(decoded);
+  }
+
+  @override
+  Future<int> hideMessageHistory({
+    required String roomId,
+    required List<String> messageIds,
+  }) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.post(
+        _uri('/rooms/$roomId/message-history/hide'),
+        headers: _headers(token),
+        body: encodeJsonBody({'message_ids': messageIds, 'confirm': true}),
+      );
+    });
+    return decoded['deleted_count'] as int? ?? 0;
   }
 
   @override

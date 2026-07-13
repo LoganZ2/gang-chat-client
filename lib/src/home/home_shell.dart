@@ -39,6 +39,7 @@ import '../app/room_invites.dart' as room_invites;
 import '../app/room_join.dart' as room_join;
 import '../app/room_members_filter.dart' as member_filter;
 import '../app/room_notifications.dart' as room_notifications;
+import '../app/room_message_history.dart' as room_message_history;
 import '../app/rooms_controller.dart';
 import '../app/search_display.dart' as search_display;
 import '../app/settings_shell_state.dart';
@@ -50,7 +51,11 @@ import '../live/live_session.dart';
 import '../live/live_presence_sound_service.dart';
 import '../live/live_presence_audio_coordinator.dart';
 import '../protocol/api_client.dart'
-    show ApiException, UploadCancelledException, UploadTransferController;
+    show
+        ApiException,
+        MessagePage,
+        UploadCancelledException,
+        UploadTransferController;
 import '../protocol/models.dart';
 import '../settings/settings_page.dart';
 import '../shell/clipboard_service.dart';
@@ -81,6 +86,7 @@ part 'home_shell_messages.dart';
 part 'home_shell_downloads.dart';
 part 'home_shell_image_preview.dart';
 part 'home_shell_notifications.dart';
+part 'home_shell_room_message_history.dart';
 part 'home_shell_search.dart';
 part 'home_shell_layout.dart';
 part 'home_shell_title_bar.dart';

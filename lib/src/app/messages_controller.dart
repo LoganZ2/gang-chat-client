@@ -222,6 +222,44 @@ class MessagesController {
     return page.messages;
   }
 
+  Future<MessagePage> loadMessageHistory({
+    required String roomId,
+    String query = '',
+    String category = 'all',
+    String? senderUserId,
+    DateTime? startAt,
+    DateTime? endAt,
+    int limit = 50,
+    String? before,
+  }) {
+    return _client.listMessageHistory(
+      roomId: roomId,
+      query: query,
+      category: category,
+      senderUserId: senderUserId,
+      startAt: startAt,
+      endAt: endAt,
+      limit: limit,
+      before: before,
+    );
+  }
+
+  Future<int> hideMessageHistory({
+    required String roomId,
+    required Iterable<String> messageIds,
+  }) async {
+    final ids = messageIds.toSet().toList(growable: false);
+    var deletedCount = 0;
+    for (var start = 0; start < ids.length; start += 100) {
+      final end = (start + 100).clamp(0, ids.length);
+      deletedCount += await _client.hideMessageHistory(
+        roomId: roomId,
+        messageIds: ids.sublist(start, end),
+      );
+    }
+    return deletedCount;
+  }
+
   Future<List<Message>> loadMessagesUntil({
     required String roomId,
     required String messageId,

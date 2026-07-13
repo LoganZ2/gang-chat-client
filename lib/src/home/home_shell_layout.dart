@@ -133,6 +133,20 @@ extension _HomeShellLayout on _HomeShellState {
         onClose: _openChat,
         onResult: (result) => _handleRoomSettingsResult(room.id, result),
         stickerImagePreviewOpener: _openStickerManagerImagePreview,
+        messageHistoryBuilder: (context) => _RoomMessageHistoryPane(
+          room: room,
+          currentUser: _currentUser,
+          roomsController: _roomsController,
+          messagesController: _messagesController,
+          clipboardService: _clipboardService,
+          onJumpToMessage: (messageId) {
+            final server = _selectedServer;
+            if (server == null) return;
+            unawaited(
+              _openRoom(server, openContent: true, focusMessageId: messageId),
+            );
+          },
+        ),
       );
     }
     if (_contentMode == _ContentMode.live) {

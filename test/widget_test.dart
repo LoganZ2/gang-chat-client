@@ -4308,6 +4308,7 @@ void main() {
     expect(find.text('房间设置'), findsOneWidget);
     expect(find.text('房间信息'), findsAtLeastNWidgets(1));
     expect(find.text('个人偏好'), findsOneWidget);
+    expect(find.text('消息记录'), findsOneWidget);
     expect(find.text('设置'), findsNothing);
     expect(find.byIcon(Icons.info_outline), findsOneWidget);
     expect(find.byType(ui.UiSwitch), findsOneWidget);
@@ -4413,6 +4414,52 @@ void main() {
             )
             .top,
       ),
+    );
+
+    await tester.tap(find.text('消息记录'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('room-message-history-search')),
+      findsOneWidget,
+    );
+    expect(find.text('Hello from Morgan'), findsOneWidget);
+    expect(find.text('Morgan'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('room-message-history-date-filter')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('room-message-history-member-filter')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('room-message-history-batch-manage')),
+    );
+    await tester.pumpAndSettle();
+    final row = tester.getRect(
+      find.byKey(const ValueKey('room-message-history-row-msg-1')),
+    );
+    final selectBox = tester.getRect(
+      find.byKey(const ValueKey('room-message-history-select-msg-1')),
+    );
+    final jumpButton = tester.getRect(
+      find.byKey(const ValueKey('room-message-history-jump-msg-1')),
+    );
+    expect(selectBox.center.dy, closeTo(row.center.dy, 0.01));
+    expect(jumpButton.center.dy, closeTo(row.center.dy, 0.01));
+    await tester.tap(
+      find.byKey(const ValueKey('room-message-history-row-msg-1')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<ui.UiCheckbox>(
+            find.byKey(const ValueKey('room-message-history-select-msg-1')),
+          )
+          .value,
+      isTrue,
     );
 
     await tester.tap(find.byTooltip('返回').last);
@@ -8055,6 +8102,34 @@ GangApi _roomsApi({
             ),
           });
         }
+        return _jsonResponse({
+          'messages': [
+            _messageJson(
+              id: 'msg-1',
+              roomId: 'server-alpha',
+              sender: _userJson(
+                id: 'user-2',
+                username: 'morgan',
+                displayName: 'Morgan',
+                uid: 'uid-2',
+                isOnline: true,
+              ),
+              clientMessageId: 'client-msg-1',
+              body: 'Hello from Morgan',
+            ),
+            _messageJson(
+              id: 'msg-2',
+              roomId: 'server-alpha',
+              sender: _currentUserJson,
+              clientMessageId: 'client-msg-2',
+              body: 'Reply from Kai',
+            ),
+          ],
+          'has_more': false,
+          'next_before': null,
+        });
+      }
+      if (request.url.path == '/api/v1/rooms/server-alpha/message-history') {
         return _jsonResponse({
           'messages': [
             _messageJson(
