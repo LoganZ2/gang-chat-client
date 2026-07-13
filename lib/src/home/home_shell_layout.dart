@@ -1,6 +1,34 @@
 part of 'home_shell.dart';
 
 extension _HomeShellLayout on _HomeShellState {
+  ChatFileDownloadActions get _chatFileDownloadActions =>
+      ChatFileDownloadActions(
+        onDownload: (message, attachment, index, resolvedUrl) => unawaited(
+          _downloadAttachment(
+            message: message,
+            attachment: attachment,
+            index: index,
+            resolvedUrl: resolvedUrl,
+          ),
+        ),
+        onPause: _pauseDownload,
+        onResume: _resumeDownload,
+        onCancel: _cancelDownload,
+        onDismiss: _dismissDownload,
+      );
+
+  ChatVoicePlaybackActions get _chatVoicePlaybackActions =>
+      ChatVoicePlaybackActions(
+        activeMessageId: _voicePlayback.playing
+            ? _voicePlayback.activeMessageId
+            : null,
+        activePosition: _voicePlayback.position,
+        activeDuration: _voicePlayback.duration,
+        onToggle: (messageId, resolvedUrl) => unawaited(
+          _toggleVoicePlayback(messageId: messageId, resolvedUrl: resolvedUrl),
+        ),
+      );
+
   Future<void> _openStickerManagerImagePreview(
     BuildContext context, {
     required String imageUrl,
@@ -139,6 +167,15 @@ extension _HomeShellLayout on _HomeShellState {
           roomsController: _roomsController,
           messagesController: _messagesController,
           clipboardService: _clipboardService,
+          fileDownloads: _fileDownloads,
+          downloadActions: _chatFileDownloadActions,
+          voicePlaybackActions: _chatVoicePlaybackActions,
+          imagePreviewActions: _imagePreviewActions,
+          messageActions: _chatMessageActions,
+          onResolveRoomProfile: _resolveRoomProfile,
+          onResolveRoomUserProfile: _resolveRoomUserProfile,
+          onOpenRoom: _openNotificationRoom,
+          profileActionBuilder: _messageProfileAction,
           onJumpToMessage: (messageId) {
             final server = _selectedServer;
             if (server == null) return;
@@ -234,32 +271,10 @@ extension _HomeShellLayout on _HomeShellState {
       onFocusMessageHandled: _handleFocusMessageHandled,
       fileTransfers: _fileTransfers,
       fileDownloads: _fileDownloads,
-      downloadActions: ChatFileDownloadActions(
-        onDownload: (message, attachment, index, resolvedUrl) => unawaited(
-          _downloadAttachment(
-            message: message,
-            attachment: attachment,
-            index: index,
-            resolvedUrl: resolvedUrl,
-          ),
-        ),
-        onPause: _pauseDownload,
-        onResume: _resumeDownload,
-        onCancel: _cancelDownload,
-        onDismiss: _dismissDownload,
-      ),
+      downloadActions: _chatFileDownloadActions,
       imagePreviewActions: _imagePreviewActions,
       messageActions: _chatMessageActions,
-      voicePlaybackActions: ChatVoicePlaybackActions(
-        activeMessageId: _voicePlayback.playing
-            ? _voicePlayback.activeMessageId
-            : null,
-        activePosition: _voicePlayback.position,
-        activeDuration: _voicePlayback.duration,
-        onToggle: (messageId, resolvedUrl) => unawaited(
-          _toggleVoicePlayback(messageId: messageId, resolvedUrl: resolvedUrl),
-        ),
-      ),
+      voicePlaybackActions: _chatVoicePlaybackActions,
       loading: _loadingRoom,
       error: _roomError,
       sending: _sending,

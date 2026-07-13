@@ -1,12 +1,21 @@
 import '../protocol/models.dart';
 import 'message_display.dart' as message_display;
 
-enum RoomMessageHistoryCategory { all, links, stickers, images, files, system }
+enum RoomMessageHistoryCategory {
+  all,
+  links,
+  voice,
+  stickers,
+  images,
+  files,
+  system,
+}
 
 extension RoomMessageHistoryCategoryValue on RoomMessageHistoryCategory {
   String get apiValue => switch (this) {
     RoomMessageHistoryCategory.all => 'all',
     RoomMessageHistoryCategory.links => 'links',
+    RoomMessageHistoryCategory.voice => 'voice',
     RoomMessageHistoryCategory.stickers => 'stickers',
     RoomMessageHistoryCategory.images => 'images',
     RoomMessageHistoryCategory.files => 'files',

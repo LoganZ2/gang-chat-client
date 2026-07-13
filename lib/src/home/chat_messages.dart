@@ -1143,7 +1143,7 @@ class _MessageStageState extends State<_MessageStage> {
               const SizedBox(height: 10),
             ],
             if (systemEvent != null)
-              _SystemMessageRow(
+              ChatSystemMessageContent(
                 message: message,
                 event: systemEvent,
                 currentUser: widget.currentUser,
@@ -1156,7 +1156,7 @@ class _MessageStageState extends State<_MessageStage> {
                 profileActionBuilder: widget.senderProfileActionBuilder,
               )
             else if (message.isRemoved)
-              _RemovedMessageRow(
+              ChatRemovedMessageContent(
                 message: message,
                 currentUser: widget.currentUser,
                 ownerUserId: widget.ownerUserId,
@@ -1357,14 +1357,21 @@ class _MessageTimeDivider extends StatelessWidget {
   }
 }
 
-class _SystemMessageRow extends StatelessWidget {
-  const _SystemMessageRow({
+/// Renders a system message exactly as it appears in a text channel.
+///
+/// Message-history and other secondary surfaces reuse this widget so inline
+/// avatars, profile cards, role colors, and information actions stay
+/// interactive instead of falling back to plain text.
+class ChatSystemMessageContent extends StatelessWidget {
+  const ChatSystemMessageContent({
+    super.key,
     required this.message,
     required this.event,
     required this.currentUser,
     required this.ownerUserId,
     required this.live,
-    required this.messageActions,
+    this.messageActions,
+    this.enableContextMenu = true,
     this.onResolveSenderProfile,
     this.onResolveRoomProfile,
     this.onEnterProfileRoom,
@@ -1376,7 +1383,8 @@ class _SystemMessageRow extends StatelessWidget {
   final CurrentUser currentUser;
   final String? ownerUserId;
   final LiveState? live;
-  final ChatMessageActions messageActions;
+  final ChatMessageActions? messageActions;
+  final bool enableContextMenu;
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
   final RoomProfileResolver? onResolveRoomProfile;
@@ -1386,8 +1394,8 @@ class _SystemMessageRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _SystemMessageContainer(
-      message: message,
-      actions: messageActions,
+      message: enableContextMenu ? message : null,
+      actions: enableContextMenu ? messageActions : null,
       children: _SystemMessageParts(
         event: event,
         currentUser: currentUser,
@@ -1478,13 +1486,16 @@ class _SystemMessageContainerState extends State<_SystemMessageContainer> {
   }
 }
 
-class _RemovedMessageRow extends StatelessWidget {
-  const _RemovedMessageRow({
+/// Renders a recalled or force-deleted message with the text-channel layout.
+class ChatRemovedMessageContent extends StatelessWidget {
+  const ChatRemovedMessageContent({
+    super.key,
     required this.message,
     required this.currentUser,
     required this.ownerUserId,
     required this.live,
     required this.messageActions,
+    this.enableContextMenu = true,
     this.onResolveSenderProfile,
     this.onResolveRoomProfile,
     this.onEnterProfileRoom,
@@ -1496,6 +1507,7 @@ class _RemovedMessageRow extends StatelessWidget {
   final String? ownerUserId;
   final LiveState? live;
   final ChatMessageActions messageActions;
+  final bool enableContextMenu;
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
   final RoomProfileResolver? onResolveRoomProfile;
@@ -1505,8 +1517,8 @@ class _RemovedMessageRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _SystemMessageContainer(
-      message: message,
-      actions: messageActions,
+      message: enableContextMenu ? message : null,
+      actions: enableContextMenu ? messageActions : null,
       children: _buildParts(),
     );
   }
@@ -2014,7 +2026,7 @@ class _SystemUserChip extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: UiTypography.label.copyWith(
-              color: _roomUsernameColor(
+              color: chatRoomUsernameColor(
                 user: colorUser,
                 currentUser: currentUser,
                 ownerUserId: ownerUserId,
@@ -2080,7 +2092,7 @@ class _MessageRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sender = _senderName(message.sender);
-    final senderColor = _roomUsernameColor(
+    final senderColor = chatRoomUsernameColor(
       user: message.sender,
       currentUser: currentUser,
       ownerUserId: ownerUserId,
@@ -2217,6 +2229,129 @@ class _MessageAvatarMentionMenu extends StatelessWidget {
   }
 }
 
+/// Renders the exact contents used inside a normal chat message bubble without
+/// adding the bubble background, border, padding, or message context menu.
+///
+/// Message-history and other read-only surfaces use this widget so links,
+/// mentions, stickers, voice messages, files, and image previews keep the same
+/// behavior as the main chat instead of maintaining a second renderer.
+class ChatMessageContent extends StatelessWidget {
+  const ChatMessageContent({
+    super.key,
+    required this.message,
+    required this.outgoing,
+    required this.fileDownloads,
+    required this.downloadActions,
+    required this.voicePlaybackActions,
+    required this.imagePreviewActions,
+    required this.currentUser,
+    required this.currentUserMentionIdentity,
+    required this.ownerUserId,
+    required this.mentionMembers,
+    this.transfer,
+    this.mentionHighlighted = false,
+    this.onResolveSenderProfile,
+    this.onResolveRoomProfile,
+    this.onEnterProfileRoom,
+    this.profileActionBuilder,
+    this.isUserInLive,
+    this.onSelectionActiveChanged,
+  });
+
+  final Message message;
+  final bool outgoing;
+  final FileTransferState? transfer;
+  final Map<String, FileTransferState> fileDownloads;
+  final ChatFileDownloadActions downloadActions;
+  final ChatVoicePlaybackActions voicePlaybackActions;
+  final ChatImagePreviewActions imagePreviewActions;
+  final CurrentUser currentUser;
+  final UserSummary currentUserMentionIdentity;
+  final String? ownerUserId;
+  final List<RoomMember> mentionMembers;
+  final bool mentionHighlighted;
+  final Future<UserSummary> Function(UserSummary sender)?
+  onResolveSenderProfile;
+  final RoomProfileResolver? onResolveRoomProfile;
+  final ValueChanged<PublicRoom>? onEnterProfileRoom;
+  final UserProfileActionBuilder? profileActionBuilder;
+  final bool Function(String userId)? isUserInLive;
+  final ValueChanged<bool>? onSelectionActiveChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final contentKind = message_display.messageContentKind(message);
+    final status = message_display.messageDeliveryStatusText(message);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        switch (contentKind) {
+          message_display.MessageContentKind.sticker => _StickerBody(
+            message: message,
+            attachment: message.stickerAttachment!,
+            imagePreviewActions: imagePreviewActions,
+          ),
+          message_display.MessageContentKind.voice => _VoiceBody(
+            message: message,
+            attachment: voice_display.voiceMessageAttachment(message)!,
+            playbackActions: voicePlaybackActions,
+          ),
+          message_display.MessageContentKind.files => _FileBody(
+            message: message,
+            outgoing: outgoing,
+            transfer: transfer,
+            fileDownloads: fileDownloads,
+            downloadActions: downloadActions,
+            imagePreviewActions: imagePreviewActions,
+          ),
+          message_display.MessageContentKind.text => _TextBody(
+            message: message,
+            profileCurrentUser: currentUser,
+            currentUser: currentUserMentionIdentity,
+            ownerUserId: ownerUserId,
+            mentionMembers: mentionMembers,
+            mentionHighlighted: mentionHighlighted,
+            onResolveSenderProfile: onResolveSenderProfile,
+            onResolveRoomProfile: onResolveRoomProfile,
+            onEnterProfileRoom: onEnterProfileRoom,
+            profileActionBuilder: profileActionBuilder,
+            isUserInLive: isUserInLive,
+            onSelectionActiveChanged:
+                onSelectionActiveChanged ?? _ignoreMessageSelectionChange,
+          ),
+        },
+        if (status != null) ...[
+          const SizedBox(height: 7),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (message.pending && !message.failed) ...[
+                const SizedBox.square(
+                  dimension: 11,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.6,
+                    color: UiColors.textMuted,
+                  ),
+                ),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                status,
+                style: UiTypography.label.copyWith(
+                  color: message.failed ? UiColors.danger : UiColors.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+void _ignoreMessageSelectionChange(bool active) {}
+
 class _MessageBubble extends StatefulWidget {
   const _MessageBubble({
     required this.message,
@@ -2272,7 +2407,6 @@ class _MessageBubbleState extends State<_MessageBubble> {
   @override
   Widget build(BuildContext context) {
     final contentKind = message_display.messageContentKind(widget.message);
-    final status = message_display.messageDeliveryStatusText(widget.message);
     final contextMenuActive = _contextMenuActive;
     final backgroundColor = widget.outgoing ? _outgoingBubble : _incomingBubble;
     final mentionBackgroundColor = widget.outgoing
@@ -2332,73 +2466,25 @@ class _MessageBubbleState extends State<_MessageBubble> {
               color: highlightColor,
               borderRadius: BorderRadius.circular(math.max(0, UiRadii.lg - 5)),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                switch (contentKind) {
-                  message_display.MessageContentKind.sticker => _StickerBody(
-                    message: widget.message,
-                    attachment: widget.message.stickerAttachment!,
-                    imagePreviewActions: widget.imagePreviewActions,
-                  ),
-                  message_display.MessageContentKind.voice => _VoiceBody(
-                    message: widget.message,
-                    attachment: voice_display.voiceMessageAttachment(
-                      widget.message,
-                    )!,
-                    playbackActions: widget.voicePlaybackActions,
-                  ),
-                  message_display.MessageContentKind.files => _FileBody(
-                    message: widget.message,
-                    outgoing: widget.outgoing,
-                    transfer: widget.transfer,
-                    fileDownloads: widget.fileDownloads,
-                    downloadActions: widget.downloadActions,
-                    imagePreviewActions: widget.imagePreviewActions,
-                  ),
-                  message_display.MessageContentKind.text => _TextBody(
-                    message: widget.message,
-                    profileCurrentUser: widget.currentUser,
-                    currentUser: widget.currentUserMentionIdentity,
-                    ownerUserId: widget.ownerUserId,
-                    mentionMembers: widget.mentionMembers,
-                    mentionHighlighted: widget.mentionHighlighted,
-                    onResolveSenderProfile: widget.onResolveSenderProfile,
-                    onResolveRoomProfile: widget.onResolveRoomProfile,
-                    onEnterProfileRoom: widget.onEnterProfileRoom,
-                    profileActionBuilder: widget.profileActionBuilder,
-                    isUserInLive: widget.isUserInLive,
-                    onSelectionActiveChanged: _handleTextSelectionActiveChanged,
-                  ),
-                },
-                if (status != null) ...[
-                  const SizedBox(height: 7),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (widget.message.pending && !widget.message.failed) ...[
-                        const SizedBox.square(
-                          dimension: 11,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 1.6,
-                            color: UiColors.textMuted,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                      ],
-                      Text(
-                        status,
-                        style: UiTypography.label.copyWith(
-                          color: widget.message.failed
-                              ? UiColors.danger
-                              : UiColors.textMuted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
+            child: ChatMessageContent(
+              message: widget.message,
+              outgoing: widget.outgoing,
+              transfer: widget.transfer,
+              fileDownloads: widget.fileDownloads,
+              downloadActions: widget.downloadActions,
+              voicePlaybackActions: widget.voicePlaybackActions,
+              imagePreviewActions: widget.imagePreviewActions,
+              currentUser: widget.currentUser,
+              currentUserMentionIdentity: widget.currentUserMentionIdentity,
+              ownerUserId: widget.ownerUserId,
+              mentionMembers: widget.mentionMembers,
+              mentionHighlighted: widget.mentionHighlighted,
+              onResolveSenderProfile: widget.onResolveSenderProfile,
+              onResolveRoomProfile: widget.onResolveRoomProfile,
+              onEnterProfileRoom: widget.onEnterProfileRoom,
+              profileActionBuilder: widget.profileActionBuilder,
+              isUserInLive: widget.isUserInLive,
+              onSelectionActiveChanged: _handleTextSelectionActiveChanged,
             ),
           ),
         ),
@@ -3836,7 +3922,7 @@ class _CenteredState extends StatelessWidget {
   }
 }
 
-Color _roomUsernameColor({
+Color chatRoomUsernameColor({
   required UserSummary user,
   required CurrentUser currentUser,
   String? ownerUserId,

@@ -44,8 +44,10 @@ import 'package:client/src/shell/login_page.dart';
 import 'package:client/src/shell/release_update_service.dart';
 import 'package:client/src/ui/ui.dart' as ui;
 import 'package:client/src/home/hover_card_anchor.dart';
+import 'package:client/src/home/chat_pane.dart';
 import 'package:client/src/home/home_page.dart';
 import 'package:client/src/home/live_channel_pane.dart' as live_pane;
+import 'package:client/src/home/room_profile_card.dart';
 import 'package:client/ui_showcase.dart' as showcase;
 
 void main() {
@@ -4424,7 +4426,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Hello from Morgan'), findsOneWidget);
-    expect(find.text('Morgan'), findsOneWidget);
+    expect(find.text('Morgan'), findsNWidgets(2));
     expect(
       find.byKey(const ValueKey('room-message-history-date-filter')),
       findsOneWidget,
@@ -4433,11 +4435,175 @@ void main() {
       find.byKey(const ValueKey('room-message-history-member-filter')),
       findsOneWidget,
     );
+    final historyRow = find.byKey(
+      const ValueKey('room-message-history-row-msg-1'),
+    );
+    final historyTime = find.byKey(
+      const ValueKey('room-message-history-time-msg-1'),
+    );
+    final historyAvatar = find.byKey(
+      const ValueKey('room-message-history-avatar-msg-1'),
+    );
+    expect(
+      find.ancestor(of: historyTime, matching: historyRow),
+      findsOneWidget,
+    );
+    expect(
+      tester.getRect(historyTime).right,
+      lessThan(tester.getRect(historyAvatar).left),
+    );
+    expect(
+      find.descendant(
+        of: historyRow,
+        matching: find.byType(ChatMessageContent),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: historyRow,
+        matching: find.byKey(const ValueKey('message-bubble-surface-msg-1')),
+      ),
+      findsNothing,
+    );
+    final historyContentPointer = tester.widget<IgnorePointer>(
+      find.byKey(
+        const ValueKey('room-message-history-content-interactions-msg-1'),
+      ),
+    );
+    expect(historyContentPointer.ignoring, isFalse);
+    final historySenderName = tester.widget<Text>(
+      find.descendant(of: historyRow, matching: find.text('Morgan')),
+    );
+    expect(
+      tester.getRect(historyAvatar).top,
+      closeTo(
+        tester
+            .getRect(
+              find.descendant(of: historyRow, matching: find.text('Morgan')),
+            )
+            .top,
+        0.01,
+      ),
+    );
+    expect(
+      historySenderName.style?.color,
+      ui.roleBadgeForegroundColorForLabel('成员'),
+    );
+    expect(find.text('语音'), findsOneWidget);
+    expect(
+      tester.getCenter(find.text('链接')).dx,
+      lessThan(tester.getCenter(find.text('语音')).dx),
+    );
+    expect(
+      tester.getCenter(find.text('语音')).dx,
+      lessThan(tester.getCenter(find.text('表情')).dx),
+    );
+    final systemHistoryRow = find.byKey(
+      const ValueKey('room-message-history-row-msg-system'),
+    );
+    expect(systemHistoryRow, findsOneWidget);
+    expect(
+      find.descendant(
+        of: systemHistoryRow,
+        matching: find.byType(ChatSystemMessageContent),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: systemHistoryRow,
+        matching: find.byKey(
+          const ValueKey('room-message-history-avatar-msg-system'),
+        ),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: systemHistoryRow, matching: find.byType(ui.Avatar)),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('room-message-history-member-filter')),
+    );
+    await tester.pumpAndSettle();
+    final memberOption = find.byKey(
+      const ValueKey('message-history-member-user-2'),
+    );
+    expect(memberOption, findsOneWidget);
+    expect(
+      find.descendant(of: memberOption, matching: find.text('@morgan')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: memberOption,
+        matching: find.textContaining('10000021'),
+      ),
+      findsNothing,
+    );
+    final memberName = tester.widget<Text>(
+      find.descendant(of: memberOption, matching: find.text('Morgan')),
+    );
+    expect(memberName.style?.fontWeight, FontWeight.w700);
+    final allMemberOption = find.byKey(
+      const ValueKey('message-history-member-all'),
+    );
+    expect(
+      find.descendant(of: allMemberOption, matching: find.byIcon(Icons.check)),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: memberOption,
+        matching: find.byType(ui.PressableSurface),
+      ),
+      findsNothing,
+    );
+    final memberRole = find.byKey(
+      const ValueKey('message-history-member-role-user-2'),
+    );
+    expect(memberRole, findsOneWidget);
+    expect(
+      tester.getRect(memberOption).right - tester.getRect(memberRole).right,
+      closeTo(11, 0.01),
+    );
+    expect(
+      find.descendant(of: memberRole, matching: find.text('成员')),
+      findsOneWidget,
+    );
+    expect(
+      find.ancestor(
+        of: find.byKey(const ValueKey('message-history-member-avatar-user-2')),
+        matching: find.byType(UserHoverCard),
+      ),
+      findsOneWidget,
+    );
+    final memberScrollbar = find.byKey(
+      const ValueKey('message-history-member-scrollbar'),
+    );
+    final memberList = tester.widget<ListView>(
+      find.descendant(of: memberScrollbar, matching: find.byType(ListView)),
+    );
+    expect((memberList.padding! as EdgeInsets).right, greaterThan(0));
+    await tester.tap(find.widgetWithText(ui.Button, '取消').last);
+    await tester.pumpAndSettle();
 
     await tester.tap(
       find.byKey(const ValueKey('room-message-history-batch-manage')),
     );
     await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<IgnorePointer>(
+            find.byKey(
+              const ValueKey('room-message-history-content-interactions-msg-1'),
+            ),
+          )
+          .ignoring,
+      isTrue,
+    );
     final row = tester.getRect(
       find.byKey(const ValueKey('room-message-history-row-msg-1')),
     );
@@ -8130,18 +8296,19 @@ GangApi _roomsApi({
         });
       }
       if (request.url.path == '/api/v1/rooms/server-alpha/message-history') {
+        final morgan = _userJson(
+          id: 'user-2',
+          username: 'morgan',
+          displayName: 'Morgan',
+          uid: 'uid-2',
+          isOnline: true,
+        );
         return _jsonResponse({
           'messages': [
             _messageJson(
               id: 'msg-1',
               roomId: 'server-alpha',
-              sender: _userJson(
-                id: 'user-2',
-                username: 'morgan',
-                displayName: 'Morgan',
-                uid: 'uid-2',
-                isOnline: true,
-              ),
+              sender: morgan,
               clientMessageId: 'client-msg-1',
               body: 'Hello from Morgan',
             ),
@@ -8151,6 +8318,21 @@ GangApi _roomsApi({
               sender: _currentUserJson,
               clientMessageId: 'client-msg-2',
               body: 'Reply from Kai',
+            ),
+            _messageJson(
+              id: 'msg-system',
+              roomId: 'server-alpha',
+              sender: _currentUserJson,
+              clientMessageId: 'client-msg-system',
+              type: 'system',
+              body: 'Morgan 加入了房间',
+              attachments: [
+                {
+                  'type': 'system',
+                  'event': 'room_member_joined',
+                  'user': morgan,
+                },
+              ],
             ),
           ],
           'has_more': false,
@@ -8319,15 +8501,17 @@ Map<String, Object?> _messageJson({
   required Map<String, Object?> sender,
   required String clientMessageId,
   required String body,
+  String type = 'text',
+  List<Object?> attachments = const [],
 }) {
   return {
     'id': id,
     'room_id': roomId,
     'sender': sender,
     'client_message_id': clientMessageId,
-    'type': 'text',
+    'type': type,
     'body': body,
-    'attachments': <Object?>[],
+    'attachments': attachments,
     'created_at': '2026-06-05T08:00:00Z',
   };
 }

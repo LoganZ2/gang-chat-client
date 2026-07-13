@@ -7,6 +7,15 @@ class _RoomMessageHistoryPane extends StatefulWidget {
     required this.roomsController,
     required this.messagesController,
     required this.clipboardService,
+    required this.fileDownloads,
+    required this.downloadActions,
+    required this.voicePlaybackActions,
+    required this.imagePreviewActions,
+    required this.messageActions,
+    required this.onResolveRoomProfile,
+    required this.onResolveRoomUserProfile,
+    required this.onOpenRoom,
+    required this.profileActionBuilder,
     required this.onJumpToMessage,
   });
 
@@ -15,6 +24,16 @@ class _RoomMessageHistoryPane extends StatefulWidget {
   final RoomsController roomsController;
   final MessagesController messagesController;
   final ClipboardService clipboardService;
+  final Map<String, FileTransferState> fileDownloads;
+  final ChatFileDownloadActions downloadActions;
+  final ChatVoicePlaybackActions voicePlaybackActions;
+  final ChatImagePreviewActions imagePreviewActions;
+  final ChatMessageActions messageActions;
+  final RoomProfileResolver? onResolveRoomProfile;
+  final Future<UserSummary> Function(String roomId, UserSummary user)?
+  onResolveRoomUserProfile;
+  final ValueChanged<PublicRoom>? onOpenRoom;
+  final UserProfileActionBuilder? profileActionBuilder;
   final ValueChanged<String> onJumpToMessage;
 
   @override
@@ -194,8 +213,13 @@ class _RoomMessageHistoryPaneState extends State<_RoomMessageHistoryPane> {
     final result = await showDialog<_HistoryMemberFilterResult>(
       context: context,
       builder: (context) => _HistoryMemberFilterDialog(
+        roomId: widget.room.id,
+        currentUser: widget.currentUser,
         members: _members,
         selectedMember: _selectedMember,
+        onResolveRoomProfile: widget.onResolveRoomProfile,
+        onResolveRoomUserProfile: widget.onResolveRoomUserProfile,
+        onOpenRoom: widget.onOpenRoom,
       ),
     );
     if (!mounted || result == null) return;
@@ -249,6 +273,87 @@ class _RoomMessageHistoryPaneState extends State<_RoomMessageHistoryPane> {
   List<Message> get _selectedMessages => _messages
       .where((message) => _selectedMessageIds.contains(message.id))
       .toList(growable: false);
+
+  UserSummary get _currentUserMentionIdentity {
+    final roomName = widget.room.personalProfile.displayName?.trim();
+    return widget.currentUser.toSummary().copyWith(
+      roomDisplayName: roomName != null && roomName.isNotEmpty
+          ? roomName
+          : widget.currentUser.displayName,
+      roomRole: widget.room.myMembership.role,
+    );
+  }
+
+  ({Widget content, bool inline}) _buildMessageContent(Message message) {
+    final systemEvent = message_display.systemMessageEvent(message);
+    if (systemEvent != null) {
+      return (
+        content: ChatSystemMessageContent(
+          key: ValueKey('room-message-history-content-${message.id}'),
+          message: message,
+          event: systemEvent,
+          currentUser: widget.currentUser,
+          ownerUserId: widget.room.createdBy?.id,
+          live: widget.room.live,
+          enableContextMenu: false,
+          onResolveSenderProfile: widget.onResolveRoomUserProfile == null
+              ? null
+              : (user) =>
+                    widget.onResolveRoomUserProfile!(widget.room.id, user),
+          onResolveRoomProfile: widget.onResolveRoomProfile,
+          onEnterProfileRoom: widget.onOpenRoom,
+          profileActionBuilder: widget.profileActionBuilder,
+        ),
+        inline: true,
+      );
+    }
+    if (message.isRemoved) {
+      return (
+        content: ChatRemovedMessageContent(
+          key: ValueKey('room-message-history-content-${message.id}'),
+          message: message,
+          currentUser: widget.currentUser,
+          ownerUserId: widget.room.createdBy?.id,
+          live: widget.room.live,
+          messageActions: widget.messageActions,
+          enableContextMenu: false,
+          onResolveSenderProfile: widget.onResolveRoomUserProfile == null
+              ? null
+              : (user) =>
+                    widget.onResolveRoomUserProfile!(widget.room.id, user),
+          onResolveRoomProfile: widget.onResolveRoomProfile,
+          onEnterProfileRoom: widget.onOpenRoom,
+          profileActionBuilder: widget.profileActionBuilder,
+        ),
+        inline: true,
+      );
+    }
+    return (
+      content: ChatMessageContent(
+        key: ValueKey('room-message-history-content-${message.id}'),
+        message: message,
+        outgoing: message.sender.id == widget.currentUser.id,
+        fileDownloads: widget.fileDownloads,
+        downloadActions: widget.downloadActions,
+        voicePlaybackActions: widget.voicePlaybackActions,
+        imagePreviewActions: widget.imagePreviewActions,
+        currentUser: widget.currentUser,
+        currentUserMentionIdentity: _currentUserMentionIdentity,
+        ownerUserId: widget.room.createdBy?.id,
+        mentionMembers: _members,
+        onResolveSenderProfile: widget.onResolveRoomUserProfile == null
+            ? null
+            : (user) => widget.onResolveRoomUserProfile!(widget.room.id, user),
+        onResolveRoomProfile: widget.onResolveRoomProfile,
+        onEnterProfileRoom: widget.onOpenRoom,
+        profileActionBuilder: widget.profileActionBuilder,
+        isUserInLive: (userId) =>
+            live_display.liveParticipantByUserId(widget.room.live, userId) !=
+            null,
+      ),
+      inline: false,
+    );
+  }
 
   Future<void> _copyMessage(Message message) async {
     await widget.clipboardService.writeText(
@@ -381,6 +486,13 @@ class _RoomMessageHistoryPaneState extends State<_RoomMessageHistoryPane> {
                         Segment(
                           value: room_message_history
                               .RoomMessageHistoryCategory
+                              .voice,
+                          label: '语音',
+                          icon: Icons.mic_none_outlined,
+                        ),
+                        Segment(
+                          value: room_message_history
+                              .RoomMessageHistoryCategory
                               .stickers,
                           label: '表情',
                           icon: Icons.emoji_emotions_outlined,
@@ -462,8 +574,16 @@ class _RoomMessageHistoryPaneState extends State<_RoomMessageHistoryPane> {
           );
         }
         final message = _messages[index];
+        final renderedContent = _buildMessageContent(message);
         return _HistoryMessageRow(
           message: message,
+          content: renderedContent.content,
+          inlineContent: renderedContent.inline,
+          senderColor: chatRoomUsernameColor(
+            user: message.sender,
+            currentUser: widget.currentUser,
+            ownerUserId: widget.room.createdBy?.id,
+          ),
           selectionMode: _selectionMode,
           selected: _selectedMessageIds.contains(message.id),
           selectedMessages: _selectedMessages,
@@ -480,6 +600,9 @@ class _RoomMessageHistoryPaneState extends State<_RoomMessageHistoryPane> {
 class _HistoryMessageRow extends StatefulWidget {
   const _HistoryMessageRow({
     required this.message,
+    required this.content,
+    required this.inlineContent,
+    required this.senderColor,
     required this.selectionMode,
     required this.selected,
     required this.selectedMessages,
@@ -490,6 +613,9 @@ class _HistoryMessageRow extends StatefulWidget {
   });
 
   final Message message;
+  final Widget content;
+  final bool inlineContent;
+  final Color senderColor;
   final bool selectionMode;
   final bool selected;
   final List<Message> selectedMessages;
@@ -509,7 +635,6 @@ class _HistoryMessageRowState extends State<_HistoryMessageRow> {
   Widget build(BuildContext context) {
     final message = widget.message;
     final senderName = _historySenderName(message.sender);
-    final content = room_message_history.roomMessageHistoryCopyText(message);
     final highlighted = widget.selected || _contextMenuActive;
     final surface = AnimatedContainer(
       key: ValueKey('room-message-history-row-${message.id}'),
@@ -524,56 +649,92 @@ class _HistoryMessageRowState extends State<_HistoryMessageRow> {
           width: highlighted ? 1.5 : 1,
         ),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Stack(
         children: [
-          Avatar(
-            label: senderName,
-            imageUrl: AppConfigScope.of(
-              context,
-            ).resolveAssetUrl(message.sender.avatarUrl),
-            defaultAvatarKey: message.sender.defaultAvatarKey,
-            size: 38,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  senderName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: UiTypography.label.copyWith(
-                    color: UiColors.text,
-                    fontWeight: FontWeight.w700,
-                  ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(width: 82),
+              const SizedBox(width: 8),
+              if (!widget.inlineContent) ...[
+                Avatar(
+                  key: ValueKey('room-message-history-avatar-${message.id}'),
+                  label: senderName,
+                  imageUrl: AppConfigScope.of(
+                    context,
+                  ).resolveAssetUrl(message.sender.avatarUrl),
+                  defaultAvatarKey: message.sender.defaultAvatarKey,
+                  size: 38,
                 ),
-                const SizedBox(height: 4),
-                IgnorePointer(
-                  ignoring: widget.selectionMode,
-                  child: ReadOnlySelectableText(
-                    value: content,
-                    maxLines: 6,
-                    style: UiTypography.body.copyWith(
-                      color: UiColors.textSecondary,
-                      height: 1.35,
-                    ),
-                  ),
-                ),
+                const SizedBox(width: 10),
               ],
+              Expanded(
+                child: widget.inlineContent
+                    ? IgnorePointer(
+                        key: ValueKey(
+                          'room-message-history-content-interactions-${message.id}',
+                        ),
+                        ignoring: widget.selectionMode,
+                        child: widget.content,
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            senderName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: UiTypography.label.copyWith(
+                              color: widget.senderColor,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          IgnorePointer(
+                            key: ValueKey(
+                              'room-message-history-content-interactions-${message.id}',
+                            ),
+                            ignoring: widget.selectionMode,
+                            child: widget.content,
+                          ),
+                        ],
+                      ),
+              ),
+              const SizedBox(width: 10),
+              const SizedBox.square(dimension: 34),
+            ],
+          ),
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 82,
+            child: Center(
+              child: Text(
+                key: ValueKey('room-message-history-time-${message.id}'),
+                room_notifications.roomInviteTimestampLabel(message.createdAt),
+                textAlign: TextAlign.center,
+                style: UiTypography.label.copyWith(color: UiColors.textMuted),
+              ),
             ),
           ),
-          const SizedBox(width: 10),
-          _HistoryInteractiveTarget(
-            child: ButtonIcon(
-              key: ValueKey('room-message-history-jump-${message.id}'),
-              tooltip: '跳转到消息',
-              icon: const Icon(Icons.location_on_rounded),
-              tone: ButtonTone.primary,
-              onPressed: widget.onJump,
-              size: 34,
+          Positioned(
+            right: 0,
+            top: 0,
+            bottom: 0,
+            width: 34,
+            child: Center(
+              child: _HistoryInteractiveTarget(
+                child: ButtonIcon(
+                  key: ValueKey('room-message-history-jump-${message.id}'),
+                  tooltip: '跳转到消息',
+                  icon: const Icon(Icons.location_on_rounded),
+                  tone: ButtonTone.primary,
+                  onPressed: widget.onJump,
+                  size: 34,
+                ),
+              ),
             ),
           ),
         ],
@@ -592,15 +753,6 @@ class _HistoryMessageRowState extends State<_HistoryMessageRow> {
           ),
           const SizedBox(width: 8),
         ],
-        SizedBox(
-          width: 82,
-          child: Text(
-            room_notifications.roomInviteTimestampLabel(message.createdAt),
-            textAlign: TextAlign.center,
-            style: UiTypography.label.copyWith(color: UiColors.textMuted),
-          ),
-        ),
-        const SizedBox(width: 8),
         Expanded(
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
@@ -679,12 +831,23 @@ class _HistoryMemberFilterResult {
 
 class _HistoryMemberFilterDialog extends StatefulWidget {
   const _HistoryMemberFilterDialog({
+    required this.roomId,
+    required this.currentUser,
     required this.members,
     required this.selectedMember,
+    required this.onResolveRoomProfile,
+    required this.onResolveRoomUserProfile,
+    required this.onOpenRoom,
   });
 
+  final String roomId;
+  final CurrentUser currentUser;
   final List<RoomMember> members;
   final RoomMember? selectedMember;
+  final RoomProfileResolver? onResolveRoomProfile;
+  final Future<UserSummary> Function(String roomId, UserSummary user)?
+  onResolveRoomUserProfile;
+  final ValueChanged<PublicRoom>? onOpenRoom;
 
   @override
   State<_HistoryMemberFilterDialog> createState() =>
@@ -694,6 +857,7 @@ class _HistoryMemberFilterDialog extends StatefulWidget {
 class _HistoryMemberFilterDialogState
     extends State<_HistoryMemberFilterDialog> {
   final TextEditingController _controller = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   RoomMember? _selectedMember;
 
   @override
@@ -708,6 +872,7 @@ class _HistoryMemberFilterDialogState
     _controller
       ..removeListener(_handleSearchChanged)
       ..dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -776,23 +941,51 @@ class _HistoryMemberFilterDialogState
             ),
             const SizedBox(height: 12),
             Expanded(
-              child: ListView(
-                children: [
-                  _HistoryMemberOption(
-                    label: '所有人',
-                    selected: _selectedMember == null,
-                    icon: Icons.groups_outlined,
-                    onPressed: () => setState(() => _selectedMember = null),
+              child: RawScrollbar(
+                key: const ValueKey('message-history-member-scrollbar'),
+                controller: _scrollController,
+                interactive: true,
+                radius: const Radius.circular(999),
+                thickness: 7,
+                thumbColor: UiColors.textMuted.withValues(alpha: 0.82),
+                child: ScrollConfiguration(
+                  behavior: ScrollConfiguration.of(
+                    context,
+                  ).copyWith(scrollbars: false),
+                  child: ListView(
+                    controller: _scrollController,
+                    primary: false,
+                    padding: const EdgeInsets.only(right: 10),
+                    children: [
+                      _HistoryMemberOption(
+                        label: '所有人',
+                        selected: _selectedMember == null,
+                        icon: Icons.groups_outlined,
+                        onPressed: () => setState(() => _selectedMember = null),
+                      ),
+                      for (final member in visibleMembers)
+                        _HistoryMemberOption(
+                          label: member_filter.roomMemberDisplayName(member),
+                          meta: '@${member.user.username}',
+                          roleLabel: room_display.roomRoleLabel(member.user),
+                          selected: _selectedMember?.user.id == member.user.id,
+                          user: member.user,
+                          currentUser: widget.currentUser,
+                          onResolveProfile:
+                              widget.onResolveRoomUserProfile == null
+                              ? null
+                              : (user) => widget.onResolveRoomUserProfile!(
+                                  widget.roomId,
+                                  user,
+                                ),
+                          onResolveRoomProfile: widget.onResolveRoomProfile,
+                          onOpenRoom: widget.onOpenRoom,
+                          onPressed: () =>
+                              setState(() => _selectedMember = member),
+                        ),
+                    ],
                   ),
-                  for (final member in visibleMembers)
-                    _HistoryMemberOption(
-                      label: member_filter.roomMemberDisplayName(member),
-                      meta: member_filter.roomMemberMeta(member),
-                      selected: _selectedMember?.user.id == member.user.id,
-                      user: member.user,
-                      onPressed: () => setState(() => _selectedMember = member),
-                    ),
-                ],
+                ),
               ),
             ),
           ],
@@ -808,14 +1001,24 @@ class _HistoryMemberOption extends StatelessWidget {
     required this.selected,
     required this.onPressed,
     this.meta,
+    this.roleLabel,
     this.user,
     this.icon,
+    this.currentUser,
+    this.onResolveProfile,
+    this.onResolveRoomProfile,
+    this.onOpenRoom,
   });
 
   final String label;
   final String? meta;
+  final String? roleLabel;
   final UserSummary? user;
   final IconData? icon;
+  final CurrentUser? currentUser;
+  final UserProfileResolver? onResolveProfile;
+  final RoomProfileResolver? onResolveRoomProfile;
+  final ValueChanged<PublicRoom>? onOpenRoom;
   final bool selected;
   final VoidCallback onPressed;
 
@@ -823,56 +1026,103 @@ class _HistoryMemberOption extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 7),
-      child: PressableSurface(
-        onPressed: onPressed,
-        selected: selected,
+      child: AnimatedContainer(
+        key: user == null
+            ? const ValueKey('message-history-member-all')
+            : ValueKey('message-history-member-${user!.id}'),
+        duration: const Duration(milliseconds: 90),
+        curve: Curves.easeOutCubic,
         height: meta == null ? 46 : 54,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        child: Row(
-          children: [
-            if (user != null)
-              Avatar(
-                label: label,
-                imageUrl: AppConfigScope.of(
-                  context,
-                ).resolveAssetUrl(user!.avatarUrl),
-                defaultAvatarKey: user!.defaultAvatarKey,
-                size: 30,
-              )
-            else
-              SizedBox.square(
-                dimension: 30,
-                child: Icon(icon, color: UiColors.textSecondary, size: 19),
-              ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: UiTypography.body.copyWith(color: UiColors.text),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? UiColors.selected : UiColors.surfaceLow,
+          borderRadius: BorderRadius.circular(UiRadii.sm),
+          border: Border.all(
+            color: selected ? UiColors.selectedBorder : UiColors.border,
+          ),
+        ),
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: user == null ? onPressed : null,
+          child: Row(
+            children: [
+              if (user != null)
+                UserHoverCard(
+                  user: user!,
+                  currentUser: currentUser,
+                  onResolveProfile: onResolveProfile,
+                  onResolveRoomProfile: onResolveRoomProfile,
+                  onEnterCommonRoom: onOpenRoom,
+                  showRoomRole: true,
+                  child: Avatar(
+                    key: ValueKey('message-history-member-avatar-${user!.id}'),
+                    label: label,
+                    imageUrl: AppConfigScope.of(
+                      context,
+                    ).resolveAssetUrl(user!.avatarUrl),
+                    defaultAvatarKey: user!.defaultAvatarKey,
+                    size: 30,
                   ),
-                  if (meta != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      meta!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: UiTypography.label.copyWith(
-                        color: UiColors.textMuted,
+                )
+              else
+                SizedBox.square(
+                  dimension: 30,
+                  child: Icon(icon, color: UiColors.textSecondary, size: 19),
+                ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: onPressed,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: UiTypography.body.copyWith(
+                                color: UiColors.text,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            if (meta != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                meta!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: UiTypography.label.copyWith(
+                                  color: UiColors.textMuted,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ],
+                      if (roleLabel != null) ...[
+                        const SizedBox(width: 8),
+                        RoleBadge(
+                          key: ValueKey(
+                            'message-history-member-role-${user?.id}',
+                          ),
+                          label: roleLabel!,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 5,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ),
-            ),
-            if (selected)
-              const Icon(Icons.check, color: UiColors.accent, size: 18),
-          ],
+            ],
+          ),
         ),
       ),
     );
