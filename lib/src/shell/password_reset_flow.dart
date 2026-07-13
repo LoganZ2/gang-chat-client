@@ -48,20 +48,18 @@ Future<String?> verifyPasswordResetEmail({
     showFloatingErrorNotice(context, '请先输入用户名或邮箱');
     return null;
   }
-  PasswordResetChallenge challenge;
+  PasswordResetChallenge? challenge;
+  late String maskedEmail;
+  late int retryAfterSeconds;
   try {
     final inspection = await controller.inspect(normalizedLogin);
-    final reusableChallenge = inspection.reusableChallenge;
-    if (!inspection.canSend && reusableChallenge == null) {
-      if (context.mounted) {
-        showFloatingErrorNotice(
-          context,
-          '验证码已发送，请在 ${inspection.retryAfterSeconds} 秒后重试',
-        );
-      }
-      return null;
+    challenge = inspection.reusableChallenge;
+    if (challenge == null && inspection.canSend) {
+      challenge = await controller.start(normalizedLogin);
     }
-    challenge = reusableChallenge ?? await controller.start(normalizedLogin);
+    maskedEmail = challenge?.maskedEmail ?? inspection.maskedEmail;
+    retryAfterSeconds =
+        challenge?.retryAfterSeconds ?? inspection.retryAfterSeconds;
   } catch (error) {
     if (context.mounted) {
       showFloatingErrorNotice(context, _passwordResetErrorMessage(error));
@@ -73,7 +71,10 @@ Future<String?> verifyPasswordResetEmail({
     context: context,
     barrierDismissible: false,
     builder: (context) => _PasswordResetVerificationDialog(
+      login: normalizedLogin,
       challenge: challenge,
+      maskedEmail: maskedEmail,
+      retryAfterSeconds: retryAfterSeconds,
       controller: controller,
     ),
   );
@@ -86,11 +87,17 @@ String _passwordResetErrorMessage(Object error) {
 
 class _PasswordResetVerificationDialog extends StatefulWidget {
   const _PasswordResetVerificationDialog({
+    required this.login,
     required this.challenge,
+    required this.maskedEmail,
+    required this.retryAfterSeconds,
     required this.controller,
   });
 
-  final PasswordResetChallenge challenge;
+  final String login;
+  final PasswordResetChallenge? challenge;
+  final String maskedEmail;
+  final int retryAfterSeconds;
   final PasswordResetController controller;
 
   @override
@@ -102,7 +109,8 @@ class _PasswordResetVerificationDialogState
     extends State<_PasswordResetVerificationDialog> {
   final _code = TextEditingController();
   Timer? _timer;
-  late PasswordResetChallenge _challenge;
+  PasswordResetChallenge? _challenge;
+  late String _maskedEmail;
   late DateTime _resendAvailableAt;
   int _remainingSeconds = 0;
   bool _resending = false;
@@ -111,14 +119,20 @@ class _PasswordResetVerificationDialogState
   @override
   void initState() {
     super.initState();
-    _applyChallenge(widget.challenge);
+    final challenge = widget.challenge;
+    _challenge = challenge;
+    _maskedEmail = challenge?.maskedEmail ?? widget.maskedEmail;
+    _applyCooldown(challenge?.retryAfterSeconds ?? widget.retryAfterSeconds);
   }
 
   void _applyChallenge(PasswordResetChallenge challenge) {
     _challenge = challenge;
-    final seconds = challenge.retryAfterSeconds < 0
-        ? 0
-        : challenge.retryAfterSeconds;
+    _maskedEmail = challenge.maskedEmail;
+    _applyCooldown(challenge.retryAfterSeconds);
+  }
+
+  void _applyCooldown(int retryAfterSeconds) {
+    final seconds = retryAfterSeconds < 0 ? 0 : retryAfterSeconds;
     _resendAvailableAt = DateTime.now().add(Duration(seconds: seconds));
     _remainingSeconds = seconds;
     _startTimer();
@@ -144,7 +158,10 @@ class _PasswordResetVerificationDialogState
     if (_resending || _verifying || _remainingSeconds > 0) return;
     setState(() => _resending = true);
     try {
-      final challenge = await widget.controller.resend(_challenge.id);
+      final currentChallenge = _challenge;
+      final challenge = currentChallenge == null
+          ? await widget.controller.start(widget.login)
+          : await widget.controller.resend(currentChallenge.id);
       if (!mounted) return;
       setState(() {
         _resending = false;
@@ -159,6 +176,11 @@ class _PasswordResetVerificationDialogState
 
   Future<void> _verify() async {
     if (_verifying || _resending) return;
+    final challenge = _challenge;
+    if (challenge == null) {
+      showFloatingErrorNotice(context, '请先发送验证码');
+      return;
+    }
     final code = _code.text.trim();
     if (!RegExp(r'^\d{6}$').hasMatch(code)) {
       showFloatingErrorNotice(context, '请输入 6 位数字验证码');
@@ -167,7 +189,7 @@ class _PasswordResetVerificationDialogState
     setState(() => _verifying = true);
     try {
       final token = await widget.controller.verify(
-        challengeId: _challenge.id,
+        challengeId: challenge.id,
         code: code,
       );
       if (!mounted) return;
@@ -199,7 +221,9 @@ class _PasswordResetVerificationDialogState
         ),
         Button(
           key: const ValueKey('password-reset-verify-button'),
-          onPressed: _verifying || _resending ? null : _verify,
+          onPressed: _verifying || _resending || _challenge == null
+              ? null
+              : _verify,
           loading: _verifying,
           tone: ButtonTone.primary,
           child: const Text('验证'),
@@ -210,7 +234,7 @@ class _PasswordResetVerificationDialogState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            '已发送验证码到该账号绑定的邮箱 ${_challenge.maskedEmail}',
+            '已发送验证码到该账号绑定的邮箱 $_maskedEmail',
             key: const ValueKey('password-reset-email-message'),
             style: UiTypography.body.copyWith(color: UiColors.textSecondary),
           ),

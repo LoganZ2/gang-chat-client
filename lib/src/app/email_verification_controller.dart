@@ -32,12 +32,10 @@ class EmailVerificationController {
     final inspection = await inspect(email);
     final reusable = inspection.reusableChallenge;
     if (reusable != null) return reusable;
-    if (inspection.canSend) return start(email);
-    throw AuthException(
-      '验证码已发送，请在 ${inspection.retryAfterSeconds} 秒后重试',
-      statusCode: 429,
-      code: 'rate_limited',
-    );
+    // Start is idempotent during the server cooldown: it returns the active
+    // challenge without sending another email. This also supports servers
+    // whose inspection response omits the reusable challenge id.
+    return start(email);
   }
 
   Future<EmailVerificationChallenge> inspectOrStartForCurrentUser(
@@ -52,16 +50,9 @@ class EmailVerificationController {
     );
     final reusable = inspection.reusableChallenge;
     if (reusable != null) return reusable;
-    if (inspection.canSend) {
-      return _withClient(
-        (client) =>
-            client.startEmailVerification(email, accessToken: accessToken),
-      );
-    }
-    throw AuthException(
-      '验证码已发送，请在 ${inspection.retryAfterSeconds} 秒后重试',
-      statusCode: 429,
-      code: 'rate_limited',
+    return _withClient(
+      (client) =>
+          client.startEmailVerification(email, accessToken: accessToken),
     );
   }
 

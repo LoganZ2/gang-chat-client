@@ -417,6 +417,68 @@ void main() {
   });
 
   testWidgets(
+    'forgot password opens verification when cooldown inspection omits challenge',
+    (WidgetTester tester) async {
+      final requestedPaths = <String>[];
+      final controller = PasswordResetController(
+        apiBaseUrl: 'https://api.example.test/api/v1',
+        authClientFactory: (baseUrl) => AuthClient(
+          baseUrl: baseUrl,
+          httpClient: MockClient((request) async {
+            requestedPaths.add(request.url.path);
+            if (request.url.path == '/api/v1/auth/password-reset/inspect') {
+              return _jsonResponse({
+                'can_send': false,
+                'masked_email': 'k***@example.test',
+                'retry_after': 42,
+              });
+            }
+            if (request.url.path == '/api/v1/auth/password-reset/start') {
+              return _jsonResponse({
+                'challenge_id': 'challenge-existing',
+                'masked_email': 'k***@example.test',
+                'retry_after': 42,
+              });
+            }
+            return http.Response('unexpected request', 404);
+          }),
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: LoginPage(
+            sizeForMode: (_, {showingError = false}) => const Size(430, 368),
+            consumeInitialWindowLock: () => true,
+            lockAuthWindow:
+                ({
+                  bool registering = false,
+                  bool moveWindow = false,
+                  bool centerWindow = false,
+                  Size? size,
+                }) async {},
+            passwordResetController: controller,
+            onSubmit: (_, {required rememberPassword}) async {},
+          ),
+        ),
+      );
+      await tester.enterText(_textFieldWithHint('用户名或邮箱地址'), 'kai');
+      await tester.tap(find.text('忘记密码？'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('password-reset-code-input')),
+        findsOneWidget,
+      );
+      expect(find.text('重新发送(42)'), findsOneWidget);
+      expect(find.text('验证码已发送，请在 42 秒后重试'), findsNothing);
+      expect(requestedPaths, ['/api/v1/auth/password-reset/inspect']);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'settings email verification hides current password for the session',
     (WidgetTester tester) async {
       tester.view.devicePixelRatio = 1;
@@ -1328,6 +1390,62 @@ void main() {
     expect(find.text('已发送验证码到您的邮箱 first@example.test'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'email verification opens when cooldown inspection omits challenge',
+    (WidgetTester tester) async {
+      final emailVerification = _FakeEmailVerificationController(
+        onInspect: (email) async => const EmailVerificationInspection(
+          canSend: false,
+          retryAfterSeconds: 42,
+        ),
+        onStart: (email) async => const EmailVerificationChallenge(
+          id: 'existing-challenge',
+          retryAfterSeconds: 42,
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: LoginPage(
+            sizeForMode: (_, {showingError = false}) => const Size(430, 500),
+            consumeInitialWindowLock: () => true,
+            lockAuthWindow:
+                ({
+                  bool registering = false,
+                  bool moveWindow = false,
+                  bool centerWindow = false,
+                  Size? size,
+                }) async {},
+            checkUsernameAvailability: (_) async => true,
+            checkEmailAvailability: (_) async => true,
+            emailVerificationController: emailVerification,
+            onSubmit: (_, {required rememberPassword}) async {},
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.text('注册'));
+      await tester.pumpAndSettle();
+      await tester.enterText(_textFieldWithHint('邮箱地址'), 'first@example.test');
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const ValueKey('auth-email-verification-button')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('auth-email-verification-code')),
+        findsOneWidget,
+      );
+      expect(find.text('重新发送(42)'), findsOneWidget);
+      expect(emailVerification.calls, [
+        'inspect:first@example.test',
+        'start:first@example.test',
+      ]);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('register checks email verification before username submit', (
     WidgetTester tester,
@@ -8808,10 +8926,11 @@ class _FakeVideoTrack implements lk.VideoTrack {
 }
 
 class _FakeEmailVerificationController extends EmailVerificationController {
-  _FakeEmailVerificationController({this.onInspect})
+  _FakeEmailVerificationController({this.onInspect, this.onStart})
     : super(apiBaseUrl: 'https://unused.test');
 
   final Future<EmailVerificationInspection> Function(String email)? onInspect;
+  final Future<EmailVerificationChallenge> Function(String email)? onStart;
   final List<String> calls = [];
 
   @override
@@ -8834,6 +8953,8 @@ class _FakeEmailVerificationController extends EmailVerificationController {
   @override
   Future<EmailVerificationChallenge> start(String email) async {
     calls.add('start:$email');
+    final start = onStart;
+    if (start != null) return start(email);
     return const EmailVerificationChallenge(
       id: 'email-challenge',
       retryAfterSeconds: 60,
