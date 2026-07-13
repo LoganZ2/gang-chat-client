@@ -936,6 +936,58 @@ void main() {
     expect(decoration.color, ui.UiColors.selected.withValues(alpha: 0.86));
   });
 
+  testWidgets('focused system message uses the same timed highlight', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    final message = _message(
+      type: 'system',
+      body: 'Logan joined the room',
+      attachments: const [
+        MessageAttachment(
+          type: 'system',
+          event: message_display.kSystemEventRoomMemberJoined,
+          target: _systemTarget,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      _host(
+        _chatPane(
+          controller: controller,
+          room: _roomDetail,
+          messages: [message],
+          focusMessageId: message.id,
+        ),
+        height: 620,
+      ),
+    );
+
+    final systemContent = find.byType(ChatSystemMessageContent);
+    final systemSurface = find.descendant(
+      of: systemContent,
+      matching: find.byType(AnimatedContainer),
+    );
+    var decoration =
+        tester.widget<AnimatedContainer>(systemSurface).decoration
+            as BoxDecoration;
+    expect(decoration.color, ui.UiColors.selected.withValues(alpha: 0.86));
+    expect((decoration.border as Border).top.color, ui.UiColors.selectedBorder);
+
+    await tester.pump(const Duration(milliseconds: 2700));
+
+    decoration =
+        tester.widget<AnimatedContainer>(systemSurface).decoration
+            as BoxDecoration;
+    expect(
+      decoration.color,
+      ui.UiColors.surfacePressed.withValues(alpha: 0.82),
+    );
+    expect((decoration.border as Border).top.color, ui.UiColors.border);
+  });
+
   testWidgets('focused @me message uses mention color immediately', (
     tester,
   ) async {

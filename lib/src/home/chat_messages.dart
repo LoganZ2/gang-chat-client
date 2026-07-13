@@ -1146,6 +1146,7 @@ class _MessageStageState extends State<_MessageStage> {
               ChatSystemMessageContent(
                 message: message,
                 event: systemEvent,
+                highlighted: _messageIsHighlighted(message),
                 currentUser: widget.currentUser,
                 ownerUserId: widget.ownerUserId,
                 live: widget.live,
@@ -1158,6 +1159,7 @@ class _MessageStageState extends State<_MessageStage> {
             else if (message.isRemoved)
               ChatRemovedMessageContent(
                 message: message,
+                highlighted: _messageIsHighlighted(message),
                 currentUser: widget.currentUser,
                 ownerUserId: widget.ownerUserId,
                 live: widget.live,
@@ -1372,9 +1374,12 @@ class ChatSystemMessageContent extends StatelessWidget {
     required this.live,
     this.messageActions,
     this.enableContextMenu = true,
+    this.highlighted = false,
     this.showSurface = true,
     this.alignment = Alignment.center,
     this.wrapAlignment = WrapAlignment.center,
+    this.textStyle = UiTypography.label,
+    this.avatarSize = 16,
     this.onResolveSenderProfile,
     this.onResolveRoomProfile,
     this.onEnterProfileRoom,
@@ -1388,9 +1393,12 @@ class ChatSystemMessageContent extends StatelessWidget {
   final LiveState? live;
   final ChatMessageActions? messageActions;
   final bool enableContextMenu;
+  final bool highlighted;
   final bool showSurface;
   final AlignmentGeometry alignment;
   final WrapAlignment wrapAlignment;
+  final TextStyle textStyle;
+  final double avatarSize;
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
   final RoomProfileResolver? onResolveRoomProfile;
@@ -1402,6 +1410,7 @@ class ChatSystemMessageContent extends StatelessWidget {
     return _SystemMessageContainer(
       message: enableContextMenu ? message : null,
       actions: enableContextMenu ? messageActions : null,
+      highlighted: highlighted,
       showSurface: showSurface,
       alignment: alignment,
       wrapAlignment: wrapAlignment,
@@ -1410,6 +1419,8 @@ class ChatSystemMessageContent extends StatelessWidget {
         currentUser: currentUser,
         ownerUserId: ownerUserId,
         live: live,
+        textStyle: textStyle,
+        avatarSize: avatarSize,
         onResolveSenderProfile: onResolveSenderProfile,
         onResolveRoomProfile: onResolveRoomProfile,
         onEnterProfileRoom: onEnterProfileRoom,
@@ -1424,6 +1435,7 @@ class _SystemMessageContainer extends StatefulWidget {
     required this.children,
     this.message,
     this.actions,
+    this.highlighted = false,
     this.showSurface = true,
     this.alignment = Alignment.center,
     this.wrapAlignment = WrapAlignment.center,
@@ -1432,6 +1444,7 @@ class _SystemMessageContainer extends StatefulWidget {
   final List<Widget> children;
   final Message? message;
   final ChatMessageActions? actions;
+  final bool highlighted;
   final bool showSurface;
   final AlignmentGeometry alignment;
   final WrapAlignment wrapAlignment;
@@ -1448,7 +1461,11 @@ class _SystemMessageContainerState extends State<_SystemMessageContainer> {
   Widget build(BuildContext context) {
     final active = _contextMenuActive;
     final contentColor = UiColors.surfacePressed.withValues(alpha: 0.82);
-    final highlightColor = active ? UiColors.selected : contentColor;
+    final highlightColor = active
+        ? UiColors.selected
+        : widget.highlighted
+        ? UiColors.selected.withValues(alpha: 0.86)
+        : contentColor;
     final parts = Wrap(
       alignment: widget.wrapAlignment,
       crossAxisAlignment: WrapCrossAlignment.center,
@@ -1458,13 +1475,17 @@ class _SystemMessageContainerState extends State<_SystemMessageContainer> {
     );
     final content = widget.showSurface
         ? AnimatedContainer(
-            duration: const Duration(milliseconds: 90),
+            duration: widget.highlighted
+                ? Duration.zero
+                : const Duration(milliseconds: 90),
             curve: Curves.easeOutCubic,
             decoration: BoxDecoration(
               color: highlightColor,
               borderRadius: BorderRadius.circular(999),
               border: Border.all(
-                color: active ? UiColors.selectedBorder : UiColors.border,
+                color: active || widget.highlighted
+                    ? UiColors.selectedBorder
+                    : UiColors.border,
               ),
             ),
             child: Padding(
@@ -1515,6 +1536,7 @@ class ChatRemovedMessageContent extends StatelessWidget {
     required this.live,
     required this.messageActions,
     this.enableContextMenu = true,
+    this.highlighted = false,
     this.showSurface = true,
     this.alignment = Alignment.center,
     this.wrapAlignment = WrapAlignment.center,
@@ -1530,6 +1552,7 @@ class ChatRemovedMessageContent extends StatelessWidget {
   final LiveState? live;
   final ChatMessageActions messageActions;
   final bool enableContextMenu;
+  final bool highlighted;
   final bool showSurface;
   final AlignmentGeometry alignment;
   final WrapAlignment wrapAlignment;
@@ -1544,6 +1567,7 @@ class ChatRemovedMessageContent extends StatelessWidget {
     return _SystemMessageContainer(
       message: enableContextMenu ? message : null,
       actions: enableContextMenu ? messageActions : null,
+      highlighted: highlighted,
       showSurface: showSurface,
       alignment: alignment,
       wrapAlignment: wrapAlignment,
@@ -1801,6 +1825,8 @@ class _SystemMessageParts {
     required this.currentUser,
     required this.ownerUserId,
     required this.live,
+    this.textStyle = UiTypography.label,
+    this.avatarSize = 16,
     this.onResolveSenderProfile,
     this.onResolveRoomProfile,
     this.onEnterProfileRoom,
@@ -1811,6 +1837,8 @@ class _SystemMessageParts {
   final CurrentUser currentUser;
   final String? ownerUserId;
   final LiveState? live;
+  final TextStyle textStyle;
+  final double avatarSize;
   final Future<UserSummary> Function(UserSummary sender)?
   onResolveSenderProfile;
   final RoomProfileResolver? onResolveRoomProfile;
@@ -1938,6 +1966,8 @@ class _SystemMessageParts {
       onEnterProfileRoom: onEnterProfileRoom,
       profileActionBuilder: profileActionBuilder,
       inLive: live_display.liveParticipantByUserId(live, user.id) != null,
+      textStyle: textStyle,
+      avatarSize: avatarSize,
     );
   }
 
@@ -1946,10 +1976,7 @@ class _SystemMessageParts {
       value,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: UiTypography.label.copyWith(
-        color: UiColors.textSecondary,
-        fontSize: 12,
-      ),
+      style: textStyle.copyWith(color: UiColors.textSecondary),
     );
   }
 
@@ -1977,9 +2004,8 @@ class _SystemMessageParts {
         value,
         maxLines: maxLines,
         overflow: TextOverflow.ellipsis,
-        style: UiTypography.label.copyWith(
+        style: textStyle.copyWith(
           color: UiColors.accent,
-          fontSize: 12,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -2004,6 +2030,8 @@ class _SystemUserChip extends StatelessWidget {
     required this.currentUser,
     required this.ownerUserId,
     required this.inLive,
+    this.textStyle = UiTypography.label,
+    this.avatarSize = 16,
     this.onResolveProfile,
     this.onResolveRoomProfile,
     this.onEnterProfileRoom,
@@ -2015,6 +2043,8 @@ class _SystemUserChip extends StatelessWidget {
   final CurrentUser currentUser;
   final String? ownerUserId;
   final bool inLive;
+  final TextStyle textStyle;
+  final double avatarSize;
   final Future<UserSummary> Function(UserSummary sender)? onResolveProfile;
   final RoomProfileResolver? onResolveRoomProfile;
   final ValueChanged<PublicRoom>? onEnterProfileRoom;
@@ -2030,7 +2060,7 @@ class _SystemUserChip extends StatelessWidget {
       label: room_display.userAvatarLabel(user),
       imageUrl: AppConfigScope.of(context).resolveAssetUrl(user.avatarUrl),
       defaultAvatarKey: user.defaultAvatarKey,
-      size: 16,
+      size: avatarSize,
       activeBorderWidth: 1,
     );
     return Row(
@@ -2053,13 +2083,12 @@ class _SystemUserChip extends StatelessWidget {
             name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: UiTypography.label.copyWith(
+            style: textStyle.copyWith(
               color: chatRoomUsernameColor(
                 user: colorUser,
                 currentUser: currentUser,
                 ownerUserId: ownerUserId,
               ),
-              fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
           ),

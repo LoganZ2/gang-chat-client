@@ -299,6 +299,8 @@ class _RoomMessageHistoryPaneState extends State<_RoomMessageHistoryPane> {
           showSurface: false,
           alignment: Alignment.centerLeft,
           wrapAlignment: WrapAlignment.start,
+          textStyle: UiTypography.body,
+          avatarSize: 18,
           onResolveSenderProfile: widget.onResolveRoomUserProfile == null
               ? null
               : (user) =>
@@ -683,11 +685,10 @@ class _HistoryMessageRowState extends State<_HistoryMessageRow> {
       constraints: const BoxConstraints(minHeight: 64),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: UiColors.surface,
+        color: highlighted ? UiColors.selected : UiColors.surface,
         borderRadius: BorderRadius.circular(UiRadii.lg),
         border: Border.all(
           color: highlighted ? UiColors.selectedBorder : UiColors.border,
-          width: highlighted ? 1.5 : 1,
         ),
       ),
       child: Stack(
@@ -703,12 +704,18 @@ class _HistoryMessageRowState extends State<_HistoryMessageRow> {
               ],
               Expanded(
                 child: widget.inlineContent
-                    ? IgnorePointer(
-                        key: ValueKey(
-                          'room-message-history-content-interactions-${message.id}',
+                    ? ConstrainedBox(
+                        constraints: const BoxConstraints(minHeight: 44),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: IgnorePointer(
+                            key: ValueKey(
+                              'room-message-history-content-interactions-${message.id}',
+                            ),
+                            ignoring: widget.selectionMode,
+                            child: widget.content,
+                          ),
                         ),
-                        ignoring: widget.selectionMode,
-                        child: widget.content,
                       )
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -4545,10 +4545,19 @@ void main() {
       of: systemHistoryContent,
       matching: find.byType(ui.Avatar),
     );
+    expect(tester.getSize(systemHistoryAvatar), const Size.square(18));
     expect(
       tester.getRect(systemHistoryAvatar).left,
       closeTo(tester.getRect(historyAvatar).left, 0.01),
     );
+    expect(
+      tester.getCenter(systemHistoryAvatar).dy,
+      closeTo(tester.getRect(systemHistoryRow).center.dy, 0.01),
+    );
+    final systemHistoryText = tester.widget<Text>(
+      find.descendant(of: systemHistoryContent, matching: find.text('加入了房间')),
+    );
+    expect(systemHistoryText.style?.fontSize, ui.UiTypography.body.fontSize);
     final systemJumpButton = find.byKey(
       const ValueKey('room-message-history-jump-msg-system'),
     );
@@ -4709,6 +4718,17 @@ void main() {
           .value,
       isTrue,
     );
+    final selectedHistoryDecoration =
+        tester
+                .widget<AnimatedContainer>(
+                  find.byKey(const ValueKey('room-message-history-row-msg-1')),
+                )
+                .decoration
+            as BoxDecoration;
+    final selectedHistoryBorder = selectedHistoryDecoration.border! as Border;
+    expect(selectedHistoryDecoration.color, ui.UiColors.selected);
+    expect(selectedHistoryBorder.top.color, ui.UiColors.selectedBorder);
+    expect(selectedHistoryBorder.top.width, 1);
 
     await tester.tap(find.byTooltip('返回').last);
     await tester.pumpAndSettle();
