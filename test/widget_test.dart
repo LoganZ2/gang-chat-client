@@ -3633,7 +3633,9 @@ void main() {
             autoUpdateWrites,
             initialValue: true,
           ),
-          installInfoService: const _FakeInstallInfoService('2026/07/01'),
+          installInfoService: const _FakeInstallInfoService(
+            '2026-07-01T12:34:56',
+          ),
           releaseUpdateService: ReleaseUpdateService(
             httpClient: MockClient((request) async {
               return http.Response('''
@@ -3658,10 +3660,10 @@ void main() {
     expect(find.text('发行时间'), findsOneWidget);
     expect(find.text('上次更新时间'), findsOneWidget);
     expect(
-      find.text(officialVersionDateLabel(gangChatClientReleaseDate)),
+      find.text(officialVersionTimeLabel(gangChatClientReleaseTimestamp)),
       findsOneWidget,
     );
-    expect(find.text('2026/07/01 UTC+08:00'), findsOneWidget);
+    expect(find.text('2026/07/01 12:34'), findsOneWidget);
     expect(find.text('自动提示更新'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '检查更新'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '意见反馈'), findsOneWidget);
@@ -8450,12 +8452,12 @@ class _FakeAutoUpdatePromptStore extends AutoUpdatePromptStore {
 }
 
 class _FakeInstallInfoService extends InstallInfoService {
-  const _FakeInstallInfoService(this.installedAtDate);
+  const _FakeInstallInfoService(this.installedAt);
 
-  final String? installedAtDate;
+  final String? installedAt;
 
   @override
-  Future<String?> readInstalledAtDate() async => installedAtDate;
+  Future<String?> readInstalledAt() async => installedAt;
 }
 
 class _FakeAudioDeviceStore extends AudioDeviceStore {

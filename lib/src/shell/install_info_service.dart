@@ -7,7 +7,7 @@ class InstallInfoService {
 
   final String fileName;
 
-  Future<String?> readInstalledAtDate() async {
+  Future<String?> readInstalledAt() async {
     try {
       final executableDir = File(Platform.resolvedExecutable).parent;
       final infoFile = File(

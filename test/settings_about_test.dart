@@ -49,22 +49,21 @@ void main() {
   });
 
   test(
-    'normalizeAboutDate accepts installer dates and falls back otherwise',
+    'official release time converts UTC across the Beijing date boundary',
     () {
-      expect(normalizeAboutDate(' 2026/07/01 '), '2026/07/01');
       expect(
-        normalizeAboutDate('2026-07-01', fallback: '2026/06/30'),
-        '2026/06/30',
+        officialDateTimeLabel(DateTime.utc(2026, 7, 12, 20, 34)),
+        '2026/07/13 04:34 UTC+08:00',
       );
-      expect(normalizeAboutDate('', fallback: '2026/06/30'), '2026/06/30');
+      expect(
+        officialVersionTimeLabel('2026-07-12T20:34:27.126Z'),
+        '2026/07/13 04:34 UTC+08:00',
+      );
     },
   );
 
-  test('officialVersionDateLabel appends official timezone', () {
-    expect(officialVersionDateLabel('2026/07/01'), '2026/07/01 UTC+08:00');
-    expect(
-      officialVersionDateLabel('invalid', fallback: '2026/06/30'),
-      '2026/06/30 UTC+08:00',
-    );
+  test('install time stays local and supports legacy date files', () {
+    expect(installTimeLabel('2026/07/01'), '2026/07/01');
+    expect(installTimeLabel('2026-07-01T12:34:56'), '2026/07/01 12:34');
   });
 }

@@ -90,14 +90,7 @@ String releaseAssetUrl(String bucketUrl, String key) {
 }
 
 String releaseTimeLabel(DateTime? releasedAt) {
-  if (releasedAt == null) return '暂无';
-  final beijing = releasedAt.toUtc().add(const Duration(hours: 8));
-  final year = beijing.year.toString().padLeft(4, '0');
-  final month = beijing.month.toString().padLeft(2, '0');
-  final day = beijing.day.toString().padLeft(2, '0');
-  final hour = beijing.hour.toString().padLeft(2, '0');
-  final minute = beijing.minute.toString().padLeft(2, '0');
-  return '$year/$month/$day $hour:$minute $gangChatOfficialTimeZoneLabel';
+  return officialDateTimeLabel(releasedAt);
 }
 
 String releaseNotesLabel(String? releaseNotes) {

@@ -19,6 +19,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
+      released_at: ${{ steps.version.outputs.released_at }}
     steps:
       - name: Resolve version
         id: version
@@ -36,6 +37,7 @@ jobs:
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "released_at=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
           echo "Resolved version: $VERSION"
 
   build-macos:
@@ -63,10 +65,9 @@ jobs:
 
       - name: Update release metadata
         run: |
-          RELEASE_DATE="$(date +%Y/%m/%d)"
           dart tool/update_release_metadata.dart \
             --version "${{ needs.prepare.outputs.version }}" \
-            --date "$RELEASE_DATE"
+            --released-at "${{ needs.prepare.outputs.released_at }}"
 
       - name: Build macOS (release)
         run: flutter build macos --release --build-name="${{ needs.prepare.outputs.version }}"
@@ -130,8 +131,9 @@ jobs:
       - name: Update release metadata
         shell: powershell
         run: |
-          $releaseDate = Get-Date -Format 'yyyy/MM/dd'
-          dart tool/update_release_metadata.dart --version "${{ needs.prepare.outputs.version }}" --date $releaseDate
+          dart tool/update_release_metadata.dart `
+            --version "${{ needs.prepare.outputs.version }}" `
+            --released-at "${{ needs.prepare.outputs.released_at }}"
 
       - name: Build Windows (release)
         shell: powershell

@@ -9,28 +9,58 @@ const gangChatClientVersion = _gangChatClientDebugBuild
     ? '1.0.0'
     : _gangChatClientBuildVersion;
 
-const gangChatClientReleaseDate = '2026/07/08';
-const gangChatClientLastUpdateDate = '2026/07/08';
+const gangChatClientReleaseTimestamp = '2026-07-12T20:34:27.126Z';
 const gangChatOfficialTimeZoneLabel = 'UTC+08:00';
 const gangChatClientInstallInfoFileName = 'gang_chat_install_info.txt';
 const gangChatSupportEmail = 'gang-chat@outlook.com';
 const defaultAutoUpdatePromptEnabled = true;
 
-String normalizeAboutDate(
-  String? value, {
-  String fallback = gangChatClientLastUpdateDate,
-}) {
-  final normalized = value?.trim();
-  if (normalized == null || normalized.isEmpty) return fallback;
-  if (!RegExp(r'^\d{4}/\d{2}/\d{2}$').hasMatch(normalized)) return fallback;
-  return normalized;
+DateTime gangChatOfficialTime(DateTime value) {
+  return value.toUtc().add(const Duration(hours: 8));
 }
 
-String officialVersionDateLabel(
+String officialDateTimeLabel(DateTime? value) {
+  if (value == null) return '暂无';
+  final official = gangChatOfficialTime(value);
+  final year = official.year.toString().padLeft(4, '0');
+  final month = official.month.toString().padLeft(2, '0');
+  final day = official.day.toString().padLeft(2, '0');
+  final hour = official.hour.toString().padLeft(2, '0');
+  final minute = official.minute.toString().padLeft(2, '0');
+  return '$year/$month/$day $hour:$minute $gangChatOfficialTimeZoneLabel';
+}
+
+String officialVersionTimeLabel(
   String? value, {
-  String fallback = gangChatClientLastUpdateDate,
+  String fallback = gangChatClientReleaseTimestamp,
 }) {
-  return '${normalizeAboutDate(value, fallback: fallback)} $gangChatOfficialTimeZoneLabel';
+  final timestamp = DateTime.tryParse(value?.trim() ?? '');
+  final fallbackTimestamp = DateTime.tryParse(fallback);
+  return officialDateTimeLabel(timestamp ?? fallbackTimestamp);
+}
+
+String installTimeLabel(
+  String? value, {
+  String fallback = gangChatClientReleaseTimestamp,
+}) {
+  final normalized = value?.trim() ?? '';
+  final timestamp = DateTime.tryParse(normalized);
+  if (timestamp != null) return localDateTimeLabel(timestamp);
+  if (RegExp(r'^\d{4}/\d{2}/\d{2}$').hasMatch(normalized)) {
+    return normalized;
+  }
+  return localDateTimeLabel(DateTime.tryParse(fallback));
+}
+
+String localDateTimeLabel(DateTime? value) {
+  if (value == null) return '暂无';
+  final local = value.toLocal();
+  final year = local.year.toString().padLeft(4, '0');
+  final month = local.month.toString().padLeft(2, '0');
+  final day = local.day.toString().padLeft(2, '0');
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '$year/$month/$day $hour:$minute';
 }
 
 String appVersionLabel(String version) {

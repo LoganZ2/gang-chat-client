@@ -2,14 +2,21 @@ import 'dart:io';
 
 void main(List<String> args) {
   final version = _requiredArg(args, '--version');
-  final releaseDate = _requiredArg(args, '--date');
+  final releasedAtValue = _requiredArg(args, '--released-at');
 
   if (!RegExp(r'^\d+\.\d+\.\d+$').hasMatch(version)) {
     _fail('version must be major.minor.patch: $version');
   }
-  if (!RegExp(r'^\d{4}/\d{2}/\d{2}$').hasMatch(releaseDate)) {
-    _fail('date must be yyyy/MM/dd: $releaseDate');
+  final releasedAt = DateTime.tryParse(releasedAtValue);
+  if (releasedAt == null ||
+      !RegExp(r'(?:Z|[+-]\d{2}:\d{2})$').hasMatch(releasedAtValue)) {
+    _fail(
+      'released-at must be an ISO 8601 timestamp with a timezone: '
+      '$releasedAtValue',
+    );
   }
+  final releaseTimestamp = releasedAt.toUtc().toIso8601String();
+  final releaseDate = _officialDate(releasedAt);
 
   final file = File('lib/src/app/settings_about.dart');
   if (!file.existsSync()) {
@@ -25,21 +32,24 @@ void main(List<String> args) {
   );
   source = _replaceSingle(
     source,
-    RegExp(r"(const\s+gangChatClientReleaseDate\s*=\s*')[^']+(';)"),
-    releaseDate,
-    'gangChatClientReleaseDate',
-  );
-  source = _replaceSingle(
-    source,
-    RegExp(r"(const\s+gangChatClientLastUpdateDate\s*=\s*')[^']+(';)"),
-    releaseDate,
-    'gangChatClientLastUpdateDate',
+    RegExp(r"(const\s+gangChatClientReleaseTimestamp\s*=\s*')[^']+(';)"),
+    releaseTimestamp,
+    'gangChatClientReleaseTimestamp',
   );
   file.writeAsStringSync(source);
 
   stdout.writeln(
-    'Updated release metadata: $version, release/update date $releaseDate',
+    'Updated release metadata: $version, released at $releaseTimestamp '
+    '(UTC+08:00 date $releaseDate)',
   );
+}
+
+String _officialDate(DateTime value) {
+  final official = value.toUtc().add(const Duration(hours: 8));
+  final year = official.year.toString().padLeft(4, '0');
+  final month = official.month.toString().padLeft(2, '0');
+  final day = official.day.toString().padLeft(2, '0');
+  return '$year/$month/$day';
 }
 
 String _requiredArg(List<String> args, String name) {

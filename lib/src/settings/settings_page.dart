@@ -201,9 +201,7 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _updateDownloadError;
   bool _openingFeedbackMail = false;
   bool _autoPromptUpdates = defaultAutoUpdatePromptEnabled;
-  String _lastUpdateDate = officialVersionDateLabel(
-    gangChatClientLastUpdateDate,
-  );
+  String _lastUpdateDate = installTimeLabel(null);
   Timer? _usernameAvailabilityDebounce;
   int _usernameAvailabilityRequestId = 0;
   String? _usernameAvailabilityQuery;
@@ -669,16 +667,12 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _loadInstallDate() async {
-    var date = gangChatClientLastUpdateDate;
+    String? installedAt;
     try {
-      date = normalizeAboutDate(
-        await widget.installInfoService.readInstalledAtDate(),
-      );
-    } catch (_) {
-      date = gangChatClientLastUpdateDate;
-    }
+      installedAt = await widget.installInfoService.readInstalledAt();
+    } catch (_) {}
     if (!mounted) return;
-    setState(() => _lastUpdateDate = officialVersionDateLabel(date));
+    setState(() => _lastUpdateDate = installTimeLabel(installedAt));
   }
 
   Future<void> _setAutoUpdatePrompt(bool value) async {
@@ -3982,7 +3976,7 @@ class _SettingsPageState extends State<SettingsPage> {
             const SizedBox(height: 14),
             _CopyableField(
               label: '发行时间',
-              value: officialVersionDateLabel(gangChatClientReleaseDate),
+              value: officialVersionTimeLabel(gangChatClientReleaseTimestamp),
             ),
             const SizedBox(height: 14),
             _CopyableField(label: '上次更新时间', value: _lastUpdateDate),

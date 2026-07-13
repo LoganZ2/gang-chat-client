@@ -181,7 +181,7 @@ Section "Install"
   File /oname=${APP_ICON_FILE} "${PROJECT_ROOT}\windows\runner\resources\app_icon.ico"
   ${GetTime} "" "L" $0 $1 $2 $3 $4 $5 $6
   FileOpen $7 "$INSTDIR\gang_chat_install_info.txt" w
-  FileWrite $7 "$2/$1/$0"
+  FileWrite $7 "$2-$1-$0T$4:$5:$6"
   FileClose $7
 
   Call WriteAppLanguagePreference
