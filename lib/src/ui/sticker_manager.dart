@@ -310,8 +310,10 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
         throw StateError(stickerNoUploadableImagesMessage());
       }
       final pack = await _ensurePack();
-      final uploadedAssetIds = <String>[];
-      var sortIndex = pack.stickers.length;
+      final uploadSortOrders = sticker_ordering.stickerSortOrdersBeforeExisting(
+        pack,
+        uploadItems.length,
+      );
       for (final entry in uploadItems.asMap().entries) {
         final item = entry.value;
         final assetId = await widget.backend.uploadImageAsset(
@@ -319,20 +321,15 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
           filename: stickerUploadFilename(item.filename, entry.key),
           purpose: 'sticker',
         );
-        uploadedAssetIds.add(assetId);
         await widget.backend.addSticker(
           packId: pack.id,
           assetId: assetId,
           name: stickerNameFromFilename(item.filename),
-          sortOrder: (++sortIndex) * 10,
+          sortOrder: uploadSortOrders[entry.key],
         );
         uploadedCount += 1;
       }
       await _load();
-      await _pinUploadedAssetsToFront(
-        packId: pack.id,
-        assetIds: uploadedAssetIds,
-      );
       if (!mounted) return;
       setState(
         () => _applyActionPatch(
@@ -364,25 +361,6 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
         ),
       );
     }
-  }
-
-  Future<void> _pinUploadedAssetsToFront({
-    required String packId,
-    required List<String> assetIds,
-  }) async {
-    if (assetIds.isEmpty) return;
-    final pack = sticker_ordering.stickerPackById(_packs, packId);
-    if (pack == null) return;
-    final nextOrder = sticker_ordering.stickerOrderWithAssetIdsPinnedToFront(
-      pack,
-      assetIds,
-    );
-    if (nextOrder == null) return;
-    await widget.backend.reorderStickers(
-      packId: pack.id,
-      stickerIds: nextOrder,
-    );
-    await _load();
   }
 
   Future<bool> _deleteItem(ManagedSticker item) async {

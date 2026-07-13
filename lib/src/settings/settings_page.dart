@@ -1896,8 +1896,10 @@ class _SettingsPageState extends State<SettingsPage> {
         throw StateError(stickerNoUploadableImagesMessage());
       }
       final pack = await _ensureActiveStickerPack();
-      final uploadedAssetIds = <String>[];
-      var sortIndex = pack.stickers.length;
+      final uploadSortOrders = sticker_ordering.stickerSortOrdersBeforeExisting(
+        pack,
+        uploadItems.length,
+      );
       for (final entry in uploadItems.asMap().entries) {
         final item = entry.value;
         final asset = await _settingsController.uploadImageAsset(
@@ -1906,20 +1908,15 @@ class _SettingsPageState extends State<SettingsPage> {
           purpose: 'sticker',
         );
         if (asset == null) continue;
-        uploadedAssetIds.add(asset.id);
         await _settingsController.addSticker(
           packId: pack.id,
           assetId: asset.id,
           name: stickerNameFromFilename(item.filename),
-          sortOrder: (++sortIndex) * 10,
+          sortOrder: uploadSortOrders[entry.key],
         );
         uploadedCount += 1;
       }
       await _loadStickers(forceReload: true);
-      await _pinUploadedStickerAssetsToFront(
-        packId: pack.id,
-        assetIds: uploadedAssetIds,
-      );
       if (!mounted) return;
       setState(
         () => _applyStickerActionPatch(
@@ -1954,29 +1951,6 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       );
     }
-  }
-
-  Future<void> _pinUploadedStickerAssetsToFront({
-    required String packId,
-    required List<String> assetIds,
-  }) async {
-    if (assetIds.isEmpty) return;
-
-    final pack = sticker_ordering.stickerPackById(_stickerPacks, packId);
-    if (pack == null) return;
-
-    final nextOrder = sticker_ordering.stickerOrderWithAssetIdsPinnedToFront(
-      pack,
-      assetIds,
-      order: _stickerOrderDrafts[pack.id],
-    );
-    if (nextOrder == null) return;
-
-    await _settingsController.reorderStickers(
-      packId: pack.id,
-      stickerIds: nextOrder,
-    );
-    await _loadStickers(forceReload: true);
   }
 
   void _toggleStickerManageMode() {

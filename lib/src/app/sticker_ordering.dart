@@ -37,6 +37,21 @@ List<String> orderedStickerIds(StickerPack pack, {List<String>? order}) {
   ).map((sticker) => sticker.id).toList();
 }
 
+List<int> stickerSortOrdersBeforeExisting(StickerPack pack, int count) {
+  if (count <= 0) return const [];
+  if (pack.stickers.isEmpty) {
+    return List.generate(count, (index) => (index + 1) * 10);
+  }
+  var minSortOrder = pack.stickers.first.sortOrder;
+  for (final sticker in pack.stickers.skip(1)) {
+    if (sticker.sortOrder < minSortOrder) {
+      minSortOrder = sticker.sortOrder;
+    }
+  }
+  final firstSortOrder = minSortOrder - count * 10;
+  return List.generate(count, (index) => firstSortOrder + index * 10);
+}
+
 StickerPack? stickerPackById(List<StickerPack> packs, String packId) {
   for (final pack in packs) {
     if (pack.id == packId) return pack;
@@ -97,29 +112,6 @@ List<String>? pinnedStickerOrder(
   final moving = ids.removeAt(index);
   ids.insert(0, moving);
   return ids;
-}
-
-List<String>? stickerOrderWithAssetIdsPinnedToFront(
-  StickerPack pack,
-  List<String> assetIds, {
-  List<String>? order,
-}) {
-  if (assetIds.isEmpty) return null;
-  final stickersByAssetId = {
-    for (final sticker in pack.stickers) sticker.asset.id: sticker,
-  };
-  final pinnedStickerIds = <String>[];
-  for (final assetId in assetIds) {
-    final sticker = stickersByAssetId[assetId];
-    if (sticker != null) pinnedStickerIds.add(sticker.id);
-  }
-  if (pinnedStickerIds.isEmpty) return null;
-
-  return stickerOrderWithStickerIdsPinnedToFront(
-    pack,
-    pinnedStickerIds,
-    order: order,
-  );
 }
 
 List<String>? stickerOrderWithStickerIdsPinnedToFront(

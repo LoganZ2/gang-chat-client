@@ -12,15 +12,16 @@ void main() {
     expect(ordered.map((sticker) => sticker.id), ['c', 'a', 'b']);
   });
 
-  test('asset id pinning preserves uploaded asset order', () {
+  test('batch upload sort orders place the whole batch before existing', () {
     final pack = _pack('pack_1', ['a', 'b', 'c']);
 
-    final next = stickerOrderWithAssetIdsPinnedToFront(pack, [
-      'asset_c',
-      'asset_a',
+    expect(stickerSortOrdersBeforeExisting(pack, 3), [-20, -10, 0]);
+    expect(stickerSortOrdersBeforeExisting(_pack('empty', []), 3), [
+      10,
+      20,
+      30,
     ]);
-
-    expect(next, ['c', 'a', 'b']);
+    expect(stickerSortOrdersBeforeExisting(pack, 0), isEmpty);
   });
 
   test('move and pin return null when order does not change', () {
