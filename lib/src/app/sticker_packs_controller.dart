@@ -47,11 +47,13 @@ class StickerPacksController {
     required String stickerId,
     required String targetScope,
     required String userId,
+    String? sourceMessageId,
     String? name,
   }) async {
     final pack = await api.saveSticker(
       roomId: roomId,
       stickerId: stickerId,
+      sourceMessageId: sourceMessageId,
       targetScope: targetScope,
       name: name,
     );

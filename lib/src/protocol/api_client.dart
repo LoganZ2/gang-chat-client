@@ -158,6 +158,7 @@ abstract interface class GangApi {
   Future<StickerPack> saveSticker({
     required String roomId,
     required String stickerId,
+    String? sourceMessageId,
     String targetScope = 'personal',
     String? targetPackId,
     String? name,
@@ -890,6 +891,7 @@ class GangApiClient implements GangApi {
   Future<StickerPack> saveSticker({
     required String roomId,
     required String stickerId,
+    String? sourceMessageId,
     String targetScope = 'personal',
     String? targetPackId,
     String? name,
@@ -899,6 +901,7 @@ class GangApiClient implements GangApi {
       'sticker_id': stickerId,
       'target_scope': targetScope,
     };
+    if (sourceMessageId != null) body['source_message_id'] = sourceMessageId;
     if (targetPackId != null) body['target_pack_id'] = targetPackId;
     if (name != null) body['name'] = name;
     if (sortOrder != null) body['sort_order'] = sortOrder;

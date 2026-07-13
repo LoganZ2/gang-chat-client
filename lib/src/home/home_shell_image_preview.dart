@@ -99,6 +99,7 @@ extension _HomeShellImagePreview on _HomeShellState {
     await _stickerPacksController.saveSticker(
       roomId: message.roomId,
       stickerId: stickerId,
+      sourceMessageId: message.id,
       targetScope: 'personal',
       userId: _currentUser.id,
     );
@@ -119,6 +120,7 @@ extension _HomeShellImagePreview on _HomeShellState {
     await _stickerPacksController.saveSticker(
       roomId: room.id,
       stickerId: stickerId,
+      sourceMessageId: message.id,
       targetScope: 'room',
       userId: _currentUser.id,
     );

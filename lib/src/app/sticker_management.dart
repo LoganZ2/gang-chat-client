@@ -789,7 +789,16 @@ List<StickerPack> _upsertStickerPack(
       next.add(current);
     }
   }
-  if (!replaced) next.insert(0, pack);
+  if (!replaced) {
+    final insertionIndex = next.indexWhere(
+      (current) => current.sortOrder > pack.sortOrder,
+    );
+    if (insertionIndex < 0) {
+      next.add(pack);
+    } else {
+      next.insert(insertionIndex, pack);
+    }
+  }
   return next;
 }
 

@@ -1696,6 +1696,7 @@ void main() {
         expect(request.headers['authorization'], 'Bearer token');
         expect(jsonDecode(request.body) as Map<String, Object?>, {
           'sticker_id': 'stk_1',
+          'source_message_id': 'msg_1',
           'target_scope': 'room',
           'name': 'ok',
         });
@@ -1711,6 +1712,7 @@ void main() {
     final pack = await api.saveSticker(
       roomId: 'room_1',
       stickerId: 'stk_1',
+      sourceMessageId: 'msg_1',
       targetScope: 'room',
       name: 'ok',
     );

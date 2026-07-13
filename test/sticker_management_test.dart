@@ -479,9 +479,9 @@ void main() {
       );
 
       expect(inserted.packs.map((pack) => pack.id), [
-        'pack_3',
         'pack_1',
         'pack_2',
+        'pack_3',
       ]);
       expect(inserted.selectedStickerIds, ['a', 'd']);
       expect(inserted.loading, isTrue);
@@ -698,13 +698,14 @@ StickerPack _pack(
   String id,
   List<String> stickerIds, {
   Map<String, String> mimeTypes = const {},
+  int sortOrder = 10,
 }) {
   return StickerPack(
     id: id,
     scope: 'personal',
     roomId: null,
     name: id,
-    sortOrder: 10,
+    sortOrder: sortOrder,
     updatedAt: DateTime.utc(2026, 6, 4),
     stickers: [
       for (final entry in stickerIds.asMap().entries)
