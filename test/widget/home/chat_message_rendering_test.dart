@@ -1035,7 +1035,7 @@ void main() {
     expect((decoration.border as Border).top.color, ui.UiColors.border);
   });
 
-  testWidgets('focused @me message uses mention color immediately', (
+  testWidgets('focused @me message temporarily strengthens mention color', (
     tester,
   ) async {
     final controller = TextEditingController();
@@ -1061,24 +1061,26 @@ void main() {
       ),
     );
 
-    final expectedColor = Color.alphaBlend(
+    final normalColor = Color.alphaBlend(
       ui.UiColors.amber.withValues(alpha: 0.13),
       ui.UiColors.surface,
     );
-    final expectedBorder = ui.UiColors.amber.withValues(alpha: 0.58);
-    var decoration = _messageBubbleDecoration(tester);
-    expect(decoration.color, expectedColor);
-    expect(
-      decoration.color,
-      isNot(ui.UiColors.selected.withValues(alpha: 0.86)),
+    final highlightedColor = Color.alphaBlend(
+      ui.UiColors.amber.withValues(alpha: 0.22),
+      ui.UiColors.surface,
     );
-    expect((decoration.border as Border).top.color, expectedBorder);
+    final normalBorder = ui.UiColors.amber.withValues(alpha: 0.58);
+    final highlightedBorder = ui.UiColors.amber.withValues(alpha: 0.72);
+    var decoration = _messageBubbleDecoration(tester);
+    expect(decoration.color, highlightedColor);
+    expect(decoration.color, isNot(normalColor));
+    expect((decoration.border as Border).top.color, highlightedBorder);
 
     await tester.pump(const Duration(milliseconds: 2700));
 
     decoration = _messageBubbleDecoration(tester);
-    expect(decoration.color, expectedColor);
-    expect((decoration.border as Border).top.color, expectedBorder);
+    expect(decoration.color, normalColor);
+    expect((decoration.border as Border).top.color, normalBorder);
   });
 
   testWidgets('handled focused message does not replay after remount', (

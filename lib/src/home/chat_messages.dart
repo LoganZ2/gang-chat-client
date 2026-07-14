@@ -2539,21 +2539,23 @@ class _MessageBubbleState extends State<_MessageBubble> {
       contextMentionBackgroundColor,
       backgroundColor,
     );
-    final highlightColor = contextMenuActive
-        ? targetsCurrentUser
-              ? contextMentionHighlightColor
-              : UiColors.selected
+    final mentionEmphasized =
+        targetsCurrentUser && (contextMenuActive || widget.mentionHighlighted);
+    final highlightColor = contextMenuActive && !targetsCurrentUser
+        ? UiColors.selected
         : targetsCurrentUser
-        ? mentionHighlightColor
+        ? mentionEmphasized
+              ? contextMentionHighlightColor
+              : mentionHighlightColor
         : widget.mentionHighlighted
         ? UiColors.selected.withValues(alpha: 0.86)
         : backgroundColor;
-    final borderColor = contextMenuActive
-        ? (targetsCurrentUser
-              ? UiColors.amber.withValues(alpha: 0.72)
-              : UiColors.selectedBorder)
+    final borderColor = contextMenuActive && !targetsCurrentUser
+        ? UiColors.selectedBorder
         : targetsCurrentUser
-        ? UiColors.amber.withValues(alpha: 0.58)
+        ? mentionEmphasized
+              ? UiColors.amber.withValues(alpha: 0.72)
+              : UiColors.amber.withValues(alpha: 0.58)
         : widget.mentionHighlighted
         ? UiColors.selectedBorder
         : widget.outgoing
