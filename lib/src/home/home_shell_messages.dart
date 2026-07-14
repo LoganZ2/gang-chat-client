@@ -1,11 +1,15 @@
 part of 'home_shell.dart';
 
 extension _HomeShellMessages on _HomeShellState {
-  String? _latestServerMessageId(List<Message> messages) {
+  Message? _latestServerMessage(List<Message> messages) {
     for (final message in messages.reversed) {
-      if (!message.pending) return message.id;
+      if (!message.pending) return message;
     }
     return null;
+  }
+
+  String? _latestServerMessageId(List<Message> messages) {
+    return _latestServerMessage(messages)?.id;
   }
 
   void _clearRoomUnreadCount(String roomId) {
@@ -19,29 +23,24 @@ extension _HomeShellMessages on _HomeShellState {
     List<Message> messages,
   ) async {
     if (_selectedServerId != roomId) return;
-    final lastReadMessageId = _latestServerMessageId(messages);
-    if (lastReadMessageId == null) return;
+    final lastReadMessage = _latestServerMessage(messages);
+    if (lastReadMessage == null) return;
+    final lastReadMessageId = lastReadMessage.id;
 
-    if (_lastMarkedReadMessageIds[roomId] == lastReadMessageId) {
+    if (_services.roomReads.isSynced(
+      roomId: roomId,
+      messageId: lastReadMessageId,
+    )) {
       if (mounted) _setHomeState(() => _clearRoomUnreadCount(roomId));
       return;
     }
-    _lastMarkedReadMessageIds[roomId] = lastReadMessageId;
     if (mounted) _setHomeState(() => _clearRoomUnreadCount(roomId));
 
-    try {
-      await _messagesController.markRead(
-        roomId: roomId,
-        lastReadMessageId: lastReadMessageId,
-      );
-    } catch (_) {
-      if (_lastMarkedReadMessageIds[roomId] == lastReadMessageId) {
-        _lastMarkedReadMessageIds.remove(roomId);
-      }
-      // Reading a room is best-effort on the client. Keep the local room clear
-      // while the selected chat is open; a later successful mark/read or list
-      // refresh will reconcile the server state.
-    }
+    await _services.roomReads.markRead(
+      roomId: roomId,
+      lastReadMessageId: lastReadMessageId,
+      messageCreatedAt: lastReadMessage.createdAt,
+    );
   }
 
   void _clearSelectedRoomNewMessagePrompt() {

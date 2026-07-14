@@ -24,6 +24,7 @@ extension _HomeShellRealtime on _HomeShellState {
 
   void _onRealtimeReconnect() {
     if (!mounted) return;
+    unawaited(_services.roomReads.retryPending());
     unawaited(_loadServersSilently());
     final selected = _selectedServerId;
     if (selected != null) unawaited(_refreshLiveSilently(selected));
@@ -165,7 +166,12 @@ extension _HomeShellRealtime on _HomeShellState {
       selectedRoom: _selectedRoom,
     );
     int? selectedNewMessageCount;
-    if (shouldRefreshMessages) {
+    if (room.id == _selectedServerId && room.hasUnreadCount) {
+      // Account-scoped room snapshots are authoritative for unread state.
+      // Apply a read receipt from another device even when the last message is
+      // already loaded locally and no message refresh is necessary.
+      selectedNewMessageCount = room.unreadCount;
+    } else if (shouldRefreshMessages) {
       for (final candidate in patch.rooms) {
         if (candidate.id == room.id) {
           selectedNewMessageCount = candidate.unreadCount;

@@ -9,6 +9,7 @@ import 'messages_controller.dart';
 import 'media_cache_controller.dart';
 import 'music_box_controller.dart';
 import 'realtime_controller.dart';
+import 'room_read_sync_controller.dart';
 import 'rooms_controller.dart';
 import 'settings_controller.dart';
 import 'sticker_packs_controller.dart';
@@ -20,6 +21,7 @@ class AuthenticatedAppServices {
     required this.api,
     required this.rooms,
     required this.messages,
+    required this.roomReads,
     required this.live,
     required this.liveSession,
     required this.realtime,
@@ -49,11 +51,13 @@ class AuthenticatedAppServices {
           screenAudioTokenProvider: (roomId) =>
               api.issueScreenAudioToken(roomId: roomId),
         );
+    final messages = MessagesController(api: api);
     return AuthenticatedAppServices._(
       context: context,
       api: api,
       rooms: RoomsController(api: api),
-      messages: MessagesController(api: api),
+      messages: messages,
+      roomReads: RoomReadSyncController(messages: messages),
       live: LiveController(api: api),
       liveSession: liveSession,
       realtime:
@@ -86,6 +90,7 @@ class AuthenticatedAppServices {
   final GangApi api;
   final RoomsController rooms;
   final MessagesController messages;
+  final RoomReadSyncController roomReads;
   final LiveController live;
   final LiveSessionController liveSession;
   final RealtimeService realtime;
@@ -109,6 +114,7 @@ class AuthenticatedAppServices {
   }
 
   void close() {
+    roomReads.close();
     if (ownsRealtime) realtime.dispose();
     if (ownsLiveSession) liveSession.dispose();
     voiceRecorder.dispose();

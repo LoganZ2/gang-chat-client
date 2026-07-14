@@ -1620,7 +1620,7 @@ class GangApiClient implements GangApi {
         headers: _headers(token),
         body: encodeJsonBody({'last_read_message_id': lastReadMessageId}),
       );
-    });
+    }, retryTransientFailures: true);
     return decoded['unread_count']! as int;
   }
 

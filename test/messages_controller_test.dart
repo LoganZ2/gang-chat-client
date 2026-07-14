@@ -597,16 +597,21 @@ void main() {
   });
 
   test('markRead forwards the latest message id to the API', () async {
+    var requests = 0;
     final api = GangApiClient(
       baseUrl: 'http://example.test/api/v1',
       accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
       httpClient: MockClient((request) async {
+        requests++;
         expect(request.method, 'POST');
         expect(request.url.path, '/api/v1/rooms/room_1/read');
         expect(
           jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>,
           {'last_read_message_id': 'msg_2'},
         );
+        if (requests == 1) {
+          throw http.ClientException('Connection reset by peer', request.url);
+        }
         return http.Response(jsonEncode({'ok': true, 'unread_count': 0}), 200);
       }),
     );
@@ -617,6 +622,7 @@ void main() {
     ).markRead(roomId: 'room_1', lastReadMessageId: 'msg_2');
 
     expect(unread, 0);
+    expect(requests, 2);
   });
 }
 

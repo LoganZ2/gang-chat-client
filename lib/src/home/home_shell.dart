@@ -250,7 +250,6 @@ class _HomeShellState extends State<HomeShell> {
   bool _voiceBlocked = false;
   final Set<String> _busyLiveMemberRemovalIds = <String>{};
   final Set<String> _busyLiveMemberModerationIds = <String>{};
-  final Map<String, String> _lastMarkedReadMessageIds = <String, String>{};
   // The selected room's music box snapshot, or null when not loaded / disabled.
   // Overwritten wholesale from state fetches, write responses, and the
   // `music_box_changed` SSE event; never merged field by field.
@@ -437,7 +436,6 @@ class _HomeShellState extends State<HomeShell> {
       _busySearchPublicRoomId = null;
       _searchPendingPublicRoomIds = const {};
       _voicePlayback = const VoicePlaybackSnapshot();
-      _lastMarkedReadMessageIds.clear();
     });
     unawaited(_voicePlaybackService.stop());
     unawaited(_loadServers());
