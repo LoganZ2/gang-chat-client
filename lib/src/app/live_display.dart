@@ -357,6 +357,19 @@ String liveScreenShareStageLabel(String displayName) {
   return displayName.isEmpty ? '屏幕共享' : '$displayName 的屏幕';
 }
 
+List<UserSummary> liveScreenShareViewers(
+  LiveState? live,
+  String broadcasterUserId,
+) {
+  final participant = liveParticipantByUserId(live, broadcasterUserId);
+  if (participant == null || !participant.screenSharing) {
+    return const <UserSummary>[];
+  }
+  return participant.screenViewers
+      .where((viewer) => viewer.id != broadcasterUserId)
+      .toList(growable: false);
+}
+
 LiveMicControlState liveMicControlState({
   required bool micMuted,
   required bool voiceBlocked,

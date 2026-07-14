@@ -1829,6 +1829,7 @@ class LiveParticipant {
     required this.voiceBlocked,
     required this.cameraOn,
     required this.screenSharing,
+    this.screenViewers = const <UserSummary>[],
     required this.connectionState,
   });
 
@@ -1853,6 +1854,7 @@ class LiveParticipant {
   final bool voiceBlocked;
   final bool cameraOn;
   final bool screenSharing;
+  final List<UserSummary> screenViewers;
 
   final String connectionState;
 
@@ -1868,6 +1870,7 @@ class LiveParticipant {
     bool? voiceBlocked,
     bool? cameraOn,
     bool? screenSharing,
+    List<UserSummary>? screenViewers,
     String? connectionState,
   }) {
     return LiveParticipant(
@@ -1882,6 +1885,7 @@ class LiveParticipant {
       voiceBlocked: voiceBlocked ?? this.voiceBlocked,
       cameraOn: cameraOn ?? this.cameraOn,
       screenSharing: screenSharing ?? this.screenSharing,
+      screenViewers: screenViewers ?? this.screenViewers,
       connectionState: connectionState ?? this.connectionState,
     );
   }
@@ -1916,6 +1920,9 @@ class LiveParticipant {
       voiceBlocked: json['voice_blocked'] as bool? ?? false,
       cameraOn: json['camera_on']! as bool,
       screenSharing: json['screen_sharing']! as bool,
+      screenViewers: _listOfMaps(
+        json['screen_viewers'],
+      ).map(UserSummary.fromJson).toList(growable: false),
       connectionState: json['connection_state']! as String,
     );
   }

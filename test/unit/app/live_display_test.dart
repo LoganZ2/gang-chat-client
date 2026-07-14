@@ -190,6 +190,32 @@ void main() {
     );
   });
 
+  test(
+    'screen share viewers require an active share and exclude broadcaster',
+    () {
+      final broadcaster = _participant(
+        'alice',
+        screenSharing: true,
+        screenViewers: [_user('alice'), _user('bob')],
+      );
+      final live = _liveWithParticipants([broadcaster]);
+
+      expect(liveScreenShareViewers(live, 'alice').map((user) => user.id), [
+        'bob',
+      ]);
+      expect(liveScreenShareViewers(live, 'missing'), isEmpty);
+      expect(
+        liveScreenShareViewers(
+          _liveWithParticipants([
+            _participant('alice', screenViewers: [_user('bob')]),
+          ]),
+          'alice',
+        ),
+        isEmpty,
+      );
+    },
+  );
+
   test('live notices and failure messages stay outside UI', () {
     expect(liveForciblyRemovedNotice(), '你已被移出语音');
     expect(liveVoiceConnectFailureMessage('network'), '无法连接语音：network');
@@ -635,6 +661,7 @@ LiveParticipant _participant(
   bool voiceBlocked = false,
   bool cameraOn = false,
   bool screenSharing = false,
+  List<UserSummary> screenViewers = const <UserSummary>[],
   String connectionState = 'connected',
   String? roomDisplayName,
 }) {
@@ -654,7 +681,18 @@ LiveParticipant _participant(
     voiceBlocked: voiceBlocked,
     cameraOn: cameraOn,
     screenSharing: screenSharing,
+    screenViewers: screenViewers,
     connectionState: connectionState,
+  );
+}
+
+UserSummary _user(String id) {
+  return UserSummary(
+    id: id,
+    username: 'user_$id',
+    displayName: 'User $id',
+    avatarUrl: null,
+    defaultAvatarKey: 'blue-3',
   );
 }
 

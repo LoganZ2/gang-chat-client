@@ -207,6 +207,16 @@ class LiveController {
     return api.updateMyLiveState(roomId: roomId, connectionState: 'left');
   }
 
+  Future<void> updateMyLiveScreenView({
+    required String roomId,
+    String? broadcasterUserId,
+  }) {
+    return api.updateMyLiveScreenView(
+      roomId: roomId,
+      broadcasterUserId: broadcasterUserId,
+    );
+  }
+
   Future<void> kickParticipant({
     required String roomId,
     required String userId,

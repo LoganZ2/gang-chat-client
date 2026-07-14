@@ -182,6 +182,7 @@ class _HomeShellState extends State<HomeShell> {
   // message id and each tile can pick the transfer that applies to it.
   Map<String, FileTransferState> _fileDownloads = const {};
   final Map<String, LiveStageSelection?> _liveStageSelections = {};
+  Future<void> _liveScreenViewSyncTail = Future<void>.value();
   LiveVideoTrack? _fullScreenLiveTrack;
   bool _loadingRoom = false;
   String? _roomError;
@@ -669,6 +670,12 @@ class _HomeShellState extends State<HomeShell> {
                         child: LiveFullScreenStage(
                           track: fullScreenTrack,
                           label: liveStageTrackLabel(_live, fullScreenTrack),
+                          screenShareViewers: fullScreenTrack.isScreenShare
+                              ? live_display.liveScreenShareViewers(
+                                  _live,
+                                  fullScreenTrack.identity,
+                                )
+                              : const <UserSummary>[],
                           screenShareVolume:
                               _liveSessionController.screenShareVolume,
                           onScreenShareVolumeChanged: _changeScreenShareVolume,

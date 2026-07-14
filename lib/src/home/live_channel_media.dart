@@ -26,6 +26,7 @@ class _LiveMediaStage extends StatelessWidget {
   const _LiveMediaStage({
     required this.track,
     required this.label,
+    required this.screenShareViewers,
     required this.screenShareVolume,
     required this.onExit,
     required this.onFullScreen,
@@ -35,6 +36,7 @@ class _LiveMediaStage extends StatelessWidget {
 
   final LiveVideoTrack track;
   final String label;
+  final List<UserSummary> screenShareViewers;
   final double screenShareVolume;
   final VoidCallback onExit;
   final VoidCallback onFullScreen;
@@ -61,6 +63,12 @@ class _LiveMediaStage extends StatelessWidget {
                   : _LiveMediaKind.camera,
             ),
           ),
+          if (track.isScreenShare && screenShareViewers.isNotEmpty)
+            Positioned(
+              left: 8,
+              bottom: 8,
+              child: _ScreenShareViewerPreview(viewers: screenShareViewers),
+            ),
           Positioned(
             top: 8,
             right: 8,
@@ -149,6 +157,7 @@ class LiveFullScreenStage extends StatefulWidget {
     super.key,
     required this.track,
     required this.label,
+    this.screenShareViewers = const <UserSummary>[],
     required this.screenShareVolume,
     required this.onScreenShareVolumeChanged,
     required this.onScreenShareMuteToggled,
@@ -157,6 +166,7 @@ class LiveFullScreenStage extends StatefulWidget {
 
   final LiveVideoTrack track;
   final String label;
+  final List<UserSummary> screenShareViewers;
   final double screenShareVolume;
   final ValueChanged<double> onScreenShareVolumeChanged;
   final VoidCallback onScreenShareMuteToggled;
@@ -206,13 +216,32 @@ class _LiveFullScreenStageState extends State<LiveFullScreenStage> {
             Positioned(
               left: 14,
               top: 14,
-              child: _LiveStageBadge(
-                label: widget.label,
-                kind: widget.track.isScreenShare
-                    ? _LiveMediaKind.screenShare
-                    : _LiveMediaKind.camera,
+              child: _FullScreenHoverReveal(
+                key: const ValueKey<String>(
+                  'live-fullscreen-stage:label-reveal',
+                ),
+                child: _LiveStageBadge(
+                  label: widget.label,
+                  kind: widget.track.isScreenShare
+                      ? _LiveMediaKind.screenShare
+                      : _LiveMediaKind.camera,
+                ),
               ),
             ),
+            if (widget.track.isScreenShare &&
+                widget.screenShareViewers.isNotEmpty)
+              Positioned(
+                left: 14,
+                bottom: 14,
+                child: _FullScreenHoverReveal(
+                  key: const ValueKey<String>(
+                    'live-fullscreen-stage:screen-viewers-reveal',
+                  ),
+                  child: _ScreenShareViewerPreview(
+                    viewers: widget.screenShareViewers,
+                  ),
+                ),
+              ),
             Positioned(
               top: 14,
               right: 14,
@@ -350,6 +379,107 @@ class _LiveStageBadge extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ScreenShareViewerPreview extends StatelessWidget {
+  const _ScreenShareViewerPreview({required this.viewers});
+
+  final List<UserSummary> viewers;
+
+  @override
+  Widget build(BuildContext context) {
+    const avatarSize = 24.0;
+    const overlap = 8.0;
+    final config = AppConfigScope.of(context);
+    final visibleViewers = viewers.take(5).toList(growable: false);
+    final avatarWidth =
+        avatarSize + (visibleViewers.length - 1) * (avatarSize - overlap);
+    return DecoratedBox(
+      key: const ValueKey<String>('live-stage:screen-viewers'),
+      decoration: BoxDecoration(
+        color: UiColors.surface.withValues(alpha: 0.9),
+        border: Border.all(color: UiColors.border),
+        borderRadius: BorderRadius.circular(UiRadii.md),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.visibility,
+              key: ValueKey<String>('live-stage:screen-viewers-icon'),
+              color: UiColors.accent,
+              size: 17,
+            ),
+            const SizedBox(width: 7),
+            SizedBox(
+              width: avatarWidth,
+              height: avatarSize,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  for (var index = 0; index < visibleViewers.length; index += 1)
+                    Positioned(
+                      left: index * (avatarSize - overlap),
+                      child: Avatar(
+                        label: live_display.liveUserDisplayName(
+                          visibleViewers[index],
+                          fallback: visibleViewers[index].id,
+                        ),
+                        imageUrl: config.resolveAssetUrl(
+                          visibleViewers[index].avatarUrl,
+                        ),
+                        defaultAvatarKey:
+                            visibleViewers[index].defaultAvatarKey,
+                        size: avatarSize,
+                        active: true,
+                        activeBorderWidth: 1,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 7),
+            Text(
+              '共 ${viewers.length} 人',
+              style: UiTypography.label.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FullScreenHoverReveal extends StatefulWidget {
+  const _FullScreenHoverReveal({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<_FullScreenHoverReveal> createState() => _FullScreenHoverRevealState();
+}
+
+class _FullScreenHoverRevealState extends State<_FullScreenHoverReveal> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedOpacity(
+        opacity: _hovered ? 1 : 0.58,
+        duration: const Duration(milliseconds: 140),
+        child: widget.child,
       ),
     );
   }

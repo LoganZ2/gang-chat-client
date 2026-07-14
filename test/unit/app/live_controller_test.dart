@@ -109,6 +109,23 @@ void main() {
     expect(isBenignGoneLiveStatePatch(StateError('boom')), isFalse);
   });
 
+  test(
+    'live participant JSON keeps screen viewers optional and decodes them',
+    () {
+      final legacy = LiveParticipant.fromJson(
+        _participantJson(user: _userJson('alice')),
+      );
+      final withViewer = LiveParticipant.fromJson({
+        ..._participantJson(user: _userJson('alice')),
+        'screen_sharing': true,
+        'screen_viewers': [_userJson('bob')],
+      });
+
+      expect(legacy.screenViewers, isEmpty);
+      expect(withViewer.screenViewers.map((user) => user.id), ['bob']);
+    },
+  );
+
   test('join state patches keep LiveKit side effects out of UI flags', () {
     final api = GangApiClient(
       baseUrl: 'http://example.test/api/v1',
@@ -318,6 +335,42 @@ void main() {
     expect(body, {'connection_state': 'left'});
     expect(participant.connectionState, 'left');
   });
+
+  test(
+    'updateMyLiveScreenView sends the watched broadcaster or clears it',
+    () async {
+      final bodies = <Map<String, Object?>>[];
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          expect(request.method, 'PATCH');
+          expect(request.url.path, '/api/v1/rooms/room_1/live/me/screen-view');
+          bodies.add(
+            jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>,
+          );
+          return http.Response(
+            jsonEncode({'broadcaster_user_id': null}),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }),
+      );
+      addTearDown(api.close);
+      final controller = LiveController(api: api);
+
+      await controller.updateMyLiveScreenView(
+        roomId: 'room_1',
+        broadcasterUserId: 'alice',
+      );
+      await controller.updateMyLiveScreenView(roomId: 'room_1');
+
+      expect(bodies, [
+        {'broadcaster_user_id': 'alice'},
+        {'broadcaster_user_id': ''},
+      ]);
+    },
+  );
 
   test('kickParticipant uses live moderation kick action', () async {
     Map<String, Object?>? body;

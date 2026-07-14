@@ -45,6 +45,51 @@ extension _HomeShellLiveActions on _HomeShellState {
       _liveSessionController.setWatchedScreenShareIdentity(screenShareIdentity),
     );
     unawaited(_liveSessionController.setWatchedCameraIdentity(cameraIdentity));
+
+    final roomId = _joinedLiveRoomId;
+    if (roomId == null) return;
+    final previousSync = _liveScreenViewSyncTail;
+    _liveScreenViewSyncTail = () async {
+      try {
+        await previousSync;
+      } catch (_) {}
+      if (!mounted || _joinedLiveRoomId != roomId) return;
+      bool isStillCurrentTarget() {
+        final currentSelection = _liveStageSelections[roomId];
+        final currentIdentity =
+            currentSelection?.mode == LiveStageSelectionMode.track &&
+                currentSelection?.isScreenShare == true &&
+                currentSelection?.identity != _currentUser.id
+            ? currentSelection?.identity
+            : null;
+        return currentIdentity == screenShareIdentity;
+      }
+
+      for (var attempt = 0; attempt < 3; attempt += 1) {
+        if (!mounted ||
+            _joinedLiveRoomId != roomId ||
+            !isStillCurrentTarget()) {
+          return;
+        }
+        try {
+          await _liveController.updateMyLiveScreenView(
+            roomId: roomId,
+            broadcasterUserId: screenShareIdentity,
+          );
+          return;
+        } catch (error) {
+          final shouldRetry =
+              screenShareIdentity != null &&
+              error is ApiException &&
+              error.code == 'screen_share_not_active' &&
+              attempt < 2;
+          if (!shouldRetry) return;
+          await Future<void>.delayed(
+            Duration(milliseconds: 120 * (attempt + 1)),
+          );
+        }
+      }
+    }();
   }
 
   Future<void> _setSystemFullScreen(bool fullScreen) async {

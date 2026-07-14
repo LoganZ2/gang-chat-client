@@ -846,6 +846,7 @@ void main() {
         id: 'live_phabe',
         user: _user('phabe', 'Phabe', roomRole: 'member'),
         screenSharing: true,
+        screenViewers: [_currentUser.toSummary()],
       ),
     ]);
 
@@ -887,6 +888,14 @@ void main() {
     final buttonRect = tester.getRect(muteButton);
     expect(buttonRect.right, closeTo(rendererRect.right - 8, 0.01));
     expect(buttonRect.bottom, closeTo(rendererRect.bottom - 8, 0.01));
+    final viewerPreview = find.byKey(
+      const ValueKey<String>('live-stage:screen-viewers'),
+    );
+    expect(viewerPreview, findsOneWidget);
+    expect(find.text('共 1 人'), findsOneWidget);
+    final viewerPreviewRect = tester.getRect(viewerPreview);
+    expect(viewerPreviewRect.left, closeTo(rendererRect.left + 8, 0.01));
+    expect(viewerPreviewRect.bottom, closeTo(rendererRect.bottom - 8, 0.01));
 
     final hover = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await hover.addPointer(location: tester.getCenter(muteButton));
@@ -964,6 +973,10 @@ void main() {
       find.byKey(const ValueKey<String>('live-stage:screen-share-volume')),
       findsNothing,
     );
+    expect(
+      find.byKey(const ValueKey<String>('live-stage:screen-viewers')),
+      findsNothing,
+    );
 
     final rendererRect = tester.getRect(
       find.byKey(
@@ -991,6 +1004,7 @@ void main() {
             isLocal: false,
           ),
           label: 'Phabe 的屏幕共享',
+          screenShareViewers: [_currentUser.toSummary()],
           screenShareVolume: 0.75,
           onScreenShareVolumeChanged: (_) {},
           onScreenShareMuteToggled: () {},
@@ -1000,11 +1014,37 @@ void main() {
     );
     await tester.pump();
 
+    final labelReveal = find.byKey(
+      const ValueKey<String>('live-fullscreen-stage:label-reveal'),
+    );
+    final viewersReveal = find.byKey(
+      const ValueKey<String>('live-fullscreen-stage:screen-viewers-reveal'),
+    );
+    AnimatedOpacity revealOpacity(Finder reveal) {
+      return tester.widget<AnimatedOpacity>(
+        find.descendant(of: reveal, matching: find.byType(AnimatedOpacity)),
+      );
+    }
+
+    expect(labelReveal, findsOneWidget);
+    expect(viewersReveal, findsOneWidget);
+    expect(revealOpacity(labelReveal).opacity, 0.58);
+    expect(revealOpacity(viewersReveal).opacity, 0.58);
+
+    final hover = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await hover.addPointer(location: tester.getCenter(labelReveal));
+    await tester.pump(const Duration(milliseconds: 160));
+    expect(revealOpacity(labelReveal).opacity, 1);
+    await hover.moveTo(tester.getCenter(viewersReveal));
+    await tester.pump(const Duration(milliseconds: 160));
+    expect(revealOpacity(viewersReveal).opacity, 1);
+
     await tester.sendKeyDownEvent(LogicalKeyboardKey.escape);
     await tester.pump();
     await tester.sendKeyUpEvent(LogicalKeyboardKey.escape);
 
     expect(exitCount, 1);
+    await hover.removePointer();
   });
 
   testWidgets('live member names use self and room role colors', (
@@ -1366,6 +1406,7 @@ LiveParticipant _participant({
   bool voiceBlocked = false,
   bool cameraOn = false,
   bool screenSharing = false,
+  List<UserSummary> screenViewers = const <UserSummary>[],
   String connectionState = 'connected',
 }) {
   return LiveParticipant(
@@ -1380,6 +1421,7 @@ LiveParticipant _participant({
     voiceBlocked: voiceBlocked,
     cameraOn: cameraOn,
     screenSharing: screenSharing,
+    screenViewers: screenViewers,
     connectionState: connectionState,
   );
 }

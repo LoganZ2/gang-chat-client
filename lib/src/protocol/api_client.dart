@@ -433,6 +433,11 @@ abstract interface class GangApi {
     String? connectionState,
   });
 
+  Future<void> updateMyLiveScreenView({
+    required String roomId,
+    String? broadcasterUserId,
+  });
+
   /// Issues a publish-only LiveKit token for the caller's hidden screen-audio
   /// aux participant (identity `<userId>--screen-audio`). Fetched on demand when
   /// the user starts screen-share-with-audio, so the token is always fresh
@@ -1808,6 +1813,20 @@ class GangApiClient implements GangApi {
     return LiveParticipant.fromJson(
       decoded['participant']! as Map<String, Object?>,
     );
+  }
+
+  @override
+  Future<void> updateMyLiveScreenView({
+    required String roomId,
+    String? broadcasterUserId,
+  }) async {
+    await _sendJson((token) {
+      return _httpClient.patch(
+        _uri('/rooms/$roomId/live/me/screen-view'),
+        headers: _headers(token),
+        body: encodeJsonBody({'broadcaster_user_id': broadcasterUserId ?? ''}),
+      );
+    });
   }
 
   @override

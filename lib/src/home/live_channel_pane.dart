@@ -306,6 +306,12 @@ class _LiveChannelPaneState extends State<LiveChannelPane> {
                                     widget.live,
                                     stageTrack,
                                   ),
+                                  screenShareViewers: stageTrack.isScreenShare
+                                      ? live_display.liveScreenShareViewers(
+                                          widget.live,
+                                          stageTrack.identity,
+                                        )
+                                      : const <UserSummary>[],
                                   screenShareVolume: widget.screenShareVolume,
                                   onExit: _exitStage,
                                   onFullScreen: () =>
