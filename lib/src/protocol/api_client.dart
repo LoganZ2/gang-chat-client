@@ -355,6 +355,8 @@ abstract interface class GangApi {
     String type = 'text',
     List<MessageAttachment> attachments = const [],
     List<Map<String, Object?>> mentions = const [],
+    String? quoteMessageId,
+    List<String> quoteMessageIds = const [],
     String? idempotencyKey,
   });
 
@@ -1588,6 +1590,8 @@ class GangApiClient implements GangApi {
     String type = 'text',
     List<MessageAttachment> attachments = const [],
     List<Map<String, Object?>> mentions = const [],
+    String? quoteMessageId,
+    List<String> quoteMessageIds = const [],
     String? idempotencyKey,
   }) async {
     final requestIdempotencyKey = idempotencyKey ?? newUuid();
@@ -1604,6 +1608,13 @@ class GangApiClient implements GangApi {
       }
       if (mentions.isNotEmpty) {
         requestBody['mentions'] = mentions;
+      }
+      if (quoteMessageId != null && quoteMessageId.isNotEmpty) {
+        requestBody['quote_message_id'] = quoteMessageId;
+      }
+      if (quoteMessageIds.isNotEmpty) {
+        requestBody['quote_message_ids'] = quoteMessageIds;
+        requestBody['quote_message_id'] = quoteMessageIds.first;
       }
       return _httpClient.post(
         _uri('/rooms/$roomId/messages'),

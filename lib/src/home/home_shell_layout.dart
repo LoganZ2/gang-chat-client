@@ -284,6 +284,8 @@ extension _HomeShellLayout on _HomeShellState {
       stickerPanel: _stickerPanelState,
       voiceState: _voiceState,
       composerAttachments: _stagedAttachmentViews,
+      composerQuotes: _selectedComposerQuotes,
+      onRemoveComposerQuote: _removeSelectedComposerQuote,
       fileActionHighlighted:
           _pickingAttachments || _stagedAttachments.isNotEmpty,
       mentionOptions: _composerMentionOptions,

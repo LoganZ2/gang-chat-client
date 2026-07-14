@@ -46,6 +46,18 @@ void main() {
     'sendComposedMessage publishes a local pending message before sending',
     () async {
       String? pendingClientId;
+      final firstQuote = MessageQuote(
+        messageId: 'source_1',
+        senderDisplayName: '房内 Alice',
+        body: 'source body',
+        createdAt: DateTime.utc(2026, 7, 14, 8, 12),
+      );
+      final secondQuote = MessageQuote(
+        messageId: 'source_2',
+        senderDisplayName: '房内 Bob',
+        body: 'second source',
+        createdAt: DateTime.utc(2026, 7, 14, 8, 13),
+      );
       final api = GangApiClient(
         baseUrl: 'http://example.test/api/v1',
         accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
@@ -55,14 +67,31 @@ void main() {
           final body = jsonDecode(utf8.decode(request.bodyBytes));
           expect(body['client_message_id'], pendingClientId);
           expect(body['body'], 'hello');
-          return http.Response(
-            jsonEncode({
-              'message': _messageJson(
-                clientMessageId: body['client_message_id']! as String,
-                body: 'hello',
-              ),
-            }),
+          expect(body['quote_message_id'], 'source_1');
+          expect(body['quote_message_ids'], ['source_1', 'source_2']);
+          final message = _messageJson(
+            clientMessageId: body['client_message_id']! as String,
+            body: 'hello',
+          );
+          message['quote'] = {
+            'message_id': 'source_1',
+            'sender_display_name': '房内 Alice',
+            'body': 'source body',
+            'created_at': '2026-07-14T08:12:00Z',
+          };
+          message['quotes'] = [
+            message['quote'],
+            {
+              'message_id': 'source_2',
+              'sender_display_name': '房内 Bob',
+              'body': 'second source',
+              'created_at': '2026-07-14T08:13:00Z',
+            },
+          ];
+          return http.Response.bytes(
+            utf8.encode(jsonEncode({'message': message})),
             201,
+            headers: const {'content-type': 'application/json; charset=utf-8'},
           );
         }),
       );
@@ -73,16 +102,23 @@ void main() {
         roomId: 'room_1',
         sender: _sender,
         body: 'hello',
+        quotes: [firstQuote, secondQuote],
         onPending: (pending) {
           pendingClientId = pending.clientMessageId;
           pendingBodies.add(pending.local.body);
           expect(pending.local.pending, isTrue);
+          expect(pending.local.effectiveQuotes, [firstQuote, secondQuote]);
         },
       );
 
       expect(pendingBodies, ['hello']);
       expect(sent.clientMessageId, pendingClientId);
       expect(sent.pending, isFalse);
+      expect(sent.quote?.senderDisplayName, '房内 Alice');
+      expect(sent.effectiveQuotes.map((quote) => quote.messageId), [
+        'source_1',
+        'source_2',
+      ]);
     },
   );
 

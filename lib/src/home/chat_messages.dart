@@ -90,9 +90,12 @@ class ChatVoicePlaybackActions {
 class ChatMessageActions {
   const ChatMessageActions({
     required this.onCopy,
+    this.onQuote = _syncNoop,
+    this.onOpenQuote = _noopQuote,
     required this.onDeleteForMe,
     required this.onRecall,
     required this.canRecall,
+    this.canQuote = _neverCanRecall,
     this.onReeditRecalledText = _syncNoop,
     this.canReeditRecalledText = _neverCanRecall,
     this.canInspectRecalledText = _neverCanRecall,
@@ -100,23 +103,34 @@ class ChatMessageActions {
 
   const ChatMessageActions.disabled()
     : onCopy = _noop,
+      onQuote = _syncNoop,
+      onOpenQuote = _noopQuote,
       onDeleteForMe = _noop,
       onRecall = _noop,
       canRecall = _neverCanRecall,
+      canQuote = _neverCanRecall,
       onReeditRecalledText = _syncNoop,
       canReeditRecalledText = _neverCanRecall,
       canInspectRecalledText = _neverCanRecall;
 
   final Future<void> Function(BuildContext context, Message message) onCopy;
+  final void Function(Message message) onQuote;
+  final Future<void> Function(BuildContext context, MessageQuote quote)
+  onOpenQuote;
   final Future<void> Function(BuildContext context, Message message)
   onDeleteForMe;
   final Future<void> Function(BuildContext context, Message message) onRecall;
   final bool Function(Message message) canRecall;
+  final bool Function(Message message) canQuote;
   final void Function(Message message) onReeditRecalledText;
   final bool Function(Message message) canReeditRecalledText;
   final bool Function(Message message) canInspectRecalledText;
 
   static Future<void> _noop(BuildContext context, Message message) async {}
+  static Future<void> _noopQuote(
+    BuildContext context,
+    MessageQuote quote,
+  ) async {}
   static void _syncNoop(Message message) {}
 
   static bool _neverCanRecall(Message message) => false;
@@ -1758,6 +1772,7 @@ Future<void> _showChatMessageContextMenu({
     message: message,
     actions: actions,
     includeCopy: true,
+    includeQuote: true,
     includeDelete: true,
     includeRecall: !message.isRemoved,
   );
@@ -1769,17 +1784,24 @@ List<UiContextMenuSection> _messageContextMenuSections({
   required Message message,
   required ChatMessageActions actions,
   bool includeCopy = true,
+  bool includeQuote = true,
   bool includeDelete = true,
   bool includeRecall = true,
 }) {
   return [
-    if (includeCopy)
+    if (includeCopy || (includeQuote && actions.canQuote(message)))
       UiContextMenuSection([
-        UiContextMenuItem(
-          label: '复制',
-          shortcut: 'Ctrl+C',
-          onPressed: () => unawaited(actions.onCopy(context, message)),
-        ),
+        if (includeCopy)
+          UiContextMenuItem(
+            label: '复制',
+            shortcut: 'Ctrl+C',
+            onPressed: () => unawaited(actions.onCopy(context, message)),
+          ),
+        if (includeQuote && actions.canQuote(message))
+          UiContextMenuItem(
+            label: '引用',
+            onPressed: () => actions.onQuote(message),
+          ),
       ]),
     if (includeRecall && actions.canRecall(message))
       UiContextMenuSection([
@@ -2313,6 +2335,7 @@ class ChatMessageContent extends StatelessWidget {
     this.profileActionBuilder,
     this.isUserInLive,
     this.onSelectionActiveChanged,
+    this.onOpenQuote,
   });
 
   final Message message;
@@ -2334,15 +2357,28 @@ class ChatMessageContent extends StatelessWidget {
   final UserProfileActionBuilder? profileActionBuilder;
   final bool Function(String userId)? isUserInLive;
   final ValueChanged<bool>? onSelectionActiveChanged;
+  final Future<void> Function(BuildContext context, MessageQuote quote)?
+  onOpenQuote;
 
   @override
   Widget build(BuildContext context) {
     final contentKind = message_display.messageContentKind(message);
     final status = message_display.messageDeliveryStatusText(message);
+    final quotes = message.effectiveQuotes;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        for (var index = 0; index < quotes.length; index++) ...[
+          _MessageQuoteCard(
+            quote: quotes[index],
+            imagePreviewActions: imagePreviewActions,
+            onTap: onOpenQuote == null
+                ? null
+                : () => unawaited(onOpenQuote!(context, quotes[index])),
+          ),
+          SizedBox(height: index == quotes.length - 1 ? 8 : 6),
+        ],
         switch (contentKind) {
           message_display.MessageContentKind.sticker => _StickerBody(
             message: message,
@@ -2542,6 +2578,7 @@ class _MessageBubbleState extends State<_MessageBubble> {
               profileActionBuilder: widget.profileActionBuilder,
               isUserInLive: widget.isUserInLive,
               onSelectionActiveChanged: _handleTextSelectionActiveChanged,
+              onOpenQuote: widget.messageActions.onOpenQuote,
             ),
           ),
         ),
@@ -2598,6 +2635,197 @@ class _MessageBubbleState extends State<_MessageBubble> {
   void _setContextMenuActive(bool active) {
     if (!mounted || _contextMenuActive == active) return;
     setState(() => _contextMenuActive = active);
+  }
+}
+
+class _MessageQuoteCard extends StatelessWidget {
+  const _MessageQuoteCard({
+    required this.quote,
+    this.onTap,
+    this.onClose,
+    this.compact = false,
+    this.imagePreviewActions,
+  });
+
+  final MessageQuote quote;
+  final VoidCallback? onTap;
+  final VoidCallback? onClose;
+  final bool compact;
+  final ChatImagePreviewActions? imagePreviewActions;
+
+  @override
+  Widget build(BuildContext context) {
+    final body = quote.body.trim().isEmpty ? '[消息]' : quote.body.trim();
+    final hasThumbnail = quote.previewAttachment?.asset != null;
+    final card = Container(
+      key: ValueKey('message-quote-${quote.messageId}'),
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(10, compact ? 7 : 8, 6, compact ? 7 : 8),
+      decoration: BoxDecoration(
+        color: UiColors.surfaceLow,
+        borderRadius: BorderRadius.circular(UiRadii.md),
+        border: Border.all(color: UiColors.border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 3,
+            height: compact ? 36 : 40,
+            decoration: BoxDecoration(
+              color: UiColors.textMuted,
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${quote.senderDisplayName}  ${message_display.formatMessageTime(quote.createdAt)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: UiTypography.label.copyWith(
+                    color: UiColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                if (hasThumbnail)
+                  _MessageQuoteThumbnail(
+                    quote: quote,
+                    actions: imagePreviewActions,
+                    compact: compact,
+                    fallbackText: body,
+                  )
+                else
+                  Text(
+                    body,
+                    maxLines: compact ? 1 : 4,
+                    overflow: TextOverflow.ellipsis,
+                    style: UiTypography.body.copyWith(
+                      color: UiColors.text,
+                      fontSize: 12,
+                      height: 1.35,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (onClose != null) ...[
+            const SizedBox(width: 6),
+            IconButton(
+              key: ValueKey('composer-quote-close-${quote.messageId}'),
+              onPressed: onClose,
+              icon: const Icon(Icons.close),
+              iconSize: 16,
+              color: UiColors.textMuted,
+              tooltip: '取消引用',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              splashRadius: 16,
+            ),
+          ],
+        ],
+      ),
+    );
+    if (onTap == null) return card;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: card,
+      ),
+    );
+  }
+}
+
+class _MessageQuoteThumbnail extends StatelessWidget {
+  const _MessageQuoteThumbnail({
+    required this.quote,
+    required this.actions,
+    required this.compact,
+    required this.fallbackText,
+  });
+
+  final MessageQuote quote;
+  final ChatImagePreviewActions? actions;
+  final bool compact;
+  final String fallbackText;
+
+  @override
+  Widget build(BuildContext context) {
+    final attachment = quote.previewAttachment;
+    final asset = attachment?.asset;
+    if (attachment == null || asset == null) return const SizedBox.shrink();
+    final config = AppConfigScope.of(context);
+    final thumbnailUrl = config.resolveAssetUrl(
+      asset.thumbnailUrl ?? asset.url,
+    );
+    final fullUrl = config.resolveAssetUrl(asset.url);
+    if (thumbnailUrl == null || thumbnailUrl.isEmpty) {
+      return Text(
+        fallbackText,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: UiTypography.body.copyWith(color: UiColors.text, fontSize: 12),
+      );
+    }
+    final isSticker = attachment.type == 'sticker';
+    final title = isSticker
+        ? message_display.stickerPreviewFilename(attachment)
+        : file_display.fileAttachmentTitle(attachment);
+    final dimension = compact ? 44.0 : 64.0;
+    final image = ClipRRect(
+      borderRadius: BorderRadius.circular(UiRadii.sm),
+      child: CachedAssetImage(
+        url: thumbnailUrl,
+        filename: asset.filename ?? title,
+        mimeType: asset.mimeType,
+        expectedBytes: asset.sizeBytes,
+        cache: actions?.mediaCache,
+        width: dimension,
+        height: dimension,
+        fit: isSticker ? BoxFit.contain : BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => SizedBox(
+          width: compact ? 120 : 180,
+          child: Text(
+            fallbackText,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: UiTypography.body.copyWith(
+              color: UiColors.text,
+              fontSize: 12,
+            ),
+          ),
+        ),
+      ),
+    );
+    final previewActions = actions;
+    final previewUrl = fullUrl == null || fullUrl.isEmpty
+        ? thumbnailUrl
+        : fullUrl;
+    if (previewActions == null) return image;
+    return Tooltip(
+      message: '查看预览',
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          key: ValueKey('message-quote-thumbnail-${quote.messageId}'),
+          behavior: HitTestBehavior.opaque,
+          onTap: () => showChatImagePreview(
+            context,
+            imageUrl: previewUrl,
+            suggestedName: title,
+            actions: previewActions,
+          ),
+          child: image,
+        ),
+      ),
+    );
   }
 }
 
@@ -3237,6 +3465,7 @@ Future<void> _showStickerContextMenu({
       message: message,
       actions: messageActions,
       includeCopy: true,
+      includeQuote: true,
       includeDelete: false,
       includeRecall: false,
     ),
@@ -3247,6 +3476,7 @@ Future<void> _showStickerContextMenu({
       message: message,
       actions: messageActions,
       includeCopy: false,
+      includeQuote: false,
       includeDelete: false,
       includeRecall: true,
     ),
@@ -3255,6 +3485,7 @@ Future<void> _showStickerContextMenu({
       message: message,
       actions: messageActions,
       includeCopy: false,
+      includeQuote: false,
       includeDelete: true,
       includeRecall: false,
     ),

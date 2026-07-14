@@ -24,6 +24,9 @@ class _ComposerDock extends StatelessWidget {
     required this.stickerPanel,
     required this.voiceState,
     required this.attachments,
+    required this.quotes,
+    required this.onRemoveQuote,
+    required this.imagePreviewActions,
     required this.fileActionHighlighted,
     required this.mentionOptions,
     required this.mentionLoading,
@@ -56,6 +59,9 @@ class _ComposerDock extends StatelessWidget {
   final sticker_display.StickerPanelLoadState stickerPanel;
   final voice_display.VoiceRecorderState voiceState;
   final List<composer_attachment.ComposerAttachmentView> attachments;
+  final List<MessageQuote> quotes;
+  final ValueChanged<String>? onRemoveQuote;
+  final ChatImagePreviewActions imagePreviewActions;
   final bool fileActionHighlighted;
   final List<message_mentions.MessageMentionOption> mentionOptions;
   final bool mentionLoading;
@@ -125,6 +131,24 @@ class _ComposerDock extends StatelessWidget {
               inputFormatters: inputFormatters,
               onPasteFiles: onPasteFiles,
               onCanPasteFiles: onCanPasteFiles,
+              header: quotes.isEmpty
+                  ? null
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (var index = 0; index < quotes.length; index++) ...[
+                          if (index > 0) const SizedBox(height: 6),
+                          _MessageQuoteCard(
+                            quote: quotes[index],
+                            onClose: onRemoveQuote == null
+                                ? null
+                                : () => onRemoveQuote!(quotes[index].messageId),
+                            compact: true,
+                            imagePreviewActions: imagePreviewActions,
+                          ),
+                        ],
+                      ],
+                    ),
               attachments: attachments.isEmpty
                   ? null
                   : _ComposerAttachmentStrip(

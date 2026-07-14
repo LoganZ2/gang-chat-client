@@ -117,14 +117,19 @@ String? roomDraftPreviewText({
   required String? text,
   required String? attachmentFilename,
   required String? attachmentMimeType,
+  bool hasQuote = false,
 }) {
+  String? preview;
   if (attachmentFilename != null) {
-    return roomAttachmentDraftPreview(
+    preview = roomAttachmentDraftPreview(
       filename: attachmentFilename,
       mimeType: attachmentMimeType,
     );
+  } else {
+    preview = roomDraftPreview(text);
   }
-  return roomDraftPreview(text);
+  if (!hasQuote) return preview;
+  return preview == null ? '[引用]' : '[引用] $preview';
 }
 
 String _systemLastMessagePreview(LastMessagePreview last) {

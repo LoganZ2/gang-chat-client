@@ -73,6 +73,53 @@ extension _HomeShellMessages on _HomeShellState {
     _clearComposerMentionState();
   }
 
+  List<MessageQuote> get _selectedComposerQuotes {
+    final roomId = _selectedServerId;
+    return roomId == null ? const [] : _messageQuoteDrafts[roomId] ?? const [];
+  }
+
+  void _quoteChatMessage(Message message) {
+    if (!_canQuoteChatMessage(message)) return;
+    final current = _messageQuoteDrafts[message.roomId] ?? const [];
+    if (current.any((quote) => quote.messageId == message.id)) {
+      _composerPanelController.closePanel();
+      _composerPanelController.requestInputFocus();
+      return;
+    }
+    _setHomeState(() {
+      _messageQuoteDrafts = Map.unmodifiable({
+        ..._messageQuoteDrafts,
+        message.roomId: List.unmodifiable([
+          ...current,
+          message_display.messageQuoteSnapshot(message),
+        ]),
+      });
+      _saveDraftInState();
+      _sendError = null;
+    });
+    _composerPanelController.closePanel();
+    _composerPanelController.requestInputFocus();
+  }
+
+  void _removeSelectedComposerQuote(String messageId) {
+    final roomId = _selectedServerId;
+    if (roomId == null || !_messageQuoteDrafts.containsKey(roomId)) return;
+    _setHomeState(() {
+      final remaining = [
+        for (final quote in _messageQuoteDrafts[roomId] ?? const [])
+          if (quote.messageId != messageId) quote,
+      ];
+      final next = Map<String, List<MessageQuote>>.of(_messageQuoteDrafts);
+      if (remaining.isEmpty) {
+        next.remove(roomId);
+      } else {
+        next[roomId] = List.unmodifiable(remaining);
+      }
+      _messageQuoteDrafts = Map.unmodifiable(next);
+      _saveDraftInState();
+    });
+  }
+
   void _setComposerText(String text, {required bool saveDraft}) {
     final nextValue = TextEditingValue(
       text: text,
@@ -410,7 +457,9 @@ extension _HomeShellMessages on _HomeShellState {
     if (roomId == null) return;
     final draftText = text ?? _composerController.text;
     final hasAttachments = _stagedAttachments.isNotEmpty;
-    final hasVisibleDraft = draftText.trim().isNotEmpty || hasAttachments;
+    final hasQuote = (_messageQuoteDrafts[roomId] ?? const []).isNotEmpty;
+    final hasVisibleDraft =
+        draftText.trim().isNotEmpty || hasAttachments || hasQuote;
     final current = _messageDrafts[roomId];
     final currentAttachments = _stagedAttachmentDrafts[roomId] ?? const [];
     final sameText = current == draftText;
@@ -466,6 +515,11 @@ extension _HomeShellMessages on _HomeShellState {
       )..remove(roomId);
       _stagedAttachmentDrafts = Map.unmodifiable(next);
     }
+    if (_messageQuoteDrafts.containsKey(roomId)) {
+      final next = Map<String, List<MessageQuote>>.of(_messageQuoteDrafts)
+        ..remove(roomId);
+      _messageQuoteDrafts = Map.unmodifiable(next);
+    }
   }
 
   void _cancelAllDraftAttachments() {
@@ -492,6 +546,7 @@ extension _HomeShellMessages on _HomeShellState {
     final roomIds = <String>{
       ..._messageDrafts.keys,
       ..._stagedAttachmentDrafts.keys,
+      ..._messageQuoteDrafts.keys,
     };
     final previews = <String, String>{};
     for (final roomId in roomIds) {
@@ -508,19 +563,96 @@ extension _HomeShellMessages on _HomeShellState {
       text: _messageDrafts[roomId],
       attachmentFilename: attachment?.file.name,
       attachmentMimeType: attachment?.file.mimeType,
+      hasQuote: (_messageQuoteDrafts[roomId] ?? const []).isNotEmpty,
     );
   }
 
   ChatMessageActions get _chatMessageActions {
     return ChatMessageActions(
       onCopy: _copyChatMessage,
+      onQuote: _quoteChatMessage,
+      onOpenQuote: _openQuotedMessage,
       onDeleteForMe: _deleteMessageForMe,
       onRecall: _recallChatMessage,
       canRecall: _canRecallChatMessage,
+      canQuote: _canQuoteChatMessage,
       onReeditRecalledText: _reeditRecalledTextMessage,
       canReeditRecalledText: _canReeditRecalledTextMessage,
       canInspectRecalledText: _canInspectRecalledTextMessage,
     );
+  }
+
+  bool _canQuoteChatMessage(Message message) {
+    return !message.pending && !message.failed && !message.isRemoved;
+  }
+
+  Future<void> _openQuotedMessage(
+    BuildContext context,
+    MessageQuote quote,
+  ) async {
+    final roomId = _selectedServerId;
+    if (roomId == null ||
+        _locallyDeletedMessageKeys.contains(quote.messageId)) {
+      if (context.mounted) {
+        showFloatingErrorNotice(context, '原消息已被删除或撤回');
+      }
+      return;
+    }
+
+    Message? target = _messageById(_messages, quote.messageId);
+    if (target == null) {
+      try {
+        final loaded = await _messagesController.loadMessagesUntil(
+          roomId: roomId,
+          messageId: quote.messageId,
+        );
+        if (!mounted || _selectedServerId != roomId) return;
+        target = _messageById(loaded, quote.messageId);
+        if (target != null) {
+          _setHomeState(() => _messages = _mergeMessages(_messages, loaded));
+        }
+      } catch (error) {
+        if (context.mounted) {
+          showFloatingErrorNotice(context, '无法跳转到原消息：$error');
+        }
+        return;
+      }
+    }
+
+    if (target == null || target.isRemoved || _isMessageDeletedForMe(target)) {
+      if (context.mounted) {
+        showFloatingErrorNotice(context, '原消息已被删除或撤回');
+      }
+      return;
+    }
+    _setHomeState(() {
+      _settingsOpen = false;
+      _contentMode = _ContentMode.chat;
+      _focusedMessageId = quote.messageId;
+    });
+  }
+
+  Message? _messageById(List<Message> messages, String messageId) {
+    for (final message in messages) {
+      if (message.id == messageId) return message;
+    }
+    return null;
+  }
+
+  List<Message> _mergeMessages(List<Message> current, List<Message> loaded) {
+    final byId = <String, Message>{};
+    for (final message in loaded) {
+      byId[message.id] = message;
+    }
+    for (final message in current) {
+      byId[message.id] = message;
+    }
+    final merged = byId.values.toList(growable: false)
+      ..sort((a, b) {
+        final byTime = a.createdAt.compareTo(b.createdAt);
+        return byTime != 0 ? byTime : a.id.compareTo(b.id);
+      });
+    return merged;
   }
 
   List<Message> _visibleMessagesForMe(List<Message> messages) {
@@ -935,6 +1067,7 @@ extension _HomeShellMessages on _HomeShellState {
       return;
     }
 
+    final quotes = _messageQuoteDrafts[room.id] ?? const [];
     String? clientMessageId;
     _setHomeState(() {
       _sending = true;
@@ -961,6 +1094,7 @@ extension _HomeShellMessages on _HomeShellState {
                 confirmedLabels: confirmedMentionLabels,
               )
             : const [],
+        quotes: quotes,
         onPending: (pending) {
           clientMessageId = pending.clientMessageId;
           if (!mounted) return;
@@ -969,8 +1103,18 @@ extension _HomeShellMessages on _HomeShellState {
               messages: _messages,
               pending: pending,
             );
+            if (quotes.isNotEmpty) {
+              final next = Map<String, List<MessageQuote>>.of(
+                _messageQuoteDrafts,
+              )..remove(room.id);
+              _messageQuoteDrafts = Map.unmodifiable(next);
+            }
           });
-          if (clearComposer) _setComposerText('', saveDraft: true);
+          if (clearComposer) {
+            _setComposerText('', saveDraft: true);
+          } else if (quotes.isNotEmpty) {
+            _saveComposerDraftValue(_composerController.text);
+          }
         },
       );
       if (!mounted || _selectedServerId != room.id) return;
@@ -1192,6 +1336,7 @@ extension _HomeShellMessages on _HomeShellState {
     if (room == null || path == null || !_voiceState.canSend) return;
 
     final duration = _voiceState.elapsed;
+    final quotes = _messageQuoteDrafts[room.id] ?? const [];
 
     _setHomeState(
       () => _voiceState = voice_display.voiceSendStarted(_voiceState),
@@ -1228,6 +1373,7 @@ extension _HomeShellMessages on _HomeShellState {
         sizeBytes: bytes.length,
         mimeType: voice_display.kVoiceMessageMimeType,
         duration: duration,
+        quotes: quotes,
         readBytes: () async => bytes,
         onPending: (pending) {
           clientMessageId = pending.clientMessageId;
@@ -1242,6 +1388,13 @@ extension _HomeShellMessages on _HomeShellState {
             );
             // The clip now lives as a pending bubble; retract the recorder.
             _voiceState = voice_display.voiceSendSucceeded();
+            if (quotes.isNotEmpty) {
+              final next = Map<String, List<MessageQuote>>.of(
+                _messageQuoteDrafts,
+              )..remove(room.id);
+              _messageQuoteDrafts = Map.unmodifiable(next);
+              _saveDraftInState();
+            }
           });
           _composerPanelController.closePanel();
         },
@@ -1601,7 +1754,6 @@ extension _HomeShellMessages on _HomeShellState {
     // bubble and the _sending flag).
     _setHomeState(() {
       _stagedAttachments.clear();
-      _discardRoomDraftInState(room.id, cancelUploads: false);
     });
     await _sendComposed(
       body: body,

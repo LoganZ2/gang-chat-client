@@ -211,6 +211,61 @@ String messageCopyText(Message message) {
   return message.body.trimRight();
 }
 
+MessageQuote messageQuoteSnapshot(Message message) {
+  final roomName = message.sender.roomDisplayName?.trim();
+  final displayName = message.sender.displayName.trim();
+  final username = message.sender.username.trim();
+  return MessageQuote(
+    messageId: message.id,
+    senderDisplayName: roomName?.isNotEmpty == true
+        ? roomName!
+        : displayName.isNotEmpty
+        ? displayName
+        : username.isNotEmpty
+        ? username
+        : '用户',
+    body: messageQuoteBodySnapshot(message),
+    createdAt: message.createdAt,
+    previewAttachment: messageQuotePreviewAttachment(message),
+  );
+}
+
+MessageAttachment? messageQuotePreviewAttachment(Message message) {
+  final sticker = message.stickerAttachment;
+  if (sticker != null) return sticker;
+  for (final attachment in message.fileAttachments) {
+    if (isImageMimeType(attachment.asset?.mimeType)) return attachment;
+  }
+  return null;
+}
+
+String messageQuoteBodySnapshot(Message message) {
+  final text = messageCopyText(message).trim();
+  if (messageContentKind(message) == MessageContentKind.text &&
+      text.isNotEmpty) {
+    return text;
+  }
+  final voice = voice_display.voiceMessageAttachment(message);
+  if (voice != null) {
+    final duration = voice_display.formatVoiceBubbleDuration(
+      voice_display.voiceAttachmentDuration(voice),
+    );
+    return duration.isEmpty ? '[语音]' : '[语音] $duration';
+  }
+  final sticker = message.stickerAttachment;
+  if (sticker != null) return '[表情] ${stickerAttachmentTitle(sticker)}';
+  final files = message.fileAttachments.toList(growable: false);
+  if (files.isNotEmpty) {
+    final nonImage = files.where(
+      (attachment) => !isImageMimeType(attachment.asset?.mimeType),
+    );
+    final preview = nonImage.isNotEmpty ? nonImage.first : files.first;
+    final label = nonImage.isEmpty ? '[图片]' : '[文件]';
+    return '$label ${fileAttachmentTitle(preview)}';
+  }
+  return text.isEmpty ? '[消息]' : text;
+}
+
 String removedMessageCopyText(Message message) {
   if (message.isForceDeleted) {
     final actor = message.forceDeletedBy;

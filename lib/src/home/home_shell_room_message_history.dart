@@ -358,6 +358,7 @@ class _RoomMessageHistoryPaneState extends State<_RoomMessageHistoryPane> {
         isUserInLive: (userId) =>
             live_display.liveParticipantByUserId(widget.room.live, userId) !=
             null,
+        onOpenQuote: widget.messageActions.onOpenQuote,
       ),
       inline: false,
     );

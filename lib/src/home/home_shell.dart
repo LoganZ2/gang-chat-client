@@ -162,6 +162,7 @@ class _HomeShellState extends State<HomeShell> {
   LiveState? _live;
   List<Message> _messages = const [];
   Map<String, String> _messageDrafts = const {};
+  Map<String, List<MessageQuote>> _messageQuoteDrafts = const {};
   Map<String, List<_StagedAttachment>> _stagedAttachmentDrafts = const {};
   bool _updatingComposerFromDraft = false;
   message_mentions.MessageMentionQuery? _composerMentionQuery;

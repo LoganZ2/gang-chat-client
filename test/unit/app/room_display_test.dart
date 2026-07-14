@@ -166,6 +166,24 @@ void main() {
       ),
       '[图片] cat picture.png',
     );
+    expect(
+      roomDraftPreviewText(
+        text: 'reply text',
+        attachmentFilename: null,
+        attachmentMimeType: null,
+        hasQuote: true,
+      ),
+      '[引用] reply text',
+    );
+    expect(
+      roomDraftPreviewText(
+        text: '',
+        attachmentFilename: null,
+        attachmentMimeType: null,
+        hasQuote: true,
+      ),
+      '[引用]',
+    );
   });
 
   test('room identity display helpers provide stable fallbacks', () {

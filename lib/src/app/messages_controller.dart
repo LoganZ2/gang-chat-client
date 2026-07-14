@@ -91,6 +91,8 @@ class MessagesController {
     String type = 'text',
     List<MessageAttachment> attachments = const [],
     List<Map<String, Object?>> mentions = const [],
+    MessageQuote? quote,
+    List<MessageQuote> quotes = const [],
   }) {
     final clientMessageId = newClientId('cmsg');
     return PendingMessage(
@@ -103,6 +105,8 @@ class MessagesController {
         body: body,
         attachments: attachments,
         mentions: mentions,
+        quote: quote,
+        quotes: quotes,
       ),
     );
   }
@@ -152,6 +156,8 @@ class MessagesController {
     required int sizeBytes,
     required String mimeType,
     required Duration duration,
+    MessageQuote? quote,
+    List<MessageQuote> quotes = const [],
   }) {
     final clientMessageId = newClientId('cmsg');
     final transfer = FileTransferState.upload(
@@ -182,6 +188,8 @@ class MessagesController {
         body: filename,
         type: 'audio',
         attachments: [localAttachment],
+        quote: quote,
+        quotes: quotes,
       ),
     );
   }
@@ -313,6 +321,8 @@ class MessagesController {
     String type = 'text',
     List<MessageAttachment> attachments = const [],
     List<Map<String, Object?>> mentions = const [],
+    String? quoteMessageId,
+    List<String> quoteMessageIds = const [],
   }) {
     return _client.sendMessage(
       roomId: roomId,
@@ -321,6 +331,8 @@ class MessagesController {
       type: type,
       attachments: attachments,
       mentions: mentions,
+      quoteMessageId: quoteMessageId,
+      quoteMessageIds: quoteMessageIds,
       idempotencyKey: newUuid(),
     );
   }
@@ -332,6 +344,8 @@ class MessagesController {
     String type = 'text',
     List<MessageAttachment> attachments = const [],
     List<Map<String, Object?>> mentions = const [],
+    MessageQuote? quote,
+    List<MessageQuote> quotes = const [],
     PendingMessageHandler? onPending,
   }) {
     final pending = createPendingMessage(
@@ -341,6 +355,8 @@ class MessagesController {
       type: type,
       attachments: attachments,
       mentions: mentions,
+      quote: quote,
+      quotes: quotes,
     );
     onPending?.call(pending);
     return sendMessage(
@@ -350,6 +366,8 @@ class MessagesController {
       type: type,
       attachments: attachments,
       mentions: mentions,
+      quoteMessageId: quote?.messageId,
+      quoteMessageIds: quotes.map((quote) => quote.messageId).toList(),
     );
   }
 
@@ -410,6 +428,8 @@ class MessagesController {
     required String mimeType,
     required Duration duration,
     required Future<Uint8List> Function() readBytes,
+    MessageQuote? quote,
+    List<MessageQuote> quotes = const [],
     PendingFileMessageHandler? onPending,
     FileMessageProgressHandler? onProgress,
     FileMessageUploadedHandler? onUploaded,
@@ -421,6 +441,8 @@ class MessagesController {
       sizeBytes: sizeBytes,
       mimeType: mimeType,
       duration: duration,
+      quote: quote,
+      quotes: quotes,
     );
     onPending?.call(pending);
 
@@ -455,6 +477,8 @@ class MessagesController {
       body: filename,
       type: 'audio',
       attachments: [attachment],
+      quoteMessageId: quote?.messageId,
+      quoteMessageIds: quotes.map((quote) => quote.messageId).toList(),
     );
   }
 
@@ -783,6 +807,8 @@ class MessagesController {
       createdAt: message.createdAt,
       attachments: attachments ?? message.attachments,
       mentions: message.mentions,
+      quote: message.quote,
+      quotes: message.quotes,
       isRecalled: message.isRecalled,
       recalledAt: message.recalledAt,
       recalledBy: message.recalledBy,

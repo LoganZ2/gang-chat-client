@@ -83,6 +83,8 @@ class ChatPane extends StatelessWidget {
     required this.stickerPanel,
     required this.voiceState,
     required this.composerAttachments,
+    this.composerQuotes = const [],
+    this.onRemoveComposerQuote,
     required this.fileActionHighlighted,
     this.mentionOptions = const [],
     this.mentionMembers = const [],
@@ -145,6 +147,8 @@ class ChatPane extends StatelessWidget {
   final sticker_display.StickerPanelLoadState stickerPanel;
   final voice_display.VoiceRecorderState voiceState;
   final List<composer_attachment.ComposerAttachmentView> composerAttachments;
+  final List<MessageQuote> composerQuotes;
+  final ValueChanged<String>? onRemoveComposerQuote;
   final bool fileActionHighlighted;
   final List<message_mentions.MessageMentionOption> mentionOptions;
   final List<RoomMember> mentionMembers;
@@ -289,6 +293,9 @@ class ChatPane extends StatelessWidget {
                 stickerPanel: stickerPanel,
                 voiceState: voiceState,
                 attachments: composerAttachments,
+                quotes: composerQuotes,
+                onRemoveQuote: onRemoveComposerQuote,
+                imagePreviewActions: imagePreviewActions,
                 fileActionHighlighted: fileActionHighlighted,
                 mentionOptions: mentionOptions,
                 mentionLoading: mentionLoading,

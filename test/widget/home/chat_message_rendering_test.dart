@@ -1177,6 +1177,160 @@ void main() {
     expect(deleted, isFalse);
   });
 
+  testWidgets('message quote shows room name and time and opens source', (
+    tester,
+  ) async {
+    MessageQuote? opened;
+    final quote = MessageQuote(
+      messageId: 'source_1',
+      senderDisplayName: '房内用户名',
+      body: '[文件] report.pdf',
+      createdAt: DateTime(2026, 7, 14, 16, 12),
+    );
+    await tester.pumpWidget(
+      _host(
+        MessageBubbleForTest(
+          message: _message(type: 'text', body: '本次回复', quote: quote),
+          downloadActions: _downloadActions(),
+          messageActions: ChatMessageActions(
+            onCopy: (_, _) async {},
+            onDeleteForMe: (_, _) async {},
+            onRecall: (_, _) async {},
+            canRecall: (_) => false,
+            onOpenQuote: (_, value) async => opened = value,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('房内用户名  16:12'), findsOneWidget);
+    expect(find.text('[文件] report.pdf'), findsOneWidget);
+    expect(find.text('本次回复'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('message-quote-source_1')));
+    await tester.pump();
+    expect(opened, same(quote));
+  });
+
+  testWidgets('composer quote row shows snapshot and can be closed', (
+    tester,
+  ) async {
+    final controller = TextEditingController(text: '本次回复');
+    addTearDown(controller.dispose);
+    String? removed;
+    await tester.pumpWidget(
+      _host(
+        _chatPane(
+          controller: controller,
+          room: _roomDetail,
+          messages: const [],
+          composerQuotes: [
+            MessageQuote(
+              messageId: 'composer_source',
+              senderDisplayName: '房内用户名',
+              body: '原消息',
+              createdAt: DateTime(2026, 7, 14, 16, 12),
+            ),
+            MessageQuote(
+              messageId: 'composer_source_2',
+              senderDisplayName: '第二位房内用户',
+              body: '[文件] second.pdf',
+              createdAt: DateTime(2026, 7, 14, 16, 13),
+            ),
+          ],
+          onRemoveComposerQuote: (messageId) => removed = messageId,
+        ),
+      ),
+    );
+
+    expect(find.text('房内用户名  16:12'), findsOneWidget);
+    expect(find.text('原消息'), findsOneWidget);
+    expect(find.text('第二位房内用户  16:13'), findsOneWidget);
+    expect(find.text('[文件] second.pdf'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('composer-quote-close-composer_source')),
+    );
+    await tester.pump();
+    expect(removed, 'composer_source');
+  });
+
+  testWidgets('image quote shows only a clickable thumbnail', (tester) async {
+    MessageQuote? opened;
+    final quote = MessageQuote(
+      messageId: 'image_source',
+      senderDisplayName: '房内用户名',
+      body: '[图片] 照片.png',
+      createdAt: DateTime(2026, 7, 14, 16, 12),
+      previewAttachment: const MessageAttachment(
+        type: 'file',
+        name: '照片.png',
+        asset: UploadedAsset(
+          id: 'image_asset',
+          url: '/images/photo.png',
+          thumbnailUrl: '/images/photo-thumb.png',
+          mimeType: 'image/png',
+          filename: '照片.png',
+        ),
+      ),
+    );
+    await tester.pumpWidget(
+      _host(
+        MessageBubbleForTest(
+          message: _message(type: 'text', body: '本次回复', quote: quote),
+          downloadActions: _downloadActions(),
+          imagePreviewActions: _imagePreviewActions(),
+          messageActions: ChatMessageActions(
+            onCopy: (_, _) async {},
+            onDeleteForMe: (_, _) async {},
+            onRecall: (_, _) async {},
+            canRecall: (_) => false,
+            onOpenQuote: (_, value) async => opened = value,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('[图片] 照片.png'), findsNothing);
+    final thumbnail = find.byKey(
+      const ValueKey('message-quote-thumbnail-image_source'),
+    );
+    expect(thumbnail, findsOneWidget);
+    tester.widget<GestureDetector>(thumbnail).onTap!();
+    await tester.pump();
+    expect(opened, isNull);
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(
+      find.byKey(const ValueKey('chat-image-preview-url-image')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('message context menu can select a quote source', (tester) async {
+    Message? quoted;
+    final message = _message(type: 'text', body: '引用我');
+    await tester.pumpWidget(
+      _host(
+        MessageBubbleForTest(
+          message: message,
+          downloadActions: _downloadActions(),
+          messageActions: ChatMessageActions(
+            onCopy: (_, _) async {},
+            onDeleteForMe: (_, _) async {},
+            onRecall: (_, _) async {},
+            canRecall: (_) => false,
+            onQuote: (value) => quoted = value,
+            canQuote: (_) => true,
+          ),
+        ),
+      ),
+    );
+
+    await _secondaryClickTextMessage(tester);
+    expect(find.text('引用'), findsOneWidget);
+    await tester.tap(find.text('引用'));
+    await tester.pump();
+    expect(quoted, same(message));
+  });
+
   testWidgets('text message bubble padding opens message menu', (tester) async {
     var deleted = false;
     await tester.pumpWidget(
@@ -2354,6 +2508,8 @@ Widget _chatPane({
   bool mentionMembersReady = true,
   DateTime? timestampNow,
   VoidCallback? onViewedNewMessages,
+  List<MessageQuote> composerQuotes = const [],
+  ValueChanged<String>? onRemoveComposerQuote,
 }) {
   return ChatPane(
     currentUser: _currentUser,
@@ -2380,6 +2536,8 @@ Widget _chatPane({
     stickerPanel: const sticker_display.StickerPanelLoadState(),
     voiceState: const voice_display.VoiceRecorderState(),
     composerAttachments: const <composer_attachment.ComposerAttachmentView>[],
+    composerQuotes: composerQuotes,
+    onRemoveComposerQuote: onRemoveComposerQuote,
     fileActionHighlighted: false,
     mentionMembers: mentionMembers,
     mentionMembersReady: mentionMembersReady,
@@ -2431,6 +2589,8 @@ Message _message({
   bool isForceDeleted = false,
   UserSummary? forceDeletedBy,
   List<Map<String, Object?>> mentions = const [],
+  MessageQuote? quote,
+  List<MessageQuote> quotes = const [],
   UserSummary sender = const UserSummary(
     id: 'user_1',
     username: 'logan',
@@ -2449,6 +2609,8 @@ Message _message({
     createdAt: createdAt ?? DateTime.utc(2026, 6, 11),
     attachments: attachments,
     mentions: mentions,
+    quote: quote,
+    quotes: quotes,
     isRecalled: isRecalled,
     recalledBy: recalledBy,
     isForceDeleted: isForceDeleted,

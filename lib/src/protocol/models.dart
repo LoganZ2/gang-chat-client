@@ -1658,6 +1658,35 @@ class RoomDetail {
   }
 }
 
+class MessageQuote {
+  const MessageQuote({
+    required this.messageId,
+    required this.senderDisplayName,
+    required this.body,
+    required this.createdAt,
+    this.previewAttachment,
+  });
+
+  final String messageId;
+  final String senderDisplayName;
+  final String body;
+  final DateTime createdAt;
+  final MessageAttachment? previewAttachment;
+
+  factory MessageQuote.fromJson(Map<String, Object?> json) {
+    final previewAttachmentJson = _nullableMap(json['preview_attachment']);
+    return MessageQuote(
+      messageId: json['message_id']! as String,
+      senderDisplayName: json['sender_display_name'] as String? ?? '用户',
+      body: json['body'] as String? ?? '',
+      createdAt: DateTime.parse(json['created_at']! as String),
+      previewAttachment: previewAttachmentJson == null
+          ? null
+          : MessageAttachment.fromJson(previewAttachmentJson),
+    );
+  }
+}
+
 class Message {
   const Message({
     required this.id,
@@ -1669,6 +1698,8 @@ class Message {
     required this.createdAt,
     this.attachments = const [],
     this.mentions = const [],
+    this.quote,
+    this.quotes = const [],
     this.isRecalled = false,
     this.recalledAt,
     this.recalledBy,
@@ -1687,6 +1718,14 @@ class Message {
   final String body;
   final DateTime createdAt;
   final List<MessageAttachment> attachments;
+  final MessageQuote? quote;
+  final List<MessageQuote> quotes;
+
+  List<MessageQuote> get effectiveQuotes {
+    if (quotes.isNotEmpty) return quotes;
+    final legacy = quote;
+    return legacy == null ? const [] : [legacy];
+  }
 
   /// Raw mention descriptors as sent by the server (opaque maps; shape is
   /// `{user_id, ...}`). Kept as-is so the renderer can highlight @mentions.
@@ -1746,6 +1785,13 @@ class Message {
         );
     final recalledByJson = _nullableMap(json['recalled_by']);
     final forceDeletedByJson = _nullableMap(json['force_deleted_by']);
+    final quoteJson = _nullableMap(json['quote']);
+    final parsedQuotes = _listOfMaps(
+      json['quotes'],
+    ).map(MessageQuote.fromJson).toList(growable: false);
+    final legacyQuote = quoteJson == null
+        ? null
+        : MessageQuote.fromJson(quoteJson);
     return Message(
       id: json['id']! as String,
       roomId: json['room_id']! as String,
@@ -1757,6 +1803,12 @@ class Message {
         json['attachments'],
       ).map(MessageAttachment.fromJson).toList(),
       mentions: _listOfMaps(json['mentions']),
+      quote: legacyQuote ?? (parsedQuotes.isEmpty ? null : parsedQuotes.first),
+      quotes: parsedQuotes.isNotEmpty
+          ? parsedQuotes
+          : legacyQuote == null
+          ? const []
+          : [legacyQuote],
       isRecalled: _boolFromJson(json, const ['is_recalled']) ?? false,
       recalledAt: _parseDateTime(json['recalled_at']),
       recalledBy: recalledByJson == null
@@ -1779,6 +1831,8 @@ class Message {
     String type = 'text',
     List<MessageAttachment> attachments = const [],
     List<Map<String, Object?>> mentions = const [],
+    MessageQuote? quote,
+    List<MessageQuote> quotes = const [],
   }) {
     return Message(
       id: clientMessageId,
@@ -1790,6 +1844,8 @@ class Message {
       createdAt: DateTime.now().toUtc(),
       attachments: attachments,
       mentions: mentions,
+      quote: quote,
+      quotes: quotes,
       pending: true,
     );
   }
@@ -1805,6 +1861,8 @@ class Message {
       createdAt: createdAt,
       attachments: attachments,
       mentions: mentions,
+      quote: quote,
+      quotes: quotes,
       isRecalled: isRecalled,
       recalledAt: recalledAt,
       recalledBy: recalledBy,

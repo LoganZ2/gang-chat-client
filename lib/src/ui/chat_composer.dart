@@ -110,6 +110,7 @@ class ChatComposer extends StatefulWidget {
     this.onPasteFiles,
     this.onCanPasteFiles,
     this.attachments,
+    this.header,
   });
 
   final List<ComposerAction> actions;
@@ -144,6 +145,7 @@ class ChatComposer extends StatefulWidget {
   /// Optional strip rendered above the input, used to show files staged for
   /// the next message. Null (or empty) leaves the composer unchanged.
   final Widget? attachments;
+  final Widget? header;
 
   @override
   State<ChatComposer> createState() => _ChatComposerState();
@@ -366,8 +368,18 @@ class _ChatComposerState extends State<ChatComposer> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (widget.header != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                      child: widget.header,
+                    ),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                    padding: EdgeInsets.fromLTRB(
+                      12,
+                      widget.header == null ? 12 : 8,
+                      12,
+                      8,
+                    ),
                     child: AnimatedSize(
                       duration: const Duration(milliseconds: 160),
                       curve: Curves.easeOutCubic,
