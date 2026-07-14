@@ -965,6 +965,8 @@ void main() {
     expect(invites.single.status, 'pending');
     expect(invites.single.roomExists, isFalse);
     expect(invites.single.inviterExists, isFalse);
+    expect(invites.single.room.isDeleted, isTrue);
+    expect(invites.single.inviter.isDeleted, isTrue);
     expect(invites.single.invalidReason, 'room_missing');
     expect(invites.single.inviter.roomRole, 'left');
     api.close();
@@ -1139,6 +1141,7 @@ void main() {
     final applications = await api.listRoomApplications(status: 'all');
 
     expect(applications.single.reviewerExists, isFalse);
+    expect(applications.single.reviewer?.isDeleted, isTrue);
     expect(applications.single.reviewer?.displayName, 'Alice');
     api.close();
   });

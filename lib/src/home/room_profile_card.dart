@@ -57,14 +57,16 @@ class _RoomHoverCardState extends State<RoomHoverCard> {
   void didUpdateWidget(covariant RoomHoverCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     final roomChanged = oldWidget.room.id != widget.room.id;
+    final deletionChanged = oldWidget.room.isDeleted != widget.room.isDeleted;
     final resolverPresenceChanged =
         (oldWidget.onResolveRoom == null) != (widget.onResolveRoom == null);
-    if (!roomChanged && !resolverPresenceChanged) return;
+    if (!roomChanged && !deletionChanged && !resolverPresenceChanged) return;
     _resolved = null;
     _resolveFuture = null;
   }
 
   Future<void> _resolveRoom() {
+    if (widget.room.isDeleted) return Future<void>.value();
     final resolver = widget.onResolveRoom;
     if (resolver == null) return Future<void>.value();
     final existing = _resolveFuture;
@@ -96,10 +98,13 @@ class _RoomHoverCardState extends State<RoomHoverCard> {
     return HoverCardAnchor(
       resetKey: Object.hash(
         widget.room.id,
+        widget.room.isDeleted,
         widget.onResolveRoom != null,
         widget.onResolveUserProfile != null,
       ),
-      onBeforeOpen: widget.onResolveRoom == null ? null : _resolveRoom,
+      onBeforeOpen: widget.room.isDeleted || widget.onResolveRoom == null
+          ? null
+          : _resolveRoom,
       cardBuilder: (context) => _RoomProfileCard(
         room: _displayRoom,
         currentUser: widget.currentUser,
@@ -182,6 +187,7 @@ class _UserHoverCardState extends State<UserHoverCard> {
   void didUpdateWidget(covariant UserHoverCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     final userChanged = oldWidget.user.id != widget.user.id;
+    final deletionChanged = oldWidget.user.isDeleted != widget.user.isDeleted;
     final currentUserChanged =
         oldWidget.currentUser?.id != widget.currentUser?.id;
     final resolverPresenceChanged =
@@ -193,6 +199,7 @@ class _UserHoverCardState extends State<UserHoverCard> {
         (oldWidget.profileActionBuilder == null) !=
         (widget.profileActionBuilder == null);
     if (!userChanged &&
+        !deletionChanged &&
         !currentUserChanged &&
         !resolverPresenceChanged &&
         !liveChanged &&
@@ -205,6 +212,7 @@ class _UserHoverCardState extends State<UserHoverCard> {
   }
 
   Future<void> _resolveProfile() {
+    if (widget.user.isDeleted) return Future<void>.value();
     final resolver = widget.onResolveProfile;
     if (resolver == null) return Future<void>.value();
     final existing = _resolveFuture;
@@ -235,6 +243,7 @@ class _UserHoverCardState extends State<UserHoverCard> {
     return HoverCardAnchor(
       resetKey: Object.hash(
         widget.user.id,
+        widget.user.isDeleted,
         widget.onResolveProfile != null,
         widget.onResolveRoomProfile != null,
         widget.currentUser?.id,
@@ -242,7 +251,9 @@ class _UserHoverCardState extends State<UserHoverCard> {
         widget.showRoomRole,
         widget.profileActionBuilder != null,
       ),
-      onBeforeOpen: widget.onResolveProfile == null ? null : _resolveProfile,
+      onBeforeOpen: widget.user.isDeleted || widget.onResolveProfile == null
+          ? null
+          : _resolveProfile,
       cardBuilder: (context) => _UserProfileCard(
         user: _displayUser,
         currentUser: widget.currentUser,
@@ -251,7 +262,9 @@ class _UserHoverCardState extends State<UserHoverCard> {
         onEnterCommonRoom: widget.onEnterCommonRoom,
         inLive: widget.inLive,
         showRoomRole: widget.showRoomRole,
-        action: widget.profileActionBuilder?.call(_displayUser),
+        action: _displayUser.isDeleted
+            ? null
+            : widget.profileActionBuilder?.call(_displayUser),
       ),
       child: widget.child,
     );
@@ -407,10 +420,11 @@ class _ResolvingUserProfileCardState extends State<_ResolvingUserProfileCard> {
   @override
   void initState() {
     super.initState();
-    if (widget.resolveOnOpen) _resolve();
+    if (widget.resolveOnOpen && !widget.user.isDeleted) _resolve();
   }
 
   Future<void> _resolve() async {
+    if (widget.user.isDeleted) return;
     final resolver = widget.onResolveProfile;
     if (resolver == null) return;
     final requestedUser = widget.user;
@@ -435,7 +449,7 @@ class _ResolvingUserProfileCardState extends State<_ResolvingUserProfileCard> {
       onEnterCommonRoom: widget.onEnterCommonRoom,
       inLive: widget.inLive,
       showRoomRole: widget.showRoomRole,
-      action: widget.profileActionBuilder?.call(user),
+      action: user.isDeleted ? null : widget.profileActionBuilder?.call(user),
     );
   }
 }
@@ -463,6 +477,7 @@ class _UserProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (user.isDeleted) return const _DeletedUserProfileCard();
     final name = room_display.userPrimaryName(user);
     final gender = genderMark(user.gender);
     final role = showRoomRole ? room_display.roomRoleLabel(user) : null;
@@ -601,6 +616,38 @@ class _UserProfileCard extends StatelessWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DeletedUserProfileCard extends StatelessWidget {
+  const _DeletedUserProfileCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.all(UiSpacing.lg),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Avatar(
+            label: '',
+            defaultAvatarKey: 'graphite-2',
+            size: 42,
+            showFallbackText: false,
+          ),
+          SizedBox(width: UiSpacing.md),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              StatusBadge(label: '用户已注销', icon: Icons.person_off_outlined),
+              SizedBox(height: UiSpacing.xs),
+              Text('@已注销', style: UiTypography.label),
+            ],
+          ),
         ],
       ),
     );
@@ -824,6 +871,7 @@ class _RoomProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (room.isDeleted) return const _DeletedRoomProfileCard();
     final config = AppConfigScope.of(context);
     final description = _nonEmpty(room.description);
     final rid = _nonEmpty(room.rid) ?? room.id;
@@ -962,6 +1010,30 @@ class _RoomProfileCard extends StatelessWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DeletedRoomProfileCard extends StatelessWidget {
+  const _DeletedRoomProfileCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.all(UiSpacing.lg),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Avatar(
+            label: '',
+            defaultAvatarKey: 'graphite-2',
+            size: 42,
+            showFallbackText: false,
+          ),
+          SizedBox(width: UiSpacing.md),
+          StatusBadge(label: '房间已删除', icon: Icons.delete_outline_rounded),
         ],
       ),
     );

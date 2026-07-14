@@ -1,0 +1,765 @@
+part of '../gang_app_shell_test.dart';
+
+void registerShellRealtimeLiveWidgetTests() {
+  testWidgets('authenticated home shell applies realtime live snapshots', (
+    WidgetTester tester,
+  ) async {
+    final realtime = _FakeRealtimeService();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(app: _homeTestAppContext(), realtime: realtime),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+    final chatLiveButton = find.byKey(
+      const ValueKey('chat-header-live-button'),
+    );
+    expect(chatLiveButton, findsOneWidget);
+    expect(
+      find.descendant(
+        of: chatLiveButton,
+        matching: find.byKey(const ValueKey('chat-header-room-title')),
+      ),
+      findsOneWidget,
+    );
+    final roomTitle = tester.widget<Text>(
+      find.byKey(const ValueKey('chat-header-room-title')),
+    );
+    expect(roomTitle.data, 'Alpha Room');
+    expect(roomTitle.style?.color, ui.UiColors.text);
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('chat-header-room-meta')))
+          .data,
+      '2 名成员 · 1 人在线',
+    );
+    expect(
+      find.descendant(of: chatLiveButton, matching: find.text('进入语音频道')),
+      findsNothing,
+    );
+
+    await _openLiveChannelFromHeader(tester);
+
+    expect(find.text('Riley'), findsNothing);
+    expect(find.text('2 名成员 · 1 人语音'), findsOneWidget);
+
+    realtime.add(
+      const RealtimeEvent(
+        type: 'live_participant_joined',
+        data: {
+          'room_id': 'server-alpha',
+          'participant_count': 2,
+          'preview': <Object?>[],
+          'live': {
+            'room_id': 'server-alpha',
+            'participant_count': 2,
+            'participants': [
+              {
+                'live_session_id': 'live-session-morgan',
+                'user': {
+                  'id': 'user-2',
+                  'username': 'morgan',
+                  'display_name': 'Morgan',
+                  'avatar_url': null,
+                  'default_avatar_key': 'blue-3',
+                },
+                'joined_at': '2026-06-05T08:00:00Z',
+                'mic_muted': true,
+                'headphones_muted': false,
+                'voice_blocked': false,
+                'camera_on': false,
+                'screen_sharing': false,
+                'connection_state': 'connected',
+              },
+              {
+                'live_session_id': 'live-session-riley',
+                'user': {
+                  'id': 'user-3',
+                  'username': 'riley',
+                  'display_name': 'Riley',
+                  'avatar_url': null,
+                  'default_avatar_key': 'green-2',
+                },
+                'joined_at': '2026-06-05T08:00:00Z',
+                'mic_muted': false,
+                'headphones_muted': false,
+                'voice_blocked': false,
+                'camera_on': false,
+                'screen_sharing': false,
+                'connection_state': 'connected',
+              },
+            ],
+            'updated_at': '2026-06-05T08:00:00Z',
+          },
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Riley'), findsOneWidget);
+    expect(find.text('2 名成员 · 2 人语音'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('chat header live preview follows realtime live snapshots', (
+    WidgetTester tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1180, 620);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final realtime = _FakeRealtimeService();
+
+    Map<String, Object?> participant({
+      required String id,
+      required String username,
+      required String displayName,
+      required String liveSessionId,
+    }) {
+      return _liveParticipantJson(
+        user: _userJson(id: id, username: username, displayName: displayName),
+        liveSessionId: liveSessionId,
+      );
+    }
+
+    RealtimeEvent liveSnapshotEvent(List<Object?> participants) {
+      return RealtimeEvent(
+        type: 'live_participant_joined',
+        data: {
+          'room_id': 'server-alpha',
+          'participant_count': participants.length,
+          'preview': <Object?>[],
+          'live': _liveStateJson(
+            roomId: 'server-alpha',
+            participantCount: participants.length,
+            participants: participants,
+          ),
+        },
+      );
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: SizedBox(
+          width: 1180,
+          height: 620,
+          child: HomePage(app: _homeTestAppContext(), realtime: realtime),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+
+    final chatLiveButton = find.byKey(
+      const ValueKey('chat-header-live-button'),
+    );
+    final livePreview = find.byKey(const ValueKey('chat-header-live-preview'));
+    final livePreviewIcon = find.byKey(
+      const ValueKey('chat-header-live-preview-icon'),
+    );
+    expect(chatLiveButton, findsOneWidget);
+    expect(livePreview, findsOneWidget);
+    expect(livePreviewIcon, findsOneWidget);
+    expect(
+      tester.getRect(chatLiveButton).right - tester.getRect(livePreview).right,
+      closeTo(10, 1),
+    );
+    final initialPreviewAvatars = find.descendant(
+      of: livePreview,
+      matching: find.byType(ui.Avatar),
+    );
+    expect(initialPreviewAvatars, findsOneWidget);
+    expect(
+      tester.getRect(livePreviewIcon).right,
+      lessThan(tester.getRect(initialPreviewAvatars.first).left),
+    );
+    expect(tester.widget<Icon>(livePreviewIcon).color, ui.UiColors.accent);
+    expect(
+      find.descendant(of: livePreview, matching: find.text('共 1 人')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<Text>(
+            find.descendant(of: livePreview, matching: find.text('共 1 人')),
+          )
+          .style
+          ?.color,
+      Colors.white,
+    );
+    expect(
+      find.descendant(of: livePreview, matching: find.text('等共 1 人')),
+      findsNothing,
+    );
+
+    realtime.add(
+      liveSnapshotEvent([
+        participant(
+          id: 'user-2',
+          username: 'morgan',
+          displayName: 'Morgan',
+          liveSessionId: 'live-session-morgan',
+        ),
+        participant(
+          id: 'user-3',
+          username: 'riley',
+          displayName: 'Riley',
+          liveSessionId: 'live-session-riley',
+        ),
+      ]),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(of: livePreview, matching: find.byType(ui.Avatar)),
+      findsNWidgets(2),
+    );
+    expect(
+      tester.getRect(chatLiveButton).right - tester.getRect(livePreview).right,
+      closeTo(10, 1),
+    );
+    expect(
+      find.descendant(of: livePreview, matching: find.text('共 2 人')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<Text>(
+            find.descendant(of: livePreview, matching: find.text('共 2 人')),
+          )
+          .style
+          ?.color,
+      Colors.white,
+    );
+    expect(
+      find.descendant(of: livePreview, matching: find.text('等共 2 人')),
+      findsNothing,
+    );
+
+    realtime.add(
+      liveSnapshotEvent([
+        participant(
+          id: 'user-2',
+          username: 'morgan',
+          displayName: 'Morgan',
+          liveSessionId: 'live-session-morgan',
+        ),
+        participant(
+          id: 'user-3',
+          username: 'riley',
+          displayName: 'Riley',
+          liveSessionId: 'live-session-riley',
+        ),
+        participant(
+          id: 'user-4',
+          username: 'ivy',
+          displayName: 'Ivy',
+          liveSessionId: 'live-session-ivy',
+        ),
+        participant(
+          id: 'user-5',
+          username: 'taylor',
+          displayName: 'Taylor',
+          liveSessionId: 'live-session-taylor',
+        ),
+        participant(
+          id: 'user-6',
+          username: 'noah',
+          displayName: 'Noah',
+          liveSessionId: 'live-session-noah',
+        ),
+        participant(
+          id: 'user-7',
+          username: 'mina',
+          displayName: 'Mina',
+          liveSessionId: 'live-session-mina',
+        ),
+      ]),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(of: livePreview, matching: find.byType(ui.Avatar)),
+      findsNWidgets(5),
+    );
+    expect(
+      tester.getRect(chatLiveButton).right - tester.getRect(livePreview).right,
+      closeTo(10, 1),
+    );
+    expect(
+      find.descendant(of: livePreview, matching: find.text('等共 6 人')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<Text>(
+            find.descendant(of: livePreview, matching: find.text('等共 6 人')),
+          )
+          .style
+          ?.color,
+      Colors.white,
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('chat-header-room-meta')))
+          .data,
+      '2 名成员 · 1 人在线',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('authenticated home shell shows realtime reconnecting marker', (
+    WidgetTester tester,
+  ) async {
+    final realtime = _FakeRealtimeService();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(app: _homeTestAppContext(), realtime: realtime),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final userSummary = find.byKey(const ValueKey('home-sidebar-user-summary'));
+    expect(
+      find.descendant(of: userSummary, matching: find.textContaining('重连中')),
+      findsNothing,
+    );
+
+    realtime.setStatus(RealtimeConnectionStatus.reconnecting);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(of: userSummary, matching: find.text('重连中')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: userSummary, matching: find.text('在线')),
+      findsNothing,
+    );
+
+    realtime.setStatus(RealtimeConnectionStatus.connected);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(of: userSummary, matching: find.textContaining('重连中')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: userSummary, matching: find.text('在线')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'authenticated home shell keeps live session on realtime reconnect',
+    (WidgetTester tester) async {
+      final realtime = _FakeRealtimeService();
+      final liveJoinRequests = <Map<String, Object?>>[];
+      final liveStateUpdates = <Map<String, Object?>>[];
+      final liveSession = _FakeLiveSession();
+      final liveSessionController = _FakeLiveSessionController(
+        session: liveSession,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: HomePage(
+            app: _homeTestAppContext(
+              liveJoinRequests: liveJoinRequests,
+              liveStateUpdates: liveStateUpdates,
+            ),
+            liveSessionController: liveSessionController,
+            realtime: realtime,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Alpha Room'));
+      await tester.pumpAndSettle();
+      await _openLiveChannelFromHeader(tester);
+      await tester.tap(find.widgetWithText(ui.Button, '加入'));
+      await tester.pumpAndSettle();
+
+      expect(liveSession.connectAttempts, 1);
+      liveJoinRequests.clear();
+      liveStateUpdates.clear();
+
+      await tester.tap(_liveControl('mic'));
+      await tester.pumpAndSettle();
+      expect(liveStateUpdates.last['mic_muted'], true);
+      liveStateUpdates.clear();
+
+      realtime.setStatus(RealtimeConnectionStatus.reconnecting);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('home-sidebar-user-summary')),
+          matching: find.text('重连中'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('home-sidebar-user-summary')),
+          matching: find.text('语音'),
+        ),
+        findsNothing,
+      );
+
+      realtime.setStatus(RealtimeConnectionStatus.connected);
+      realtime.emitReconnect();
+      await tester.pumpAndSettle();
+
+      expect(liveJoinRequests, isEmpty);
+      expect(liveSession.connectAttempts, 1);
+      expect(liveStateUpdates, isEmpty);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('home-sidebar-user-summary')),
+          matching: find.textContaining('重连中'),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('home-sidebar-user-summary')),
+          matching: find.text('语音'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'authenticated home shell restores live after LiveKit disconnect',
+    (WidgetTester tester) async {
+      final realtime = _FakeRealtimeService();
+      final liveJoinRequests = <Map<String, Object?>>[];
+      final liveStateUpdates = <Map<String, Object?>>[];
+      final liveSession = _FakeLiveSession();
+      final liveSessionController = _FakeLiveSessionController(
+        session: liveSession,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: HomePage(
+            app: _homeTestAppContext(
+              liveJoinRequests: liveJoinRequests,
+              liveStateUpdates: liveStateUpdates,
+            ),
+            liveSessionController: liveSessionController,
+            realtime: realtime,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Alpha Room'));
+      await tester.pumpAndSettle();
+      await _openLiveChannelFromHeader(tester);
+      await tester.tap(find.widgetWithText(ui.Button, '加入'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(_liveControl('mic'));
+      await tester.pumpAndSettle();
+      liveJoinRequests.clear();
+      liveStateUpdates.clear();
+
+      await liveSession.disconnect();
+
+      realtime.setStatus(RealtimeConnectionStatus.reconnecting);
+      await tester.pumpAndSettle();
+      realtime.setStatus(RealtimeConnectionStatus.connected);
+      realtime.emitReconnect();
+      await tester.pumpAndSettle();
+
+      expect(
+        liveJoinRequests.map((body) => body['source']),
+        contains('reconnect'),
+      );
+      expect(liveSession.connectAttempts, 2);
+      expect(liveStateUpdates.last['mic_muted'], true);
+      expect(liveStateUpdates.last['headphones_muted'], false);
+      expect(liveStateUpdates.last['camera_on'], false);
+      expect(liveStateUpdates.last['screen_sharing'], false);
+    },
+  );
+
+  testWidgets('authenticated home shell footer opens settings and logs out', (
+    WidgetTester tester,
+  ) async {
+    final accountUpdates = <Map<String, Object?>>[];
+    var logoutCount = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(
+            onLogout: () async => logoutCount++,
+            accountUpdates: accountUpdates,
+          ),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final userSummaryRect = tester.getRect(
+      find.byKey(const ValueKey('home-sidebar-user-summary')),
+    );
+    final createRect = tester.getRect(find.byTooltip('创建房间'));
+    final notificationsRect = tester.getRect(find.byTooltip('通知'));
+    final settingsRect = tester.getRect(find.byTooltip('设置'));
+    final logoutRect = tester.getRect(find.byTooltip('退出登录'));
+    expect(createRect.left, closeTo(userSummaryRect.left, 0.01));
+    expect(notificationsRect.top, closeTo(createRect.top, 0.01));
+    expect(notificationsRect.bottom, closeTo(createRect.bottom, 0.01));
+    expect(settingsRect.top, closeTo(createRect.top, 0.01));
+    expect(settingsRect.bottom, closeTo(createRect.bottom, 0.01));
+    // The logout control now lives inline in the top user summary bar, anchored
+    // to its right edge — not in the bottom footer alongside settings.
+    expect(logoutRect.top, greaterThanOrEqualTo(userSummaryRect.top - 0.01));
+    expect(logoutRect.bottom, lessThanOrEqualTo(userSummaryRect.bottom + 0.01));
+    expect(logoutRect.bottom, lessThan(createRect.top));
+    expect(logoutRect.right, lessThanOrEqualTo(userSummaryRect.right + 0.01));
+
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('设置'), findsOneWidget);
+    expect(find.textContaining('设置 ·'), findsNothing);
+    expect(find.text('用户资料'), findsOneWidget);
+    expect(find.text('偏好设置'), findsOneWidget);
+    expect(find.byTooltip('刷新设置'), findsOneWidget);
+    final displayNameField = find.byWidgetPredicate(
+      (widget) => widget is TextField && widget.controller?.text == 'Kai',
+    );
+    expect(displayNameField, findsOneWidget);
+    expect(
+      tester.widget<TextField>(displayNameField).decoration?.hintText,
+      isEmpty,
+    );
+    expect(
+      tester
+          .widget<ui.PressableSurface>(
+            find.ancestor(
+              of: find.byTooltip('设置'),
+              matching: find.byType(ui.PressableSurface),
+            ),
+          )
+          .selected,
+      isTrue,
+    );
+
+    final usernameField = find.byWidgetPredicate(
+      (widget) => widget is TextField && widget.controller?.text == 'kai',
+    );
+    expect(usernameField, findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '保存登录 Username'), findsNothing);
+    expect(find.text('合法'), findsNothing);
+
+    await tester.enterText(usernameField, 'kai_new');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(find.text('合法'), findsOneWidget);
+
+    await tester.tap(find.text('偏好设置'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('语言切换'), findsOneWidget);
+    expect(find.text('语言'), findsOneWidget);
+    expect(find.text('简体中文'), findsOneWidget);
+    expect(find.text('繁體中文'), findsOneWidget);
+    expect(find.text('English'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '保存偏好设置'), findsOneWidget);
+    expect(find.text('隐私和安全'), findsOneWidget);
+    expect(find.text('用户资料'), findsOneWidget);
+
+    await tester.tap(find.text('English'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ui.Button, '保存偏好设置'));
+    await tester.pumpAndSettle();
+
+    expect(accountUpdates, hasLength(1));
+    expect(accountUpdates.single['language'], 'en');
+    expect(find.text('偏好设置已保存'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('退出登录'));
+    await tester.pumpAndSettle();
+
+    expect(logoutCount, 0);
+    expect(find.text('确认退出当前账号？'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '取消'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '退出登录'), findsOneWidget);
+    expect(
+      tester
+          .widget<Icon>(
+            find.descendant(
+              of: find.byTooltip('退出登录'),
+              matching: find.byIcon(Icons.logout),
+            ),
+          )
+          .color,
+      ui.UiColors.accent,
+    );
+
+    await tester.tap(find.widgetWithText(ui.Button, '取消'));
+    await tester.pumpAndSettle();
+    expect(logoutCount, 0);
+    expect(find.text('确认退出当前账号？'), findsNothing);
+    expect(
+      tester
+          .widget<Icon>(
+            find.descendant(
+              of: find.byTooltip('退出登录'),
+              matching: find.byIcon(Icons.logout),
+            ),
+          )
+          .color,
+      ui.UiColors.textMuted,
+    );
+
+    await tester.tap(find.byTooltip('退出登录'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ui.Button, '退出登录'));
+    await tester.pumpAndSettle();
+    expect(logoutCount, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('authenticated home shell lets sidebar scrollbar auto-hide', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: Center(
+          child: SizedBox(
+            width: 420,
+            height: 190,
+            child: HomePage(
+              app: _homeTestAppContext(),
+              realtime: _NoopRealtimeService(),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final userSummaryRect = tester.getRect(
+      find.byKey(const ValueKey('home-sidebar-user-summary')),
+    );
+    final alphaCardRect = tester.getRect(
+      find.ancestor(
+        of: find.text('Alpha Room'),
+        matching: find.byType(ui.PressableSurface),
+      ),
+    );
+
+    expect(userSummaryRect.right - alphaCardRect.right, closeTo(0, 0.01));
+    expect(find.byType(Scrollbar), findsNothing);
+    final rawScrollbarFinder = find.byType(RawScrollbar);
+    expect(rawScrollbarFinder, findsOneWidget);
+    final rawScrollbar = tester.widget<RawScrollbar>(rawScrollbarFinder);
+    expect(rawScrollbar.radius, const Radius.circular(999));
+    expect(rawScrollbar.controller, isNotNull);
+    expect(rawScrollbar.controller!.hasClients, isTrue);
+    expect(rawScrollbar.interactive, isTrue);
+    expect(
+      tester.getRect(rawScrollbarFinder).right - alphaCardRect.right,
+      closeTo(8, 0.01),
+    );
+    await tester.dragFrom(
+      tester.getRect(rawScrollbarFinder).topRight - const Offset(3, -30),
+      const Offset(0, 30),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('authenticated home shell keeps macOS sidebar below title bar', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme().copyWith(platform: TargetPlatform.macOS),
+        home: HomePage(
+          app: _homeTestAppContext(),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final userSummaryRect = tester.getRect(
+      find.byKey(const ValueKey('home-sidebar-user-summary')),
+    );
+    final searchRect = tester.getRect(
+      find.byKey(const ValueKey('home-title-search')),
+    );
+
+    expect(find.text('Gang Chat'), findsNothing);
+    expect(find.byTooltip('最小化'), findsNothing);
+    expect(find.byTooltip('最大化'), findsNothing);
+    expect(find.byTooltip('关闭'), findsNothing);
+    expect(searchRect.center.dx, closeTo(400, 0.01));
+    expect(userSummaryRect.top, closeTo(60, 0.01));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'authenticated home shell opens chat content from narrow server list',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: Center(
+            child: SizedBox(
+              width: 420,
+              height: 620,
+              child: HomePage(
+                app: _homeTestAppContext(),
+                realtime: _NoopRealtimeService(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Alpha Room'), findsOneWidget);
+      expect(find.byTooltip('Show servers'), findsNothing);
+
+      await tester.tap(find.text('Alpha Room'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Beta Room'), findsNothing);
+      expect(find.byTooltip('Show servers'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('chat-header-live-button')),
+        findsOneWidget,
+      );
+      expect(find.text('进入语音频道'), findsNothing);
+      expect(find.text('Hello from Morgan'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+}

@@ -81,10 +81,10 @@ const kRoomEventNotificationRoleDemoted = 'role_demoted';
 const kRoomEventNotificationCreatorTransferDemoted = 'creator_transfer_demoted';
 const kRoomEventNotificationMentioned = 'mentioned';
 
-const missingRoomNotificationRoomLabel = '房间不存在';
+const missingRoomNotificationRoomLabel = '房间已删除';
 const missingRoomNotificationRoomAvatarLabel = '';
 const missingRoomNotificationRoomAvatarKey = 'graphite-2';
-const missingRoomNotificationUserLabel = '用户不存在';
+const missingRoomNotificationUserLabel = '用户已注销';
 const missingRoomNotificationUserAvatarLabel = '';
 const missingRoomNotificationUserAvatarKey = 'graphite-2';
 
@@ -501,7 +501,7 @@ String roomNotificationRoomAvatarKey(
 }
 
 bool roomNotificationRoomCardEnabled({required bool roomExists}) {
-  return roomExists;
+  return true;
 }
 
 String roomNotificationUserLabel(UserSummary user, {required bool userExists}) {
@@ -679,17 +679,28 @@ int _invitePendingRank(RoomInvite invite) {
 
 String _roomInviteSearchText(RoomInvite invite) {
   final values = <String>[];
-  _addRoomSearchValues(values, invite.room);
-  _addUserSearchValues(values, invite.inviter);
+  if (invite.roomExists) {
+    _addRoomSearchValues(values, invite.room);
+  }
+  if (invite.inviterExists) {
+    _addUserSearchValues(values, invite.inviter);
+  }
   _addSearchValue(values, invite.id);
   _addSearchValue(values, invite.status);
-  _addSearchValue(values, invite.room.joined ? '已加入 joined' : '未加入 not joined');
-  _addSearchValue(values, roomInviteRoleLabel(invite.inviter));
+  if (invite.roomExists) {
+    _addSearchValue(
+      values,
+      invite.room.joined ? '已加入 joined' : '未加入 not joined',
+    );
+  }
+  if (invite.inviterExists) {
+    _addSearchValue(values, roomInviteRoleLabel(invite.inviter));
+  }
   _addSearchValue(
     values,
     invite.inviterExists
         ? null
-        : '$missingRoomNotificationUserLabel 不存在 用户已不存在 user missing',
+        : '$missingRoomNotificationUserLabel 已注销 user deactivated deleted',
   );
   _addSearchValue(values, invite.invalidReason);
   _addSearchValue(
@@ -700,7 +711,7 @@ String _roomInviteSearchText(RoomInvite invite) {
     values,
     invite.roomExists
         ? null
-        : '$missingRoomNotificationRoomLabel 不存在 房间已不存在 room missing',
+        : '$missingRoomNotificationRoomLabel 已删除 room deleted',
   );
   _addSearchValue(values, roomInviteDecisionLabel(invite));
   return values.join('\n');
@@ -721,13 +732,15 @@ String _roomApplicationSearchText(RoomApplication application) {
   _addSearchValue(values, roomApplicationReviewActionLabel(application));
   final reviewer = application.reviewer;
   if (reviewer != null) {
-    _addUserSearchValues(values, reviewer);
-    _addSearchValue(values, roomInviteRoleLabel(reviewer));
+    if (application.reviewerExists) {
+      _addUserSearchValues(values, reviewer);
+      _addSearchValue(values, roomInviteRoleLabel(reviewer));
+    }
     _addSearchValue(
       values,
       application.reviewerExists
           ? null
-          : '$missingRoomNotificationUserLabel 不存在 用户已不存在 user missing',
+          : '$missingRoomNotificationUserLabel 已注销 user deactivated deleted',
     );
   }
   return values.join('\n');
@@ -735,7 +748,9 @@ String _roomApplicationSearchText(RoomApplication application) {
 
 String _roomEventNotificationSearchText(RoomEventNotification notification) {
   final values = <String>[];
-  _addRoomSearchValues(values, notification.room);
+  if (notification.roomExists) {
+    _addRoomSearchValues(values, notification.room);
+  }
   _addSearchValue(values, notification.id);
   _addSearchValue(values, notification.type);
   _addSearchValue(values, roomNotificationRoleLabel(notification.fromRole));
@@ -744,17 +759,19 @@ String _roomEventNotificationSearchText(RoomEventNotification notification) {
     values,
     notification.roomExists
         ? null
-        : '$missingRoomNotificationRoomLabel 不存在 房间已不存在 room missing',
+        : '$missingRoomNotificationRoomLabel 已删除 room deleted',
   );
   final actor = notification.actor;
   if (actor != null) {
-    _addUserSearchValues(values, actor);
-    _addSearchValue(values, roomInviteRoleLabel(actor));
+    if (notification.actorExists) {
+      _addUserSearchValues(values, actor);
+      _addSearchValue(values, roomInviteRoleLabel(actor));
+    }
     _addSearchValue(
       values,
       notification.actorExists
           ? null
-          : '$missingRoomNotificationUserLabel 不存在 用户已不存在 user missing',
+          : '$missingRoomNotificationUserLabel 已注销 user deactivated deleted',
     );
   }
   switch (notification.type) {

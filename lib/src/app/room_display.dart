@@ -537,6 +537,7 @@ UserSummary roomUserInfoProfile({
   required RoomDetail room,
   required CurrentUser currentUser,
 }) {
+  if (user.isDeleted) return user;
   var profile = user;
   final createdBy = room.createdBy;
   if (createdBy != null && user.id == createdBy.id) {
@@ -561,6 +562,7 @@ List<UserCommonRoom> roomUserInfoCommonRooms({
   required CurrentUser currentUser,
   required bool includeSelectedRoom,
 }) {
+  if (user.isDeleted) return const [];
   if (user.isSuperuser) {
     return const [];
   }
@@ -615,13 +617,16 @@ String publicRoomJoinActionLabel(PublicRoom room, {required bool pending}) {
 }
 
 bool publicRoomJoinActionable(PublicRoom room, {required bool pending}) {
+  if (room.isDeleted) return false;
   if (room.joined) return true;
   if (pending) return false;
   return room.joinPolicy != 'closed';
 }
 
 bool publicRoomJoinRequiresApplication(PublicRoom room) {
-  return !room.joined && room.joinPolicy == 'approval_required';
+  return !room.isDeleted &&
+      !room.joined &&
+      room.joinPolicy == 'approval_required';
 }
 
 RoomAccessState roomAccessState({

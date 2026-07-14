@@ -111,6 +111,118 @@ void main() {
 
     expect(requests, 1);
   });
+
+  test('drains different rooms independently', () async {
+    final roomOneStarted = Completer<void>();
+    final releaseRoomOne = Completer<void>();
+    final requestedRooms = <String>[];
+    final messages = _FakeMessagesController((roomId, _) async {
+      requestedRooms.add(roomId);
+      if (roomId == 'room_1') {
+        roomOneStarted.complete();
+        await releaseRoomOne.future;
+      }
+      return 0;
+    });
+    final controller = RoomReadSyncController(messages: messages);
+    addTearDown(controller.close);
+
+    final roomOne = controller.markRead(
+      roomId: 'room_1',
+      lastReadMessageId: 'msg_1',
+      messageCreatedAt: DateTime.utc(2026, 7, 14, 10),
+    );
+    await roomOneStarted.future;
+    await controller.markRead(
+      roomId: 'room_2',
+      lastReadMessageId: 'msg_2',
+      messageCreatedAt: DateTime.utc(2026, 7, 14, 10),
+    );
+
+    expect(requestedRooms, containsAll(<String>['room_1', 'room_2']));
+    expect(controller.isSynced(roomId: 'room_2', messageId: 'msg_2'), isTrue);
+    releaseRoomOne.complete();
+    await roomOne;
+  });
+
+  test('close ignores a successful response that arrives late', () async {
+    final started = Completer<void>();
+    final release = Completer<void>();
+    var requests = 0;
+    final messages = _FakeMessagesController((_, _) async {
+      requests++;
+      started.complete();
+      await release.future;
+      return 0;
+    });
+    final controller = RoomReadSyncController(messages: messages);
+
+    final pending = controller.markRead(
+      roomId: 'room_1',
+      lastReadMessageId: 'msg_1',
+      messageCreatedAt: DateTime.utc(2026, 7, 14, 10),
+    );
+    await started.future;
+    controller.close();
+    release.complete();
+    await pending;
+    await controller.retryPending();
+
+    expect(requests, 1);
+    expect(controller.isSynced(roomId: 'room_1', messageId: 'msg_1'), isFalse);
+  });
+
+  test(
+    'uses the message id as a stable tie-breaker for equal timestamps',
+    () async {
+      final requestedMessageIds = <String>[];
+      final messages = _FakeMessagesController((_, messageId) async {
+        requestedMessageIds.add(messageId);
+        return 0;
+      });
+      final controller = RoomReadSyncController(messages: messages);
+      addTearDown(controller.close);
+      final createdAt = DateTime.utc(2026, 7, 14, 10);
+
+      await controller.markRead(
+        roomId: 'room_1',
+        lastReadMessageId: 'msg_b',
+        messageCreatedAt: createdAt,
+      );
+      await controller.markRead(
+        roomId: 'room_1',
+        lastReadMessageId: 'msg_a',
+        messageCreatedAt: createdAt,
+      );
+
+      expect(requestedMessageIds, <String>['msg_b']);
+      expect(controller.isSynced(roomId: 'room_1', messageId: 'msg_b'), isTrue);
+    },
+  );
+
+  test('ignores blank room and message identifiers', () async {
+    var requests = 0;
+    final messages = _FakeMessagesController((_, _) async {
+      requests++;
+      return 0;
+    });
+    final controller = RoomReadSyncController(messages: messages);
+    addTearDown(controller.close);
+    final createdAt = DateTime.utc(2026, 7, 14, 10);
+
+    await controller.markRead(
+      roomId: '',
+      lastReadMessageId: 'msg_1',
+      messageCreatedAt: createdAt,
+    );
+    await controller.markRead(
+      roomId: 'room_1',
+      lastReadMessageId: '',
+      messageCreatedAt: createdAt,
+    );
+
+    expect(requests, 0);
+  });
 }
 
 class _FakeMessagesController extends MessagesController {

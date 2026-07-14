@@ -846,7 +846,44 @@ void main() {
     },
   );
 
-  testWidgets('deleted notification rooms do not open room profile cards', (
+  testWidgets('deleted room card skips resolving and hides all room actions', (
+    tester,
+  ) async {
+    var resolveCalls = 0;
+    var enterCalls = 0;
+    final deletedRoom = _joinedRoom.copyWith(isDeleted: true);
+    await tester.pumpWidget(
+      _host(
+        RoomHoverCardForTest(
+          room: deletedRoom,
+          currentUser: _currentUser,
+          onResolveRoom: (room) async {
+            resolveCalls += 1;
+            return room;
+          },
+          onEnterRoom: (_) => enterCalls += 1,
+        ),
+      ),
+    );
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await gesture.moveTo(tester.getCenter(find.byType(Avatar).first));
+    await tester.pumpAndSettle();
+
+    expect(resolveCalls, 0);
+    expect(enterCalls, 0);
+    expect(find.text('房间已删除'), findsOneWidget);
+    expect(find.text('Launch Room'), findsNothing);
+    expect(find.text('12 名成员'), findsNothing);
+    expect(find.text('创建者'), findsNothing);
+    expect(find.text('我的房间内信息'), findsNothing);
+    expect(find.text('进入房间'), findsNothing);
+    expect(find.text('RID: R10001'), findsNothing);
+  });
+
+  testWidgets('deleted notification rooms open only a tombstone card', (
     tester,
   ) async {
     final invite = RoomInvite(
@@ -896,7 +933,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('房间不存在'), findsOneWidget);
+    expect(find.text('房间已删除'), findsOneWidget);
     expect(find.text('空'), findsNothing);
     expect(find.text('Deleted Room'), findsNothing);
 
@@ -911,6 +948,7 @@ void main() {
     addTearDown(gesture.removePointer);
     await gesture.moveTo(tester.getCenter(avatarFinder));
     await tester.pumpAndSettle();
+    expect(find.text('房间已删除'), findsNWidgets(2));
     expect(find.text('Deleted Room'), findsNothing);
     expect(find.text('RID: R404'), findsNothing);
 
@@ -975,7 +1013,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('用户不存在'), findsOneWidget);
+    expect(find.text('用户已注销'), findsOneWidget);
     expect(find.text('空'), findsNothing);
     expect(find.text('Deleted User'), findsNothing);
     final avatar = tester.widget<Avatar>(
@@ -985,6 +1023,20 @@ void main() {
     );
     expect(avatar.label, '');
     expect(avatar.showFallbackText, isFalse);
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await gesture.moveTo(
+      tester.getCenter(
+        find.byKey(
+          const ValueKey('notification-inviter-avatar-invite_deleted_user'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('用户已注销'), findsNWidgets(2));
+    expect(find.text('@已注销'), findsOneWidget);
+    expect(find.text('Deleted User'), findsNothing);
   });
 
   testWidgets('notification context menu copies text and confirms deletion', (

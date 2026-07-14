@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:client/src/protocol/models.dart';
 import 'package:client/src/ui/ui.dart';
 import 'package:client/src/home/chat_pane.dart';
+import 'package:client/src/home/room_profile_card.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -798,6 +799,71 @@ void main() {
     expect(find.text('@logan'), findsOneWidget);
     expect(find.text('在线'), findsOneWidget);
     expect(find.text('离线'), findsNothing);
+  });
+
+  testWidgets('deleted user card is a non-interactive tombstone', (
+    tester,
+  ) async {
+    const deleted = UserSummary(
+      id: 'user_deleted',
+      uid: '1000999',
+      username: 'historical_name',
+      displayName: 'Historical User',
+      bio: 'This must not be shown.',
+      gender: 'male',
+      avatarUrl: '/historical-avatar.png',
+      defaultAvatarKey: 'blue-3',
+      roomDisplayName: 'Historical Room Name',
+      roomRole: 'admin',
+      isOnline: true,
+      isDeleted: true,
+      commonRooms: [
+        UserCommonRoom(
+          id: 'room_old',
+          rid: 'R100',
+          name: 'Historical Room',
+          avatarUrl: null,
+          defaultAvatarKey: 'room-1',
+        ),
+      ],
+    );
+    var resolveCalls = 0;
+    var actionBuilderCalls = 0;
+
+    await tester.pumpWidget(
+      _host(
+        AvatarHoverCardForTest(
+          user: deleted,
+          onResolveProfile: (user) async {
+            resolveCalls += 1;
+            return user;
+          },
+          profileActionBuilder: (_) {
+            actionBuilderCalls += 1;
+            return UserProfileAction(
+              label: '管理成员',
+              icon: Icons.admin_panel_settings_outlined,
+              onPressed: () {},
+            );
+          },
+        ),
+      ),
+    );
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await gesture.moveTo(tester.getCenter(find.byType(Avatar).first));
+    await tester.pumpAndSettle();
+
+    expect(resolveCalls, 0);
+    expect(actionBuilderCalls, 0);
+    expect(find.text('用户已注销'), findsOneWidget);
+    expect(find.text('@已注销'), findsOneWidget);
+    expect(find.text('This must not be shown.'), findsNothing);
+    expect(find.text('Historical Room'), findsNothing);
+    expect(find.text('UID: 1000999'), findsNothing);
+    expect(find.text('管理成员'), findsNothing);
   });
 }
 

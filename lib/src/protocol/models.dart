@@ -105,6 +105,7 @@ class UserSummary {
     this.isSuperuser = false,
     this.isOnline,
     this.commonRooms = const [],
+    this.isDeleted = false,
   });
 
   final String id;
@@ -124,6 +125,7 @@ class UserSummary {
   final bool isSuperuser;
   final bool? isOnline;
   final List<UserCommonRoom> commonRooms;
+  final bool isDeleted;
 
   factory UserSummary.fromJson(Map<String, Object?> json) {
     final username = json['username']! as String;
@@ -169,6 +171,7 @@ class UserSummary {
       commonRooms: _listOfMaps(
         json['common_rooms'],
       ).map(UserCommonRoom.fromJson).where((room) => room.isUsable).toList(),
+      isDeleted: json['is_deleted'] as bool? ?? false,
     );
   }
 
@@ -188,6 +191,7 @@ class UserSummary {
     bool? isSuperuser,
     bool? isOnline,
     List<UserCommonRoom>? commonRooms,
+    bool? isDeleted,
   }) {
     return UserSummary(
       id: id,
@@ -207,10 +211,13 @@ class UserSummary {
       isSuperuser: isSuperuser ?? this.isSuperuser,
       isOnline: isOnline ?? this.isOnline,
       commonRooms: commonRooms ?? this.commonRooms,
+      isDeleted: isDeleted ?? this.isDeleted,
     );
   }
 
   UserSummary mergeMissing(UserSummary fallback) {
+    if (isDeleted) return this;
+    if (fallback.isDeleted) return fallback;
     String? nonEmptyOrFallback(String? value, String? fallback) {
       if (value != null && value.trim().isNotEmpty) return value;
       return fallback;
@@ -239,6 +246,7 @@ class UserSummary {
       isSuperuser: isSuperuser || fallback.isSuperuser,
       isOnline: isOnline ?? fallback.isOnline,
       commonRooms: commonRooms.isNotEmpty ? commonRooms : fallback.commonRooms,
+      isDeleted: false,
     );
   }
 }
@@ -789,6 +797,7 @@ class PublicRoom {
     this.createdBy,
     this.personalProfile = const RoomPersonalProfile(),
     this.myMembership,
+    this.isDeleted = false,
   });
 
   final String id;
@@ -808,6 +817,7 @@ class PublicRoom {
   final UserSummary? createdBy;
   final RoomPersonalProfile personalProfile;
   final RoomMembership? myMembership;
+  final bool isDeleted;
 
   factory PublicRoom.fromJson(Map<String, Object?> json) {
     return PublicRoom(
@@ -839,6 +849,7 @@ class PublicRoom {
       myMembership: _nullableMap(json['my_membership']) == null
           ? null
           : RoomMembership.fromJson(_nullableMap(json['my_membership'])!),
+      isDeleted: json['is_deleted'] as bool? ?? false,
     );
   }
 
@@ -848,6 +859,7 @@ class PublicRoom {
     int? memberCount,
     int? onlineMemberCount,
     int? liveParticipantCount,
+    bool? isDeleted,
   }) {
     return PublicRoom(
       id: id,
@@ -867,6 +879,7 @@ class PublicRoom {
       createdBy: createdBy,
       personalProfile: personalProfile,
       myMembership: myMembership,
+      isDeleted: isDeleted ?? this.isDeleted,
     );
   }
 }
@@ -1273,16 +1286,22 @@ class RoomInvite {
   final DateTime? updatedAt;
 
   factory RoomInvite.fromJson(Map<String, Object?> json) {
+    final roomExists = json['room_exists'] as bool? ?? true;
+    final inviterExists = json['inviter_exists'] as bool? ?? true;
     return RoomInvite(
       id: json['id']! as String,
       status: json['status'] as String? ?? 'pending',
-      room: PublicRoom.fromJson(json['room']! as Map<String, Object?>),
-      inviter: UserSummary.fromJson(json['inviter']! as Map<String, Object?>),
+      room: PublicRoom.fromJson(
+        json['room']! as Map<String, Object?>,
+      ).copyWith(isDeleted: !roomExists),
+      inviter: UserSummary.fromJson(
+        json['inviter']! as Map<String, Object?>,
+      ).copyWith(isDeleted: !inviterExists),
       createdAt:
           _parseDateTime(json['created_at']) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-      roomExists: json['room_exists'] as bool? ?? true,
-      inviterExists: json['inviter_exists'] as bool? ?? true,
+      roomExists: roomExists,
+      inviterExists: inviterExists,
       invalidReason: _stringFromJson(json, const ['invalid_reason']),
       updatedAt: _parseDateTime(json['updated_at']),
     );
@@ -1341,6 +1360,8 @@ class RoomApplication {
   final bool reviewNotificationDeleted;
 
   factory RoomApplication.fromJson(Map<String, Object?> json) {
+    final reviewerExists = json['reviewer_exists'] as bool? ?? true;
+    final reviewerJson = _nullableMap(json['reviewer']);
     return RoomApplication(
       id: json['id']! as String,
       status: json['status'] as String? ?? 'pending',
@@ -1353,10 +1374,12 @@ class RoomApplication {
           _parseDateTime(json['updated_at']) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       reviewedAt: _parseDateTime(json['reviewed_at']),
-      reviewer: _nullableMap(json['reviewer']) == null
+      reviewer: reviewerJson == null
           ? null
-          : UserSummary.fromJson(_nullableMap(json['reviewer'])!),
-      reviewerExists: json['reviewer_exists'] as bool? ?? true,
+          : UserSummary.fromJson(
+              reviewerJson,
+            ).copyWith(isDeleted: !reviewerExists),
+      reviewerExists: reviewerExists,
       requestNotificationDeleted:
           json['request_notification_deleted'] as bool? ?? false,
       reviewNotificationDeleted:
@@ -1415,17 +1438,23 @@ class RoomEventNotification {
 
   factory RoomEventNotification.fromJson(Map<String, Object?> json) {
     final actorJson = _nullableMap(json['actor']);
-    final actor = actorJson == null ? null : UserSummary.fromJson(actorJson);
+    final roomExists = json['room_exists'] as bool? ?? true;
+    final actorExists = json['actor_exists'] as bool? ?? actorJson != null;
+    final actor = actorJson == null
+        ? null
+        : UserSummary.fromJson(actorJson).copyWith(isDeleted: !actorExists);
     return RoomEventNotification(
       id: json['id']! as String,
       type: json['type'] as String? ?? '',
-      room: PublicRoom.fromJson(json['room']! as Map<String, Object?>),
+      room: PublicRoom.fromJson(
+        json['room']! as Map<String, Object?>,
+      ).copyWith(isDeleted: !roomExists),
       createdAt:
           _parseDateTime(json['created_at']) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-      roomExists: json['room_exists'] as bool? ?? true,
+      roomExists: roomExists,
       actor: actor,
-      actorExists: json['actor_exists'] as bool? ?? actor != null,
+      actorExists: actorExists,
       fromRole: _stringFromJson(json, const ['from_role']),
       toRole: _stringFromJson(json, const ['to_role']),
       messageId: _stringFromJson(json, const ['message_id']),

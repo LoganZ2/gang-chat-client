@@ -1,0 +1,975 @@
+part of '../gang_app_shell_test.dart';
+
+void registerShellRoomManagementWidgetTests() {
+  testWidgets('authenticated home shell opens room management with real APIs', (
+    WidgetTester tester,
+  ) async {
+    final requestedPaths = <String>[];
+    final requestedUris = <Uri>[];
+    final myRoomSettingsUpdates = <Map<String, Object?>>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(
+            requestedPaths: requestedPaths,
+            requestedUris: requestedUris,
+            myRoomSettingsUpdates: myRoomSettingsUpdates,
+          ),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('room-members-entry-badge')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byIcon(Icons.groups_outlined));
+    await tester.pumpAndSettle();
+
+    expect(find.text('成员'), findsAtLeastNWidgets(1));
+    expect(find.text('房间成员'), findsOneWidget);
+    expect(find.text('新成员'), findsOneWidget);
+    expect(find.text('黑名单'), findsOneWidget);
+    expect(find.byKey(const ValueKey('new-members-tab-badge')), findsOneWidget);
+    expect(find.text('邀请成员'), findsNothing);
+    expect(find.text('语音 1'), findsOneWidget);
+    expect(find.text('在线 2'), findsOneWidget);
+    expect(find.text('管理员 1'), findsOneWidget);
+    expect(find.text('创建者 1'), findsOneWidget);
+    expect(
+      tester.getRect(find.byKey(const ValueKey('room-members-list'))).height,
+      greaterThan(260),
+    );
+    expect(find.text('@riley'), findsNothing);
+    expect(find.text('10000001'), findsNothing);
+    expect(find.text('Kai'), findsWidgets);
+    expect(find.text('Morgan'), findsWidgets);
+    expect(find.text('uid-1 · @kai'), findsNothing);
+    expect(find.text('user-2 · @morgan'), findsNothing);
+    expect(find.text('创建者'), findsWidgets);
+    expect(requestedPaths, contains('/api/v1/rooms/server-alpha/members'));
+    expect(
+      requestedPaths,
+      contains('/api/v1/rooms/server-alpha/join-requests'),
+    );
+
+    await tester.tap(find.text('新成员'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('邀请成员'), findsOneWidget);
+    expect(find.text('加入申请'), findsOneWidget);
+    expect(find.byTooltip('详情'), findsOneWidget);
+    await tester.ensureVisible(find.byTooltip('详情'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('详情'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<ui.ButtonIcon>(_buttonIconWithTooltip('详情')).selected,
+      isTrue,
+    );
+    expect(find.text('申请详情'), findsOneWidget);
+    expect(find.text('来源'), findsOneWidget);
+    expect(find.text('公开房间搜索'), findsOneWidget);
+    expect(find.text('申请理由'), findsOneWidget);
+    expect(find.text('Please approve my request'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ui.Button, '关闭'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<ui.ButtonIcon>(_buttonIconWithTooltip('详情')).selected,
+      isFalse,
+    );
+
+    await tester.ensureVisible(_textFieldWithHint('按用户名、昵称或 UID 搜索'));
+    await tester.pumpAndSettle();
+    await tester.enterText(_textFieldWithHint('按用户名、昵称或 UID 搜索'), 'mo');
+    await tester.pump(const Duration(milliseconds: 320));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Morgan'), findsAtLeastNWidgets(1));
+    expect(find.text('@morgan'), findsOneWidget);
+    expect(find.widgetWithText(ui.Button, '在房间内'), findsOneWidget);
+
+    await tester.enterText(_textFieldWithHint('按用户名、昵称或 UID 搜索'), '');
+    await tester.pump(const Duration(milliseconds: 320));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('房间成员'));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.byTooltip('设为管理员'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('设为管理员'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('设为管理员'), findsWidgets);
+    expect(find.textContaining('Morgan'), findsAtLeastNWidgets(1));
+    await tester.tap(find.widgetWithText(ui.Button, '设为管理员'));
+    await tester.pumpAndSettle();
+
+    expect(
+      requestedPaths,
+      contains('/api/v1/rooms/server-alpha/members/user-2'),
+    );
+
+    await tester.ensureVisible(find.byTooltip('踢出此用户'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('踢出此用户'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('踢出此用户'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ui.Button, '踢出'));
+    await tester.pumpAndSettle();
+
+    expect(
+      requestedPaths
+          .where((path) => path == '/api/v1/rooms/server-alpha/members/user-2')
+          .length,
+      2,
+    );
+    expect(find.text('Morgan'), findsNothing);
+
+    await tester.tap(find.text('新成员'));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(_textFieldWithHint('按用户名、昵称或 UID 搜索'));
+    await tester.pumpAndSettle();
+    await tester.enterText(_textFieldWithHint('按用户名、昵称或 UID 搜索'), 'ri');
+    await tester.pump(const Duration(milliseconds: 320));
+    await tester.pumpAndSettle();
+
+    expect(requestedPaths, contains('/api/v1/users/search'));
+    expect(find.textContaining('Riley'), findsAtLeastNWidgets(1));
+    expect(find.text('@riley'), findsOneWidget);
+    expect(find.text('@river'), findsOneWidget);
+    expect(find.text('@rina'), findsOneWidget);
+    expect(find.text('@riko'), findsOneWidget);
+    expect(find.text('@rita'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ui.Button, '邀请').first);
+    await tester.pumpAndSettle();
+
+    expect(requestedPaths, contains('/api/v1/rooms/server-alpha/invites'));
+    expect(find.widgetWithText(ui.Button, '已邀请'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('返回').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('房间设置'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('房间设置'), findsOneWidget);
+    expect(find.text('房间信息'), findsAtLeastNWidgets(1));
+    expect(find.text('个人偏好'), findsOneWidget);
+    expect(find.text('消息记录'), findsOneWidget);
+    expect(find.text('设置'), findsNothing);
+    expect(find.byIcon(Icons.info_outline), findsOneWidget);
+    expect(find.byType(ui.UiSwitch), findsOneWidget);
+    expect(find.byType(Switch), findsNothing);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is ListView && widget.physics is ClampingScrollPhysics,
+      ),
+      findsAtLeastNWidgets(1),
+    );
+    final descriptionField = _roomSettingsTextField('description');
+    expect(tester.widget<TextField>(descriptionField).maxLines, isNull);
+    expect(
+      tester
+          .widget<TextField>(_roomSettingsTextField('name'))
+          .decoration
+          ?.hintText,
+      isEmpty,
+    );
+    expect(
+      tester.widget<TextField>(descriptionField).decoration?.hintText,
+      isEmpty,
+    );
+    expect(find.text('房间 RID'), findsOneWidget);
+    final ridText = tester.widget<TextField>(
+      find.byKey(const ValueKey('room-settings-rid')),
+    );
+    expect(ridText.controller?.text, 'server-alpha');
+    expect(find.text('创建时间'), findsOneWidget);
+    final createdAtText = tester.widget<TextField>(
+      find.byKey(const ValueKey('room-settings-created-at')),
+    );
+    expect(
+      createdAtText.controller?.text,
+      room_display.roomCreatedAtLabel(DateTime.parse('2026-06-01T00:00:00Z')),
+    );
+    expect(
+      tester.getRect(find.byKey(const ValueKey('room-settings-rid'))).top,
+      greaterThan(tester.getRect(descriptionField).bottom),
+    );
+    expect(
+      tester
+          .getRect(find.byKey(const ValueKey('room-settings-created-at')))
+          .top,
+      greaterThan(
+        tester.getRect(find.byKey(const ValueKey('room-settings-rid'))).bottom,
+      ),
+    );
+    final roomInfoSectionDecorations = tester
+        .widgetList<DecoratedBox>(
+          find.ancestor(
+            of: find.text('房间信息'),
+            matching: find.byType(DecoratedBox),
+          ),
+        )
+        .where((box) => box.decoration is BoxDecoration)
+        .map((box) => box.decoration as BoxDecoration);
+    expect(
+      roomInfoSectionDecorations.any(
+        (decoration) => decoration.color == null && decoration.border is Border,
+      ),
+      isTrue,
+    );
+
+    await tester.enterText(_roomSettingsTextField('name'), 'Alpha Renamed');
+    final saveButton = find.widgetWithText(ui.Button, '保存房间设置');
+    tester.widget<ui.Button>(saveButton).onPressed?.call();
+    await tester.pumpAndSettle();
+
+    expect(requestedPaths, contains('/api/v1/rooms/server-alpha'));
+    expect(find.text('房间信息已保存'), findsOneWidget);
+    expect(find.textContaining('Alpha Renamed'), findsAtLeastNWidgets(1));
+
+    await tester.tap(find.text('个人偏好').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('房间消息'), findsOneWidget);
+    expect(find.text('全部'), findsOneWidget);
+    expect(find.text('接收但不提醒'), findsOneWidget);
+    expect(find.text('屏蔽'), findsOneWidget);
+    await tester.tap(find.text('接收但不提醒'));
+    await tester.pumpAndSettle();
+    final savePreferencesButton = find.widgetWithText(ui.Button, '保存个人偏好');
+    await tester.ensureVisible(savePreferencesButton);
+    await tester.pumpAndSettle();
+    await tester.tap(savePreferencesButton);
+    await tester.pumpAndSettle();
+
+    expect(requestedPaths, contains('/api/v1/rooms/server-alpha/me'));
+    expect(myRoomSettingsUpdates, hasLength(1));
+    expect(myRoomSettingsUpdates.single['notification_policy'], 'silent');
+    expect(myRoomSettingsUpdates.single['is_pinned'], isFalse);
+    await tester.drag(find.byType(ListView).last, const Offset(0, 600));
+    await tester.pumpAndSettle();
+    expect(find.text('个人偏好已保存'), findsOneWidget);
+    expect(
+      tester.getRect(find.text('个人偏好已保存')).top,
+      lessThan(
+        tester
+            .getRect(
+              find.byKey(const ValueKey('room-settings-remark-name-input')),
+            )
+            .top,
+      ),
+    );
+
+    await tester.tap(find.text('消息记录'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('room-message-history-search')),
+      findsOneWidget,
+    );
+    expect(find.text('Hello from Morgan'), findsOneWidget);
+    expect(find.text('Morgan'), findsNWidgets(2));
+    expect(
+      find.byKey(const ValueKey('room-message-history-date-filter')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('room-message-history-member-filter')),
+      findsOneWidget,
+    );
+    final historyRow = find.byKey(
+      const ValueKey('room-message-history-row-msg-1'),
+    );
+    final historyTime = find.byKey(
+      const ValueKey('room-message-history-time-msg-1'),
+    );
+    final historyAvatar = find.byKey(
+      const ValueKey('room-message-history-avatar-msg-1'),
+    );
+    expect(tester.getRect(historyRow).height, greaterThanOrEqualTo(64));
+    expect(
+      find.ancestor(of: historyTime, matching: historyRow),
+      findsOneWidget,
+    );
+    expect(
+      tester.getRect(historyTime).right,
+      lessThan(tester.getRect(historyAvatar).left),
+    );
+    expect(
+      find.descendant(
+        of: historyRow,
+        matching: find.byType(ChatMessageContent),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: historyRow,
+        matching: find.byKey(const ValueKey('message-bubble-surface-msg-1')),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.ancestor(of: historyAvatar, matching: find.byType(UserHoverCard)),
+      findsOneWidget,
+    );
+    final historyContentPointer = tester.widget<IgnorePointer>(
+      find.byKey(
+        const ValueKey('room-message-history-content-interactions-msg-1'),
+      ),
+    );
+    expect(historyContentPointer.ignoring, isFalse);
+    final historySenderName = tester.widget<Text>(
+      find.descendant(of: historyRow, matching: find.text('Morgan')),
+    );
+    expect(
+      tester.getRect(historyAvatar).top,
+      closeTo(
+        tester
+            .getRect(
+              find.descendant(of: historyRow, matching: find.text('Morgan')),
+            )
+            .top,
+        0.01,
+      ),
+    );
+    expect(
+      historySenderName.style?.color,
+      ui.roleBadgeForegroundColorForLabel('成员'),
+    );
+    expect(find.text('语音'), findsOneWidget);
+    expect(
+      tester.getCenter(find.text('链接')).dx,
+      lessThan(tester.getCenter(find.text('语音')).dx),
+    );
+    expect(
+      tester.getCenter(find.text('语音')).dx,
+      lessThan(tester.getCenter(find.text('表情')).dx),
+    );
+    final systemHistoryRow = find.byKey(
+      const ValueKey('room-message-history-row-msg-system'),
+    );
+    expect(systemHistoryRow, findsOneWidget);
+    expect(
+      find.descendant(
+        of: systemHistoryRow,
+        matching: find.byType(ChatSystemMessageContent),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: systemHistoryRow,
+        matching: find.byKey(
+          const ValueKey('room-message-history-avatar-msg-system'),
+        ),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: systemHistoryRow, matching: find.byType(ui.Avatar)),
+      findsOneWidget,
+    );
+    final systemHistoryContent = find.descendant(
+      of: systemHistoryRow,
+      matching: find.byType(ChatSystemMessageContent),
+    );
+    expect(
+      find.descendant(
+        of: systemHistoryContent,
+        matching: find.byType(AnimatedContainer),
+      ),
+      findsNothing,
+    );
+    final systemHistoryAvatar = find.descendant(
+      of: systemHistoryContent,
+      matching: find.byType(ui.Avatar),
+    );
+    expect(tester.getSize(systemHistoryAvatar), const Size.square(18));
+    expect(
+      tester.getRect(systemHistoryAvatar).left,
+      closeTo(tester.getRect(historyAvatar).left, 0.01),
+    );
+    expect(
+      tester.getCenter(systemHistoryAvatar).dy,
+      closeTo(tester.getRect(systemHistoryRow).center.dy, 0.01),
+    );
+    final systemHistoryText = tester.widget<Text>(
+      find.descendant(of: systemHistoryContent, matching: find.text('加入了房间')),
+    );
+    expect(systemHistoryText.style?.fontSize, ui.UiTypography.body.fontSize);
+    final systemJumpButton = find.byKey(
+      const ValueKey('room-message-history-jump-msg-system'),
+    );
+    expect(
+      tester.getRect(systemJumpButton).top,
+      greaterThanOrEqualTo(tester.getRect(systemHistoryRow).top),
+    );
+    expect(
+      tester.getRect(systemJumpButton).bottom,
+      lessThanOrEqualTo(tester.getRect(systemHistoryRow).bottom),
+    );
+
+    await tester.tap(find.text('图片'));
+    await tester.pumpAndSettle();
+    expect(
+      requestedUris.any(
+        (uri) =>
+            uri.path == '/api/v1/rooms/server-alpha/message-history' &&
+            uri.queryParameters['category'] == 'images',
+      ),
+      isTrue,
+    );
+    await tester.tap(find.text('文件'));
+    await tester.pumpAndSettle();
+    expect(
+      requestedUris.any(
+        (uri) =>
+            uri.path == '/api/v1/rooms/server-alpha/message-history' &&
+            uri.queryParameters['category'] == 'files',
+      ),
+      isTrue,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('room-message-history-member-filter')),
+    );
+    await tester.pumpAndSettle();
+    final memberOption = find.byKey(
+      const ValueKey('message-history-member-user-2'),
+    );
+    expect(memberOption, findsOneWidget);
+    expect(
+      find.descendant(of: memberOption, matching: find.text('@morgan')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: memberOption,
+        matching: find.textContaining('10000021'),
+      ),
+      findsNothing,
+    );
+    final memberName = tester.widget<Text>(
+      find.descendant(of: memberOption, matching: find.text('Morgan')),
+    );
+    expect(memberName.style?.fontWeight, FontWeight.w700);
+    final allMemberOption = find.byKey(
+      const ValueKey('message-history-member-all'),
+    );
+    expect(
+      find.descendant(of: allMemberOption, matching: find.byIcon(Icons.check)),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: memberOption,
+        matching: find.byType(ui.PressableSurface),
+      ),
+      findsNothing,
+    );
+    final memberRole = find.byKey(
+      const ValueKey('message-history-member-role-user-2'),
+    );
+    expect(memberRole, findsOneWidget);
+    expect(
+      tester.getRect(memberOption).right - tester.getRect(memberRole).right,
+      closeTo(11, 0.01),
+    );
+    expect(
+      find.descendant(of: memberRole, matching: find.text('成员')),
+      findsOneWidget,
+    );
+    expect(
+      find.ancestor(
+        of: find.byKey(const ValueKey('message-history-member-avatar-user-2')),
+        matching: find.byType(UserHoverCard),
+      ),
+      findsOneWidget,
+    );
+    final memberScrollbar = find.byKey(
+      const ValueKey('message-history-member-scrollbar'),
+    );
+    final memberList = tester.widget<ListView>(
+      find.descendant(of: memberScrollbar, matching: find.byType(ListView)),
+    );
+    expect((memberList.padding! as EdgeInsets).right, greaterThan(0));
+    await tester.tap(find.widgetWithText(ui.Button, '取消').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('room-message-history-batch-manage')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<IgnorePointer>(
+            find.byKey(
+              const ValueKey('room-message-history-content-interactions-msg-1'),
+            ),
+          )
+          .ignoring,
+      isTrue,
+    );
+    final row = tester.getRect(
+      find.byKey(const ValueKey('room-message-history-row-msg-1')),
+    );
+    final selectBox = tester.getRect(
+      find.byKey(const ValueKey('room-message-history-select-msg-1')),
+    );
+    final jumpButton = tester.getRect(
+      find.byKey(const ValueKey('room-message-history-jump-msg-1')),
+    );
+    expect(selectBox.center.dy, closeTo(row.center.dy, 0.01));
+    expect(jumpButton.center.dy, closeTo(row.center.dy, 0.01));
+    expect(
+      tester
+          .widget<ui.UiCheckbox>(
+            find.byKey(const ValueKey('room-message-history-select-msg-1')),
+          )
+          .value,
+      isFalse,
+    );
+    await tester.tap(historyAvatar);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('user-profile-card-avatar-preview')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<ui.UiCheckbox>(
+            find.byKey(const ValueKey('room-message-history-select-msg-1')),
+          )
+          .value,
+      isFalse,
+    );
+    await tester.tap(historyAvatar);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('room-message-history-row-msg-1')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<ui.UiCheckbox>(
+            find.byKey(const ValueKey('room-message-history-select-msg-1')),
+          )
+          .value,
+      isTrue,
+    );
+    final selectedHistoryDecoration =
+        tester
+                .widget<AnimatedContainer>(
+                  find.byKey(const ValueKey('room-message-history-row-msg-1')),
+                )
+                .decoration
+            as BoxDecoration;
+    final selectedHistoryBorder = selectedHistoryDecoration.border! as Border;
+    expect(selectedHistoryDecoration.color, ui.UiColors.selected);
+    expect(selectedHistoryBorder.top.color, ui.UiColors.selectedBorder);
+    expect(selectedHistoryBorder.top.width, 1);
+
+    await tester.tap(find.byTooltip('返回').last);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Alpha Renamed'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'room settings confirms auto-reviewing pending applications before join policy change',
+    (WidgetTester tester) async {
+      final requestedPaths = <String>[];
+      final roomSettingsUpdates = <Map<String, Object?>>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: HomePage(
+            app: _homeTestAppContext(
+              requestedPaths: requestedPaths,
+              roomSettingsUpdates: roomSettingsUpdates,
+            ),
+            realtime: _NoopRealtimeService(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Alpha Room'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('房间设置'));
+      await tester.pumpAndSettle();
+
+      final openJoinPolicy = find.text('开放').last;
+      await tester.ensureVisible(openJoinPolicy);
+      await tester.pumpAndSettle();
+      await tester.tap(openJoinPolicy);
+      await tester.pumpAndSettle();
+
+      final saveButton = find.widgetWithText(ui.Button, '保存房间设置');
+      tester.widget<ui.Button>(saveButton).onPressed?.call();
+      await tester.pumpAndSettle();
+
+      expect(
+        requestedPaths,
+        contains('/api/v1/rooms/server-alpha/join-requests'),
+      );
+      expect(find.text('确认修改加入方式？'), findsOneWidget);
+      expect(find.textContaining('自动批准所有未处理申请'), findsOneWidget);
+      expect(roomSettingsUpdates, isEmpty);
+
+      await tester.tap(find.widgetWithText(ui.Button, '取消'));
+      await tester.pumpAndSettle();
+      expect(roomSettingsUpdates, isEmpty);
+
+      tester.widget<ui.Button>(saveButton).onPressed?.call();
+      await tester.pumpAndSettle();
+      expect(roomSettingsUpdates, hasLength(1));
+      expect(roomSettingsUpdates.single['join_policy'], 'approval_required');
+      expect(find.text('确认修改加入方式？'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('room settings info fields are read-only for regular members', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(currentRoomRole: 'member'),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('房间设置'));
+    await tester.pumpAndSettle();
+
+    final nameField = tester.widget<TextField>(_roomSettingsTextField('name'));
+    final descriptionField = tester.widget<TextField>(
+      _roomSettingsTextField('description'),
+    );
+
+    expect(nameField.readOnly, isTrue);
+    expect(nameField.enableInteractiveSelection, isTrue);
+    expect(nameField.controller?.text, 'Alpha Room');
+    expect(descriptionField.readOnly, isTrue);
+    expect(descriptionField.enableInteractiveSelection, isTrue);
+    expect(descriptionField.maxLines, isNull);
+    expect(descriptionField.controller?.text, isEmpty);
+    expect(
+      tester
+          .widget<ui.Button>(find.widgetWithText(ui.Button, '保存房间设置'))
+          .onPressed,
+      isNull,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'authenticated home shell hides member removal for regular users',
+    (WidgetTester tester) async {
+      final requestedPaths = <String>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: HomePage(
+            app: _homeTestAppContext(
+              requestedPaths: requestedPaths,
+              currentRoomRole: 'member',
+              currentRoomJoinPolicy: 'closed',
+            ),
+            realtime: _NoopRealtimeService(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Alpha Room'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('room-members-entry-badge')),
+        findsNothing,
+      );
+
+      await tester.tap(find.byTooltip('房间成员'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('成员'), findsAtLeastNWidgets(1));
+      expect(find.text('房间成员'), findsNothing);
+      expect(find.text('新成员'), findsNothing);
+      expect(find.text('黑名单'), findsNothing);
+      expect(find.text('Morgan'), findsWidgets);
+      expect(find.byTooltip('踢出此用户'), findsNothing);
+      expect(find.byTooltip('设为管理员'), findsNothing);
+      expect(find.byTooltip('转让创建者'), findsNothing);
+      expect(requestedPaths, contains('/api/v1/rooms/server-alpha/members'));
+      expect(
+        requestedPaths,
+        isNot(contains('/api/v1/rooms/server-alpha/join-requests')),
+      );
+      expect(
+        requestedPaths,
+        isNot(contains('/api/v1/rooms/server-alpha/blacklist')),
+      );
+    },
+  );
+
+  testWidgets('authenticated home shell hides new members for closed rooms', (
+    WidgetTester tester,
+  ) async {
+    final requestedPaths = <String>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(
+            requestedPaths: requestedPaths,
+            currentRoomJoinPolicy: 'closed',
+          ),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('room-members-entry-badge')),
+      findsNothing,
+    );
+
+    await tester.tap(find.byTooltip('房间成员'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('房间成员'), findsOneWidget);
+    expect(find.text('新成员'), findsNothing);
+    expect(find.text('黑名单'), findsOneWidget);
+    expect(requestedPaths, contains('/api/v1/rooms/server-alpha/members'));
+    expect(
+      requestedPaths,
+      isNot(contains('/api/v1/rooms/server-alpha/join-requests')),
+    );
+  });
+
+  testWidgets('authenticated home shell lets superusers remove creators', (
+    WidgetTester tester,
+  ) async {
+    final requestedPaths = <String>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(
+            requestedPaths: requestedPaths,
+            currentRoomRole: 'member',
+            currentUserIsSuperuser: true,
+            secondaryMemberRole: 'owner',
+          ),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('房间成员'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Morgan'), findsWidgets);
+    expect(find.text('创建者'), findsWidgets);
+    expect(find.byTooltip('踢出此用户'), findsOneWidget);
+    expect(find.byTooltip('设为管理员'), findsNothing);
+    expect(find.byTooltip('转让创建者'), findsNothing);
+    expect(requestedPaths, contains('/api/v1/rooms/server-alpha/members'));
+  });
+
+  testWidgets('creator removal action aligns with member action group', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(
+            currentRoomRole: 'member',
+            currentUserIsSuperuser: true,
+            secondaryMemberRole: 'owner',
+            includeActionComparisonMember: true,
+          ),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('房间成员'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Morgan'), findsWidgets);
+    expect(find.text('Taylor'), findsWidgets);
+    expect(_buttonIconWithTooltip('踢出此用户'), findsNWidgets(2));
+    expect(_buttonIconWithTooltip('转让创建者'), findsOneWidget);
+
+    final creatorRemoveRect = tester.getRect(
+      _buttonIconWithTooltip('踢出此用户').first,
+    );
+    final memberTransferRect = tester.getRect(_buttonIconWithTooltip('转让创建者'));
+    expect(creatorRemoveRect.right, closeTo(memberTransferRect.right, 0.01));
+  });
+
+  testWidgets('member management keeps row order after role updates', (
+    WidgetTester tester,
+  ) async {
+    final requestedPaths = <String>[];
+    final realtime = _FakeRealtimeService();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(
+            requestedPaths: requestedPaths,
+            includeActionComparisonMember: true,
+          ),
+          realtime: realtime,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('房间成员'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Morgan'), findsWidgets);
+    expect(find.text('Taylor'), findsOneWidget);
+    final morganTopBefore = tester.getTopLeft(find.text('Morgan').first).dy;
+    final taylorTopBefore = tester.getTopLeft(find.text('Taylor')).dy;
+    expect(morganTopBefore, lessThan(taylorTopBefore));
+
+    expect(_buttonIconWithTooltip('设为管理员'), findsNWidgets(2));
+    await tester.tap(_buttonIconWithTooltip('设为管理员').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(ui.Button, '设为管理员'));
+    await tester.pumpAndSettle();
+
+    expect(
+      requestedPaths,
+      contains('/api/v1/rooms/server-alpha/members/user-5'),
+    );
+    final morganTopAfter = tester.getTopLeft(find.text('Morgan').first).dy;
+    final taylorTopAfter = tester.getTopLeft(find.text('Taylor')).dy;
+    expect(morganTopAfter, lessThan(taylorTopAfter));
+
+    realtime.add(
+      RealtimeEvent(
+        type: 'room_updated',
+        data: {
+          ..._roomCardJson(
+            id: 'server-alpha',
+            name: 'Alpha Room',
+            memberCount: 3,
+            liveParticipantCount: 1,
+          ),
+          'online_member_count': 3,
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final morganTopAfterReload = tester
+        .getTopLeft(find.text('Morgan').first)
+        .dy;
+    final taylorTopAfterReload = tester.getTopLeft(find.text('Taylor')).dy;
+    expect(morganTopAfterReload, lessThan(taylorTopAfterReload));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('message profile can jump to member management by UID', (
+    WidgetTester tester,
+  ) async {
+    final requestedPaths = <String>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(requestedPaths: requestedPaths),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+
+    final messageAvatar = find.descendant(
+      of: find.byKey(const ValueKey('message-stage-server-alpha')),
+      matching: find.byWidgetPredicate(
+        (widget) => widget is ui.Avatar && widget.label == 'Morgan',
+      ),
+    );
+    expect(messageAvatar, findsOneWidget);
+
+    await gesture.moveTo(tester.getCenter(messageAvatar));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(ui.Button, '管理成员'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ui.Button, '管理成员'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('成员'), findsAtLeastNWidgets(1));
+    expect(requestedPaths, contains('/api/v1/rooms/server-alpha/members'));
+    final memberSearchField = tester.widget<TextField>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField && widget.decoration?.hintText == '搜索成员',
+      ),
+    );
+    expect(memberSearchField.controller?.text, 'uid-2');
+    expect(find.textContaining('Morgan'), findsAtLeastNWidgets(1));
+  });
+}

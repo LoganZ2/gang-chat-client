@@ -249,7 +249,7 @@ void main() {
     );
   });
 
-  test('deleted notification rooms display as missing room targets', () {
+  test('deleted notification rooms display as deleted room targets', () {
     final deleted = _invite(
       'deleted',
       roomName: 'Deleted Room',
@@ -259,7 +259,7 @@ void main() {
 
     expect(
       roomNotificationRoomLabel(deleted.room, roomExists: deleted.roomExists),
-      '房间不存在',
+      '房间已删除',
     );
     expect(
       roomNotificationRoomAvatarLabel(
@@ -284,12 +284,12 @@ void main() {
     );
     expect(
       roomNotificationRoomCardEnabled(roomExists: deleted.roomExists),
-      isFalse,
+      isTrue,
     );
     expect(
       roomInviteNotificationsForView(
         invites: [deleted],
-        query: '房间不存在',
+        query: '房间已删除',
         filter: RoomNotificationFilter.all,
       ),
       [deleted],
@@ -300,11 +300,27 @@ void main() {
         query: '不存在',
         filter: RoomNotificationFilter.all,
       ),
-      [deleted],
+      isEmpty,
+    );
+    expect(
+      roomInviteNotificationsForView(
+        invites: [deleted],
+        query: 'Invite Room',
+        filter: RoomNotificationFilter.all,
+      ),
+      isEmpty,
+    );
+    expect(
+      roomInviteNotificationsForView(
+        invites: [deleted],
+        query: 'user_inviter_deleted_room',
+        filter: RoomNotificationFilter.all,
+      ),
+      isEmpty,
     );
   });
 
-  test('deleted notification users display as missing user targets', () {
+  test('deleted notification users display as deactivated user targets', () {
     final deletedInviter = _invite(
       'deleted_inviter',
       inviter: _user(
@@ -332,7 +348,7 @@ void main() {
         deletedInviter.inviter,
         userExists: deletedInviter.inviterExists,
       ),
-      '用户不存在',
+      '用户已注销',
     );
     expect(
       roomNotificationUserAvatarLabel(
@@ -358,7 +374,23 @@ void main() {
     expect(
       roomInviteNotificationsForView(
         invites: [deletedInviter],
-        query: '用户不存在',
+        query: 'Deleted Inviter',
+        filter: RoomNotificationFilter.all,
+      ),
+      isEmpty,
+    );
+    expect(
+      roomInviteNotificationsForView(
+        invites: [deletedInviter],
+        query: '用户已注销',
+        filter: RoomNotificationFilter.all,
+      ),
+      [deletedInviter],
+    );
+    expect(
+      roomInviteNotificationsForView(
+        invites: [deletedInviter],
+        query: '用户已注销',
         filter: RoomNotificationFilter.all,
       ),
       [deletedInviter],
@@ -367,7 +399,7 @@ void main() {
       roomNotificationsForView(
         invites: const [],
         applications: [deletedReviewer],
-        query: '用户不存在',
+        query: '用户已注销',
         filter: RoomNotificationFilter.all,
       ).map((item) => item.id),
       [

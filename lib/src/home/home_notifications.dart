@@ -958,18 +958,16 @@ class _RoomInviteNotificationRow extends StatelessWidget {
       showFallbackText: invite.inviterExists,
     );
     final inviterAvatarTarget = _NotificationInteractiveTarget(
-      child: invite.inviterExists
-          ? UserHoverCard(
-              user: inviter,
-              currentUser: currentUser,
-              onResolveProfile: onResolveRoomUserProfile == null
-                  ? null
-                  : (user) => onResolveRoomUserProfile!(room.id, user),
-              onResolveRoomProfile: onResolveRoomProfile,
-              onEnterCommonRoom: onOpenRoom,
-              child: inviterAvatar,
-            )
-          : inviterAvatar,
+      child: UserHoverCard(
+        user: inviter.copyWith(isDeleted: !invite.inviterExists),
+        currentUser: currentUser,
+        onResolveProfile: onResolveRoomUserProfile == null
+            ? null
+            : (user) => onResolveRoomUserProfile!(room.id, user),
+        onResolveRoomProfile: onResolveRoomProfile,
+        onEnterCommonRoom: onOpenRoom,
+        child: inviterAvatar,
+      ),
     );
     return _NotificationNewMarker(
       show: isActionablePendingRoomInvite(invite),
@@ -1265,18 +1263,16 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
       showFallbackText: application.reviewerExists,
     );
     final reviewerAvatarTarget = _NotificationInteractiveTarget(
-      child: application.reviewerExists
-          ? UserHoverCard(
-              user: reviewer,
-              currentUser: currentUser,
-              onResolveProfile: onResolveRoomUserProfile == null
-                  ? null
-                  : (user) => onResolveRoomUserProfile!(room.id, user),
-              onResolveRoomProfile: onResolveRoomProfile,
-              onEnterCommonRoom: onOpenRoom,
-              child: reviewerAvatar,
-            )
-          : reviewerAvatar,
+      child: UserHoverCard(
+        user: reviewer.copyWith(isDeleted: !application.reviewerExists),
+        currentUser: currentUser,
+        onResolveProfile: onResolveRoomUserProfile == null
+            ? null
+            : (user) => onResolveRoomUserProfile!(room.id, user),
+        onResolveRoomProfile: onResolveRoomProfile,
+        onEnterCommonRoom: onOpenRoom,
+        child: reviewerAvatar,
+      ),
     );
     return AnimatedContainer(
       key: ValueKey(
@@ -1797,18 +1793,16 @@ class _InlineUserTarget extends StatelessWidget {
       showFallbackText: userExists,
     );
     final avatarTarget = _NotificationInteractiveTarget(
-      child: userExists
-          ? UserHoverCard(
-              user: user,
-              currentUser: currentUser,
-              onResolveProfile: onResolveRoomUserProfile == null
-                  ? null
-                  : (target) => onResolveRoomUserProfile!(roomId, target),
-              onResolveRoomProfile: onResolveRoomProfile,
-              onEnterCommonRoom: onOpenRoom,
-              child: avatar,
-            )
-          : avatar,
+      child: UserHoverCard(
+        user: user.copyWith(isDeleted: !userExists),
+        currentUser: currentUser,
+        onResolveProfile: onResolveRoomUserProfile == null
+            ? null
+            : (target) => onResolveRoomUserProfile!(roomId, target),
+        onResolveRoomProfile: onResolveRoomProfile,
+        onEnterCommonRoom: onOpenRoom,
+        child: avatar,
+      ),
     );
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -1890,7 +1884,7 @@ class _InlineRoomTarget extends StatelessWidget {
     final avatarTarget = _NotificationInteractiveTarget(
       child: roomNotificationRoomCardEnabled(roomExists: roomExists)
           ? RoomHoverCard(
-              room: room,
+              room: room.copyWith(isDeleted: !roomExists),
               currentUser: currentUser,
               onResolveRoom: onResolveRoomProfile,
               onResolveUserProfile: onResolveRoomUserProfile == null
