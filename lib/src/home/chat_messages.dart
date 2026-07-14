@@ -268,6 +268,10 @@ class _MessageStageState extends State<_MessageStage> {
   @override
   void didUpdateWidget(covariant _MessageStage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.focusMessageId != widget.focusMessageId &&
+        widget.focusMessageId == null) {
+      _handledFocusMessageId = null;
+    }
     if (widget.focusMessageId != null &&
         oldWidget.messages.isNotEmpty &&
         widget.messages.isEmpty) {
@@ -1187,6 +1191,8 @@ class _MessageStageState extends State<_MessageStage> {
               _MessageRow(
                 message: message,
                 outgoing: message.sender.id == widget.currentUser.id,
+                timestampNow: now,
+                showDetailedTimestamps: _showDetailedTimestamps,
                 currentUser: widget.currentUser,
                 currentUserMentionIdentity: _currentUserMentionIdentity,
                 ownerUserId: widget.ownerUserId,
@@ -2124,6 +2130,8 @@ class _MessageRow extends StatelessWidget {
   const _MessageRow({
     required this.message,
     required this.outgoing,
+    required this.timestampNow,
+    required this.showDetailedTimestamps,
     required this.currentUser,
     required this.currentUserMentionIdentity,
     required this.ownerUserId,
@@ -2147,6 +2155,8 @@ class _MessageRow extends StatelessWidget {
 
   final Message message;
   final bool outgoing;
+  final DateTime timestampNow;
+  final bool showDetailedTimestamps;
   final CurrentUser currentUser;
   final UserSummary currentUserMentionIdentity;
   final String? ownerUserId;
@@ -2206,6 +2216,8 @@ class _MessageRow extends StatelessWidget {
             child: _MessageBubble(
               message: message,
               outgoing: outgoing,
+              timestampNow: timestampNow,
+              showDetailedTimestamps: showDetailedTimestamps,
               transfer: transfer,
               fileDownloads: fileDownloads,
               downloadActions: downloadActions,
@@ -2336,6 +2348,8 @@ class ChatMessageContent extends StatelessWidget {
     this.isUserInLive,
     this.onSelectionActiveChanged,
     this.onOpenQuote,
+    this.timestampNow,
+    this.showDetailedTimestamps = false,
   });
 
   final Message message;
@@ -2359,6 +2373,8 @@ class ChatMessageContent extends StatelessWidget {
   final ValueChanged<bool>? onSelectionActiveChanged;
   final Future<void> Function(BuildContext context, MessageQuote quote)?
   onOpenQuote;
+  final DateTime? timestampNow;
+  final bool showDetailedTimestamps;
 
   @override
   Widget build(BuildContext context) {
@@ -2372,6 +2388,8 @@ class ChatMessageContent extends StatelessWidget {
         for (var index = 0; index < quotes.length; index++) ...[
           _MessageQuoteCard(
             quote: quotes[index],
+            timestampNow: timestampNow,
+            showDetailedTimestamps: showDetailedTimestamps,
             imagePreviewActions: imagePreviewActions,
             onTap: onOpenQuote == null
                 ? null
@@ -2449,6 +2467,8 @@ class _MessageBubble extends StatefulWidget {
   const _MessageBubble({
     required this.message,
     required this.outgoing,
+    required this.timestampNow,
+    required this.showDetailedTimestamps,
     required this.transfer,
     required this.fileDownloads,
     required this.downloadActions,
@@ -2470,6 +2490,8 @@ class _MessageBubble extends StatefulWidget {
 
   final Message message;
   final bool outgoing;
+  final DateTime timestampNow;
+  final bool showDetailedTimestamps;
   final FileTransferState? transfer;
   final Map<String, FileTransferState> fileDownloads;
   final ChatFileDownloadActions downloadActions;
@@ -2562,6 +2584,8 @@ class _MessageBubbleState extends State<_MessageBubble> {
             child: ChatMessageContent(
               message: widget.message,
               outgoing: widget.outgoing,
+              timestampNow: widget.timestampNow,
+              showDetailedTimestamps: widget.showDetailedTimestamps,
               transfer: widget.transfer,
               fileDownloads: widget.fileDownloads,
               downloadActions: widget.downloadActions,
@@ -2645,6 +2669,8 @@ class _MessageQuoteCard extends StatelessWidget {
     this.onClose,
     this.compact = false,
     this.imagePreviewActions,
+    this.timestampNow,
+    this.showDetailedTimestamps = false,
   });
 
   final MessageQuote quote;
@@ -2652,11 +2678,19 @@ class _MessageQuoteCard extends StatelessWidget {
   final VoidCallback? onClose;
   final bool compact;
   final ChatImagePreviewActions? imagePreviewActions;
+  final DateTime? timestampNow;
+  final bool showDetailedTimestamps;
 
   @override
   Widget build(BuildContext context) {
     final body = quote.body.trim().isEmpty ? '[消息]' : quote.body.trim();
     final hasThumbnail = quote.previewAttachment?.asset != null;
+    final timestamp = showDetailedTimestamps
+        ? message_display.formatDetailedChatTimestamp(quote.createdAt)
+        : message_display.formatChatTimestamp(
+            quote.createdAt,
+            now: timestampNow,
+          );
     final card = Container(
       key: ValueKey('message-quote-${quote.messageId}'),
       width: double.infinity,
@@ -2666,68 +2700,82 @@ class _MessageQuoteCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(UiRadii.md),
         border: Border.all(color: UiColors.border),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
         children: [
-          Container(
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
             width: 3,
-            height: compact ? 36 : 40,
-            decoration: BoxDecoration(
-              color: UiColors.textMuted,
-              borderRadius: BorderRadius.circular(999),
+            child: Container(
+              key: ValueKey('message-quote-indicator-${quote.messageId}'),
+              decoration: BoxDecoration(
+                color: UiColors.textMuted,
+                borderRadius: BorderRadius.circular(999),
+              ),
             ),
           ),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+          Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Text(
-                  '${quote.senderDisplayName}  ${message_display.formatMessageTime(quote.createdAt)}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: UiTypography.label.copyWith(
-                    color: UiColors.textSecondary,
-                    fontWeight: FontWeight.w600,
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${quote.senderDisplayName}  $timestamp',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: UiTypography.label.copyWith(
+                          color: UiColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      if (hasThumbnail)
+                        _MessageQuoteThumbnail(
+                          quote: quote,
+                          actions: imagePreviewActions,
+                          compact: compact,
+                          fallbackText: body,
+                        )
+                      else
+                        Text(
+                          body,
+                          maxLines: compact ? 1 : 4,
+                          overflow: TextOverflow.ellipsis,
+                          style: UiTypography.body.copyWith(
+                            color: UiColors.text,
+                            fontSize: 12,
+                            height: 1.35,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 3),
-                if (hasThumbnail)
-                  _MessageQuoteThumbnail(
-                    quote: quote,
-                    actions: imagePreviewActions,
-                    compact: compact,
-                    fallbackText: body,
-                  )
-                else
-                  Text(
-                    body,
-                    maxLines: compact ? 1 : 4,
-                    overflow: TextOverflow.ellipsis,
-                    style: UiTypography.body.copyWith(
-                      color: UiColors.text,
-                      fontSize: 12,
-                      height: 1.35,
+                if (onClose != null) ...[
+                  const SizedBox(width: 6),
+                  IconButton(
+                    key: ValueKey('composer-quote-close-${quote.messageId}'),
+                    onPressed: onClose,
+                    icon: const Icon(Icons.close),
+                    iconSize: 16,
+                    color: UiColors.textMuted,
+                    tooltip: '取消引用',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 28,
+                      minHeight: 28,
                     ),
+                    splashRadius: 16,
                   ),
+                ],
               ],
             ),
           ),
-          if (onClose != null) ...[
-            const SizedBox(width: 6),
-            IconButton(
-              key: ValueKey('composer-quote-close-${quote.messageId}'),
-              onPressed: onClose,
-              icon: const Icon(Icons.close),
-              iconSize: 16,
-              color: UiColors.textMuted,
-              tooltip: '取消引用',
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-              splashRadius: 16,
-            ),
-          ],
         ],
       ),
     );
@@ -4129,6 +4177,8 @@ class MessageBubbleForTest extends StatelessWidget {
     this.fileDownloads = const {},
     this.voicePlaybackActions = const ChatVoicePlaybackActions.disabled(),
     this.messageActions = const ChatMessageActions.disabled(),
+    this.timestampNow,
+    this.showDetailedTimestamps = false,
   });
 
   final Message message;
@@ -4139,6 +4189,8 @@ class MessageBubbleForTest extends StatelessWidget {
   final Map<String, FileTransferState> fileDownloads;
   final ChatVoicePlaybackActions voicePlaybackActions;
   final ChatMessageActions messageActions;
+  final DateTime? timestampNow;
+  final bool showDetailedTimestamps;
 
   @override
   Widget build(BuildContext context) {
@@ -4147,6 +4199,8 @@ class MessageBubbleForTest extends StatelessWidget {
       child: _MessageBubble(
         message: message,
         outgoing: outgoing,
+        timestampNow: timestampNow ?? DateTime.now(),
+        showDetailedTimestamps: showDetailedTimestamps,
         transfer: transfer,
         fileDownloads: fileDownloads,
         downloadActions: downloadActions,

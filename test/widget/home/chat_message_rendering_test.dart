@@ -249,6 +249,53 @@ void main() {
     expect(find.text(secondDetailed), findsNothing);
   });
 
+  testWidgets('quote timestamps follow the message timestamp format', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    final now = DateTime(2026, 7, 14, 18);
+    final messageAt = DateTime(2026, 7, 14, 17);
+    final quoteAt = DateTime(2026, 7, 10, 16, 12);
+    final messageBrief = message_display.formatChatTimestamp(
+      messageAt,
+      now: now,
+    );
+    final quoteBrief = message_display.formatChatTimestamp(quoteAt, now: now);
+    final quoteDetailed = message_display.formatDetailedChatTimestamp(quoteAt);
+
+    await tester.pumpWidget(
+      _host(
+        _chatPane(
+          controller: controller,
+          timestampNow: now,
+          messages: [
+            _message(
+              type: 'text',
+              body: 'Reply body',
+              createdAt: messageAt,
+              quote: MessageQuote(
+                messageId: 'quoted_message',
+                senderDisplayName: 'Quoted user',
+                body: 'Quoted body',
+                createdAt: quoteAt,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    expect(find.text('Quoted user  $quoteBrief'), findsOneWidget);
+    expect(find.text('Quoted user  $quoteDetailed'), findsNothing);
+
+    await tester.tap(find.text(messageBrief));
+    await tester.pump();
+
+    expect(find.text('Quoted user  $quoteBrief'), findsNothing);
+    expect(find.text('Quoted user  $quoteDetailed'), findsOneWidget);
+  });
+
   testWidgets('chat pane hides the composer until the room is ready', (
     tester,
   ) async {
@@ -1103,6 +1150,47 @@ void main() {
     expect(scrollable.position.pixels, closeTo(previousPixels, 1));
   });
 
+  testWidgets('the same focused message can be requested again', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    String? focusMessageId = 'message_1';
+    VoidCallback? requestAgain;
+    var handledCount = 0;
+
+    await tester.pumpWidget(
+      _host(
+        StatefulBuilder(
+          builder: (context, setState) {
+            requestAgain = () => setState(() => focusMessageId = 'message_1');
+            return _chatPane(
+              controller: controller,
+              messages: [_message(type: 'text', body: 'jump target')],
+              focusMessageId: focusMessageId,
+              onFocusMessageHandled: (messageId) {
+                handledCount++;
+                setState(() {
+                  if (focusMessageId == messageId) focusMessageId = null;
+                });
+              },
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(handledCount, 1);
+    expect(focusMessageId, isNull);
+
+    requestAgain!();
+    await tester.pumpAndSettle();
+
+    expect(handledCount, 2);
+    expect(focusMessageId, isNull);
+  });
+
   testWidgets('selected text message context menu only copies selection', (
     tester,
   ) async {
@@ -1191,6 +1279,7 @@ void main() {
       _host(
         MessageBubbleForTest(
           message: _message(type: 'text', body: '本次回复', quote: quote),
+          timestampNow: DateTime(2026, 7, 14, 18),
           downloadActions: _downloadActions(),
           messageActions: ChatMessageActions(
             onCopy: (_, _) async {},
@@ -1221,6 +1310,7 @@ void main() {
       _host(
         _chatPane(
           controller: controller,
+          timestampNow: DateTime(2026, 7, 14, 18),
           room: _roomDetail,
           messages: const [],
           composerQuotes: [
@@ -1246,9 +1336,17 @@ void main() {
     expect(find.text('原消息'), findsOneWidget);
     expect(find.text('第二位房内用户  16:13'), findsOneWidget);
     expect(find.text('[文件] second.pdf'), findsOneWidget);
-    await tester.tap(
-      find.byKey(const ValueKey('composer-quote-close-composer_source')),
+    final firstQuoteCard = find.byKey(
+      const ValueKey('message-quote-composer_source'),
     );
+    final firstCloseButton = find.byKey(
+      const ValueKey('composer-quote-close-composer_source'),
+    );
+    expect(
+      tester.getCenter(firstCloseButton).dy,
+      closeTo(tester.getCenter(firstQuoteCard).dy, 0.01),
+    );
+    await tester.tap(firstCloseButton);
     await tester.pump();
     expect(removed, 'composer_source');
   });
@@ -1276,6 +1374,7 @@ void main() {
       _host(
         MessageBubbleForTest(
           message: _message(type: 'text', body: '本次回复', quote: quote),
+          timestampNow: DateTime(2026, 7, 14, 18),
           downloadActions: _downloadActions(),
           imagePreviewActions: _imagePreviewActions(),
           messageActions: ChatMessageActions(
@@ -1294,6 +1393,14 @@ void main() {
       const ValueKey('message-quote-thumbnail-image_source'),
     );
     expect(thumbnail, findsOneWidget);
+    final indicator = find.byKey(
+      const ValueKey('message-quote-indicator-image_source'),
+    );
+    expect(indicator, findsOneWidget);
+    expect(
+      tester.getBottomRight(indicator).dy,
+      closeTo(tester.getBottomRight(thumbnail).dy, 0.01),
+    );
     tester.widget<GestureDetector>(thumbnail).onTap!();
     await tester.pump();
     expect(opened, isNull);

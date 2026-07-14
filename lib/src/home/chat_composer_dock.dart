@@ -19,6 +19,7 @@ class _ComposerDock extends StatelessWidget {
   const _ComposerDock({
     required this.controller,
     required this.composerController,
+    required this.timestampNow,
     required this.sending,
     required this.sendError,
     required this.stickerPanel,
@@ -54,6 +55,7 @@ class _ComposerDock extends StatelessWidget {
 
   final TextEditingController controller;
   final ChatComposerController composerController;
+  final DateTime timestampNow;
   final bool sending;
   final String? sendError;
   final sticker_display.StickerPanelLoadState stickerPanel;
@@ -140,6 +142,7 @@ class _ComposerDock extends StatelessWidget {
                           if (index > 0) const SizedBox(height: 6),
                           _MessageQuoteCard(
                             quote: quotes[index],
+                            timestampNow: timestampNow,
                             onClose: onRemoveQuote == null
                                 ? null
                                 : () => onRemoveQuote!(quotes[index].messageId),

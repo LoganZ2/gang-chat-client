@@ -1224,6 +1224,43 @@ void registerShellHomeWidgetTests() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('authenticated home shell adds a message quote from its menu', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+
+    final messageBody = find.text('Hello from Morgan');
+    expect(messageBody, findsOneWidget);
+    final secondaryClick = await tester.startGesture(
+      tester.getCenter(messageBody),
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryMouseButton,
+    );
+    await secondaryClick.up();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('引用'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('composer-quote-close-msg-1')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('authenticated home shell opens live channel pane', (
     WidgetTester tester,
   ) async {

@@ -75,25 +75,27 @@ extension _HomeShellMessages on _HomeShellState {
 
   List<MessageQuote> get _selectedComposerQuotes {
     final roomId = _selectedServerId;
-    return roomId == null ? const [] : _messageQuoteDrafts[roomId] ?? const [];
+    return roomId == null
+        ? const <MessageQuote>[]
+        : _messageQuoteDrafts[roomId] ?? const <MessageQuote>[];
   }
 
   void _quoteChatMessage(Message message) {
     if (!_canQuoteChatMessage(message)) return;
-    final current = _messageQuoteDrafts[message.roomId] ?? const [];
+    final current =
+        _messageQuoteDrafts[message.roomId] ?? const <MessageQuote>[];
     if (current.any((quote) => quote.messageId == message.id)) {
       _composerPanelController.closePanel();
       _composerPanelController.requestInputFocus();
       return;
     }
     _setHomeState(() {
-      _messageQuoteDrafts = Map.unmodifiable({
-        ..._messageQuoteDrafts,
-        message.roomId: List.unmodifiable([
-          ...current,
-          message_display.messageQuoteSnapshot(message),
-        ]),
-      });
+      final next = Map<String, List<MessageQuote>>.of(_messageQuoteDrafts);
+      next[message.roomId] = List<MessageQuote>.unmodifiable([
+        ...current,
+        message_display.messageQuoteSnapshot(message),
+      ]);
+      _messageQuoteDrafts = Map<String, List<MessageQuote>>.unmodifiable(next);
       _saveDraftInState();
       _sendError = null;
     });
@@ -105,17 +107,18 @@ extension _HomeShellMessages on _HomeShellState {
     final roomId = _selectedServerId;
     if (roomId == null || !_messageQuoteDrafts.containsKey(roomId)) return;
     _setHomeState(() {
-      final remaining = [
-        for (final quote in _messageQuoteDrafts[roomId] ?? const [])
+      final remaining = <MessageQuote>[
+        for (final quote
+            in _messageQuoteDrafts[roomId] ?? const <MessageQuote>[])
           if (quote.messageId != messageId) quote,
       ];
       final next = Map<String, List<MessageQuote>>.of(_messageQuoteDrafts);
       if (remaining.isEmpty) {
         next.remove(roomId);
       } else {
-        next[roomId] = List.unmodifiable(remaining);
+        next[roomId] = List<MessageQuote>.unmodifiable(remaining);
       }
-      _messageQuoteDrafts = Map.unmodifiable(next);
+      _messageQuoteDrafts = Map<String, List<MessageQuote>>.unmodifiable(next);
       _saveDraftInState();
     });
   }
@@ -457,7 +460,8 @@ extension _HomeShellMessages on _HomeShellState {
     if (roomId == null) return;
     final draftText = text ?? _composerController.text;
     final hasAttachments = _stagedAttachments.isNotEmpty;
-    final hasQuote = (_messageQuoteDrafts[roomId] ?? const []).isNotEmpty;
+    final hasQuote =
+        (_messageQuoteDrafts[roomId] ?? const <MessageQuote>[]).isNotEmpty;
     final hasVisibleDraft =
         draftText.trim().isNotEmpty || hasAttachments || hasQuote;
     final current = _messageDrafts[roomId];
@@ -518,7 +522,7 @@ extension _HomeShellMessages on _HomeShellState {
     if (_messageQuoteDrafts.containsKey(roomId)) {
       final next = Map<String, List<MessageQuote>>.of(_messageQuoteDrafts)
         ..remove(roomId);
-      _messageQuoteDrafts = Map.unmodifiable(next);
+      _messageQuoteDrafts = Map<String, List<MessageQuote>>.unmodifiable(next);
     }
   }
 
@@ -563,7 +567,8 @@ extension _HomeShellMessages on _HomeShellState {
       text: _messageDrafts[roomId],
       attachmentFilename: attachment?.file.name,
       attachmentMimeType: attachment?.file.mimeType,
-      hasQuote: (_messageQuoteDrafts[roomId] ?? const []).isNotEmpty,
+      hasQuote:
+          (_messageQuoteDrafts[roomId] ?? const <MessageQuote>[]).isNotEmpty,
     );
   }
 
@@ -1067,7 +1072,7 @@ extension _HomeShellMessages on _HomeShellState {
       return;
     }
 
-    final quotes = _messageQuoteDrafts[room.id] ?? const [];
+    final quotes = _messageQuoteDrafts[room.id] ?? const <MessageQuote>[];
     String? clientMessageId;
     _setHomeState(() {
       _sending = true;
@@ -1107,7 +1112,8 @@ extension _HomeShellMessages on _HomeShellState {
               final next = Map<String, List<MessageQuote>>.of(
                 _messageQuoteDrafts,
               )..remove(room.id);
-              _messageQuoteDrafts = Map.unmodifiable(next);
+              _messageQuoteDrafts =
+                  Map<String, List<MessageQuote>>.unmodifiable(next);
             }
           });
           if (clearComposer) {
@@ -1336,7 +1342,7 @@ extension _HomeShellMessages on _HomeShellState {
     if (room == null || path == null || !_voiceState.canSend) return;
 
     final duration = _voiceState.elapsed;
-    final quotes = _messageQuoteDrafts[room.id] ?? const [];
+    final quotes = _messageQuoteDrafts[room.id] ?? const <MessageQuote>[];
 
     _setHomeState(
       () => _voiceState = voice_display.voiceSendStarted(_voiceState),
@@ -1392,7 +1398,8 @@ extension _HomeShellMessages on _HomeShellState {
               final next = Map<String, List<MessageQuote>>.of(
                 _messageQuoteDrafts,
               )..remove(room.id);
-              _messageQuoteDrafts = Map.unmodifiable(next);
+              _messageQuoteDrafts =
+                  Map<String, List<MessageQuote>>.unmodifiable(next);
               _saveDraftInState();
             }
           });

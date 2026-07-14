@@ -288,6 +288,7 @@ class ChatPane extends StatelessWidget {
               child: _ComposerDock(
                 controller: composerController,
                 composerController: composerPanelController,
+                timestampNow: timestampNow,
                 sending: sending,
                 sendError: sendError,
                 stickerPanel: stickerPanel,
