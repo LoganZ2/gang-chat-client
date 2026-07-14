@@ -859,7 +859,17 @@ void main() {
     expect(resolveCalls, 0);
     expect(actionBuilderCalls, 0);
     expect(find.text('用户已注销'), findsOneWidget);
-    expect(find.text('@已注销'), findsOneWidget);
+    expect(find.text('@已注销'), findsNothing);
+    final tombstone = find.byKey(const ValueKey('deleted-user-profile-card'));
+    expect(tombstone, findsOneWidget);
+    expect(
+      find.descendant(of: tombstone, matching: find.byType(StatusBadge)),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: tombstone, matching: find.byType(Icon)),
+      findsNothing,
+    );
     expect(find.text('This must not be shown.'), findsNothing);
     expect(find.text('Historical Room'), findsNothing);
     expect(find.text('UID: 1000999'), findsNothing);

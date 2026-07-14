@@ -627,26 +627,22 @@ class _DeletedUserProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.all(UiSpacing.lg),
+    return Padding(
+      padding: const EdgeInsets.all(UiSpacing.lg),
       child: Row(
+        key: const ValueKey('deleted-user-profile-card'),
         mainAxisSize: MainAxisSize.min,
         children: [
-          Avatar(
+          const Avatar(
             label: '',
             defaultAvatarKey: 'graphite-2',
             size: 42,
             showFallbackText: false,
           ),
-          SizedBox(width: UiSpacing.md),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              StatusBadge(label: '用户已注销', icon: Icons.person_off_outlined),
-              SizedBox(height: UiSpacing.xs),
-              Text('@已注销', style: UiTypography.label),
-            ],
+          const SizedBox(width: UiSpacing.md),
+          Text(
+            '用户已注销',
+            style: UiTypography.body.copyWith(color: UiColors.textSecondary),
           ),
         ],
       ),
@@ -1021,19 +1017,23 @@ class _DeletedRoomProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.all(UiSpacing.lg),
+    return Padding(
+      padding: const EdgeInsets.all(UiSpacing.lg),
       child: Row(
+        key: const ValueKey('deleted-room-profile-card'),
         mainAxisSize: MainAxisSize.min,
         children: [
-          Avatar(
+          const Avatar(
             label: '',
             defaultAvatarKey: 'graphite-2',
             size: 42,
             showFallbackText: false,
           ),
-          SizedBox(width: UiSpacing.md),
-          StatusBadge(label: '房间已删除', icon: Icons.delete_outline_rounded),
+          const SizedBox(width: UiSpacing.md),
+          Text(
+            '房间已删除',
+            style: UiTypography.body.copyWith(color: UiColors.textSecondary),
+          ),
         ],
       ),
     );

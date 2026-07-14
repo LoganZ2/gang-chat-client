@@ -279,7 +279,8 @@ extension _HomeShellSearch on _HomeShellState {
       final result = await _roomsController.joinRoom(room.id, reason: reason);
       if (!mounted) return;
       if (result.joined && result.room != null) {
-        _applyJoinedSearchRoom(result.room!);
+        await _applyJoinedSearchRoom(result.room!);
+        if (!mounted) return;
         _setHomeState(() {
           _busySearchPublicRoomId = null;
           _searchResults = _searchResultsWithPublicRoomJoined(result.room!);
@@ -331,30 +332,13 @@ extension _HomeShellSearch on _HomeShellState {
     }
   }
 
-  void _applyJoinedSearchRoom(RoomDetail room) {
-    _storeSelectedComposerDraft();
+  Future<void> _applyJoinedSearchRoom(RoomDetail room) async {
     final patch = _roomsController.patchRoomDetailApplied(
       rooms: _servers,
       detail: room,
     );
-    _setHomeState(() {
-      _servers = patch.rooms;
-      _selectedServerId = room.id;
-      _discardRoomDraftInState(room.id);
-      _stagedAttachments.clear();
-      _setComposerText('', saveDraft: false);
-      _selectedRoom = patch.selectedRoom;
-      _live = room.live;
-      _messages = const [];
-      _selectedRoomNewMessageCount = 0;
-      _fileTransfers = const {};
-      _settingsOpen = false;
-      _contentMode = _ContentMode.chat;
-      _roomError = null;
-      _sendError = null;
-      _loadingRoom = false;
-      _narrowContentOpen = true;
-    });
+    _setHomeState(() => _servers = patch.rooms);
+    await _openRoom(room.toCard(), openContent: true);
   }
 
   void _openMessageSearchResult(MessageSearchResult result) {

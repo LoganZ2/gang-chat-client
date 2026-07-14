@@ -875,6 +875,16 @@ void main() {
     expect(resolveCalls, 0);
     expect(enterCalls, 0);
     expect(find.text('房间已删除'), findsOneWidget);
+    final tombstone = find.byKey(const ValueKey('deleted-room-profile-card'));
+    expect(tombstone, findsOneWidget);
+    expect(
+      find.descendant(of: tombstone, matching: find.byType(StatusBadge)),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: tombstone, matching: find.byType(Icon)),
+      findsNothing,
+    );
     expect(find.text('Launch Room'), findsNothing);
     expect(find.text('12 名成员'), findsNothing);
     expect(find.text('创建者'), findsNothing);
@@ -1035,7 +1045,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('用户已注销'), findsNWidgets(2));
-    expect(find.text('@已注销'), findsOneWidget);
+    expect(find.text('@已注销'), findsNothing);
     expect(find.text('Deleted User'), findsNothing);
   });
 

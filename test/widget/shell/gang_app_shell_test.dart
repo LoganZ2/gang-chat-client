@@ -594,6 +594,44 @@ GangApi _roomsApi({
           ),
         });
       }
+      if (request.url.path == '/api/v1/rooms/server-public') {
+        return _jsonResponse({
+          'room': _roomDetailJson(
+            id: 'server-public',
+            name: 'Beta Public',
+            memberCount: 3,
+            onlineMemberCount: 1,
+            liveParticipantCount: 0,
+            visibility: 'public',
+            joinPolicy: 'open',
+            role: 'member',
+          ),
+        });
+      }
+      if (request.url.path == '/api/v1/rooms/server-public/messages') {
+        return _jsonResponse({
+          'messages': [
+            _messageJson(
+              id: 'msg-public-history',
+              roomId: 'server-public',
+              sender: _userJson(
+                id: 'user-2',
+                username: 'morgan',
+                displayName: 'Morgan',
+              ),
+              clientMessageId: 'client-msg-public-history',
+              body: 'History visible immediately after join',
+            ),
+          ],
+          'has_more': false,
+          'next_before': null,
+        });
+      }
+      if (request.url.path == '/api/v1/rooms/server-public/live') {
+        return _jsonResponse({
+          'live': _liveStateJson(roomId: 'server-public', participantCount: 0),
+        });
+      }
       if (request.url.path == '/api/v1/users/me/account') {
         final body =
             jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>;

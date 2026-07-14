@@ -618,6 +618,13 @@ void registerShellHomeWidgetTests() {
       await tester.pumpAndSettle();
 
       expect(requestedPaths, contains('/api/v1/rooms/server-public/join'));
+      expect(requestedPaths, contains('/api/v1/rooms/server-public'));
+      expect(requestedPaths, contains('/api/v1/rooms/server-public/messages'));
+      expect(requestedPaths, contains('/api/v1/rooms/server-public/live'));
+      expect(
+        find.text('History visible immediately after join'),
+        findsOneWidget,
+      );
 
       // Selecting the 我的房间 category filters the sidebar to matching rooms.
       await tester.tap(find.byKey(const ValueKey('search-category-myRooms')));
