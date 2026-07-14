@@ -313,6 +313,16 @@ void main() {
     );
   });
 
+  test('messageQuoteSnapshot omits the sender for system messages', () {
+    final systemQuote = messageQuoteSnapshot(
+      _message(type: kSystemMessageType, body: 'joined the room'),
+    );
+    final userQuote = messageQuoteSnapshot(_message());
+
+    expect(systemQuote.senderDisplayName, isEmpty);
+    expect(userQuote.senderDisplayName, 'Logan');
+  });
+
   test('shouldShowFileAttachmentBody hides duplicate single-file body', () {
     const attachment = MessageAttachment(type: 'file', name: 'report.pdf');
 

@@ -1302,6 +1302,30 @@ void main() {
     expect(opened, same(quote));
   });
 
+  testWidgets('system message quote header shows only its timestamp', (
+    tester,
+  ) async {
+    final quote = MessageQuote(
+      messageId: 'system_source',
+      senderDisplayName: '',
+      body: 'A member joined the room',
+      createdAt: DateTime(2026, 7, 14, 16, 12),
+    );
+    await tester.pumpWidget(
+      _host(
+        MessageBubbleForTest(
+          message: _message(type: 'text', body: 'Reply', quote: quote),
+          timestampNow: DateTime(2026, 7, 14, 18),
+          downloadActions: _downloadActions(),
+        ),
+      ),
+    );
+
+    expect(find.text('16:12'), findsOneWidget);
+    expect(find.text('A member joined the room'), findsOneWidget);
+    expect(find.textContaining('用户  16:12'), findsNothing);
+  });
+
   testWidgets('composer quote row shows snapshot and can be closed', (
     tester,
   ) async {

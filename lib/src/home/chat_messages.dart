@@ -2693,6 +2693,10 @@ class _MessageQuoteCard extends StatelessWidget {
             quote.createdAt,
             now: timestampNow,
           );
+    final senderDisplayName = quote.senderDisplayName.trim();
+    final header = senderDisplayName.isEmpty
+        ? timestamp
+        : '$senderDisplayName  $timestamp';
     final card = Container(
       key: ValueKey('message-quote-${quote.messageId}'),
       width: double.infinity,
@@ -2728,7 +2732,7 @@ class _MessageQuoteCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '${quote.senderDisplayName}  $timestamp',
+                        header,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: UiTypography.label.copyWith(

@@ -217,7 +217,9 @@ MessageQuote messageQuoteSnapshot(Message message) {
   final username = message.sender.username.trim();
   return MessageQuote(
     messageId: message.id,
-    senderDisplayName: roomName?.isNotEmpty == true
+    senderDisplayName: message.type == kSystemMessageType
+        ? ''
+        : roomName?.isNotEmpty == true
         ? roomName!
         : displayName.isNotEmpty
         ? displayName
