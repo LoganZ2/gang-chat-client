@@ -302,6 +302,7 @@ void registerShellRoomManagementWidgetTests() {
     final historyAvatar = find.byKey(
       const ValueKey('room-message-history-avatar-msg-1'),
     );
+    expect(tester.widget<ui.Avatar>(historyAvatar).label, 'Morgan Account');
     expect(tester.getRect(historyRow).height, greaterThanOrEqualTo(64));
     expect(
       find.ancestor(of: historyTime, matching: historyRow),
@@ -502,6 +503,14 @@ void registerShellRoomManagementWidgetTests() {
         matching: find.byType(UserHoverCard),
       ),
       findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<ui.Avatar>(
+            find.byKey(const ValueKey('message-history-member-avatar-user-2')),
+          )
+          .label,
+      'Morgan Account',
     );
     final memberScrollbar = find.byKey(
       const ValueKey('message-history-member-scrollbar'),

@@ -400,7 +400,7 @@ class _UserSummaryBar extends StatelessWidget {
                   clipBehavior: Clip.none,
                   children: [
                     Avatar(
-                      label: user.displayName,
+                      label: room_display.userAvatarLabel(user.toSummary()),
                       imageUrl: AppConfigScope.of(
                         context,
                       ).resolveAssetUrl(user.avatarUrl),

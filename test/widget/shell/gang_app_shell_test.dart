@@ -571,10 +571,10 @@ GangApi _roomsApi({
             'user': _userJson(
               id: 'user-2',
               username: 'morgan',
-              displayName: 'Morgan',
+              displayName: 'Morgan Account',
               uid: 'uid-2',
               isOnline: true,
-            ),
+            )..['room_display_name'] = 'Morgan',
             'role': 'member',
             'joined_at': '2026-06-01T00:00:00Z',
           },
@@ -727,10 +727,10 @@ GangApi _roomsApi({
               user: _userJson(
                 id: 'user-2',
                 username: 'morgan',
-                displayName: 'Morgan',
+                displayName: 'Morgan Account',
                 uid: 'uid-2',
                 isOnline: true,
-              ),
+              )..['room_display_name'] = 'Morgan',
               role: secondaryMemberRole,
             ),
             if (includeActionComparisonMember)
@@ -996,10 +996,10 @@ GangApi _roomsApi({
         final morgan = _userJson(
           id: 'user-2',
           username: 'morgan',
-          displayName: 'Morgan',
+          displayName: 'Morgan Account',
           uid: 'uid-2',
           isOnline: true,
-        );
+        )..['room_display_name'] = 'Morgan';
         return _jsonResponse({
           'messages': [
             _messageJson(

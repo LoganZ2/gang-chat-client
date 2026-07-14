@@ -846,7 +846,9 @@ void main() {
         id: 'live_phabe',
         user: _user('phabe', 'Phabe', roomRole: 'member'),
         screenSharing: true,
-        screenViewers: [_currentUser.toSummary()],
+        screenViewers: [
+          _currentUser.toSummary().copyWith(roomDisplayName: 'Room Kai'),
+        ],
       ),
     ]);
 
@@ -892,6 +894,17 @@ void main() {
       const ValueKey<String>('live-stage:screen-viewers'),
     );
     expect(viewerPreview, findsOneWidget);
+    expect(
+      tester
+          .widget<ui.Avatar>(
+            find.descendant(
+              of: viewerPreview,
+              matching: find.byType(ui.Avatar),
+            ),
+          )
+          .label,
+      'Me',
+    );
     expect(find.text('共 1 人'), findsOneWidget);
     final viewerPreviewRect = tester.getRect(viewerPreview);
     expect(viewerPreviewRect.left, closeTo(rendererRect.left + 8, 0.01));

@@ -627,7 +627,7 @@ class _RoomMessageHistoryPaneState extends State<_RoomMessageHistoryPane> {
       showRoomRole: true,
       child: Avatar(
         key: ValueKey('room-message-history-avatar-${message.id}'),
-        label: _historySenderName(message.sender),
+        label: room_display.userAvatarLabel(message.sender),
         imageUrl: AppConfigScope.of(
           context,
         ).resolveAssetUrl(message.sender.avatarUrl),
@@ -1097,7 +1097,7 @@ class _HistoryMemberOption extends StatelessWidget {
                   showRoomRole: true,
                   child: Avatar(
                     key: ValueKey('message-history-member-avatar-${user!.id}'),
-                    label: label,
+                    label: room_display.userAvatarLabel(user!),
                     imageUrl: AppConfigScope.of(
                       context,
                     ).resolveAssetUrl(user!.avatarUrl),

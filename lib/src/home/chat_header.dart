@@ -312,7 +312,9 @@ class _LiveHeaderAvatarPreview extends StatelessWidget {
                     Positioned(
                       left: index * (avatarSize - overlap),
                       child: Avatar(
-                        label: _livePreviewUserName(visibleUsers[index]),
+                        label: room_display.userAvatarLabel(
+                          visibleUsers[index],
+                        ),
                         imageUrl: config.resolveAssetUrl(
                           visibleUsers[index].avatarUrl,
                         ),
@@ -430,12 +432,4 @@ String _roomMeta({required int? memberCount, required int? onlineMemberCount}) {
   final online = onlineMemberCount ?? 0;
   if (online > 0) parts.add('$online 人在线');
   return parts.isEmpty ? '就绪' : parts.join(' · ');
-}
-
-String _livePreviewUserName(UserSummary user) {
-  final displayName = user.displayName.trim();
-  if (displayName.isNotEmpty) return displayName;
-  final username = user.username.trim();
-  if (username.isNotEmpty) return username;
-  return user.id;
 }

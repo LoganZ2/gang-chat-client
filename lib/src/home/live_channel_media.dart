@@ -426,9 +426,8 @@ class _ScreenShareViewerPreview extends StatelessWidget {
                     Positioned(
                       left: index * (avatarSize - overlap),
                       child: Avatar(
-                        label: live_display.liveUserDisplayName(
+                        label: room_display.userAvatarLabel(
                           visibleViewers[index],
-                          fallback: visibleViewers[index].id,
                         ),
                         imageUrl: config.resolveAssetUrl(
                           visibleViewers[index].avatarUrl,

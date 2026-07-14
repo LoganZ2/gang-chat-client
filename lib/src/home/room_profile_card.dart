@@ -1122,11 +1122,7 @@ String _myRoomDefaultAvatarKey(PublicRoom room, CurrentUser currentUser) {
 }
 
 String _currentUserAvatarLabel(CurrentUser currentUser) {
-  final displayName = currentUser.displayName.trim();
-  if (displayName.isNotEmpty) return displayName;
-  final username = currentUser.username.trim();
-  if (username.isNotEmpty) return username;
-  return currentUser.id;
+  return room_display.userAvatarLabel(currentUser.toSummary());
 }
 
 String _myRoomRoleLabel(PublicRoom room, CurrentUser currentUser) {

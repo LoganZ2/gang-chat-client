@@ -268,6 +268,25 @@ void main() {
     },
   );
 
+  test('userAvatarLabel ignores the room display name', () {
+    expect(
+      userAvatarLabel(
+        _user(
+          username: 'testxxxx',
+          displayName: 'Test Example',
+          roomDisplayName: 'J',
+        ),
+      ),
+      'Test Example',
+    );
+    expect(
+      userAvatarLabel(
+        _user(username: 'testxxxx', displayName: '', roomDisplayName: 'J'),
+      ),
+      'testxxxx',
+    );
+  });
+
   test('user identity labels prefer uid and include username handle', () {
     expect(userUidLabel(_user(uid: '1001')), '1001');
     expect(
