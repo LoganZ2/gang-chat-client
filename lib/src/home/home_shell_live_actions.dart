@@ -1156,6 +1156,7 @@ extension _HomeShellLiveActions on _HomeShellState {
   }
 
   Future<void> _toggleScreenShare() async {
+    if (!supportsDesktopScreenShare) return;
     final roomId = _joinedLiveRoomId;
     if (roomId == null ||
         !canPatchSelectedLiveState(

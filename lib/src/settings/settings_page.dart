@@ -267,6 +267,12 @@ class _SettingsPageState extends State<SettingsPage> {
 
   bool get _isManagingUser => _settingsController.isManagingUser;
 
+  String get _pageTitle {
+    if (!_isManagingUser) return '设置';
+    final displayName = _user?.displayName.trim() ?? '';
+    return displayName.isEmpty ? '用户设置' : '$displayName 的用户设置';
+  }
+
   DesktopWindowController get _windowController =>
       widget.windowController ??
       (_ownedWindowController ??= DesktopWindowController());
@@ -4170,7 +4176,7 @@ class _SettingsPageState extends State<SettingsPage> {
         backgroundColor: _primaryDarkLow,
         body: SettingsScaffold(
           icon: Icons.settings_outlined,
-          title: '设置',
+          title: _pageTitle,
           onBack: widget.onClose != null || !widget.isSubWindow
               ? (widget.onClose ?? () => Navigator.of(context).pop())
               : null,

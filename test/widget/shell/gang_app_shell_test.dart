@@ -836,6 +836,9 @@ GangApi _roomsApi({
           },
         });
       }
+      if (request.url.path == '/api/v1/users/user-3/sessions') {
+        return _jsonResponse([]);
+      }
       if (request.url.path == '/api/v1/users/user-3/audio-settings') {
         return _jsonResponse({
           'audio_settings': {

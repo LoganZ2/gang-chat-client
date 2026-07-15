@@ -1,6 +1,41 @@
 part of '../gang_app_shell_test.dart';
 
 void registerShellAuthWidgetTests() {
+  testWidgets('auth surface fits a narrow mobile viewport', (
+    WidgetTester tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 480);
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: LoginPage(
+          sizeForMode: (_, {showingError = false}) => const Size(430, 500),
+          consumeInitialWindowLock: () => true,
+          lockAuthWindow:
+              ({
+                bool registering = false,
+                bool moveWindow = false,
+                bool centerWindow = false,
+                Size? size,
+              }) async {},
+          onSubmit: (_, {required rememberPassword}) async {},
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final surfaceRect = tester.getRect(
+      find.byKey(const ValueKey('auth-surface')),
+    );
+    expect(surfaceRect, const Rect.fromLTWH(0, 0, 320, 480));
+    expect(tester.getRect(find.byType(ui.Input).first).left, greaterThan(0));
+    expect(tester.getRect(find.byType(ui.Input).first).right, lessThan(320));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('app renders login entrypoint on real auth gate', (
     WidgetTester tester,
   ) async {
@@ -533,7 +568,10 @@ void registerShellAuthWidgetTests() {
 
     expect(_textFieldWithHint('登录用户名或邮箱地址'), findsOneWidget);
     expect(
-      tester.widget<TextField>(_textFieldWithHint('登录用户名或邮箱地址')).controller!.text,
+      tester
+          .widget<TextField>(_textFieldWithHint('登录用户名或邮箱地址'))
+          .controller!
+          .text,
       'morgan',
     );
     expect(
@@ -572,7 +610,10 @@ void registerShellAuthWidgetTests() {
     await tester.pump();
 
     expect(
-      tester.widget<TextField>(_textFieldWithHint('登录用户名或邮箱地址')).controller!.text,
+      tester
+          .widget<TextField>(_textFieldWithHint('登录用户名或邮箱地址'))
+          .controller!
+          .text,
       isEmpty,
     );
     expect(
@@ -592,7 +633,10 @@ void registerShellAuthWidgetTests() {
     await tester.pump();
 
     expect(
-      tester.widget<TextField>(_textFieldWithHint('登录用户名或邮箱地址')).controller!.text,
+      tester
+          .widget<TextField>(_textFieldWithHint('登录用户名或邮箱地址'))
+          .controller!
+          .text,
       'kai',
     );
     expect(
@@ -716,7 +760,10 @@ void registerShellAuthWidgetTests() {
     await tester.pump();
 
     expect(
-      tester.widget<TextField>(_textFieldWithHint('登录用户名或邮箱地址')).controller!.text,
+      tester
+          .widget<TextField>(_textFieldWithHint('登录用户名或邮箱地址'))
+          .controller!
+          .text,
       'morgan',
     );
     expect(
@@ -762,7 +809,10 @@ void registerShellAuthWidgetTests() {
     await tester.pump();
     await tester.pump();
 
-    await tester.enterText(_textFieldWithHint('登录用户名或邮箱地址'), 'morgan@mail.test');
+    await tester.enterText(
+      _textFieldWithHint('登录用户名或邮箱地址'),
+      'morgan@mail.test',
+    );
     await tester.pump();
 
     expect(

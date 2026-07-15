@@ -114,7 +114,7 @@ const _ignoredShareWindowNameParts = <String>[
   'geforce overlay',
 ];
 
-bool get _isDesktopScreenShareSourcePickerPlatform =>
+bool get supportsDesktopScreenShare =>
     !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
 
 @visibleForTesting
@@ -845,8 +845,7 @@ class LiveSession extends ChangeNotifier {
       final target = screenShareResolutionForHeight(_screenShareMaxHeight);
       final captureScreenAudio = shouldRequestScreenShareAudio(
         sourceId: sourceId,
-        isDesktopSourcePickerPlatform:
-            _isDesktopScreenShareSourcePickerPlatform,
+        isDesktopSourcePickerPlatform: supportsDesktopScreenShare,
         isWindowsDesktop: !kIsWeb && Platform.isWindows,
       );
       final options = lk.ScreenShareCaptureOptions(

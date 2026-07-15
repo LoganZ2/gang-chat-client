@@ -45,7 +45,7 @@ class _LiveControlBar extends StatelessWidget {
   final VoidCallback? onToggleMic;
   final VoidCallback onToggleHeadphones;
   final VoidCallback onToggleCamera;
-  final VoidCallback onToggleShare;
+  final VoidCallback? onToggleShare;
   final ValueChanged<double> onInputVolumeChanged;
   final ValueChanged<double> onOutputVolumeChanged;
   final VoidCallback onToggleMusicBox;
@@ -103,20 +103,21 @@ class _LiveControlBar extends StatelessWidget {
               size: _controlButtonSize,
             ),
           ),
-          _HoverInfo(
-            message: screenSharing ? '停止共享屏幕' : '共享屏幕',
-            child: ButtonIcon(
-              key: const ValueKey<String>('live-control:screen-share'),
-              icon: Icon(
-                screenSharing
-                    ? Icons.stop_screen_share
-                    : Icons.screen_share_outlined,
+          if (onToggleShare != null)
+            _HoverInfo(
+              message: screenSharing ? '停止共享屏幕' : '共享屏幕',
+              child: ButtonIcon(
+                key: const ValueKey<String>('live-control:screen-share'),
+                icon: Icon(
+                  screenSharing
+                      ? Icons.stop_screen_share
+                      : Icons.screen_share_outlined,
+                ),
+                selected: screenSharing,
+                onPressed: onToggleShare,
+                size: _controlButtonSize,
               ),
-              selected: screenSharing,
-              onPressed: onToggleShare,
-              size: _controlButtonSize,
             ),
-          ),
           _HoverInfo(
             message: joining ? '正在加入语音' : '离开语音频道',
             child: ButtonIcon(

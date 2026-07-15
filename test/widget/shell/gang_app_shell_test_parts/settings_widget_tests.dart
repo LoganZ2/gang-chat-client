@@ -83,7 +83,7 @@ void registerShellSettingsWidgetTests() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('设置'), findsOneWidget);
+      expect(find.text('目标用户 的用户设置'), findsOneWidget);
       expect(find.text('用户资料'), findsOneWidget);
       expect(find.text('偏好设置'), findsOneWidget);
       expect(find.text('隐私和安全'), findsOneWidget);

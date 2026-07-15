@@ -737,12 +737,28 @@ void registerShellHomeWidgetTests() {
       await tester.pumpAndSettle();
 
       expect(find.text('Riley 的用户设置'), findsOneWidget);
-      await tester.tap(find.text('安全'));
+      await tester.tap(find.text('隐私和安全'));
+      await tester.pumpAndSettle();
+      final managedSettingsPage = find.byKey(
+        const ValueKey('superuser-user-settings-user-3'),
+      );
+      await tester.scrollUntilVisible(
+        find.text('新密码'),
+        200,
+        scrollable: find
+            .descendant(
+              of: managedSettingsPage,
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
       await tester.pumpAndSettle();
       expect(find.text('当前密码'), findsNothing);
       expect(find.text('新密码'), findsOneWidget);
       expect(find.text('确认新密码'), findsOneWidget);
-      expect(find.widgetWithText(ui.Button, '忘记密码（已禁用）'), findsOneWidget);
+      final forgotPassword = find.widgetWithText(ui.Button, '忘记密码');
+      expect(forgotPassword, findsOneWidget);
+      expect(tester.widget<ui.Button>(forgotPassword).onPressed, isNull);
       expect(tester.takeException(), isNull);
     },
   );

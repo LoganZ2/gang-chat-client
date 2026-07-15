@@ -286,7 +286,9 @@ extension _HomeShellLayout on _HomeShellState {
         onToggleMic: _voiceBlocked ? null : _toggleMicMute,
         onToggleHeadphones: _toggleHeadphonesMute,
         onToggleCamera: () => unawaited(_toggleCamera()),
-        onToggleShare: () => unawaited(_toggleScreenShare()),
+        onToggleShare: supportsDesktopScreenShare
+            ? () => unawaited(_toggleScreenShare())
+            : null,
         musicBox: _musicBox,
         musicBoxOpen: _musicBoxOpen,
         musicBoxSearchController: _musicBoxSearchController,

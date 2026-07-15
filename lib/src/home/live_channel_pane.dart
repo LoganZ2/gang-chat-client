@@ -152,7 +152,7 @@ class LiveChannelPane extends StatefulWidget {
   final VoidCallback? onToggleMic;
   final VoidCallback onToggleHeadphones;
   final VoidCallback onToggleCamera;
-  final VoidCallback onToggleShare;
+  final VoidCallback? onToggleShare;
   final MusicBoxState? musicBox;
   final bool musicBoxOpen;
   final TextEditingController musicBoxSearchController;

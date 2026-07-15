@@ -28,6 +28,30 @@ void main() {
     expect(find.text('Live Channel'), findsNothing);
   });
 
+  testWidgets('screen-share control is hidden when unsupported', (
+    tester,
+  ) async {
+    final searchController = TextEditingController();
+    addTearDown(searchController.dispose);
+
+    await tester.pumpWidget(
+      _host(
+        searchController: searchController,
+        live: _liveState(const []),
+        screenShareSupported: false,
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey<String>('live-control:screen-share')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('live-control:camera')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets(
     'current user live member card is square and shows connected statuses',
     (tester) async {
@@ -1211,6 +1235,7 @@ Widget _host({
   VoidCallback? onToggleHeadphones,
   VoidCallback? onToggleCamera,
   VoidCallback? onToggleShare,
+  bool screenShareSupported = true,
   ValueChanged<LiveStageSelection?>? onStageSelectionChanged,
   LiveStageSelection? stageSelection,
   List<LiveVideoTrack> videoTracks = const [],
@@ -1265,7 +1290,7 @@ Widget _host({
             onToggleMic: onToggleMic ?? () {},
             onToggleHeadphones: onToggleHeadphones ?? () {},
             onToggleCamera: onToggleCamera ?? () {},
-            onToggleShare: onToggleShare ?? () {},
+            onToggleShare: screenShareSupported ? onToggleShare ?? () {} : null,
             musicBox: null,
             musicBoxOpen: false,
             musicBoxSearchController: searchController,
