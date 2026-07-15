@@ -9,21 +9,19 @@ import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../app/audio_device_store.dart';
-import '../app/account_display.dart' as account_display;
 import '../app/app_update.dart';
 import '../app/audio_device_state.dart'
     show rememberedAudioVolume, restoredAudioVolume;
 import '../app/audio_levels.dart';
-import '../app/account_forms.dart';
 import '../app/authenticated_app_services.dart';
 import '../app/authenticated_app_context.dart';
-import '../app/auth_form.dart';
 import '../app/close_behavior.dart';
 import '../app/file_display.dart' as file_display;
 import '../app/error_display.dart';
 import '../app/file_downloads_controller.dart';
 import '../app/file_transfer_state.dart';
 import '../app/media_cache_controller.dart';
+import '../app/managed_user_audio_settings.dart';
 import '../app/composer_attachment_display.dart' as composer_attachment;
 import '../app/global_search_controller.dart';
 import '../app/live_controller.dart';
@@ -47,6 +45,7 @@ import '../app/room_message_history.dart' as room_message_history;
 import '../app/rooms_controller.dart';
 import '../app/search_display.dart' as search_display;
 import '../app/settings_shell_state.dart';
+import '../app/settings_controller.dart';
 import '../app/sticker_display.dart' as sticker_display;
 import '../app/sticker_packs_controller.dart';
 import '../app/voice_message_display.dart' as voice_display;
@@ -57,7 +56,6 @@ import '../live/live_presence_audio_coordinator.dart';
 import '../protocol/api_client.dart'
     show
         ApiException,
-        GangApi,
         MessagePage,
         UploadCancelledException,
         UploadTransferController;
@@ -72,7 +70,6 @@ import '../shell/system_live_presence_speech_player.dart';
 import '../shell/voice_playback_service.dart';
 import '../shell/window_controls.dart';
 import '../ui/ui.dart';
-import '../ui/avatar_crop_dialog.dart';
 import 'chat_pane.dart';
 import 'home_content.dart';
 import 'hover_card_anchor.dart';
@@ -97,7 +94,6 @@ part 'home_shell_search.dart';
 part 'home_shell_layout.dart';
 part 'home_shell_title_bar.dart';
 part 'home_shell_join_dialog.dart';
-part 'superuser_user_settings_pane.dart';
 
 const _windowEdgeBorder = Color(0xFF303842);
 const _defaultLiveVolumeRestore = 0.5;

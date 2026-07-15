@@ -2,6 +2,119 @@ part of '../gang_app_shell_test.dart';
 
 void registerShellSettingsWidgetTests() {
   testWidgets(
+    'managed user settings reuse the ordinary page with target account data',
+    (WidgetTester tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(980, 820);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final requestedUris = <Uri>[];
+      final targetUser = <String, Object?>{
+        ..._currentUserJson,
+        'id': 'target_user',
+        'uid': '1000099',
+        'username': 'target_name',
+        'display_name': '目标用户',
+        'email': 'target@example.test',
+        'is_superuser': false,
+      };
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          requestedUris.add(request.url);
+          if (request.url.path == '/api/v1/users/target_user/settings') {
+            return _jsonResponse({'user': targetUser});
+          }
+          if (request.url.path == '/api/v1/users/target_user/sessions') {
+            return _jsonResponse([]);
+          }
+          if (request.url.path == '/api/v1/sticker-packs') {
+            return _jsonResponse({
+              'packs': [
+                {
+                  'id': 'target_pack',
+                  'scope': 'personal',
+                  'name': '目标表情包',
+                  'sort_order': 10,
+                  'stickers': const [
+                    {
+                      'id': 'target_sticker',
+                      'name': '目标表情',
+                      'sort_order': 10,
+                      'asset': {
+                        'id': 'target_asset',
+                        'url':
+                            'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+                        'thumbnail_url':
+                            'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+                        'mime_type': 'image/png',
+                      },
+                    },
+                  ],
+                },
+              ],
+            });
+          }
+          return http.Response('unexpected request: ${request.url}', 404);
+        }),
+      );
+      final stickerStore = _MemoryStickerPackStore();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: SettingsPage(
+            isSubWindow: true,
+            initialSection: SettingsSection.security,
+            api: api,
+            apiBaseUrl: 'http://example.test/api/v1',
+            controller: SettingsController(
+              api: api,
+              apiBaseUrl: 'http://example.test/api/v1',
+              stickerPackStore: stickerStore,
+              managedUserId: 'target_user',
+            ),
+            stickerPackStore: stickerStore,
+            systemAudioDevices: SystemAudioDevices(supported: false),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('设置'), findsOneWidget);
+      expect(find.text('用户资料'), findsOneWidget);
+      expect(find.text('偏好设置'), findsOneWidget);
+      expect(find.text('隐私和安全'), findsOneWidget);
+      expect(find.text('语音和视频'), findsOneWidget);
+      expect(find.text('我的表情包'), findsOneWidget);
+      expect(find.text('关于Gang Chat'), findsOneWidget);
+      expect(find.text('当前密码'), findsNothing);
+      final forgot = find.widgetWithText(ui.Button, '忘记密码');
+      expect(forgot, findsOneWidget);
+      expect(tester.widget<ui.Button>(forgot).onPressed, isNull);
+
+      await tester.tap(find.text('我的表情包').first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('目标表情包'), findsNothing);
+      expect(
+        requestedUris.any(
+          (uri) =>
+              uri.path == '/api/v1/sticker-packs' &&
+              uri.queryParameters['owner_user_id'] == 'target_user',
+        ),
+        isTrue,
+      );
+      expect(stickerStore.lastWrittenUserId, 'target_user');
+      expect(stickerStore.packs!.single.stickers.single.name, '目标表情');
+      expect(tester.takeException(), isNull);
+      api.close();
+    },
+  );
+
+  testWidgets(
     'direct close exit keeps token while leaving live and going offline',
     (WidgetTester tester) async {
       final events = <String>[];
@@ -847,4 +960,25 @@ void registerShellSettingsWidgetTests() {
     );
     expect(tester.takeException(), isNull);
   });
+}
+
+class _MemoryStickerPackStore extends StickerPackStore {
+  List<StickerPack>? packs;
+  String? lastWrittenUserId;
+
+  @override
+  Future<List<StickerPack>?> readPersonalPacks({
+    required String userId,
+    required String apiBaseUrl,
+  }) async => packs;
+
+  @override
+  Future<void> writePersonalPacks({
+    required String userId,
+    required String apiBaseUrl,
+    required List<StickerPack> packs,
+  }) async {
+    lastWrittenUserId = userId;
+    this.packs = packs;
+  }
 }

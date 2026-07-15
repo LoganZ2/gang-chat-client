@@ -108,12 +108,14 @@ abstract interface class GangApi {
   Future<List<StickerPack>> listStickerPacks({
     String scope = 'personal',
     String? roomId,
+    String? ownerUserId,
   });
 
   Future<StickerPack> createStickerPack({
     required String name,
     String scope = 'personal',
     String? roomId,
+    String? ownerUserId,
     int? sortOrder,
   });
 
@@ -133,6 +135,7 @@ abstract interface class GangApi {
     String? idempotencyKey,
     String scope = 'personal',
     String? roomId,
+    String? ownerUserId,
   });
 
   Future<void> deleteSticker({
@@ -140,6 +143,7 @@ abstract interface class GangApi {
     required String stickerId,
     String scope = 'personal',
     String? roomId,
+    String? ownerUserId,
   });
 
   Future<Sticker> updateSticker({
@@ -322,6 +326,10 @@ abstract interface class GangApi {
   });
 
   Future<CurrentUser> getForcedUserSettings(String userId);
+
+  Future<List<UserSession>> listForcedUserSessions(String userId);
+
+  Future<void> forceDeleteUserAccount(String userId);
 
   Future<CurrentUser> updateForcedUserSettings({
     required String userId,
@@ -672,9 +680,11 @@ class GangApiClient implements GangApi {
   Future<List<StickerPack>> listStickerPacks({
     String scope = 'personal',
     String? roomId,
+    String? ownerUserId,
   }) async {
     final query = {'scope': scope};
     if (roomId != null) query['room_id'] = roomId;
+    if (ownerUserId != null) query['owner_user_id'] = ownerUserId;
     final decoded = await _sendJson((token) {
       return _httpClient.get(
         _uri('/sticker-packs', query),
@@ -692,10 +702,12 @@ class GangApiClient implements GangApi {
     required String name,
     String scope = 'personal',
     String? roomId,
+    String? ownerUserId,
     int? sortOrder,
   }) async {
     final body = <String, Object?>{'scope': scope, 'name': name};
     if (roomId != null) body['room_id'] = roomId;
+    if (ownerUserId != null) body['owner_user_id'] = ownerUserId;
     if (sortOrder != null) body['sort_order'] = sortOrder;
     final decoded = await _sendJson((token) {
       return _httpClient.post(
@@ -745,6 +757,7 @@ class GangApiClient implements GangApi {
     String? idempotencyKey,
     String scope = 'personal',
     String? roomId,
+    String? ownerUserId,
   }) async {
     final body = <String, Object?>{'asset_id': assetId, 'name': name};
     if (sortOrder != null) body['sort_order'] = sortOrder;
@@ -771,6 +784,7 @@ class GangApiClient implements GangApi {
           assetId: assetId,
           scope: scope,
           roomId: roomId,
+          ownerUserId: ownerUserId,
         )) {
           return;
         }
@@ -783,6 +797,7 @@ class GangApiClient implements GangApi {
           assetId: assetId,
           scope: scope,
           roomId: roomId,
+          ownerUserId: ownerUserId,
         )) {
           return;
         }
@@ -797,9 +812,14 @@ class GangApiClient implements GangApi {
     required String assetId,
     required String scope,
     String? roomId,
+    String? ownerUserId,
   }) async {
     try {
-      final packs = await listStickerPacks(scope: scope, roomId: roomId);
+      final packs = await listStickerPacks(
+        scope: scope,
+        roomId: roomId,
+        ownerUserId: ownerUserId,
+      );
       for (final pack in packs) {
         if (pack.id != packId) continue;
         for (final sticker in pack.stickers) {
@@ -817,9 +837,14 @@ class GangApiClient implements GangApi {
     required String stickerId,
     required String scope,
     String? roomId,
+    String? ownerUserId,
   }) async {
     try {
-      final packs = await listStickerPacks(scope: scope, roomId: roomId);
+      final packs = await listStickerPacks(
+        scope: scope,
+        roomId: roomId,
+        ownerUserId: ownerUserId,
+      );
       for (final pack in packs) {
         if (pack.id != packId) continue;
         return !pack.stickers.any((sticker) => sticker.id == stickerId);
@@ -836,6 +861,7 @@ class GangApiClient implements GangApi {
     required String stickerId,
     String scope = 'personal',
     String? roomId,
+    String? ownerUserId,
   }) async {
     Future<void> send() {
       return _sendJson((token) {
@@ -859,6 +885,7 @@ class GangApiClient implements GangApi {
           stickerId: stickerId,
           scope: scope,
           roomId: roomId,
+          ownerUserId: ownerUserId,
         )) {
           return;
         }
@@ -871,6 +898,7 @@ class GangApiClient implements GangApi {
           stickerId: stickerId,
           scope: scope,
           roomId: roomId,
+          ownerUserId: ownerUserId,
         )) {
           return;
         }
@@ -1538,6 +1566,38 @@ class GangApiClient implements GangApi {
       );
     }, retryTransientFailures: true);
     return CurrentUser.fromJson(decoded['user']! as Map<String, Object?>);
+  }
+
+  @override
+  Future<List<UserSession>> listForcedUserSessions(String userId) async {
+    final decoded = await _sendJsonValue((token) {
+      return _httpClient.get(
+        _uri('/users/$userId/sessions'),
+        headers: _headers(token),
+      );
+    }, retryTransientFailures: true);
+    final items = decoded is List
+        ? decoded.cast<Object?>()
+        : decoded is Map<String, Object?>
+        ? decoded['items'] as List<Object?>? ??
+              decoded['sessions'] as List<Object?>? ??
+              const []
+        : const [];
+    return items
+        .cast<Map<String, Object?>>()
+        .map(UserSession.fromJson)
+        .toList();
+  }
+
+  @override
+  Future<void> forceDeleteUserAccount(String userId) async {
+    await _sendJson((token) {
+      return _httpClient.delete(
+        _uri('/users/$userId/account'),
+        headers: _headers(token),
+        body: encodeJsonBody({'confirm': true}),
+      );
+    });
   }
 
   @override

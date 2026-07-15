@@ -19,13 +19,17 @@ class SettingsController {
     required this.api,
     required this.apiBaseUrl,
     required this.stickerPackStore,
+    this.managedUserId,
   });
 
   final GangApi? api;
   final String apiBaseUrl;
   final StickerPackStore stickerPackStore;
+  final String? managedUserId;
 
   bool get hasApi => api != null;
+  bool get isManagingUser => managedUserId != null;
+  bool get canDeleteAccount => true;
 
   Future<AppVersionInfo?> checkAppVersion() {
     final client = api;
@@ -36,6 +40,10 @@ class SettingsController {
   Future<CurrentUser?> loadAccount() {
     final client = api;
     if (client == null) return Future.value();
+    final targetUserId = managedUserId;
+    if (targetUserId != null) {
+      return client.getForcedUserSettings(targetUserId);
+    }
     return client.me();
   }
 
@@ -51,6 +59,10 @@ class SettingsController {
   Future<List<UserSession>?> loadSessions() {
     final client = api;
     if (client == null) return Future.value();
+    final targetUserId = managedUserId;
+    if (targetUserId != null) {
+      return client.listForcedUserSessions(targetUserId);
+    }
     return client.listSessions();
   }
 
@@ -70,7 +82,10 @@ class SettingsController {
 
     final client = api;
     if (client == null) return null;
-    final packs = await client.listStickerPacks(scope: 'personal');
+    final packs = await client.listStickerPacks(
+      scope: 'personal',
+      ownerUserId: managedUserId,
+    );
     await stickerPackStore.writePersonalPacks(
       userId: userId,
       apiBaseUrl: apiBaseUrl,
@@ -90,6 +105,19 @@ class SettingsController {
   }) {
     final client = api;
     if (client == null) return Future.value();
+    final targetUserId = managedUserId;
+    if (targetUserId != null) {
+      return client.updateForcedUserSettings(
+        userId: targetUserId,
+        username: username,
+        email: email,
+        emailVerified: emailVerificationToken == null ? null : true,
+        emailPublic: emailPublic,
+        phoneNumber: phoneNumber,
+        phoneNumberPublic: phoneNumberPublic,
+        language: language,
+      );
+    }
     return client.updateAccount(
       username: username,
       email: email,
@@ -110,6 +138,17 @@ class SettingsController {
   }) {
     final client = api;
     if (client == null) return Future.value();
+    final targetUserId = managedUserId;
+    if (targetUserId != null) {
+      return client.updateForcedUserSettings(
+        userId: targetUserId,
+        displayName: displayName,
+        bio: bio,
+        gender: gender,
+        avatarAssetId: avatarAssetId,
+        defaultAvatarKey: defaultAvatarKey,
+      );
+    }
     return client.updateProfile(
       displayName: displayName,
       bio: bio,
@@ -139,7 +178,11 @@ class SettingsController {
   }) {
     final client = api;
     if (client == null) return Future.value();
-    return client.createStickerPack(name: name, sortOrder: sortOrder);
+    return client.createStickerPack(
+      name: name,
+      sortOrder: sortOrder,
+      ownerUserId: managedUserId,
+    );
   }
 
   Future<void> addSticker({
@@ -155,6 +198,7 @@ class SettingsController {
       assetId: assetId,
       name: name,
       sortOrder: sortOrder,
+      ownerUserId: managedUserId,
     );
   }
 
@@ -164,7 +208,11 @@ class SettingsController {
   }) {
     final client = api;
     if (client == null) return Future.value();
-    return client.deleteSticker(packId: packId, stickerId: stickerId);
+    return client.deleteSticker(
+      packId: packId,
+      stickerId: stickerId,
+      ownerUserId: managedUserId,
+    );
   }
 
   Future<Sticker?> updateSticker({
@@ -204,6 +252,13 @@ class SettingsController {
   }) {
     final client = api;
     if (client == null) return Future.value();
+    final targetUserId = managedUserId;
+    if (targetUserId != null) {
+      return client.forceResetUserPassword(
+        userId: targetUserId,
+        newPassword: newPassword,
+      );
+    }
     return client.changePassword(
       currentPassword: currentPassword,
       newPassword: newPassword,
@@ -213,6 +268,10 @@ class SettingsController {
   Future<void> deleteMyAccount() {
     final client = api;
     if (client == null) return Future.value();
+    final targetUserId = managedUserId;
+    if (targetUserId != null) {
+      return client.forceDeleteUserAccount(targetUserId);
+    }
     return client.deleteMyAccount(confirm: true);
   }
 }

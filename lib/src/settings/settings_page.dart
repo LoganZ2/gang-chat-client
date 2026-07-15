@@ -265,6 +265,8 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  bool get _isManagingUser => _settingsController.isManagingUser;
+
   DesktopWindowController get _windowController =>
       widget.windowController ??
       (_ownedWindowController ??= DesktopWindowController());
@@ -406,7 +408,9 @@ class _SettingsPageState extends State<SettingsPage> {
         _syncUserFields(user);
       });
       widget.onUserUpdated?.call(user);
-      unawaited(_rememberLanguagePreference(user.language));
+      if (!_isManagingUser) {
+        unawaited(_rememberLanguagePreference(user.language));
+      }
     } catch (e) {
       if (!mounted) return;
       setState(
@@ -491,7 +495,9 @@ class _SettingsPageState extends State<SettingsPage> {
         }
       }
 
-      final challenge = await controller.inspectOrStartForCurrentUser(email);
+      final challenge = _isManagingUser
+          ? await controller.inspectOrStart(email)
+          : await controller.inspectOrStartForCurrentUser(email);
       if (!mounted || requestId != _emailVerificationRequestId) return;
       setState(() => _checkingEmailAvailability = false);
       final verificationToken = await showEmailVerificationDialog(
@@ -632,6 +638,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _loadCloseBehavior() async {
+    if (_isManagingUser) return;
     if (_loadingCloseBehavior) return;
     setState(() {
       _loadingCloseBehavior = true;
@@ -657,6 +664,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _loadAutoUpdatePrompt() async {
+    if (_isManagingUser) return;
     try {
       final enabled = await widget.autoUpdatePromptStore.read();
       if (!mounted) return;
@@ -680,6 +688,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _setAutoUpdatePrompt(bool value) async {
+    if (_isManagingUser) return;
     if (_autoPromptUpdates == value) return;
     final previous = _autoPromptUpdates;
     setState(() {
@@ -726,21 +735,25 @@ class _SettingsPageState extends State<SettingsPage> {
       _closeBehaviorError = null;
       _notice = null;
     });
-    try {
-      await widget.closeBehaviorStore.write(_closeBehavior);
-      if (!mounted) return;
+    if (!_isManagingUser) {
+      try {
+        await widget.closeBehaviorStore.write(_closeBehavior);
+        if (!mounted) return;
+        setState(() => _savingCloseBehavior = false);
+      } catch (error) {
+        if (!mounted) return;
+        setState(() {
+          _savingCloseBehavior = false;
+          _closeBehaviorError = userFacingErrorMessage(
+            error,
+            fallback: '保存关闭方式失败',
+          );
+          _markFloatingNoticeEvent('closeBehaviorError', _closeBehaviorError);
+        });
+        return;
+      }
+    } else {
       setState(() => _savingCloseBehavior = false);
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _savingCloseBehavior = false;
-        _closeBehaviorError = userFacingErrorMessage(
-          error,
-          fallback: '保存关闭方式失败',
-        );
-        _markFloatingNoticeEvent('closeBehaviorError', _closeBehaviorError);
-      });
-      return;
     }
 
     final user = _user;
@@ -758,7 +771,9 @@ class _SettingsPageState extends State<SettingsPage> {
       language: _language,
     );
     if (draft.error == null && draft.noChanges) {
-      await _rememberLanguagePreference(_language);
+      if (!_isManagingUser) {
+        await _rememberLanguagePreference(_language);
+      }
       if (!mounted) return;
       setState(() {
         _notice = '偏好设置已保存';
@@ -1392,7 +1407,9 @@ class _SettingsPageState extends State<SettingsPage> {
         emailVerificationRequired && draft.email == null;
     if (draft.noChanges && !emailVerificationOnlyUpdate) {
       if (target == AccountFormSaveTarget.preferences) {
-        await _rememberLanguagePreference(_language);
+        if (!_isManagingUser) {
+          await _rememberLanguagePreference(_language);
+        }
         if (!mounted) return;
       }
       setState(
@@ -1447,7 +1464,9 @@ class _SettingsPageState extends State<SettingsPage> {
         return;
       }
       if (target == AccountFormSaveTarget.preferences) {
-        await _rememberLanguagePreference(updated.language);
+        if (!_isManagingUser) {
+          await _rememberLanguagePreference(updated.language);
+        }
         if (!mounted) return;
       }
       setState(() {
@@ -2795,10 +2814,11 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   bool get _canResetPasswordWithoutCurrentPassword {
-    return widget.passwordResetController?.isCurrentSessionAuthorizedFor(
-          _user?.email,
-        ) ??
-        false;
+    return _isManagingUser ||
+        (widget.passwordResetController?.isCurrentSessionAuthorizedFor(
+              _user?.email,
+            ) ??
+            false);
   }
 
   Future<void> _verifyEmailForPasswordReset() async {
@@ -2846,11 +2866,13 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _confirmDeleteAccount() async {
     final user = _user;
-    if (!account_display.canStartAccountDeletion(
-      hasApi: _settingsController.hasApi,
-      user: user,
-      deletingAccount: _deletingAccount,
-    )) {
+    if (!_settingsController.canDeleteAccount ||
+        (_isManagingUser && (user?.isSuperuser ?? false)) ||
+        !account_display.canStartAccountDeletion(
+          hasApi: _settingsController.hasApi,
+          user: user,
+          deletingAccount: _deletingAccount,
+        )) {
       return;
     }
     final targetUser = user!;
@@ -3545,10 +3567,13 @@ class _SettingsPageState extends State<SettingsPage> {
                   )
                   .toList(growable: false),
               onChanged: _setCloseBehavior,
+              enabled: !_isManagingUser,
             ),
             const SizedBox(height: 10),
             Text(
-              closeBehaviorDescription(_closeBehavior),
+              _isManagingUser
+                  ? '该设置仅保存在用户设备，无法远程读取'
+                  : closeBehaviorDescription(_closeBehavior),
               style: const TextStyle(
                 color: _textSecondary,
                 fontSize: 13,
@@ -3626,7 +3651,8 @@ class _SettingsPageState extends State<SettingsPage> {
       _usernameController.text,
     );
     final usernameEditable =
-        user != null && account_display.canEditUsername(user);
+        user != null &&
+        (_isManagingUser || account_display.canEditUsername(user));
     final usernameChanged =
         user != null && _usernameController.text.trim() != user.username;
     final usernameAvailabilityApplies =
@@ -3738,6 +3764,8 @@ class _SettingsPageState extends State<SettingsPage> {
     final user = _user;
     final unavailable = !_settingsController.hasApi || user == null;
     final emailEmpty = _normalizedAccountEmail.isEmpty;
+    final managedSuperuserPasswordBlocked =
+        _isManagingUser && (user?.isSuperuser ?? false);
     return SettingsList(
       children: [
         if (unavailable)
@@ -3874,7 +3902,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 children: [
                   Expanded(
                     child: Button(
-                      onPressed: _verifyingPasswordReset
+                      onPressed: _verifyingPasswordReset || _isManagingUser
                           ? null
                           : _verifyEmailForPasswordReset,
                       loading: _verifyingPasswordReset,
@@ -3885,7 +3913,10 @@ class _SettingsPageState extends State<SettingsPage> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Button(
-                      onPressed: _changingPassword ? null : _changePassword,
+                      onPressed:
+                          _changingPassword || managedSuperuserPasswordBlocked
+                          ? null
+                          : _changePassword,
                       loading: _changingPassword,
                       icon: const Icon(Icons.lock_reset),
                       tone: ButtonTone.primary,
@@ -3930,11 +3961,13 @@ class _SettingsPageState extends State<SettingsPage> {
                 alignment: Alignment.centerRight,
                 child: Button(
                   onPressed:
-                      account_display.canStartAccountDeletion(
-                        hasApi: _settingsController.hasApi,
-                        user: user,
-                        deletingAccount: _deletingAccount,
-                      )
+                      _settingsController.canDeleteAccount &&
+                          !(_isManagingUser && user.isSuperuser) &&
+                          account_display.canStartAccountDeletion(
+                            hasApi: _settingsController.hasApi,
+                            user: user,
+                            deletingAccount: _deletingAccount,
+                          )
                       ? _confirmDeleteAccount
                       : null,
                   loading: _deletingAccount,
@@ -3971,8 +4004,20 @@ class _SettingsPageState extends State<SettingsPage> {
             _ToggleSetting(
               label: '自动提示更新',
               value: _autoPromptUpdates,
+              enabled: !_isManagingUser,
               onChanged: (value) => unawaited(_setAutoUpdatePrompt(value)),
             ),
+            if (_isManagingUser) ...[
+              const SizedBox(height: 10),
+              const Text(
+                '该设置仅保存在用户设备，无法远程读取',
+                style: TextStyle(
+                  color: _textSecondary,
+                  fontSize: 13,
+                  height: 1.4,
+                ),
+              ),
+            ],
             const SizedBox(height: 14),
             Button(
               onPressed: _checkingAppVersion
@@ -4031,7 +4076,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 devices: _audioInputs,
                 selectedDevice: _selectedInput,
                 busyDeviceId: _busyDeviceId,
-                emptyText: _loading ? '正在加载输入源' : '未找到输入源',
+                emptyText: _isManagingUser
+                    ? '该设置仅保存在用户设备，无法远程读取'
+                    : (_loading ? '正在加载输入源' : '未找到输入源'),
                 fallbackLabel: '麦克风',
                 onSelect: _selectInput,
               ),
@@ -4045,7 +4092,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 level: _inputLevel,
                 testing: _testingInput,
                 testTooltip: audioInputTestTooltip(_testingInput),
-                disabled: _audioInputs.isEmpty,
+                disabled: !_isManagingUser && _audioInputs.isEmpty,
+                testDisabled: _isManagingUser,
                 onVolumeChanged: (value) => unawaited(_setInputVolume(value)),
                 onToggleTest: _toggleInputTest,
               ),
@@ -4062,7 +4110,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 devices: _audioOutputs,
                 selectedDevice: _selectedOutput,
                 busyDeviceId: _busyDeviceId,
-                emptyText: _loading ? '正在加载输出源' : '未找到输出源',
+                emptyText: _isManagingUser
+                    ? '该设置仅保存在用户设备，无法远程读取'
+                    : (_loading ? '正在加载输出源' : '未找到输出源'),
                 fallbackLabel: '输出',
                 onSelect: _selectOutput,
               ),
@@ -4076,7 +4126,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 level: _outputLevel,
                 testing: _testingOutput,
                 testTooltip: audioOutputTestTooltip(_testingOutput),
-                disabled: _audioOutputs.isEmpty,
+                disabled: !_isManagingUser && _audioOutputs.isEmpty,
+                testDisabled: _isManagingUser,
                 onVolumeChanged: (value) => unawaited(_setOutputVolume(value)),
                 onToggleTest: _toggleOutputTest,
               ),
@@ -4089,6 +4140,7 @@ class _SettingsPageState extends State<SettingsPage> {
             _SettingsSubPanel(
               child: _ScreenShareResolutionSection(
                 selectedHeight: _screenShareMaxHeight,
+                remoteUnavailable: _isManagingUser,
                 onSelect: (height) =>
                     unawaited(_setScreenShareMaxHeight(height)),
               ),

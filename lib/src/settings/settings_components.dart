@@ -215,18 +215,26 @@ class _ToggleSetting extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onChanged,
+    this.enabled = true,
   });
 
   final String label;
   final bool value;
   final ValueChanged<bool> onChanged;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         Expanded(child: _FieldLabel(label)),
-        UiSwitch(value: value, onChanged: onChanged),
+        IgnorePointer(
+          ignoring: !enabled,
+          child: Opacity(
+            opacity: enabled ? 1 : 0.55,
+            child: UiSwitch(value: value, onChanged: onChanged),
+          ),
+        ),
       ],
     );
   }
@@ -246,12 +254,14 @@ class _SegmentedSetting extends StatelessWidget {
     required this.value,
     required this.options,
     required this.onChanged,
+    this.enabled = true,
   });
 
   final String label;
   final String value;
   final List<_SegmentOption> options;
   final ValueChanged<String> onChanged;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -260,14 +270,20 @@ class _SegmentedSetting extends StatelessWidget {
       children: [
         _FieldLabel(label),
         const SizedBox(height: 8),
-        SegmentedControl<String>(
-          expanded: true,
-          value: value,
-          onChanged: onChanged,
-          segments: [
-            for (final option in options)
-              Segment(value: option.value, label: option.label),
-          ],
+        IgnorePointer(
+          ignoring: !enabled,
+          child: Opacity(
+            opacity: enabled ? 1 : 0.55,
+            child: SegmentedControl<String>(
+              expanded: true,
+              value: value,
+              onChanged: onChanged,
+              segments: [
+                for (final option in options)
+                  Segment(value: option.value, label: option.label),
+              ],
+            ),
+          ),
         ),
       ],
     );

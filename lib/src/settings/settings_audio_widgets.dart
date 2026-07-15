@@ -87,6 +87,7 @@ class _AudioControlPanel extends StatelessWidget {
     required this.disabled,
     required this.onVolumeChanged,
     required this.onToggleTest,
+    this.testDisabled = false,
   });
 
   final String title;
@@ -98,6 +99,7 @@ class _AudioControlPanel extends StatelessWidget {
   final bool disabled;
   final ValueChanged<double> onVolumeChanged;
   final VoidCallback onToggleTest;
+  final bool testDisabled;
 
   @override
   Widget build(BuildContext context) {
@@ -158,7 +160,7 @@ class _AudioControlPanel extends StatelessWidget {
             SizedBox(
               width: 96,
               child: Button(
-                onPressed: disabled ? null : onToggleTest,
+                onPressed: disabled || testDisabled ? null : onToggleTest,
                 tooltip: testTooltip,
                 height: 42,
                 width: double.infinity,
@@ -234,10 +236,12 @@ class _ScreenShareResolutionSection extends StatelessWidget {
   const _ScreenShareResolutionSection({
     required this.selectedHeight,
     required this.onSelect,
+    this.remoteUnavailable = false,
   });
 
   final int selectedHeight;
   final ValueChanged<int> onSelect;
+  final bool remoteUnavailable;
 
   @override
   Widget build(BuildContext context) {
@@ -265,16 +269,19 @@ class _ScreenShareResolutionSection extends StatelessWidget {
           style: TextStyle(color: _textSecondary, fontSize: 13, height: 1.4),
         ),
         const SizedBox(height: 12),
-        Column(
-          children: [
-            for (final height in screenShareHeightOptions)
-              _ScreenShareResolutionRow(
-                label: screenShareHeightLabel(height),
-                selected: height == selected,
-                onTap: () => onSelect(height),
-              ),
-          ],
-        ),
+        if (remoteUnavailable)
+          const _SettingsEmptyState(text: '该设置仅保存在用户设备，无法远程读取')
+        else
+          Column(
+            children: [
+              for (final height in screenShareHeightOptions)
+                _ScreenShareResolutionRow(
+                  label: screenShareHeightLabel(height),
+                  selected: height == selected,
+                  onTap: () => onSelect(height),
+                ),
+            ],
+          ),
       ],
     );
   }

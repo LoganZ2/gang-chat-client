@@ -1499,6 +1499,40 @@ void main() {
     api.close();
   });
 
+  test('listForcedUserSessions reads the managed account activity', () async {
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/api/v1/users/user_2/sessions');
+        expect(request.headers['authorization'], 'Bearer token');
+        return http.Response(
+          jsonEncode([
+            {
+              'id': 'target_session',
+              'user_agent': 'Windows target',
+              'ip_address': '203.0.113.8',
+              'location': 'Shanghai',
+              'created_at': 1780300800,
+              'last_used_at': 1780300860,
+              'expires_at': 1782892800,
+              'is_current': false,
+            },
+          ]),
+          200,
+        );
+      }),
+    );
+
+    final sessions = await api.listForcedUserSessions('user_2');
+
+    expect(sessions.single.id, 'target_session');
+    expect(sessions.single.ipAddress, '203.0.113.8');
+    expect(sessions.single.isCurrent, isFalse);
+    api.close();
+  });
+
   test('updateAccount sends language preference and parses it', () async {
     final api = GangApiClient(
       baseUrl: 'http://example.test/api/v1',
@@ -1843,6 +1877,42 @@ void main() {
     );
 
     expect(pack.stickers.single.id, 'stk_saved');
+    api.close();
+  });
+
+  test('personal sticker APIs carry the managed owner user id', () async {
+    var requestIndex = 0;
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        requestIndex += 1;
+        switch (requestIndex) {
+          case 1:
+            expect(request.method, 'GET');
+            expect(request.url.path, '/api/v1/sticker-packs');
+            expect(request.url.queryParameters, {
+              'scope': 'personal',
+              'owner_user_id': 'user_2',
+            });
+            return http.Response(jsonEncode({'packs': []}), 200);
+          case 2:
+            expect(request.method, 'POST');
+            expect(jsonDecode(request.body), {
+              'scope': 'personal',
+              'name': 'Target Pack',
+              'owner_user_id': 'user_2',
+            });
+            return http.Response(jsonEncode(_stickerPackJson()), 201);
+        }
+        fail('unexpected request ${request.method} ${request.url}');
+      }),
+    );
+
+    await api.listStickerPacks(scope: 'personal', ownerUserId: 'user_2');
+    await api.createStickerPack(name: 'Target Pack', ownerUserId: 'user_2');
+
+    expect(requestIndex, 2);
     api.close();
   });
 

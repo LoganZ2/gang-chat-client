@@ -93,17 +93,53 @@ extension _HomeShellLayout on _HomeShellState {
 
     if (_contentMode == _ContentMode.superuserUserSettings &&
         _superuserSettingsTarget != null) {
-      return _SuperuserUserSettingsPane(
-        key: ValueKey(
-          'superuser-user-settings-${_superuserSettingsTarget!.id}',
-        ),
+      final target = _superuserSettingsTarget!;
+      return SettingsPage(
+        key: ValueKey('superuser-user-settings-${target.id}'),
+        isSubWindow: true,
         api: _services.api,
         apiBaseUrl: widget.app.apiBaseUrl,
-        currentUser: _currentUser,
-        initialUser: _superuserSettingsTarget!,
+        emailVerificationController: widget.app.emailVerificationController,
+        controller: SettingsController(
+          api: _services.api,
+          apiBaseUrl: widget.app.apiBaseUrl,
+          stickerPackStore: widget.app.stickerPackStore,
+          managedUserId: target.id,
+        ),
+        audioDeviceStore: ManagedUserAudioSettingsStore(
+          api: _services.api,
+          userId: target.id,
+        ),
+        audioDeviceService: const ManagedUserAudioDeviceService(),
+        closeBehaviorStore: widget.closeBehaviorStore,
+        languageStore: widget.languageStore,
+        windowController: widget.windowController,
+        stickerPackStore: widget.app.stickerPackStore,
+        stickerImagePreviewOpener: _openStickerManagerImagePreview,
         fileSelectionService: _fileSelectionService,
         onClose: _closeSuperuserUserSettings,
-        onSaved: (updated) {
+        onAccountDeleted: () async {
+          _setHomeState(() {
+            final results = _searchResults;
+            if (results != null) {
+              _searchResults = GlobalSearchResults(
+                myRooms: results.myRooms,
+                publicRooms: results.publicRooms,
+                userSettings: [
+                  for (final user in results.userSettings)
+                    if (user.id != target.id) user,
+                ],
+                messages: results.messages,
+                files: results.files,
+                nextCursors: results.nextCursors,
+                totalCounts: results.totalCounts,
+              );
+            }
+            _superuserSettingsTarget = null;
+            _contentMode = _ContentMode.chat;
+          });
+        },
+        onUserUpdated: (updated) {
           _setHomeState(() {
             _superuserSettingsTarget = updated.toSummary();
             final results = _searchResults;
