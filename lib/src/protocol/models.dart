@@ -342,6 +342,61 @@ class CurrentUser {
   }
 }
 
+class UserSearchPage {
+  const UserSearchPage({
+    required this.users,
+    this.nextCursor,
+    this.totalCount,
+  });
+
+  final List<UserSummary> users;
+  final String? nextCursor;
+  final int? totalCount;
+
+  factory UserSearchPage.fromJson(Map<String, Object?> json) {
+    return UserSearchPage(
+      users: _listOfMaps(json['users']).map(UserSummary.fromJson).toList(),
+      nextCursor: json['next_cursor'] as String?,
+      totalCount: _nullableInt(json['total_count']),
+    );
+  }
+}
+
+class UserAudioSettings {
+  const UserAudioSettings({
+    required this.defaultAudioInputVolume,
+    required this.defaultAudioOutputVolume,
+    required this.liveMicInputVolume,
+    required this.liveVoiceOutputVolume,
+    required this.liveScreenShareOutputVolume,
+    required this.liveMusicOutputVolume,
+    this.updatedAt,
+  });
+
+  final int defaultAudioInputVolume;
+  final int defaultAudioOutputVolume;
+  final int liveMicInputVolume;
+  final int liveVoiceOutputVolume;
+  final int liveScreenShareOutputVolume;
+  final int liveMusicOutputVolume;
+  final DateTime? updatedAt;
+
+  factory UserAudioSettings.fromJson(Map<String, Object?> json) {
+    int volume(String key) => _nullableInt(json[key]) ?? 100;
+    return UserAudioSettings(
+      defaultAudioInputVolume: volume('default_audio_input_volume'),
+      defaultAudioOutputVolume: volume('default_audio_output_volume'),
+      liveMicInputVolume: volume('live_mic_input_volume'),
+      liveVoiceOutputVolume: volume('live_voice_output_volume'),
+      liveScreenShareOutputVolume: volume(
+        'live_screen_share_output_volume',
+      ),
+      liveMusicOutputVolume: volume('live_music_output_volume'),
+      updatedAt: _parseDateTime(json['updated_at']),
+    );
+  }
+}
+
 class UserSession {
   const UserSession({
     required this.id,
@@ -937,12 +992,14 @@ class GlobalSearchCursors {
   const GlobalSearchCursors({
     this.myRooms,
     this.publicRooms,
+    this.userSettings,
     this.messages,
     this.files,
   });
 
   final String? myRooms;
   final String? publicRooms;
+  final String? userSettings;
   final String? messages;
   final String? files;
 
@@ -951,6 +1008,7 @@ class GlobalSearchCursors {
     return GlobalSearchCursors(
       myRooms: json['my_rooms'] as String?,
       publicRooms: json['public_rooms'] as String?,
+      userSettings: json['user_settings'] as String?,
       messages: json['messages'] as String?,
       files: json['files'] as String?,
     );
@@ -961,12 +1019,14 @@ class GlobalSearchCounts {
   const GlobalSearchCounts({
     this.myRooms,
     this.publicRooms,
+    this.userSettings,
     this.messages,
     this.files,
   });
 
   final int? myRooms;
   final int? publicRooms;
+  final int? userSettings;
   final int? messages;
   final int? files;
 
@@ -975,6 +1035,7 @@ class GlobalSearchCounts {
     return GlobalSearchCounts(
       myRooms: _nullableInt(json['my_rooms']),
       publicRooms: _nullableInt(json['public_rooms']),
+      userSettings: _nullableInt(json['user_settings']),
       messages: _nullableInt(json['messages']),
       files: _nullableInt(json['files']),
     );
@@ -985,6 +1046,7 @@ class GlobalSearchResults {
   const GlobalSearchResults({
     required this.myRooms,
     required this.publicRooms,
+    this.userSettings = const [],
     required this.messages,
     required this.files,
     this.nextCursors = const GlobalSearchCursors(),
@@ -993,6 +1055,7 @@ class GlobalSearchResults {
 
   final List<RoomCard> myRooms;
   final List<PublicRoom> publicRooms;
+  final List<UserSummary> userSettings;
   final List<MessageSearchResult> messages;
   final List<MessageSearchResult> files;
   final GlobalSearchCursors nextCursors;
@@ -1004,6 +1067,9 @@ class GlobalSearchResults {
       publicRooms: _listOfMaps(
         json['public_rooms'],
       ).map(PublicRoom.fromJson).toList(),
+      userSettings: _listOfMaps(
+        json['user_settings'],
+      ).map(UserSummary.fromJson).toList(),
       messages: _listOfMaps(
         json['messages'],
       ).map(MessageSearchResult.fromJson).toList(),

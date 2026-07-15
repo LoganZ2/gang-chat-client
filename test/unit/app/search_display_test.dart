@@ -8,11 +8,13 @@ void main() {
     final results = GlobalSearchResults(
       myRooms: [_room('room_1')],
       publicRooms: [_publicRoom('room_2')],
+      userSettings: [_user('user_1')],
       messages: [_messageResult('room_1')],
       files: [_messageResult('room_1', type: 'file')],
       totalCounts: const GlobalSearchCounts(
         myRooms: 10,
         publicRooms: 11,
+        userSettings: 14,
         messages: 12,
         files: 13,
       ),
@@ -28,6 +30,10 @@ void main() {
       11,
     );
     expect(
+      globalSearchCategoryCount(results, GlobalSearchCategory.userSettings),
+      14,
+    );
+    expect(
       globalSearchCategoryCount(results, GlobalSearchCategory.messages),
       12,
     );
@@ -36,6 +42,22 @@ void main() {
     expect(
       globalSearchCategoryKey(GlobalSearchCategory.publicRooms),
       'public_rooms',
+    );
+    expect(
+      globalSearchCategoryKey(GlobalSearchCategory.userSettings),
+      'user_settings',
+    );
+    expect(
+      globalSearchCategoryLabel(GlobalSearchCategory.userSettings),
+      '用户设置',
+    );
+    expect(
+      superuserGlobalSearchCategories,
+      isNot(contains(GlobalSearchCategory.publicRooms)),
+    );
+    expect(
+      superuserGlobalSearchCategories,
+      contains(GlobalSearchCategory.userSettings),
     );
     expect(globalSearchCategoryKey(GlobalSearchCategory.messages), 'messages');
     expect(globalSearchCategoryKey(GlobalSearchCategory.files), 'files');
@@ -209,6 +231,16 @@ void main() {
     expect(globalSearchFileTitle(result), 'alpha.pdf');
     expect(globalSearchFileSubtitle(result), 'application/pdf - 4.0 KB');
   });
+}
+
+UserSummary _user(String id) {
+  return UserSummary(
+    id: id,
+    username: 'alice',
+    displayName: 'Alice',
+    avatarUrl: null,
+    defaultAvatarKey: 'blue-3',
+  );
 }
 
 RoomCard _room(

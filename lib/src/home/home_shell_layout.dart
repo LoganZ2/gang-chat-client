@@ -91,6 +91,41 @@ extension _HomeShellLayout on _HomeShellState {
       );
     }
 
+    if (_contentMode == _ContentMode.superuserUserSettings &&
+        _superuserSettingsTarget != null) {
+      return _SuperuserUserSettingsPane(
+        key: ValueKey(
+          'superuser-user-settings-${_superuserSettingsTarget!.id}',
+        ),
+        api: _services.api,
+        apiBaseUrl: widget.app.apiBaseUrl,
+        currentUser: _currentUser,
+        initialUser: _superuserSettingsTarget!,
+        fileSelectionService: _fileSelectionService,
+        onClose: _closeSuperuserUserSettings,
+        onSaved: (updated) {
+          _setHomeState(() {
+            _superuserSettingsTarget = updated.toSummary();
+            final results = _searchResults;
+            if (results != null) {
+              _searchResults = GlobalSearchResults(
+                myRooms: results.myRooms,
+                publicRooms: results.publicRooms,
+                userSettings: [
+                  for (final user in results.userSettings)
+                    if (user.id == updated.id) updated.toSummary() else user,
+                ],
+                messages: results.messages,
+                files: results.files,
+                nextCursors: results.nextCursors,
+                totalCounts: results.totalCounts,
+              );
+            }
+          });
+        },
+      );
+    }
+
     if (_contentMode == _ContentMode.createRoom) {
       return RoomSettingsDialog.create(
         key: const ValueKey('home-create-room-settings-dialog'),

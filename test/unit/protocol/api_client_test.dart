@@ -706,6 +706,128 @@ void main() {
     },
   );
 
+  test(
+    'searchUsersPage forwards cursor and parses pagination metadata',
+    () async {
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          expect(request.method, 'GET');
+          expect(request.url.path, '/api/v1/users/search');
+          expect(request.url.queryParameters, {
+            'q': 'alice',
+            'limit': '8',
+            'cursor': '8',
+            'include_suspended': 'true',
+          });
+          return http.Response(
+            jsonEncode({
+              'users': [
+                {
+                  'id': 'user_1',
+                  'uid': '1000001',
+                  'username': 'alice',
+                  'display_name': 'Alice',
+                  'default_avatar_key': 'blue-3',
+                },
+              ],
+              'next_cursor': '16',
+              'total_count': 21,
+            }),
+            200,
+          );
+        }),
+      );
+
+      final page = await api.searchUsersPage(
+        query: 'alice',
+        limit: 8,
+        cursor: '8',
+        includeSuspended: true,
+      );
+
+      expect(page.users.single.username, 'alice');
+      expect(page.nextCursor, '16');
+      expect(page.totalCount, 21);
+      api.close();
+    },
+  );
+
+  test('superuser user settings APIs use target-only endpoints', () async {
+    final requests = <http.Request>[];
+    final api = GangApiClient(
+      baseUrl: 'http://example.test/api/v1',
+      accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        requests.add(request);
+        final userJson = {
+          'id': 'user_2',
+          'uid': '1000002',
+          'username': 'bob',
+          'display_name': 'Bob',
+          'bio': '',
+          'gender': 'secret',
+          'email': 'bob@example.com',
+          'email_verified': true,
+          'email_public': false,
+          'phone_number_public': false,
+          'default_avatar_key': 'blue-3',
+          'language': 'zh-Hans',
+          'is_superuser': false,
+          'status': 'active',
+        };
+        if (request.url.path.endsWith('/audio-settings')) {
+          return http.Response(
+            jsonEncode({
+              'audio_settings': {
+                'default_audio_input_volume': 90,
+                'default_audio_output_volume': 80,
+                'live_mic_input_volume': 70,
+                'live_voice_output_volume': 60,
+                'live_screen_share_output_volume': 50,
+                'live_music_output_volume': 40,
+              },
+            }),
+            200,
+          );
+        }
+        if (request.url.path.endsWith('/password')) {
+          return http.Response(jsonEncode({'ok': true}), 200);
+        }
+        return http.Response(jsonEncode({'user': userJson}), 200);
+      }),
+    );
+
+    final user = await api.getForcedUserSettings('user_2');
+    final updated = await api.updateForcedUserSettings(
+      userId: 'user_2',
+      displayName: 'Bob',
+      emailVerified: true,
+    );
+    final audio = await api.getForcedUserAudioSettings('user_2');
+    await api.updateForcedUserAudioSettings(userId: 'user_2', settings: audio);
+    await api.forceResetUserPassword(
+      userId: 'user_2',
+      newPassword: 'new password',
+    );
+
+    expect(user.id, 'user_2');
+    expect(updated.emailVerified, isTrue);
+    expect(audio.liveMusicOutputVolume, 40);
+    expect(requests.map((request) => request.method), [
+      'GET',
+      'PATCH',
+      'GET',
+      'PATCH',
+      'POST',
+    ]);
+    final passwordBody = jsonDecode(requests.last.body) as Map<String, Object?>;
+    expect(passwordBody, {'new_password': 'new password'});
+    expect(passwordBody, isNot(contains('current_password')));
+    api.close();
+  });
+
   test('search calls global search endpoint and parses categories', () async {
     final api = GangApiClient(
       baseUrl: 'http://example.test/api/v1',

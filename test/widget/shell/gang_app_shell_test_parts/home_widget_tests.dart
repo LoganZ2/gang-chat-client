@@ -683,6 +683,70 @@ void registerShellHomeWidgetTests() {
     },
   );
 
+  testWidgets(
+    'superuser global search replaces public rooms with user settings',
+    (WidgetTester tester) async {
+      final requestedUris = <Uri>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: HomePage(
+            app: _homeTestAppContext(
+              requestedUris: requestedUris,
+              currentUserIsSuperuser: true,
+            ),
+            realtime: _NoopRealtimeService(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final searchField = find.descendant(
+        of: find.byKey(const ValueKey('home-title-search')),
+        matching: find.byType(TextField),
+      );
+      await tester.enterText(searchField, 'ri');
+      await tester.pump(const Duration(milliseconds: 320));
+      await tester.pumpAndSettle();
+
+      expect(
+        requestedUris.any(
+          (uri) =>
+              uri.path == '/api/v1/search' &&
+              uri.queryParameters['categories'] == 'my_rooms,messages,files',
+        ),
+        isTrue,
+      );
+      expect(
+        requestedUris.any(
+          (uri) =>
+              uri.path == '/api/v1/users/search' &&
+              uri.queryParameters['include_suspended'] == 'true',
+        ),
+        isTrue,
+      );
+      expect(find.text('用户设置 5'), findsWidgets);
+      expect(find.textContaining('公开房间'), findsNothing);
+      expect(find.widgetWithText(ui.Button, '进入设置'), findsNWidgets(5));
+      expect(
+        find.byKey(const ValueKey('open-user-settings-user-3')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('open-user-settings-user-3')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Riley 的用户设置'), findsOneWidget);
+      await tester.tap(find.text('安全'));
+      await tester.pumpAndSettle();
+      expect(find.text('当前密码'), findsNothing);
+      expect(find.text('新密码'), findsOneWidget);
+      expect(find.text('确认新密码'), findsOneWidget);
+      expect(find.widgetWithText(ui.Button, '忘记密码（已禁用）'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('authenticated home shell search scroll loads next cursor page', (
     WidgetTester tester,
   ) async {

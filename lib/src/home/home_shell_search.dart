@@ -22,7 +22,9 @@ extension _HomeShellSearch on _HomeShellState {
   List<search_display.GlobalSearchCategory> get _visibleSearchCategories {
     final activeCategory = _activeSearchCategory;
     return activeCategory == null
-        ? search_display.globalSearchCategories
+        ? (_currentUser.isSuperuser
+              ? search_display.superuserGlobalSearchCategories
+              : search_display.globalSearchCategories)
         : [activeCategory];
   }
 
@@ -61,7 +63,10 @@ extension _HomeShellSearch on _HomeShellState {
     if (!search_display.hasGlobalSearchQuery(query)) return;
 
     try {
-      final results = await _globalSearchController.search(query: query);
+      final results = await _globalSearchController.search(
+        query: query,
+        categories: _visibleSearchCategories,
+      );
       if (!mounted || requestSerial != _searchRequestSerial) return;
       if (_titleSearchController.text.trim() != query) return;
       _setTitleSearchResultsState(() {
@@ -113,6 +118,7 @@ extension _HomeShellSearch on _HomeShellState {
         categories: categories,
         myRoomsCursor: cursors.myRooms,
         publicRoomsCursor: cursors.publicRooms,
+        userSettingsCursor: cursors.userSettings,
         messagesCursor: cursors.messages,
         filesCursor: cursors.files,
       );
@@ -190,6 +196,34 @@ extension _HomeShellSearch on _HomeShellState {
 
   void _openSearchProfileRoom(PublicRoom room) {
     _openSearchRoom(_roomCardForPublicRoom(room));
+  }
+
+  void _openSuperuserUserSettings(UserSummary user) {
+    if (!_currentUser.isSuperuser) return;
+    if (user.id == _currentUser.id) {
+      _setHomeState(() {
+        _superuserSettingsTarget = null;
+        _settingsOpen = true;
+        _contentMode = _ContentMode.chat;
+        _narrowContentOpen = true;
+        _searchExpanded = false;
+      });
+      return;
+    }
+    _setHomeState(() {
+      _superuserSettingsTarget = user;
+      _settingsOpen = false;
+      _contentMode = _ContentMode.superuserUserSettings;
+      _narrowContentOpen = true;
+      _searchExpanded = false;
+    });
+  }
+
+  void _closeSuperuserUserSettings() {
+    _setHomeState(() {
+      _superuserSettingsTarget = null;
+      _contentMode = _ContentMode.chat;
+    });
   }
 
   Future<PublicRoom> _resolveRoomProfile(PublicRoom room) async {
@@ -406,6 +440,7 @@ extension _HomeShellSearch on _HomeShellState {
           else
             publicRoom,
       ],
+      userSettings: snapshot.userSettings,
       messages: snapshot.messages,
       files: snapshot.files,
       nextCursors: snapshot.nextCursors,

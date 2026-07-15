@@ -821,6 +821,31 @@ GangApi _roomsApi({
           '/api/v1/rooms/server-alpha/join-requests/join-request-riley') {
         return _jsonResponse({});
       }
+      if (request.url.path == '/api/v1/users/user-3/settings') {
+        return _jsonResponse({
+          'user': {
+            ..._currentUserJson,
+            'id': 'user-3',
+            'uid': '10000003',
+            'username': 'riley',
+            'display_name': 'Riley',
+            'email': 'riley@example.com',
+            'is_superuser': false,
+          },
+        });
+      }
+      if (request.url.path == '/api/v1/users/user-3/audio-settings') {
+        return _jsonResponse({
+          'audio_settings': {
+            'default_audio_input_volume': 100,
+            'default_audio_output_volume': 100,
+            'live_mic_input_volume': 100,
+            'live_voice_output_volume': 100,
+            'live_screen_share_output_volume': 100,
+            'live_music_output_volume': 100,
+          },
+        });
+      }
       if (request.url.path == '/api/v1/users/search') {
         return _jsonResponse({
           'users': [

@@ -3,7 +3,7 @@ import 'file_display.dart' as file_display;
 import 'room_display.dart' as room_display;
 import 'room_notifications.dart' as room_notifications;
 
-enum GlobalSearchCategory { myRooms, publicRooms, messages, files }
+enum GlobalSearchCategory { myRooms, publicRooms, userSettings, messages, files }
 
 const globalSearchCategories = [
   GlobalSearchCategory.myRooms,
@@ -12,10 +12,18 @@ const globalSearchCategories = [
   GlobalSearchCategory.files,
 ];
 
+const superuserGlobalSearchCategories = [
+  GlobalSearchCategory.myRooms,
+  GlobalSearchCategory.userSettings,
+  GlobalSearchCategory.messages,
+  GlobalSearchCategory.files,
+];
+
 String globalSearchCategoryKey(GlobalSearchCategory category) {
   return switch (category) {
     GlobalSearchCategory.myRooms => 'my_rooms',
     GlobalSearchCategory.publicRooms => 'public_rooms',
+    GlobalSearchCategory.userSettings => 'user_settings',
     GlobalSearchCategory.messages => 'messages',
     GlobalSearchCategory.files => 'files',
   };
@@ -28,6 +36,7 @@ String? globalSearchCursorForCategory(
   return switch (category) {
     GlobalSearchCategory.myRooms => cursors.myRooms,
     GlobalSearchCategory.publicRooms => cursors.publicRooms,
+    GlobalSearchCategory.userSettings => cursors.userSettings,
     GlobalSearchCategory.messages => cursors.messages,
     GlobalSearchCategory.files => cursors.files,
   };
@@ -39,6 +48,7 @@ GlobalSearchCursors globalSearchCursorsForCategories(
 ) {
   String? myRooms;
   String? publicRooms;
+  String? userSettings;
   String? messages;
   String? files;
   for (final category in categories) {
@@ -47,6 +57,8 @@ GlobalSearchCursors globalSearchCursorsForCategories(
         myRooms = cursors.myRooms;
       case GlobalSearchCategory.publicRooms:
         publicRooms = cursors.publicRooms;
+      case GlobalSearchCategory.userSettings:
+        userSettings = cursors.userSettings;
       case GlobalSearchCategory.messages:
         messages = cursors.messages;
       case GlobalSearchCategory.files:
@@ -56,6 +68,7 @@ GlobalSearchCursors globalSearchCursorsForCategories(
   return GlobalSearchCursors(
     myRooms: myRooms,
     publicRooms: publicRooms,
+    userSettings: userSettings,
     messages: messages,
     files: files,
   );
@@ -68,6 +81,7 @@ GlobalSearchResults globalSearchResultsByAppendingPage({
 }) {
   var appendMyRooms = false;
   var appendPublicRooms = false;
+  var appendUserSettings = false;
   var appendMessages = false;
   var appendFiles = false;
   for (final category in categories) {
@@ -76,6 +90,8 @@ GlobalSearchResults globalSearchResultsByAppendingPage({
         appendMyRooms = true;
       case GlobalSearchCategory.publicRooms:
         appendPublicRooms = true;
+      case GlobalSearchCategory.userSettings:
+        appendUserSettings = true;
       case GlobalSearchCategory.messages:
         appendMessages = true;
       case GlobalSearchCategory.files:
@@ -90,6 +106,9 @@ GlobalSearchResults globalSearchResultsByAppendingPage({
     publicRooms: appendPublicRooms
         ? [...current.publicRooms, ...page.publicRooms]
         : current.publicRooms,
+    userSettings: appendUserSettings
+        ? [...current.userSettings, ...page.userSettings]
+        : current.userSettings,
     messages: appendMessages
         ? [...current.messages, ...page.messages]
         : current.messages,
@@ -101,6 +120,9 @@ GlobalSearchResults globalSearchResultsByAppendingPage({
       publicRooms: appendPublicRooms
           ? page.nextCursors.publicRooms
           : current.nextCursors.publicRooms,
+      userSettings: appendUserSettings
+          ? page.nextCursors.userSettings
+          : current.nextCursors.userSettings,
       messages: appendMessages
           ? page.nextCursors.messages
           : current.nextCursors.messages,
@@ -113,6 +135,9 @@ GlobalSearchResults globalSearchResultsByAppendingPage({
       publicRooms: appendPublicRooms
           ? page.totalCounts.publicRooms ?? current.totalCounts.publicRooms
           : current.totalCounts.publicRooms,
+      userSettings: appendUserSettings
+          ? page.totalCounts.userSettings ?? current.totalCounts.userSettings
+          : current.totalCounts.userSettings,
       messages: appendMessages
           ? page.totalCounts.messages ?? current.totalCounts.messages
           : current.totalCounts.messages,
@@ -131,6 +156,7 @@ String globalSearchCategoryLabel(GlobalSearchCategory category) {
   return switch (category) {
     GlobalSearchCategory.myRooms => '我的房间',
     GlobalSearchCategory.publicRooms => '公开房间',
+    GlobalSearchCategory.userSettings => '用户设置',
     GlobalSearchCategory.messages => '聊天记录',
     GlobalSearchCategory.files => '聊天文件',
   };
@@ -146,6 +172,8 @@ int globalSearchCategoryCount(
       results.totalCounts.myRooms ?? results.myRooms.length,
     GlobalSearchCategory.publicRooms =>
       results.totalCounts.publicRooms ?? results.publicRooms.length,
+    GlobalSearchCategory.userSettings =>
+      results.totalCounts.userSettings ?? results.userSettings.length,
     GlobalSearchCategory.messages =>
       results.totalCounts.messages ?? results.messages.length,
     GlobalSearchCategory.files =>
@@ -157,6 +185,7 @@ bool globalSearchHasResults(GlobalSearchResults? results) {
   if (results == null) return false;
   return results.myRooms.isNotEmpty ||
       results.publicRooms.isNotEmpty ||
+      results.userSettings.isNotEmpty ||
       results.messages.isNotEmpty ||
       results.files.isNotEmpty;
 }
@@ -168,6 +197,7 @@ GlobalSearchResults globalSearchResultsForView(
   return GlobalSearchResults(
     myRooms: visibleMyRoomSearchResults(rooms: results.myRooms, query: query),
     publicRooms: results.publicRooms,
+    userSettings: results.userSettings,
     messages: results.messages,
     files: results.files,
     nextCursors: results.nextCursors,

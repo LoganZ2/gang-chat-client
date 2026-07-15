@@ -9,12 +9,15 @@ import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../app/audio_device_store.dart';
+import '../app/account_display.dart' as account_display;
 import '../app/app_update.dart';
 import '../app/audio_device_state.dart'
     show rememberedAudioVolume, restoredAudioVolume;
 import '../app/audio_levels.dart';
+import '../app/account_forms.dart';
 import '../app/authenticated_app_services.dart';
 import '../app/authenticated_app_context.dart';
+import '../app/auth_form.dart';
 import '../app/close_behavior.dart';
 import '../app/file_display.dart' as file_display;
 import '../app/error_display.dart';
@@ -54,6 +57,7 @@ import '../live/live_presence_audio_coordinator.dart';
 import '../protocol/api_client.dart'
     show
         ApiException,
+        GangApi,
         MessagePage,
         UploadCancelledException,
         UploadTransferController;
@@ -68,6 +72,7 @@ import '../shell/system_live_presence_speech_player.dart';
 import '../shell/voice_playback_service.dart';
 import '../shell/window_controls.dart';
 import '../ui/ui.dart';
+import '../ui/avatar_crop_dialog.dart';
 import 'chat_pane.dart';
 import 'home_content.dart';
 import 'hover_card_anchor.dart';
@@ -92,6 +97,7 @@ part 'home_shell_search.dart';
 part 'home_shell_layout.dart';
 part 'home_shell_title_bar.dart';
 part 'home_shell_join_dialog.dart';
+part 'superuser_user_settings_pane.dart';
 
 const _windowEdgeBorder = Color(0xFF303842);
 const _defaultLiveVolumeRestore = 0.5;
@@ -106,6 +112,7 @@ enum _ContentMode {
   roomSettings,
   createRoom,
   notifications,
+  superuserUserSettings,
 }
 
 class HomeShell extends StatefulWidget {
@@ -220,6 +227,7 @@ class _HomeShellState extends State<HomeShell> {
   bool _exitingApplication = false;
   bool _narrowContentOpen = false;
   _ContentMode _contentMode = _ContentMode.chat;
+  UserSummary? _superuserSettingsTarget;
   // Bumped to ask an open members panel to reload (e.g. after a
   // `room_join_requests_updated`, `room_role_changed`, or
   // `room_member_profile_changed` SSE event). The panel watches this via
@@ -408,6 +416,7 @@ class _HomeShellState extends State<HomeShell> {
       _logoutConfirming = false;
       _narrowContentOpen = false;
       _contentMode = _ContentMode.chat;
+      _superuserSettingsTarget = null;
       _membersInitialSearchQuery = '';
       _notificationInvites = const [];
       _notificationApplications = const [];
@@ -658,9 +667,12 @@ class _HomeShellState extends State<HomeShell> {
                               onProfileRoomSelected: _openSearchProfileRoom,
                               onResolveRoomProfile: _resolveRoomProfile,
                               onResolveRoomUserProfile: _resolveRoomUserProfile,
+                              onResolveUserProfile: _resolveUserProfile,
                               onPublicRoomAction: (room) => unawaited(
                                 _handlePublicRoomSearchAction(room),
                               ),
+                              onUserSettingsSelected:
+                                  _openSuperuserUserSettings,
                               onMessageSelected: _openMessageSearchResult,
                               onFileSelected: _openMessageSearchResult,
                             ),

@@ -561,7 +561,9 @@ class _TitleSearchResultsPanel extends StatelessWidget {
     required this.onProfileRoomSelected,
     required this.onResolveRoomProfile,
     required this.onResolveRoomUserProfile,
+    required this.onResolveUserProfile,
     required this.onPublicRoomAction,
+    required this.onUserSettingsSelected,
     required this.onMessageSelected,
     required this.onFileSelected,
   });
@@ -584,7 +586,9 @@ class _TitleSearchResultsPanel extends StatelessWidget {
   final RoomProfileResolver onResolveRoomProfile;
   final Future<UserSummary> Function(String roomId, UserSummary user)
   onResolveRoomUserProfile;
+  final UserProfileResolver onResolveUserProfile;
   final ValueChanged<PublicRoom> onPublicRoomAction;
+  final ValueChanged<UserSummary> onUserSettingsSelected;
   final ValueChanged<MessageSearchResult> onMessageSelected;
   final ValueChanged<MessageSearchResult> onFileSelected;
 
@@ -614,6 +618,9 @@ class _TitleSearchResultsPanel extends StatelessWidget {
               _SearchCategoryTabs(
                 results: results,
                 activeCategory: activeCategory,
+                categories: currentUser.isSuperuser
+                    ? search_display.superuserGlobalSearchCategories
+                    : search_display.globalSearchCategories,
                 onCategorySelected: onCategorySelected,
               ),
               const Divider(height: 1, color: UiColors.border),
@@ -801,6 +808,37 @@ class _TitleSearchResultsPanel extends StatelessWidget {
               ),
             )
             .toList(),
+      search_display.GlobalSearchCategory.userSettings => snapshot.userSettings
+          .map(
+            (user) => _RoomSearchResultTile(
+              title: user.displayName.trim().isEmpty
+                  ? user.username
+                  : user.displayName,
+              subtitle: '@${user.username}',
+              query: query,
+              leading: UserHoverCard(
+                user: user,
+                currentUser: currentUser,
+                onResolveProfile: onResolveUserProfile,
+                child: Avatar(
+                  label: user.displayName,
+                  imageUrl: AppConfigScope.of(
+                    context,
+                  ).resolveAssetUrl(user.avatarUrl),
+                  defaultAvatarKey: user.defaultAvatarKey,
+                  size: 30,
+                ),
+              ),
+              trailing: Button(
+                key: ValueKey('open-user-settings-${user.id}'),
+                height: 30,
+                onPressed: () => onUserSettingsSelected(user),
+                icon: const Icon(Icons.manage_accounts_outlined, size: 15),
+                child: const Text('进入设置'),
+              ),
+            ),
+          )
+          .toList(),
       search_display.GlobalSearchCategory.messages =>
         snapshot.messages
             .map(
@@ -839,11 +877,13 @@ class _SearchCategoryTabs extends StatelessWidget {
   const _SearchCategoryTabs({
     required this.results,
     required this.activeCategory,
+    required this.categories,
     required this.onCategorySelected,
   });
 
   final GlobalSearchResults? results;
   final search_display.GlobalSearchCategory? activeCategory;
+  final List<search_display.GlobalSearchCategory> categories;
   final ValueChanged<search_display.GlobalSearchCategory> onCategorySelected;
 
   @override
@@ -862,7 +902,7 @@ class _SearchCategoryTabs extends StatelessWidget {
             spacing: 6,
             runSpacing: 6,
             children: [
-              for (final category in search_display.globalSearchCategories)
+              for (final category in categories)
                 SizedBox(
                   width: itemWidth,
                   child: _SearchCategoryButton(

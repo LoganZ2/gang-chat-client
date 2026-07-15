@@ -314,6 +314,44 @@ abstract interface class GangApi {
     int limit = 20,
   });
 
+  Future<UserSearchPage> searchUsersPage({
+    required String query,
+    int limit = 20,
+    String? cursor,
+    bool includeSuspended = false,
+  });
+
+  Future<CurrentUser> getForcedUserSettings(String userId);
+
+  Future<CurrentUser> updateForcedUserSettings({
+    required String userId,
+    String? username,
+    String? email,
+    bool? emailVerified,
+    bool? emailPublic,
+    String? phoneNumber,
+    bool? phoneNumberPublic,
+    String? displayName,
+    String? bio,
+    String? gender,
+    String? avatarAssetId,
+    String? defaultAvatarKey,
+    String? language,
+    String? status,
+  });
+
+  Future<UserAudioSettings> getForcedUserAudioSettings(String userId);
+
+  Future<UserAudioSettings> updateForcedUserAudioSettings({
+    required String userId,
+    required UserAudioSettings settings,
+  });
+
+  Future<void> forceResetUserPassword({
+    required String userId,
+    required String newPassword,
+  });
+
   Future<List<JoinRequest>> listJoinRequests(
     String roomId, {
     String status = 'pending',
@@ -1468,16 +1506,135 @@ class GangApiClient implements GangApi {
     required String query,
     int limit = 20,
   }) async {
+    final page = await searchUsersPage(query: query, limit: limit);
+    return page.users;
+  }
+
+  @override
+  Future<UserSearchPage> searchUsersPage({
+    required String query,
+    int limit = 20,
+    String? cursor,
+    bool includeSuspended = false,
+  }) async {
+    final parameters = <String, String>{'q': query, 'limit': '$limit'};
+    if (cursor != null) parameters['cursor'] = cursor;
+    if (includeSuspended) parameters['include_suspended'] = 'true';
     final decoded = await _sendJson((token) {
       return _httpClient.get(
-        _uri('/users/search', {'q': query, 'limit': '$limit'}),
+        _uri('/users/search', parameters),
         headers: _headers(token),
       );
     }, retryTransientFailures: true);
-    return (decoded['users'] as List<Object?>? ?? const [])
-        .cast<Map<String, Object?>>()
-        .map(UserSummary.fromJson)
-        .toList();
+    return UserSearchPage.fromJson(decoded);
+  }
+
+  @override
+  Future<CurrentUser> getForcedUserSettings(String userId) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.get(
+        _uri('/users/$userId/settings'),
+        headers: _headers(token),
+      );
+    }, retryTransientFailures: true);
+    return CurrentUser.fromJson(decoded['user']! as Map<String, Object?>);
+  }
+
+  @override
+  Future<CurrentUser> updateForcedUserSettings({
+    required String userId,
+    String? username,
+    String? email,
+    bool? emailVerified,
+    bool? emailPublic,
+    String? phoneNumber,
+    bool? phoneNumberPublic,
+    String? displayName,
+    String? bio,
+    String? gender,
+    String? avatarAssetId,
+    String? defaultAvatarKey,
+    String? language,
+    String? status,
+  }) async {
+    final body = <String, Object?>{};
+    void put(String key, Object? value) {
+      if (value != null) body[key] = value;
+    }
+
+    put('username', username);
+    put('email', email);
+    put('email_verified', emailVerified);
+    put('email_public', emailPublic);
+    put('phone_number', phoneNumber);
+    put('phone_number_public', phoneNumberPublic);
+    put('display_name', displayName);
+    put('bio', bio);
+    put('gender', gender);
+    put('avatar_asset_id', avatarAssetId);
+    put('default_avatar_key', defaultAvatarKey);
+    put('language', language);
+    put('status', status);
+    final decoded = await _sendJson((token) {
+      return _httpClient.patch(
+        _uri('/users/$userId/settings'),
+        headers: _headers(token),
+        body: encodeJsonBody(body),
+      );
+    });
+    return CurrentUser.fromJson(decoded['user']! as Map<String, Object?>);
+  }
+
+  @override
+  Future<UserAudioSettings> getForcedUserAudioSettings(String userId) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.get(
+        _uri('/users/$userId/audio-settings'),
+        headers: _headers(token),
+      );
+    }, retryTransientFailures: true);
+    return UserAudioSettings.fromJson(
+      decoded['audio_settings']! as Map<String, Object?>,
+    );
+  }
+
+  @override
+  Future<UserAudioSettings> updateForcedUserAudioSettings({
+    required String userId,
+    required UserAudioSettings settings,
+  }) async {
+    final decoded = await _sendJson((token) {
+      return _httpClient.patch(
+        _uri('/users/$userId/audio-settings'),
+        headers: _headers(token),
+        body: encodeJsonBody({
+          'default_audio_input_volume': settings.defaultAudioInputVolume,
+          'default_audio_output_volume': settings.defaultAudioOutputVolume,
+          'live_mic_input_volume': settings.liveMicInputVolume,
+          'live_voice_output_volume': settings.liveVoiceOutputVolume,
+          'live_screen_share_output_volume':
+              settings.liveScreenShareOutputVolume,
+          'live_music_output_volume': settings.liveMusicOutputVolume,
+        }),
+      );
+    });
+    return UserAudioSettings.fromJson(
+      decoded['audio_settings']! as Map<String, Object?>,
+    );
+  }
+
+  @override
+  Future<void> forceResetUserPassword({
+    required String userId,
+    required String newPassword,
+  }) async {
+    await _sendJson((token) {
+      return _httpClient.post(
+        _uri('/users/$userId/password'),
+        headers: _headers(token),
+        body: encodeJsonBody({'new_password': newPassword}),
+      );
+    });
   }
 
   @override
