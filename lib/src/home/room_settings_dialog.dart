@@ -321,7 +321,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
       if (!mounted) return;
       setState(() {
         _saving = false;
-        _error = error.toString();
+        _error = userFacingErrorMessage(error);
         _notice = null;
         _markFloatingNoticeEvent('error', _error);
       });
@@ -415,7 +415,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
       if (!mounted) return;
       setState(() {
         _savingPreferences = false;
-        _error = error.toString();
+        _error = userFacingErrorMessage(error);
         _notice = null;
         _markFloatingNoticeEvent('error', _error);
       });
@@ -457,7 +457,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
       if (!mounted) return;
       setState(() {
         _refreshing = false;
-        _error = error.toString();
+        _error = userFacingErrorMessage(error);
         _markFloatingNoticeEvent('error', _error);
       });
     }
@@ -471,7 +471,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _error = error.toString();
+        _error = userFacingErrorMessage(error);
         _notice = null;
         _markFloatingNoticeEvent('error', _error);
       });
@@ -500,7 +500,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
       if (!mounted) return;
       setState(() {
         _uploadingAvatar = false;
-        _error = error.toString();
+        _error = userFacingErrorMessage(error);
         _markFloatingNoticeEvent('error', _error);
       });
     }
@@ -581,7 +581,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
       if (!mounted) return;
       setState(() {
         _leaving = false;
-        _error = error.toString();
+        _error = userFacingErrorMessage(error);
         _markFloatingNoticeEvent('error', _error);
       });
     }
@@ -623,7 +623,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
       if (!mounted) return;
       setState(() {
         _deleting = false;
-        _error = error.toString();
+        _error = userFacingErrorMessage(error);
         _markFloatingNoticeEvent('error', _error);
       });
     }

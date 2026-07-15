@@ -17,6 +17,7 @@ import '../app/authenticated_app_services.dart';
 import '../app/authenticated_app_context.dart';
 import '../app/close_behavior.dart';
 import '../app/file_display.dart' as file_display;
+import '../app/error_display.dart';
 import '../app/file_downloads_controller.dart';
 import '../app/file_transfer_state.dart';
 import '../app/media_cache_controller.dart';
@@ -522,7 +523,7 @@ class _HomeShellState extends State<HomeShell> {
       );
     } catch (error) {
       if (!mounted) return;
-      _setHomeState(() => _sendError = error.toString());
+      _setHomeState(() => _sendError = userFacingErrorMessage(error));
     }
   }
 

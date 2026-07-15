@@ -8,7 +8,7 @@ void registerShellAuthWidgetTests() {
     await tester.pump();
 
     expect(find.text('Gang Chat'), findsOneWidget);
-    expect(find.text('用户名或邮箱地址'), findsOneWidget);
+    expect(find.text('登录用户名或邮箱地址'), findsOneWidget);
     expect(find.text('密码'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '登录'), findsOneWidget);
     expect(find.text('注册'), findsOneWidget);
@@ -107,7 +107,7 @@ void registerShellAuthWidgetTests() {
     );
     await tester.pump();
 
-    await tester.enterText(_textFieldWithHint('用户名或邮箱地址'), 'kai');
+    await tester.enterText(_textFieldWithHint('登录用户名或邮箱地址'), 'kai');
     await tester.enterText(_textFieldWithHint('密码'), 'secret123');
     await tester.tap(find.widgetWithText(ui.Button, '登录'));
     await tester.pumpAndSettle();
@@ -175,7 +175,7 @@ void registerShellAuthWidgetTests() {
         ),
       ),
     );
-    await tester.enterText(_textFieldWithHint('用户名或邮箱地址'), 'kai');
+    await tester.enterText(_textFieldWithHint('登录用户名或邮箱地址'), 'kai');
     await tester.tap(find.text('忘记密码？'));
     await tester.pumpAndSettle();
 
@@ -257,7 +257,7 @@ void registerShellAuthWidgetTests() {
         ),
       ),
     );
-    await tester.enterText(_textFieldWithHint('用户名或邮箱地址'), 'kai');
+    await tester.enterText(_textFieldWithHint('登录用户名或邮箱地址'), 'kai');
     await tester.tap(find.text('忘记密码？'));
     await tester.pumpAndSettle();
 
@@ -317,7 +317,7 @@ void registerShellAuthWidgetTests() {
           ),
         ),
       );
-      await tester.enterText(_textFieldWithHint('用户名或邮箱地址'), 'kai');
+      await tester.enterText(_textFieldWithHint('登录用户名或邮箱地址'), 'kai');
       await tester.tap(find.text('忘记密码？'));
       await tester.pumpAndSettle();
 
@@ -531,9 +531,9 @@ void registerShellAuthWidgetTests() {
     await tester.pump();
     await tester.pump();
 
-    expect(_textFieldWithHint('用户名或邮箱地址'), findsOneWidget);
+    expect(_textFieldWithHint('登录用户名或邮箱地址'), findsOneWidget);
     expect(
-      tester.widget<TextField>(_textFieldWithHint('用户名或邮箱地址')).controller!.text,
+      tester.widget<TextField>(_textFieldWithHint('登录用户名或邮箱地址')).controller!.text,
       'morgan',
     );
     expect(
@@ -572,7 +572,7 @@ void registerShellAuthWidgetTests() {
     await tester.pump();
 
     expect(
-      tester.widget<TextField>(_textFieldWithHint('用户名或邮箱地址')).controller!.text,
+      tester.widget<TextField>(_textFieldWithHint('登录用户名或邮箱地址')).controller!.text,
       isEmpty,
     );
     expect(
@@ -592,7 +592,7 @@ void registerShellAuthWidgetTests() {
     await tester.pump();
 
     expect(
-      tester.widget<TextField>(_textFieldWithHint('用户名或邮箱地址')).controller!.text,
+      tester.widget<TextField>(_textFieldWithHint('登录用户名或邮箱地址')).controller!.text,
       'kai',
     );
     expect(
@@ -716,7 +716,7 @@ void registerShellAuthWidgetTests() {
     await tester.pump();
 
     expect(
-      tester.widget<TextField>(_textFieldWithHint('用户名或邮箱地址')).controller!.text,
+      tester.widget<TextField>(_textFieldWithHint('登录用户名或邮箱地址')).controller!.text,
       'morgan',
     );
     expect(
@@ -762,7 +762,7 @@ void registerShellAuthWidgetTests() {
     await tester.pump();
     await tester.pump();
 
-    await tester.enterText(_textFieldWithHint('用户名或邮箱地址'), 'morgan@mail.test');
+    await tester.enterText(_textFieldWithHint('登录用户名或邮箱地址'), 'morgan@mail.test');
     await tester.pump();
 
     expect(
@@ -803,7 +803,7 @@ void registerShellAuthWidgetTests() {
     );
     await tester.pump();
 
-    await tester.enterText(_textFieldWithHint('用户名或邮箱地址'), 'kai');
+    await tester.enterText(_textFieldWithHint('登录用户名或邮箱地址'), 'kai');
     await tester.enterText(_textFieldWithHint('密码'), 'secret123');
     await tester.tap(
       find.byKey(const ValueKey('auth-remember-password-hot-zone')),
@@ -845,7 +845,7 @@ void registerShellAuthWidgetTests() {
       );
       await tester.pump();
 
-      await tester.enterText(_textFieldWithHint('用户名或邮箱地址'), 'kai');
+      await tester.enterText(_textFieldWithHint('登录用户名或邮箱地址'), 'kai');
       await tester.enterText(_textFieldWithHint('密码'), 'secret123');
       await tester.tap(find.widgetWithText(ui.Button, '登录'));
       await tester.pump();
@@ -875,7 +875,7 @@ void registerShellAuthWidgetTests() {
     await tester.tap(find.text('注册'));
     await tester.pump();
 
-    expect(find.text('用户名'), findsOneWidget);
+    expect(find.text('登录用户名'), findsOneWidget);
     expect(find.text('邮箱地址'), findsOneWidget);
     expect(find.text('密码'), findsOneWidget);
     expect(find.text('确认密码'), findsOneWidget);
@@ -944,7 +944,7 @@ void registerShellAuthWidgetTests() {
             .every((field) => field.enableInteractiveSelection),
         isTrue,
       );
-      final loginField = _textFieldWithHint('用户名或邮箱地址');
+      final loginField = _textFieldWithHint('登录用户名或邮箱地址');
       final loginFieldTop = tester.getTopLeft(loginField).dy;
       const loginText = 'logan@example.test';
       await tester.enterText(loginField, loginText);
@@ -1032,7 +1032,7 @@ void registerShellAuthWidgetTests() {
         tester.widget<GestureDetector>(emailVerificationAction).onTap,
         isNotNull,
       );
-      final registerUsernameField = _textFieldWithHint('用户名');
+      final registerUsernameField = _textFieldWithHint('登录用户名');
       expect(
         tester.getTopLeft(registerUsernameField).dy,
         closeTo(loginFieldTop, 0.01),
@@ -1049,7 +1049,7 @@ void registerShellAuthWidgetTests() {
         findsOneWidget,
       );
       expect(
-        find.byTooltip('Username 需为 3-32 位，只能包含英文字母、数字、下划线或连字符'),
+        find.byTooltip('登录用户名需为 3-32 位，只能包含英文字母、数字、下划线或连字符'),
         findsOneWidget,
       );
 
@@ -1064,7 +1064,7 @@ void registerShellAuthWidgetTests() {
       expect(find.text('请输入有效的邮箱地址'), findsOneWidget);
       expect(find.text('邮箱验证'), findsNothing);
 
-      await tester.enterText(_textFieldWithHint('用户名'), 'logan_01');
+      await tester.enterText(_textFieldWithHint('登录用户名'), 'logan_01');
       await tester.enterText(emailField, 'logan@example.test');
       await tester.pump();
       expect(
@@ -1333,10 +1333,10 @@ void registerShellAuthWidgetTests() {
     await tester.tap(find.text('注册'));
     await tester.pump();
 
-    await tester.enterText(_textFieldWithHint('用户名'), 'taken_name');
+    await tester.enterText(_textFieldWithHint('登录用户名'), 'taken_name');
     await tester.pump(const Duration(milliseconds: 350));
     await tester.pump();
-    expect(find.byTooltip('该登录 Username 已被其他用户使用'), findsOneWidget);
+    expect(find.byTooltip('该登录用户名已被其他用户使用'), findsOneWidget);
 
     await tester.enterText(_textFieldWithHint('邮箱地址'), 'taken@example.test');
     await tester.enterText(_textFieldWithHint('密码'), 'secret123');
@@ -1346,7 +1346,7 @@ void registerShellAuthWidgetTests() {
     expect(submissions, 0);
     expect(find.text('请先验证邮箱'), findsOneWidget);
 
-    await tester.enterText(_textFieldWithHint('用户名'), 'available_name');
+    await tester.enterText(_textFieldWithHint('登录用户名'), 'available_name');
     await tester.pump(const Duration(milliseconds: 350));
     await tester.pump();
     expect(
@@ -1391,7 +1391,7 @@ void registerShellAuthWidgetTests() {
     await tester.pump();
     await tester.tap(find.text('注册'));
     await tester.pumpAndSettle();
-    await tester.enterText(_textFieldWithHint('用户名'), 'verified_user');
+    await tester.enterText(_textFieldWithHint('登录用户名'), 'verified_user');
     await tester.enterText(_textFieldWithHint('邮箱地址'), 'verified@example.test');
     await tester.pump();
     await tester.enterText(_textFieldWithHint('密码'), 'secret123');

@@ -18,7 +18,7 @@ class ReleaseDownloadCancelledException implements Exception {
   const ReleaseDownloadCancelledException();
 
   @override
-  String toString() => 'release download cancelled';
+  String toString() => '版本下载已取消';
 }
 
 class ReleaseDownloadCancellationToken {
@@ -93,7 +93,7 @@ class ReleaseUpdateService {
     });
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw HttpException(
-        'release listing failed (${response.statusCode})',
+        '读取版本列表失败（状态码 ${response.statusCode}）',
         uri: _listUri(bucketUrl),
       );
     }
@@ -133,7 +133,7 @@ class ReleaseUpdateService {
       cancellationToken?._throwIfCancelled();
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw HttpException(
-          'release download failed (${response.statusCode})',
+          '版本下载失败（状态码 ${response.statusCode}）',
           uri: update.downloadUrl,
         );
       }
@@ -300,5 +300,5 @@ String _processResultMessage(ProcessResult result) {
   final stdout = result.stdout?.toString().trim() ?? '';
   if (stdout.isNotEmpty) return stdout;
 
-  return 'installer launch failed';
+  return '安装程序启动失败';
 }

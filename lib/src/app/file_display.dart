@@ -95,7 +95,7 @@ List<String> normalizedFilePaths(Iterable<String> paths) {
 }
 
 String clipboardFilesReadFailureMessage(Object error) {
-  return 'Unable to read clipboard files: $error';
+  return '无法读取剪贴板中的文件';
 }
 
 String clipboardImageUploadFilename({
@@ -117,11 +117,11 @@ String clipboardImageUploadFilename({
 }
 
 String filePickerOpenFailureMessage(Object error) {
-  return '无法打开文件选择器：$error';
+  return '无法打开文件选择器';
 }
 
 String fileReadFailureMessage(Object error) {
-  return '无法读取文件：$error';
+  return '无法读取文件';
 }
 
 String fileEmptyMessage() {

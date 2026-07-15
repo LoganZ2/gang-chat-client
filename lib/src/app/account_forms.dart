@@ -1,5 +1,6 @@
 import '../protocol/models.dart';
 import 'account_display.dart';
+import 'error_display.dart';
 import 'language_preference.dart';
 
 enum AccountFormSaveTarget { account, profile, preferences }
@@ -107,10 +108,10 @@ final _loginUsernamePattern = RegExp(r'^[A-Za-z0-9_-]{3,32}$');
 String? loginUsernameValidationError(String username) {
   final trimmed = username.trim();
   if (trimmed.isEmpty) {
-    return '用户名不能为空';
+    return '登录用户名不能为空';
   }
   if (!_loginUsernamePattern.hasMatch(trimmed)) {
-    return 'Username 需为 3-32 位，只能包含英文字母、数字、下划线或连字符';
+    return '登录用户名需为 3-32 位，只能包含英文字母、数字、下划线或连字符';
   }
   return null;
 }
@@ -129,7 +130,7 @@ String? loginUsernameAvailabilityError({
     return candidate.id != user.id &&
         candidate.username.trim().toLowerCase() == normalizedUsername;
   });
-  return taken ? '该登录 Username 已被其他用户使用' : null;
+  return taken ? '该登录用户名已被其他用户使用' : null;
 }
 
 class AccountFormSaveStatePatch {
@@ -256,7 +257,7 @@ PasswordChangeStatePatch passwordChangeStarted() {
 PasswordChangeStatePatch passwordChangeFailed(Object failure) {
   return PasswordChangeStatePatch(
     changingPassword: false,
-    securityError: failure.toString(),
+    securityError: userFacingErrorMessage(failure),
     notice: null,
   );
 }
@@ -280,7 +281,7 @@ AccountDeletionStatePatch accountDeletionStarted() {
 AccountDeletionStatePatch accountDeletionFailed(Object failure) {
   return AccountDeletionStatePatch(
     deletingAccount: false,
-    securityError: failure.toString(),
+    securityError: userFacingErrorMessage(failure),
     notice: null,
   );
 }
@@ -436,7 +437,7 @@ AccountFormSaveStatePatch accountFormSaveFailed({
       savingProfile: savingProfile,
       targetSaving: false,
     ),
-    accountError: failure.toString(),
+    accountError: userFacingErrorMessage(failure),
     notice: null,
   );
 }
@@ -575,7 +576,7 @@ AccountAvatarStatePatch accountAvatarActionFailed({
     uploadingAvatar: false,
     accountError: accountError,
     stickerError: stickerError,
-    targetError: failure.toString(),
+    targetError: userFacingErrorMessage(failure),
     notice: null,
   );
 }

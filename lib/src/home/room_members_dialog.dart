@@ -313,7 +313,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = error.toString();
+        _error = userFacingErrorMessage(error);
         _markFloatingNoticeEvent('error', _error);
       });
     }
@@ -338,7 +338,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       if (!mounted) return;
       setState(() {
         _loadingBlacklist = false;
-        _blacklistError = error.toString();
+        _blacklistError = userFacingErrorMessage(error);
       });
     }
   }
@@ -363,7 +363,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       if (!mounted || seq != _inviteSearchSeq) return;
       setState(() {
         _searchingInvites = false;
-        _inviteError = error.toString();
+        _inviteError = userFacingErrorMessage(error);
       });
     }
   }
@@ -388,7 +388,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       if (!mounted || seq != _blockSearchSeq) return;
       setState(() {
         _searchingBlocks = false;
-        _blockError = error.toString();
+        _blockError = userFacingErrorMessage(error);
       });
     }
   }
@@ -417,7 +417,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       if (!mounted) return;
       setState(() {
         _busyInviteUserIds.remove(user.id);
-        _inviteError = error.toString();
+        _inviteError = userFacingErrorMessage(error);
       });
     }
   }
@@ -452,7 +452,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       if (!mounted) return;
       setState(() {
         _busyBlockUserIds.remove(user.id);
-        _blockError = error.toString();
+        _blockError = userFacingErrorMessage(error);
       });
     }
   }
@@ -487,7 +487,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       if (!mounted) return;
       setState(() {
         _busyBlockUserIds.remove(user.id);
-        _blacklistError = error.toString();
+        _blacklistError = userFacingErrorMessage(error);
       });
     }
   }
@@ -522,7 +522,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       if (!mounted) return;
       setState(() {
         _busyRequestIds.remove(request.id);
-        _requestError = error.toString();
+        _requestError = userFacingErrorMessage(error);
       });
     }
   }
@@ -616,7 +616,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       if (!mounted) return;
       setState(() {
         _busyMemberIds.remove(member.user.id);
-        _error = error.toString();
+        _error = userFacingErrorMessage(error);
         _markFloatingNoticeEvent('error', _error);
       });
     }
@@ -653,7 +653,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       if (!mounted) return;
       setState(() {
         _busyMemberIds.remove(member.user.id);
-        _error = error.toString();
+        _error = userFacingErrorMessage(error);
         _markFloatingNoticeEvent('error', _error);
       });
     }
@@ -702,7 +702,7 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
       if (!mounted) return;
       setState(() {
         _busyMemberIds.remove(member.user.id);
-        _error = error.toString();
+        _error = userFacingErrorMessage(error);
         _markFloatingNoticeEvent('error', _error);
       });
     }

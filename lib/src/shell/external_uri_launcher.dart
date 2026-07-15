@@ -17,6 +17,6 @@ class ExternalUriLauncher {
       await Process.start('xdg-open', [value]);
       return;
     }
-    throw UnsupportedError('Opening links is not supported on this platform.');
+    throw UnsupportedError('当前平台不支持打开链接');
   }
 }

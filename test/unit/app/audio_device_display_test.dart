@@ -41,10 +41,7 @@ void main() {
       ),
       isFalse,
     );
-    expect(
-      audioDevicePreferenceSaveFailureMessage('denied'),
-      'Could not save audio device preference: denied',
-    );
+    expect(audioDevicePreferenceSaveFailureMessage('denied'), '无法保存音频设备偏好');
   });
 
   test('isSameAudioDevice compares kind and device id', () {
@@ -83,13 +80,7 @@ void main() {
       deviceIdOf: _deviceIdOf,
     );
 
-    expect(labels, [
-      'System default',
-      'Communications',
-      '麦克风 3',
-      'Desk Mic',
-      'Desk Mic #2',
-    ]);
+    expect(labels, ['系统默认', '通信设备', '麦克风 3', 'Desk Mic', 'Desk Mic #2']);
   });
 
   test('audioDevicesByKind filters devices by WebRTC kind', () {

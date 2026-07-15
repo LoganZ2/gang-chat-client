@@ -80,8 +80,8 @@ void main() {
     expect(preferencesSavedNotice(), '偏好设置已保存');
     expect(profileNoChangesNotice(), '没有用户资料变更');
     expect(profileSavedNotice(), '用户资料已保存');
-    expect(avatarPickerOpenFailureMessage('denied'), '无法打开文件选择器：denied');
-    expect(avatarReadFailureMessage('bad file'), '无法读取图片：bad file');
+    expect(avatarPickerOpenFailureMessage('denied'), '无法打开文件选择器');
+    expect(avatarReadFailureMessage('bad file'), '无法读取图片');
     expect(avatarEmptyFileMessage(), '图片文件为空');
     expect(avatarUploadedPendingProfileNotice(), '头像已上传，保存用户资料后生效');
     expect(avatarUpdatedNotice(), '头像已更新');

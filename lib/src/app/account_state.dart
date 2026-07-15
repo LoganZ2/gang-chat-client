@@ -1,4 +1,5 @@
 import '../protocol/models.dart';
+import 'error_display.dart';
 
 class AccountLoadPatch {
   const AccountLoadPatch({
@@ -38,6 +39,6 @@ AccountLoadPatch accountLoadFailed({
   return AccountLoadPatch(
     user: user,
     loading: false,
-    accountError: failure.toString(),
+    accountError: userFacingErrorMessage(failure),
   );
 }

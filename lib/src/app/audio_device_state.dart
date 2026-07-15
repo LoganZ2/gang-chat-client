@@ -1,6 +1,7 @@
 import 'audio_device_display.dart';
 import 'audio_device_preferences.dart';
 import 'audio_levels.dart';
+import 'error_display.dart';
 
 class AudioDeviceListPatch<T> {
   const AudioDeviceListPatch({
@@ -113,7 +114,7 @@ AudioDeviceListPatch<T> audioDeviceListLoadFailed<T>({
     selectedInput: selectedInput,
     selectedOutput: selectedOutput,
     loading: false,
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
   );
 }
 
@@ -200,7 +201,7 @@ AudioDeviceSelectionPatch<T> audioDeviceSelectionFailed<T>({
     selectedInput: selectedInput,
     selectedOutput: selectedOutput,
     busyDeviceId: null,
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
   );
 }
 
@@ -329,7 +330,7 @@ AudioTestStatePatch audioInputTestFailed({
     testingOutput: testingOutput,
     inputLevel: 0,
     outputLevel: outputLevel,
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
   );
 }
 
@@ -370,7 +371,7 @@ AudioTestStatePatch audioOutputTestFailed({
     testingOutput: false,
     inputLevel: inputLevel,
     outputLevel: 0,
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
   );
 }
 

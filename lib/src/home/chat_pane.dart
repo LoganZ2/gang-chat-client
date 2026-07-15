@@ -13,6 +13,7 @@ import 'package:flutter/rendering.dart'
 import 'package:flutter/services.dart' show TextInputFormatter;
 
 import '../app/file_display.dart' as file_display;
+import '../app/error_display.dart';
 import '../app/file_transfer_state.dart';
 import '../app/media_cache_controller.dart';
 import '../app/composer_attachment_display.dart' as composer_attachment;

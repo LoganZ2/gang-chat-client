@@ -121,7 +121,7 @@ void main() {
       );
       expect(searchFailed.results.map((room) => room.id), ['existing']);
       expect(searchFailed.searching, isFalse);
-      expect(searchFailed.error, 'search failed');
+      expect(searchFailed.error, '操作失败，请稍后重试');
 
       final invitesStarted = roomJoinInvitesLoadStarted(invites: invites);
       expect(invitesStarted.invites.map((invite) => invite.id), ['invite_1']);
@@ -139,7 +139,7 @@ void main() {
       );
       expect(invitesFailed.invites.map((invite) => invite.id), ['invite_1']);
       expect(invitesFailed.loading, isFalse);
-      expect(invitesFailed.error, 'load failed');
+      expect(invitesFailed.error, '操作失败，请稍后重试');
     },
   );
 
@@ -171,7 +171,7 @@ void main() {
         failure: 'join failed',
       );
       expect(failed.busyRoomId, 'room_1');
-      expect(failed.error, 'join failed');
+      expect(failed.error, '操作失败，请稍后重试');
       expect(failed.pendingRoomIds, {'existing', 'room_2'});
 
       final finished = roomJoinPublicActionFinished(
@@ -179,7 +179,7 @@ void main() {
         pendingRoomIds: failed.pendingRoomIds,
       );
       expect(finished.busyRoomId, isNull);
-      expect(finished.error, 'join failed');
+      expect(finished.error, '操作失败，请稍后重试');
       expect(finished.pendingRoomIds, {'existing', 'room_2'});
     },
   );
@@ -226,7 +226,7 @@ void main() {
       ]);
       expect(failed.pendingRoomIds, {'existing'});
       expect(failed.busyInviteId, 'invite_1');
-      expect(failed.error, 'review failed');
+      expect(failed.error, '操作失败，请稍后重试');
 
       final finished = roomJoinInviteDecisionFinished(
         invites: failed.invites,
@@ -239,7 +239,7 @@ void main() {
       ]);
       expect(finished.pendingRoomIds, {'existing'});
       expect(finished.busyInviteId, isNull);
-      expect(finished.error, 'review failed');
+      expect(finished.error, '操作失败，请稍后重试');
     },
   );
 

@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import '../protocol/api_client.dart';
 import '../protocol/models.dart';
+import 'error_display.dart';
 import 'room_display.dart' as room_display;
 import 'room_join_requests.dart' as room_join_requests;
 import 'room_live_state.dart' as room_live_state;
@@ -281,7 +282,7 @@ class RoomsController {
     return RoomListLoadPatch(
       rooms: rooms,
       loading: false,
-      error: failure.toString(),
+      error: userFacingErrorMessage(failure),
     );
   }
 
@@ -356,7 +357,7 @@ class RoomsController {
       selectedRoomId: selectedRoomId,
       selectedRoom: selectedRoom,
       loadingRoom: loadingRoom,
-      error: failure.toString(),
+      error: userFacingErrorMessage(failure),
       selectedRoomHasPendingJoinRequests: selectedRoomHasPendingJoinRequests,
       messages: messages,
       live: live,
@@ -437,7 +438,7 @@ class RoomsController {
       live: live,
       loading: false,
       changed: changed,
-      error: failure.toString(),
+      error: userFacingErrorMessage(failure),
       requestError: null,
       busyRequestIds: busyRequestIds.toSet(),
     );
@@ -479,7 +480,7 @@ class RoomsController {
       live: live,
       loading: loading,
       changed: changed,
-      error: failure.toString(),
+      error: userFacingErrorMessage(failure),
       requestError: requestError,
       busyRequestIds: busyRequestIds.toSet(),
     );
@@ -521,7 +522,7 @@ class RoomsController {
       loading: loading,
       changed: changed,
       error: null,
-      requestError: failure.toString(),
+      requestError: userFacingErrorMessage(failure),
       busyRequestIds: busyRequestIds.toSet(),
     );
   }
@@ -603,7 +604,7 @@ class RoomsController {
       loading: loading,
       changed: changed,
       error: error,
-      requestError: failure.toString(),
+      requestError: userFacingErrorMessage(failure),
       busyRequestIds: failed.busyRequestIds,
     );
   }

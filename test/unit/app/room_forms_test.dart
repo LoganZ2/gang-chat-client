@@ -23,11 +23,11 @@ void main() {
 
     final failed = createRoomSubmitFailed(failure: 'create failed');
     expect(failed.busy, isTrue);
-    expect(failed.error, 'create failed');
+    expect(failed.error, '操作失败，请稍后重试');
 
     final finished = createRoomSubmitFinished(error: failed.error);
     expect(finished.busy, isFalse);
-    expect(finished.error, 'create failed');
+    expect(finished.error, '操作失败，请稍后重试');
   });
 
   test('roomProfileUpdateDraftFromForm trims room profile fields', () {
@@ -207,7 +207,7 @@ void main() {
       failure: Exception('clipboard'),
     );
     expect(copyFailed.notice, 'kept');
-    expect(copyFailed.error, contains('clipboard'));
+    expect(copyFailed.error, '无法复制');
 
     final global = roomProfileUseGlobalProfile(
       currentUserDefaultAvatarKey: 'green-2',
@@ -295,7 +295,7 @@ void main() {
     expect(failed.pendingAvatarUrl, '/old.png');
     expect(failed.usingProfilePresetAvatar, isTrue);
     expect(failed.uploadingAvatar, isFalse);
-    expect(failed.error, contains('upload failed'));
+    expect(failed.error, '操作失败，请稍后重试');
     expect(failed.notice, isNull);
   });
 
@@ -325,7 +325,7 @@ void main() {
       failure: Exception('save failed'),
     );
     expect(saveFailed.saving, isFalse);
-    expect(saveFailed.error, contains('save failed'));
+    expect(saveFailed.error, '操作失败，请稍后重试');
 
     final leaveStarted = roomProfileLeaveStarted(
       pendingAvatarAssetId: 'asset_1',
@@ -352,7 +352,7 @@ void main() {
       failure: Exception('leave failed'),
     );
     expect(leaveFailed.leaving, isFalse);
-    expect(leaveFailed.error, contains('leave failed'));
+    expect(leaveFailed.error, '操作失败，请稍后重试');
     expect(leaveFailed.notice, isNull);
   });
 
@@ -411,7 +411,7 @@ void main() {
     expect(failed.usingPresetAvatar, isFalse);
     expect(failed.uploadingAvatar, isFalse);
     expect(failed.changed, isFalse);
-    expect(failed.error, contains('upload failed'));
+    expect(failed.error, '操作失败，请稍后重试');
     expect(failed.notice, isNull);
 
     final preset = roomManagementUsePresetAvatar(
@@ -590,7 +590,7 @@ void main() {
     expect(failed.pendingAvatarAssetId, 'asset_1');
     expect(failed.saving, isFalse);
     expect(failed.changed, isTrue);
-    expect(failed.error, contains('save failed'));
+    expect(failed.error, '操作失败，请稍后重试');
     expect(failed.notice, isNull);
   });
 
@@ -630,7 +630,7 @@ void main() {
     expect(failed.room, same(room));
     expect(failed.deleting, isFalse);
     expect(failed.changed, isTrue);
-    expect(failed.error, contains('delete failed'));
+    expect(failed.error, '操作失败，请稍后重试');
     expect(failed.notice, isNull);
   });
 }

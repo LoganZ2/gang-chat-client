@@ -745,7 +745,7 @@ void main() {
     );
     expect(failed.members, currentMembers);
     expect(failed.loading, isFalse);
-    expect(failed.error, contains('load failed'));
+    expect(failed.error, '操作失败，请稍后重试');
   });
 
   test('room member role update patches members busy ids and notice', () {
@@ -780,7 +780,7 @@ void main() {
     expect(failed.members.map((member) => member.user.id), ['a', 'b']);
     expect(failed.busyMemberIds, {'other'});
     expect(failed.changed, isFalse);
-    expect(failed.error, contains('role failed'));
+    expect(failed.error, '操作失败，请稍后重试');
     expect(failed.notice, isNull);
   });
 
@@ -814,7 +814,7 @@ void main() {
     expect(failed.members, members);
     expect(failed.busyMemberIds, {'other'});
     expect(failed.changed, isTrue);
-    expect(failed.error, contains('remove failed'));
+    expect(failed.error, '操作失败，请稍后重试');
     expect(failed.notice, isNull);
   });
 
@@ -848,7 +848,7 @@ void main() {
     expect(failed.members, members);
     expect(failed.busyMemberIds, {'other'});
     expect(failed.changed, isTrue);
-    expect(failed.error, contains('transfer failed'));
+    expect(failed.error, '操作失败，请稍后重试');
     expect(failed.notice, isNull);
   });
 }

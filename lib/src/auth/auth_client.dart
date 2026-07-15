@@ -1,5 +1,6 @@
 import 'package:http/http.dart' as http;
 
+import '../protocol/error_messages.dart';
 import '../protocol/models.dart';
 import '../protocol/utf8_json.dart';
 import 'auth_transport.dart';
@@ -529,7 +530,11 @@ class AuthException implements Exception {
       final code = error?['code'] as String?;
       if (message != null && message.isNotEmpty) {
         return AuthException(
-          message,
+          localizedServerErrorMessage(
+            code: code ?? 'request_failed',
+            statusCode: response.statusCode,
+            message: message,
+          ),
           statusCode: response.statusCode,
           code: code ?? 'request_failed',
         );

@@ -1678,35 +1678,6 @@ class LiveSessionConnectException implements Exception {
 
   @override
   String toString() {
-    return '无法连接到 $url 的 LiveKit：${_describeError(cause)}';
+    return '无法连接语音服务';
   }
-}
-
-String _describeError(Object error) {
-  final message = _tryReadMessage(error);
-  final nested = _tryReadNestedError(error);
-  if (message != null && nested != null) {
-    return '$message (${_describeError(nested)})';
-  }
-  if (message != null) return message;
-
-  final text = error.toString();
-  if (text.startsWith('Instance of ')) return error.runtimeType.toString();
-  return text;
-}
-
-String? _tryReadMessage(Object error) {
-  try {
-    final value = (error as dynamic).message;
-    if (value is String && value.isNotEmpty) return value;
-  } catch (_) {}
-  return null;
-}
-
-Object? _tryReadNestedError(Object error) {
-  try {
-    final value = (error as dynamic).error;
-    if (value is Object) return value;
-  } catch (_) {}
-  return null;
 }

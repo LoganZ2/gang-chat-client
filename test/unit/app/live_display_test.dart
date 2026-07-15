@@ -218,9 +218,9 @@ void main() {
 
   test('live notices and failure messages stay outside UI', () {
     expect(liveForciblyRemovedNotice(), '你已被移出语音');
-    expect(liveVoiceConnectFailureMessage('network'), '无法连接语音：network');
-    expect(liveCameraOpenFailureMessage('denied'), '无法打开摄像头: denied');
-    expect(liveScreenShareFailureMessage('denied'), '无法共享屏幕: denied');
+    expect(liveVoiceConnectFailureMessage('network'), '无法连接语音频道');
+    expect(liveCameraOpenFailureMessage('denied'), '无法打开摄像头');
+    expect(liveScreenShareFailureMessage('denied'), '无法共享屏幕');
   });
 
   test('liveScreenShareByIdentity resolves active fullscreen share', () {
@@ -497,7 +497,7 @@ void main() {
     expect(failed.loading, isFalse);
     expect(failed.sources, [screen, window]);
     expect(failed.selectedId, 'window');
-    expect(failed.error, 'Bad state: sources failed');
+    expect(failed.error, '加载语音频道失败');
   });
 
   test(

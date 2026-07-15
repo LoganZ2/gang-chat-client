@@ -236,10 +236,10 @@ void main() {
 
   test('room operation notices and delete confirmation stay outside UI', () {
     expect(roomCopySuccessNotice('RID'), 'RID 已复制');
-    expect(roomCopyFailureMessage('denied'), '无法复制：denied');
+    expect(roomCopyFailureMessage('denied'), '无法复制');
     expect(userUidCopySuccessNotice(), 'UID 已复制');
-    expect(userUidCopyFailureMessage('denied'), '无法复制 UID：denied');
-    expect(roomOpenFailureMessage('missing'), '无法打开房间：missing');
+    expect(userUidCopyFailureMessage('denied'), '无法复制 UID');
+    expect(roomOpenFailureMessage('missing'), '无法打开房间');
     expect(roomOptimisticOpenRefreshFailureNotice(), '房间刷新失败，已先打开当前房间');
     expect(roomUseGlobalProfileNotice(), '保存后将使用全局默认用户名和默认头像');
     expect(roomInfoSavedNotice(), '房间信息已保存');

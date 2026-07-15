@@ -3567,7 +3567,7 @@ Future<void> _runStickerContextAction(
     if (!context.mounted) return;
     _showMessageContextNotice(
       context,
-      '$error',
+      userFacingErrorMessage(error, fallback: '表情操作失败'),
       tone: FloatingNoticeTone.error,
     );
   }

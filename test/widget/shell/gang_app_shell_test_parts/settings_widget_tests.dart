@@ -177,7 +177,7 @@ void registerShellSettingsWidgetTests() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.widgetWithText(ui.Button, '保存登录 Username'), findsNothing);
+    expect(find.widgetWithText(ui.Button, '保存登录用户名'), findsNothing);
     expect(find.text('合法'), findsNothing);
 
     final usernameField = find.byWidgetPredicate(
@@ -266,7 +266,7 @@ void registerShellSettingsWidgetTests() {
     await tester.pumpAndSettle();
 
     expect(find.text('不合法'), findsOneWidget);
-    expect(find.byTooltip('该登录 Username 已被其他用户使用'), findsOneWidget);
+    expect(find.byTooltip('该登录用户名已被其他用户使用'), findsOneWidget);
 
     final saveProfileButton = find.widgetWithText(ui.Button, '保存用户资料');
     if (saveProfileButton.evaluate().isEmpty) {

@@ -12,6 +12,7 @@ export 'authenticated_app_context.dart';
 export 'authenticated_app_services.dart';
 export 'chat_composer_state.dart';
 export 'confirmation.dart';
+export 'error_display.dart';
 export 'file_display.dart';
 export 'file_downloads_controller.dart';
 export 'file_transfer_state.dart';

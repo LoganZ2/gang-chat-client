@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../app/account_display.dart' as account_display;
+import '../app/error_display.dart';
 import '../app/room_display.dart' as room_display;
 import '../app/room_forms.dart' as room_forms;
 import '../app/room_blacklist.dart' as room_blacklist;

@@ -171,7 +171,7 @@ extension _HomeShellNotifications on _HomeShellState {
       if (!mounted) return;
       _setHomeState(() {
         _loadingNotifications = false;
-        _notificationError = error.toString();
+        _notificationError = userFacingErrorMessage(error);
       });
     }
   }
@@ -307,7 +307,7 @@ extension _HomeShellNotifications on _HomeShellState {
       if (!mounted) return;
       _setHomeState(() {
         _busyNotificationInviteId = null;
-        _notificationError = error.toString();
+        _notificationError = userFacingErrorMessage(error);
       });
     }
   }
@@ -338,7 +338,7 @@ extension _HomeShellNotifications on _HomeShellState {
       if (!mounted) return;
       _setHomeState(() {
         _busyNotificationApplicationId = null;
-        _notificationError = error.toString();
+        _notificationError = userFacingErrorMessage(error);
       });
     }
   }

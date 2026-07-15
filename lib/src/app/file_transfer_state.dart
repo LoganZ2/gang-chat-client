@@ -1,6 +1,7 @@
 import 'package:http/http.dart' as http;
 
 import '../protocol/api_client.dart';
+import 'error_display.dart';
 
 enum FileTransferDirection { upload, download }
 
@@ -67,7 +68,7 @@ class FileTransferState {
   void markFailed(Object failure, {bool stopTransferSpeed = false}) {
     failed = true;
     sendingMessage = false;
-    error = failure.toString();
+    error = userFacingErrorMessage(failure, fallback: '文件传输失败');
     if (stopTransferSpeed) stopSpeed();
   }
 

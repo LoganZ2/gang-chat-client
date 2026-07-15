@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../app/room_notifications.dart';
+import '../app/error_display.dart';
 import '../protocol/models.dart';
 import '../ui/ui.dart';
 import 'hover_card_anchor.dart';
@@ -816,7 +817,10 @@ class _NotificationContextMenuRegionState
       showFloatingSuccessNotice(context, '已复制');
     } catch (error) {
       if (!mounted) return;
-      showFloatingErrorNotice(context, '$error');
+      showFloatingErrorNotice(
+        context,
+        userFacingErrorMessage(error, fallback: '复制通知失败'),
+      );
     }
   }
 
@@ -845,7 +849,10 @@ class _NotificationContextMenuRegionState
       );
     } catch (error) {
       if (!mounted) return;
-      showFloatingErrorNotice(context, '$error');
+      showFloatingErrorNotice(
+        context,
+        userFacingErrorMessage(error, fallback: '删除通知失败'),
+      );
     }
   }
 }

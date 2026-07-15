@@ -30,7 +30,7 @@ bool audioDeviceBusy<T>(
 }
 
 String audioDevicePreferenceSaveFailureMessage(Object error) {
-  return 'Could not save audio device preference: $error';
+  return '无法保存音频设备偏好';
 }
 
 bool isSameAudioDevice<T>(
@@ -109,8 +109,8 @@ String audioDeviceLabel({
 }) {
   final trimmed = label.trim();
   if (trimmed.isNotEmpty) return trimmed;
-  if (deviceId == 'default') return 'System default';
-  if (deviceId == 'communications') return 'Communications';
+  if (deviceId == 'default') return '系统默认';
+  if (deviceId == 'communications') return '通信设备';
   return '$fallbackLabel ${index + 1}';
 }
 

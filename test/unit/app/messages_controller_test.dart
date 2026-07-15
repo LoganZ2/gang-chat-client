@@ -457,7 +457,7 @@ void main() {
       failure: 'network failed',
     );
     expect(pending.transfer.failed, isTrue);
-    expect(pending.transfer.error, 'network failed');
+    expect(pending.transfer.error, '网络连接失败，请检查网络后重试');
     expect(patch.messages.single.failed, isTrue);
 
     final sent = Message(

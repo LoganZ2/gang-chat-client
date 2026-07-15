@@ -1,4 +1,5 @@
 import '../protocol/models.dart';
+import 'error_display.dart';
 import 'room_display.dart';
 import 'room_invites.dart' as room_invites;
 
@@ -206,7 +207,7 @@ RoomJoinSearchPatch roomJoinSearchFailed({
   return RoomJoinSearchPatch(
     results: results.toList(),
     searching: false,
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
   );
 }
 
@@ -237,7 +238,7 @@ RoomJoinInvitesPatch roomJoinInvitesLoadFailed({
   return RoomJoinInvitesPatch(
     invites: invites.toList(),
     loading: false,
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
   );
 }
 
@@ -277,7 +278,7 @@ RoomJoinPublicActionPatch roomJoinPublicActionFailed({
 }) {
   return RoomJoinPublicActionPatch(
     busyRoomId: busyRoomId,
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
     pendingRoomIds: pendingRoomIds.toSet(),
   );
 }
@@ -338,7 +339,7 @@ RoomJoinInviteDecisionPatch roomJoinInviteDecisionFailed({
     invites: invites.toList(),
     pendingRoomIds: pendingRoomIds.toSet(),
     busyInviteId: busyInviteId,
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
   );
 }
 

@@ -17,6 +17,7 @@ import '../app/audio_device_store.dart';
 import '../app/audio_levels.dart';
 import '../app/close_behavior.dart';
 import '../app/email_verification_controller.dart';
+import '../app/error_display.dart';
 import '../app/confirmation.dart';
 import '../app/language_preference.dart';
 import '../app/password_reset_controller.dart';
@@ -542,7 +543,7 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() {
         _usernameAvailabilityQuery = username;
         _checkingUsernameAvailability = false;
-        _usernameAvailabilityError = '暂时无法检测 Username 是否重复';
+        _usernameAvailabilityError = '暂时无法检测登录用户名是否重复';
       });
     }
   }
@@ -583,7 +584,7 @@ class _SettingsPageState extends State<SettingsPage> {
       });
       return error;
     } catch (_) {
-      const error = '暂时无法检测 Username 是否重复';
+      const error = '暂时无法检测登录用户名是否重复';
       if (!mounted || requestId != _usernameAvailabilityRequestId) {
         return error;
       }
@@ -647,7 +648,10 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!mounted) return;
       setState(() {
         _loadingCloseBehavior = false;
-        _closeBehaviorError = error.toString();
+        _closeBehaviorError = userFacingErrorMessage(
+          error,
+          fallback: '读取关闭方式失败',
+        );
       });
     }
   }
@@ -660,7 +664,7 @@ class _SettingsPageState extends State<SettingsPage> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _aboutError = '读取自动提示更新失败：$error';
+        _aboutError = '读取自动提示更新失败';
         _markFloatingNoticeEvent('aboutError', _aboutError);
       });
     }
@@ -694,7 +698,7 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!mounted) return;
       setState(() {
         _autoPromptUpdates = previous;
-        _aboutError = '自动提示更新保存失败：$error';
+        _aboutError = '自动提示更新保存失败';
         _markFloatingNoticeEvent('aboutError', _aboutError);
       });
     }
@@ -730,7 +734,10 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!mounted) return;
       setState(() {
         _savingCloseBehavior = false;
-        _closeBehaviorError = error.toString();
+        _closeBehaviorError = userFacingErrorMessage(
+          error,
+          fallback: '保存关闭方式失败',
+        );
         _markFloatingNoticeEvent('closeBehaviorError', _closeBehaviorError);
       });
       return;
@@ -1094,7 +1101,7 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!mounted) return;
       setState(() {
         _checkingAppVersion = false;
-        _aboutError = '检查更新失败：$error';
+        _aboutError = '检查更新失败';
         _markFloatingNoticeEvent('aboutError', _aboutError);
       });
     }
@@ -1143,7 +1150,7 @@ class _SettingsPageState extends State<SettingsPage> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _updateDownloadError = '忽略此版本失败：$error';
+        _updateDownloadError = '忽略此版本失败';
         _markFloatingNoticeEvent('updateDownloadError', _updateDownloadError);
       });
     }
@@ -1236,7 +1243,10 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!mounted) return;
       setState(() {
         _downloadingAppUpdate = false;
-        _updateDownloadError = '下载或启动安装器失败：$error';
+        _updateDownloadError = userFacingErrorMessage(
+          error,
+          fallback: '下载或启动安装程序失败',
+        );
         _markFloatingNoticeEvent('updateDownloadError', _updateDownloadError);
       });
     } finally {
@@ -1286,7 +1296,7 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!mounted) return;
       setState(() {
         _openingFeedbackMail = false;
-        _aboutError = '无法打开邮件客户端：$error';
+        _aboutError = '无法打开邮件客户端';
         _markFloatingNoticeEvent('aboutError', _aboutError);
       });
     }
@@ -2827,7 +2837,10 @@ class _SettingsPageState extends State<SettingsPage> {
     } catch (error) {
       if (!mounted) return;
       setState(() => _verifyingPasswordReset = false);
-      showFloatingErrorNotice(context, '$error');
+      showFloatingErrorNotice(
+        context,
+        userFacingErrorMessage(error, fallback: '邮箱验证失败'),
+      );
     }
   }
 
@@ -3636,7 +3649,7 @@ class _SettingsPageState extends State<SettingsPage> {
               _CopyableField(label: '个人 UID', value: user.uid),
               const SizedBox(height: 14),
               _LabeledTextField(
-                label: '登录 Username',
+                label: '登录用户名',
                 controller: _usernameController,
                 enabled: usernameEditable,
                 helperText: account_display.usernameHelperText(user),

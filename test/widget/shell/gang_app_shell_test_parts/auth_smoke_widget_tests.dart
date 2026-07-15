@@ -56,7 +56,7 @@ void registerShellAuthSmokeWidgetTests() {
     await tester.pump();
 
     expect(find.text('Gang Chat'), findsAtLeastNWidgets(1));
-    expect(find.text('用户名或邮箱地址'), findsOneWidget);
+    expect(find.text('登录用户名或邮箱地址'), findsOneWidget);
     expect(find.text('密码'), findsOneWidget);
     expect(find.byTooltip('显示密码'), findsOneWidget);
     expect(find.widgetWithText(ui.Button, '登录'), findsOneWidget);
@@ -77,7 +77,7 @@ void registerShellAuthSmokeWidgetTests() {
     await tester.tap(find.text('注册'));
     await tester.pump();
 
-    expect(find.text('用户名'), findsOneWidget);
+    expect(find.text('登录用户名'), findsOneWidget);
     expect(find.text('邮箱地址'), findsOneWidget);
     expect(find.text('确认密码'), findsOneWidget);
     expect(find.byTooltip('显示密码'), findsNWidgets(2));

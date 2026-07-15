@@ -1,4 +1,5 @@
 import '../protocol/models.dart';
+import 'error_display.dart';
 import 'sticker_ordering.dart' as sticker_ordering;
 
 enum StickerManagementScope { personal, room }
@@ -470,7 +471,7 @@ StickerActionPatch stickerActionFailed({
     savingOrder: savingOrder,
     downloading: downloading,
     selectedStickerIds: selectedStickerIds.toList(),
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
     notice: null,
   );
 }
@@ -531,7 +532,7 @@ StickerActionPatch stickerActionErrorShown({
     savingOrder: savingOrder,
     downloading: downloading,
     selectedStickerIds: selectedStickerIds.toList(),
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
     notice: notice,
   );
 }
@@ -564,7 +565,7 @@ StickerPreviewState stickerPreviewActionFailed({
     state,
     action: action,
     active: false,
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
   );
 }
 
@@ -619,7 +620,7 @@ StickerPackLoadPatch stickerPacksLoadFailed({
     packs: packs.toList(),
     selectedStickerIds: selectedStickerIds.toList(),
     loading: false,
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
   );
 }
 

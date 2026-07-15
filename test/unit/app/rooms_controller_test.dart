@@ -505,7 +505,7 @@ void main() {
     );
     expect(failed.rooms, same(existingRooms));
     expect(failed.loading, isFalse);
-    expect(failed.error, 'load failed');
+    expect(failed.error, '操作失败，请稍后重试');
   });
 
   test('room open state patches preserve Home open-room semantics', () {
@@ -607,7 +607,7 @@ void main() {
     expect(failedPatch.selectedRoomId, 'room_2');
     expect(failedPatch.selectedRoom, same(optimisticRoom));
     expect(failedPatch.loadingRoom, isTrue);
-    expect(failedPatch.error, 'open failed');
+    expect(failedPatch.error, '操作失败，请稍后重试');
     expect(failedPatch.selectedRoomHasPendingJoinRequests, isTrue);
     expect(failedPatch.messages, same(snapshot.messages));
     expect(failedPatch.live, same(snapshot.live));
@@ -698,7 +698,7 @@ void main() {
     expect(failed.live, same(live));
     expect(failed.loading, isFalse);
     expect(failed.changed, isTrue);
-    expect(failed.error, contains('load failed'));
+    expect(failed.error, '操作失败，请稍后重试');
     expect(failed.requestError, isNull);
     expect(failed.busyRequestIds, {'request_1'});
   });
@@ -755,7 +755,7 @@ void main() {
       expect(membersFailed.live, same(live));
       expect(membersFailed.loading, isFalse);
       expect(membersFailed.changed, isTrue);
-      expect(membersFailed.error, contains('members failed'));
+      expect(membersFailed.error, '操作失败，请稍后重试');
       expect(membersFailed.requestError, 'request error');
 
       final requestsReloaded = controller.patchRoomJoinRequestsReloadSucceeded(
@@ -791,7 +791,7 @@ void main() {
       expect(requestsFailed.requests, same(requests));
       expect(requestsFailed.live, same(live));
       expect(requestsFailed.error, isNull);
-      expect(requestsFailed.requestError, contains('requests failed'));
+      expect(requestsFailed.requestError, '操作失败，请稍后重试');
       expect(requestsFailed.busyRequestIds, {'request_1'});
     },
   );
@@ -866,7 +866,7 @@ void main() {
     expect(failed.loading, isFalse);
     expect(failed.changed, isTrue);
     expect(failed.error, 'kept');
-    expect(failed.requestError, contains('review failed'));
+    expect(failed.requestError, '操作失败，请稍后重试');
     expect(failed.busyRequestIds, {'request_2'});
   });
 

@@ -461,7 +461,7 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
     if (_login.text.trim().isEmpty) {
-      showFloatingErrorNotice(context, '请先输入用户名或邮箱');
+      showFloatingErrorNotice(context, '请先输入登录用户名或邮箱');
       return;
     }
     setState(() => _checkingPasswordReset = true);
@@ -545,7 +545,7 @@ class _LoginPageState extends State<LoginPage> {
     }
     try {
       final available = await checker(normalized);
-      final error = available ? null : '该登录 Username 已被其他用户使用';
+      final error = available ? null : '该登录用户名已被其他用户使用';
       if (mounted && _registering && _login.text.trim() == normalized) {
         setState(() {
           _checkingUsernameAvailability = false;
@@ -554,7 +554,7 @@ class _LoginPageState extends State<LoginPage> {
       }
       return error;
     } catch (_) {
-      const error = '暂时无法检测 Username 是否重复';
+      const error = '暂时无法检测登录用户名是否重复';
       if (mounted && _registering && _login.text.trim() == normalized) {
         setState(() {
           _checkingUsernameAvailability = false;
@@ -854,7 +854,7 @@ class _LoginPageState extends State<LoginPage> {
     return Input(
       controller: _login,
       enabled: !_submitState.busy,
-      hintText: _registering ? '用户名' : '用户名或邮箱地址',
+      hintText: _registering ? '登录用户名' : '登录用户名或邮箱地址',
       prefixIcon: Icons.person_outline,
       suffix: _registering
           ? _RegisterUsernameValidityIndicator(
@@ -1057,8 +1057,8 @@ class _RegisterUsernameValidityIndicator extends StatelessWidget {
             !checksAvailability || (availabilityApplies && !checking);
         final valid = error == null && availabilityChecked;
         final message = pending
-            ? '正在检测 Username 是否可用'
-            : error ?? (valid ? 'Username 可用' : '等待检测 Username 是否可用');
+            ? '正在检测登录用户名是否可用'
+            : error ?? (valid ? '登录用户名可用' : '等待检测登录用户名是否可用');
         if (pending || !valid && error == null) {
           return _InputCheckingIndicator(
             iconKey: const ValueKey('auth-username-checking'),

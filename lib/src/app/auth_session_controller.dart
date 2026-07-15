@@ -182,7 +182,7 @@ class AuthSessionController {
     if (activeRefresh != null) return activeRefresh;
 
     final session = _session;
-    if (session == null) return Future.error(StateError('not authenticated'));
+    if (session == null) return Future.error(StateError('尚未登录'));
     if (forceRefresh) return _refreshAccessToken();
     if (!session.isAccessTokenExpiringSoon()) {
       return Future.value(session.accessToken);
@@ -195,7 +195,7 @@ class AuthSessionController {
     if (activeRefresh != null) return activeRefresh;
 
     final session = _session;
-    if (session == null) return Future.error(StateError('not authenticated'));
+    if (session == null) return Future.error(StateError('尚未登录'));
 
     final refresh = _refreshSession(session.refreshToken);
     _refreshInFlight = refresh;

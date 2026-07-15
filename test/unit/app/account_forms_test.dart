@@ -15,7 +15,7 @@ void main() {
         phoneNumberPublic: false,
         language: defaultUserLanguage,
       ).error,
-      '用户名不能为空',
+      '登录用户名不能为空',
     );
     expect(
       accountUpdateDraftFromForm(
@@ -39,7 +39,7 @@ void main() {
         phoneNumberPublic: false,
         language: defaultUserLanguage,
       ).error,
-      'Username 需为 3-32 位，只能包含英文字母、数字、下划线或连字符',
+      '登录用户名需为 3-32 位，只能包含英文字母、数字、下划线或连字符',
     );
   });
 
@@ -84,7 +84,7 @@ void main() {
         username: 'New_Logan',
         candidates: [_summary(id: 'user_2', username: 'new_logan')],
       ),
-      '该登录 Username 已被其他用户使用',
+      '该登录用户名已被其他用户使用',
     );
   });
 
@@ -330,7 +330,7 @@ void main() {
     final patch = passwordChangeFailed('request failed');
 
     expect(patch.changingPassword, isFalse);
-    expect(patch.securityError, 'request failed');
+    expect(patch.securityError, '操作失败，请稍后重试');
     expect(patch.notice, isNull);
   });
 
@@ -354,7 +354,7 @@ void main() {
     final patch = accountDeletionFailed('delete failed');
 
     expect(patch.deletingAccount, isFalse);
-    expect(patch.securityError, 'delete failed');
+    expect(patch.securityError, '操作失败，请稍后重试');
     expect(patch.notice, isNull);
   });
 
@@ -470,7 +470,7 @@ void main() {
 
     expect(patch.savingAccount, isFalse);
     expect(patch.savingProfile, isTrue);
-    expect(patch.accountError, 'request failed');
+    expect(patch.accountError, '操作失败，请稍后重试');
     expect(patch.notice, isNull);
   });
 
@@ -574,11 +574,11 @@ void main() {
     );
 
     expect(accountPatch.uploadingAvatar, isFalse);
-    expect(accountPatch.accountError, 'account failed');
+    expect(accountPatch.accountError, '操作失败，请稍后重试');
     expect(accountPatch.stickerError, 'sticker failed');
     expect(stickerPatch.uploadingAvatar, isFalse);
     expect(stickerPatch.accountError, 'account failed');
-    expect(stickerPatch.stickerError, 'sticker failed');
+    expect(stickerPatch.stickerError, '操作失败，请稍后重试');
   });
 
   test('accountAvatarActionCancelled clears target error and busy state', () {

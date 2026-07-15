@@ -123,14 +123,14 @@ AuthFormCopy authFormCopy(String language) {
 class AuthFormCopy {
   const AuthFormCopy.zhHans()
     : missingCredentials = '请输入账号和密码后继续',
-      missingUsername = '用户名不能为空',
+      missingUsername = '登录用户名不能为空',
       passwordMismatch = '两次输入的密码不一致',
       emailVerificationRequired = '请先验证邮箱',
       connectionFailedPrefix = '无法连接服务器：',
       secureConnectionFailed = '无法建立安全连接，请检查网络、代理或系统时间后重试',
       invalidCredentials = '账号或密码不正确',
       rateLimited = '登录尝试次数过多，请稍后再试',
-      conflict = '用户名或邮箱已被占用',
+      conflict = '登录用户名或邮箱已被占用',
       badRequest = '请检查账号信息后再试',
       serverError = '服务器暂时无法完成请求，请稍后再试',
       requestFailedPrefix = '请求失败',
@@ -183,7 +183,7 @@ class AuthFormCopy {
   final String fallback;
 
   String connectionFailed(Object failure) {
-    return '$connectionFailedPrefix$failure';
+    return connectionFailedPrefix.replaceFirst(RegExp(r'[:：]\s*$'), '');
   }
 
   String authException(AuthException failure) {

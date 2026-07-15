@@ -618,7 +618,10 @@ extension _HomeShellMessages on _HomeShellState {
         }
       } catch (error) {
         if (context.mounted) {
-          showFloatingErrorNotice(context, '无法跳转到原消息：$error');
+          showFloatingErrorNotice(
+            context,
+            userFacingErrorMessage(error, fallback: '无法跳转到原消息'),
+          );
         }
         return;
       }
@@ -698,7 +701,7 @@ extension _HomeShellMessages on _HomeShellState {
       if (!context.mounted) return;
       _showChatMessageActionNotice(
         context,
-        '$error',
+        userFacingErrorMessage(error, fallback: '复制消息失败'),
         tone: FloatingNoticeTone.error,
       );
     }
@@ -939,7 +942,7 @@ extension _HomeShellMessages on _HomeShellState {
       if (!context.mounted) return;
       _showChatMessageActionNotice(
         context,
-        '$error',
+        userFacingErrorMessage(error, fallback: '撤回消息失败'),
         tone: FloatingNoticeTone.error,
       );
     }
@@ -1134,7 +1137,7 @@ extension _HomeShellMessages on _HomeShellState {
     } catch (error) {
       if (!mounted) return;
       _setHomeState(() {
-        _sendError = error.toString();
+        _sendError = userFacingErrorMessage(error);
         if (clientMessageId != null) {
           _messages = _messagesController.patchFailedMessage(
             messages: _messages,
@@ -1241,7 +1244,7 @@ extension _HomeShellMessages on _HomeShellState {
       if (!mounted) return;
       _setHomeState(
         () => _voiceState = const voice_display.VoiceRecorderState().copyWith(
-          error: error.toString(),
+          error: userFacingErrorMessage(error),
         ),
       );
       return;
@@ -1292,7 +1295,7 @@ extension _HomeShellMessages on _HomeShellState {
       if (!mounted) return;
       _setHomeState(
         () => _voiceState = const voice_display.VoiceRecorderState().copyWith(
-          error: error.toString(),
+          error: userFacingErrorMessage(error),
         ),
       );
       return;
@@ -1531,7 +1534,7 @@ extension _HomeShellMessages on _HomeShellState {
       files = await _fileSelectionService.openFiles();
     } catch (error) {
       if (!mounted) return;
-      _setHomeState(() => _sendError = error.toString());
+      _setHomeState(() => _sendError = userFacingErrorMessage(error));
       return;
     } finally {
       if (mounted) _setHomeState(() => _pickingAttachments = false);
@@ -1782,6 +1785,6 @@ extension _HomeShellMessages on _HomeShellState {
 
   String _stagedAttachmentErrorMessage(Object error) {
     if (error is StateError) return error.message;
-    return error.toString();
+    return userFacingErrorMessage(error, fallback: '上传失败，请重试');
   }
 }

@@ -1,4 +1,5 @@
 import '../protocol/models.dart';
+import 'error_display.dart';
 import 'sticker_uploads.dart';
 
 enum StickerPanelSource { personal, room }
@@ -120,7 +121,10 @@ StickerPanelLoadState stickerPanelLoadFailed({
   required StickerPanelLoadState state,
   required Object failure,
 }) {
-  return state.copyWith(loading: false, error: failure.toString());
+  return state.copyWith(
+    loading: false,
+    error: userFacingErrorMessage(failure, fallback: '加载表情包失败'),
+  );
 }
 
 StickerPanelLoadState stickerPanelLoadFinished(StickerPanelLoadState state) {

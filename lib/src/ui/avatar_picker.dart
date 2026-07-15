@@ -9,23 +9,39 @@ import 'tokens.dart';
 /// keys understood by [avatarFallbackColor].
 const List<String> kAvatarPresetKeys = [
   'blue-3',
+  'navy-2',
+  'azure-2',
   'sky-2',
   'cyan-2',
+  'turquoise-2',
   'mint-2',
+  'emerald-2',
   'green-2',
+  'forest-2',
   'lime-2',
+  'yellow-2',
   'amber-2',
+  'gold-2',
   'orange-2',
   'coral-2',
+  'red-2',
+  'crimson-2',
   'pink-2',
+  'magenta-2',
   'violet-2',
+  'purple-2',
+  'lavender-2',
   'indigo-2',
   'rose-2',
   'teal-2',
   'olive-2',
+  'brown-2',
+  'sand-2',
   'slate-2',
   'steel-2',
+  'gray-2',
   'graphite-2',
+  'black-2',
 ];
 
 /// A live circular avatar preview, a row of preset color swatches, and an
@@ -51,7 +67,7 @@ class AvatarPicker extends StatelessWidget {
     this.uploadLabel = '上传图片',
   });
 
-  /// Heading shown above the picker, e.g. '头像' or 'Room avatar'.
+  /// Heading shown above the picker, e.g. '头像' or '房间图标'.
   final String label;
 
   /// Display name used to derive the fallback initials.
@@ -104,8 +120,8 @@ class AvatarPicker extends StatelessWidget {
             const SizedBox(width: 16),
             Expanded(
               child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
+                spacing: 4,
+                runSpacing: 4,
                 children: [
                   for (final key in presetKeys)
                     _AvatarPickerSwatch(
@@ -212,13 +228,13 @@ class _AvatarPickerSwatch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: keyName,
+      message: avatarPresetLabel(keyName),
       child: InkWell(
         onTap: onTap,
         customBorder: const CircleBorder(),
         child: Container(
-          width: 30,
-          height: 30,
+          width: 24,
+          height: 24,
           decoration: BoxDecoration(
             color: avatarFallbackColor(keyName),
             shape: BoxShape.circle,

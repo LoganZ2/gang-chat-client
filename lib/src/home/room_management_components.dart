@@ -337,7 +337,7 @@ Future<_CroppedRoomAvatar?> _pickAndCropRoomAvatar(BuildContext context) async {
       ],
     );
   } catch (error) {
-    throw Exception('无法打开文件选择器：$error');
+    throw Exception('无法打开文件选择器');
   }
   if (file == null) return null;
 
@@ -345,7 +345,7 @@ Future<_CroppedRoomAvatar?> _pickAndCropRoomAvatar(BuildContext context) async {
   try {
     bytes = await file.readAsBytes();
   } catch (error) {
-    throw Exception('无法读取图片：$error');
+    throw Exception('无法读取图片');
   }
   if (bytes.isEmpty) {
     throw Exception('图片文件为空');

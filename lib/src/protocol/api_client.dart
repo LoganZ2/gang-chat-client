@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
+import 'error_messages.dart';
 import 'models.dart';
 import 'server_time_header.dart';
 import 'utf8_json.dart';
@@ -64,7 +65,7 @@ class UploadCancelledException implements Exception {
   const UploadCancelledException();
 
   @override
-  String toString() => 'Upload cancelled';
+  String toString() => '上传已取消';
 }
 
 abstract interface class GangApi {
@@ -2101,7 +2102,11 @@ class ApiException implements Exception {
       final requestId = error?['request_id'] as String? ?? headerRequestId;
       if (message != null && message.isNotEmpty) {
         return ApiException(
-          message,
+          localizedServerErrorMessage(
+            code: code ?? 'request_failed',
+            statusCode: response.statusCode,
+            message: message,
+          ),
           statusCode: response.statusCode,
           code: code ?? 'request_failed',
           requestId: requestId,
@@ -2123,7 +2128,7 @@ class ApiException implements Exception {
   @override
   String toString() {
     if (requestId == null) return message;
-    return '$message (request $requestId)';
+    return '$message（请求编号：$requestId）';
   }
 }
 

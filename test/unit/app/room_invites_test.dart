@@ -277,7 +277,7 @@ void main() {
     );
     expect(failed.searchResults, existingResults);
     expect(failed.searching, isFalse);
-    expect(failed.error, contains('search failed'));
+    expect(failed.error, '操作失败，请稍后重试');
     expect(failed.pendingInviteUserIds, {'pending'});
     expect(failed.busyUserIds, {'busy'});
   });
@@ -322,7 +322,7 @@ void main() {
     );
     expect(failed.searchResults, results);
     expect(failed.searching, isTrue);
-    expect(failed.error, contains('invite failed'));
+    expect(failed.error, '操作失败，请稍后重试');
     expect(failed.pendingInviteUserIds, {'pending'});
     expect(failed.busyUserIds, {'other_busy'});
   });

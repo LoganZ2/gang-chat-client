@@ -78,7 +78,7 @@ extension _HomeShellSearch on _HomeShellState {
       _setTitleSearchResultsState(() {
         _searching = false;
         _searchLoadingMore = false;
-        _searchError = error.toString();
+        _searchError = userFacingErrorMessage(error, fallback: '搜索失败');
       });
     }
   }

@@ -142,7 +142,7 @@ void main() {
     expect(failed.roomPacks.map((pack) => pack.id), ['room_pack']);
     expect(failed.loading, isFalse);
     expect(failed.loaded, isTrue);
-    expect(failed.error, 'Bad state: network failed');
+    expect(failed.error, '网络连接失败，请检查网络后重试');
 
     final finished = stickerPanelLoadFinished(failed);
 

@@ -1,4 +1,5 @@
 import '../protocol/models.dart';
+import 'error_display.dart';
 import 'room_members_filter.dart';
 
 enum RoomInviteSearchBodyState { loading, prompt, empty, results }
@@ -244,7 +245,7 @@ RoomMemberInviteDialogPatch roomMemberInviteSearchFailed({
   return RoomMemberInviteDialogPatch(
     searchResults: searchResults.toList(),
     searching: false,
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
     pendingInviteUserIds: pendingInviteUserIds.toSet(),
     busyUserIds: busyUserIds.toSet(),
   );
@@ -348,7 +349,7 @@ RoomMemberInviteDialogPatch roomMemberInviteFailed({
   return RoomMemberInviteDialogPatch(
     searchResults: searchResults.toList(),
     searching: searching,
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
     pendingInviteUserIds: state.pendingInviteUserIds,
     busyUserIds: state.busyUserIds,
   );

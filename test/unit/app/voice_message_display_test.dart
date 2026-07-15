@@ -86,7 +86,7 @@ void main() {
     );
     expect(failed.phase, VoiceRecorderPhase.review);
     expect(failed.recordingPath, '/tmp/voice_1.m4a');
-    expect(failed.error, contains('network down'));
+    expect(failed.error, '网络连接失败，请检查网络后重试');
     expect(failed.canSend, isTrue);
   });
 

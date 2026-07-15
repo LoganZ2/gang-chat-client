@@ -38,7 +38,7 @@ void main() {
       expect(patch.selectedInput, input);
       expect(patch.selectedOutput, isNull);
       expect(patch.loading, isFalse);
-      expect(patch.error, 'device denied');
+      expect(patch.error, '操作失败，请稍后重试');
     },
   );
 
@@ -197,10 +197,7 @@ void main() {
     expect(patch.selectedInput, oldInput);
     expect(patch.selectedOutput, newOutput);
     expect(patch.busyDeviceId, isNull);
-    expect(
-      patch.error,
-      'Could not save audio device preference: storage denied',
-    );
+    expect(patch.error, '无法保存音频设备偏好');
   });
 
   test('audioDeviceSelectionFailed preserves selection and clears busy', () {
@@ -214,7 +211,7 @@ void main() {
     expect(patch.selectedInput, input);
     expect(patch.selectedOutput, isNull);
     expect(patch.busyDeviceId, isNull);
-    expect(patch.error, 'select failed');
+    expect(patch.error, '操作失败，请稍后重试');
   });
 
   test('audio device selection effects describe follow-up test work', () {
@@ -327,7 +324,7 @@ void main() {
     expect(failed.testingOutput, isFalse);
     expect(failed.inputLevel, 0);
     expect(failed.outputLevel, 0.2);
-    expect(failed.error, 'input failed');
+    expect(failed.error, '操作失败，请稍后重试');
   });
 
   test('audioOutputTestStarted resets output level and clears error', () {
@@ -361,7 +358,7 @@ void main() {
     expect(failed.testingOutput, isFalse);
     expect(failed.inputLevel, 0.1);
     expect(failed.outputLevel, 0);
-    expect(failed.error, 'output failed');
+    expect(failed.error, '操作失败，请稍后重试');
   });
 
   test('audio test level changes apply current volume', () {

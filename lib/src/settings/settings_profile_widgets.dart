@@ -177,15 +177,11 @@ class _UsernameValidityIndicator extends StatelessWidget {
         ? _cyan
         : _danger;
     final label = checking ? '检测中' : (valid ? '合法' : '不合法');
-    final message = checking
-        ? '正在检测 Username 是否可用'
-        : (valid ? 'Username 可用' : error!);
+    final message = checking ? '正在检测登录用户名是否可用' : (valid ? '登录用户名可用' : error!);
     return Tooltip(
       message: message,
       child: Semantics(
-        label: checking
-            ? '正在检测 Username 是否可用'
-            : (valid ? 'Username 可用' : 'Username 不合法'),
+        label: checking ? '正在检测登录用户名是否可用' : (valid ? '登录用户名可用' : '登录用户名不合法'),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

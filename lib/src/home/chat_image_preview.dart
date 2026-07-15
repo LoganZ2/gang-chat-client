@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 
 import '../app/media_cache_controller.dart';
+import '../app/error_display.dart';
 import '../protocol/models.dart';
 import '../ui/ui.dart';
 
@@ -245,7 +246,10 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
       // it was without showing success or error.
     } catch (error) {
       if (!mounted) return;
-      showFloatingErrorNotice(context, '$error');
+      showFloatingErrorNotice(
+        context,
+        userFacingErrorMessage(error, fallback: '图片操作失败'),
+      );
     } finally {
       if (mounted) setState(() => _busy = null);
     }

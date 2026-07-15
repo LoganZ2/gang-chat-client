@@ -136,7 +136,7 @@ class _AvatarCropDialogState extends State<AvatarCropDialog> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _rendering = false);
-      showFloatingErrorNotice(context, '裁剪图片失败：$e');
+      showFloatingErrorNotice(context, '裁剪图片失败');
     }
   }
 
@@ -169,7 +169,7 @@ class _AvatarCropDialogState extends State<AvatarCropDialog> {
     final data = await cropped.toByteData(format: ui.ImageByteFormat.png);
     cropped.dispose();
     if (data == null) {
-      throw StateError('no image data');
+      throw StateError('没有可用的图片数据');
     }
     return data.buffer.asUint8List();
   }
@@ -219,7 +219,7 @@ class _AvatarCropDialogState extends State<AvatarCropDialog> {
                   ),
                   const SizedBox(height: 16),
                   if (snapshot.hasError)
-                    _CropError(message: '无法读取图片：${snapshot.error}')
+                    const _CropError(message: '无法读取图片')
                   else if (image == null)
                     const SizedBox(
                       height: 180,

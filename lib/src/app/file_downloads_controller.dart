@@ -181,7 +181,7 @@ class FileDownloadsController {
   }) async {
     final destinationPath = transfer.destinationPath;
     if (destinationPath == null) {
-      throw StateError('Download destination is missing');
+      throw StateError('下载位置不存在');
     }
 
     http.Client? client;

@@ -1,4 +1,5 @@
 import '../protocol/models.dart';
+import 'error_display.dart';
 
 enum RoomMemberPresence { live, online, offline }
 
@@ -225,7 +226,7 @@ RoomMemberLoadPatch roomMembersLoadFailed({
   return RoomMemberLoadPatch(
     members: members.toList(),
     loading: false,
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
   );
 }
 
@@ -318,7 +319,7 @@ RoomMemberManagementPatch roomMemberRoleUpdateFailed({
         if (item != userId) item,
     },
     changed: changed,
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
     notice: null,
   );
 }
@@ -361,7 +362,7 @@ RoomMemberManagementPatch roomMemberRemoveFailed({
         if (item != userId) item,
     },
     changed: changed,
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
     notice: null,
   );
 }
@@ -401,7 +402,7 @@ RoomMemberManagementPatch transferCreatorFailed({
         if (item != userId) item,
     },
     changed: changed,
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
     notice: null,
   );
 }

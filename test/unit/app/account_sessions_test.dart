@@ -46,7 +46,7 @@ void main() {
 
     expect(patch.sessions, existing);
     expect(patch.loading, isFalse);
-    expect(patch.securityError, 'load failed');
+    expect(patch.securityError, '操作失败，请稍后重试');
   });
 }
 

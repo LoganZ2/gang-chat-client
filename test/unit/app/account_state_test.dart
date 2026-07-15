@@ -40,7 +40,7 @@ void main() {
 
     expect(patch.user, user);
     expect(patch.loading, isFalse);
-    expect(patch.accountError, 'load failed');
+    expect(patch.accountError, '操作失败，请稍后重试');
   });
 }
 

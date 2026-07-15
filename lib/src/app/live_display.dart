@@ -1,4 +1,5 @@
 import '../protocol/models.dart';
+import 'error_display.dart';
 
 class JoinedLiveRoomSummary {
   const JoinedLiveRoomSummary({
@@ -326,7 +327,10 @@ LiveScreenSourcePickerState<T> liveScreenSourceLoadFailed<T>({
   required LiveScreenSourcePickerState<T> state,
   required Object failure,
 }) {
-  return state.copyWith(loading: false, error: failure.toString());
+  return state.copyWith(
+    loading: false,
+    error: userFacingErrorMessage(failure, fallback: '加载语音频道失败'),
+  );
 }
 
 LiveScreenSourcePickerState<T> liveScreenSourceSelectedChanged<T>(
@@ -393,15 +397,15 @@ String liveForciblyRemovedNotice() {
 }
 
 String liveVoiceConnectFailureMessage(Object error) {
-  return '无法连接语音：$error';
+  return '无法连接语音频道';
 }
 
 String liveCameraOpenFailureMessage(Object error) {
-  return '无法打开摄像头: $error';
+  return '无法打开摄像头';
 }
 
 String liveScreenShareFailureMessage(Object error) {
-  return '无法共享屏幕: $error';
+  return '无法共享屏幕';
 }
 
 String _roomDetailDisplayName(RoomDetail room) {

@@ -264,7 +264,7 @@ void main() {
 
     expect(failed.busy, isFalse);
     expect(failed.downloading, isFalse);
-    expect(failed.error, 'Bad state: download failed');
+    expect(failed.error, '操作失败，请稍后重试');
 
     final renaming = stickerPreviewActionStarted(
       state: failed,
@@ -459,7 +459,7 @@ void main() {
     expect(failed.packs.map((pack) => pack.id), ['pack_1']);
     expect(failed.selectedStickerIds, ['a']);
     expect(failed.loading, isFalse);
-    expect(failed.error, 'Bad state: network failed');
+    expect(failed.error, '网络连接失败，请检查网络后重试');
   });
 
   test(
@@ -633,7 +633,7 @@ void main() {
 
     expect(failed.savingOrder, isFalse);
     expect(failed.selectedStickerIds, ['b']);
-    expect(failed.error, 'Bad state: sort failed');
+    expect(failed.error, '操作失败，请稍后重试');
     expect(failed.notice, isNull);
   });
 
@@ -676,7 +676,7 @@ void main() {
       notice: 'previous notice',
     );
 
-    expect(error.error, 'picker failed');
+    expect(error.error, '操作失败，请稍后重试');
     expect(error.notice, 'previous notice');
     expect(error.selectedStickerIds, ['a']);
   });

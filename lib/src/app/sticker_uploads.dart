@@ -39,7 +39,7 @@ String stickerPackRequiresServerMessage() {
 }
 
 String stickerPickerOpenFailureMessage(Object error) {
-  return '无法打开文件选择器：$error';
+  return '无法打开文件选择器';
 }
 
 String stickerNoUploadableImagesMessage() {

@@ -26,12 +26,9 @@ void main() {
   });
 
   test('file interaction notices and download url parsing stay outside UI', () {
-    expect(
-      clipboardFilesReadFailureMessage('denied'),
-      'Unable to read clipboard files: denied',
-    );
-    expect(filePickerOpenFailureMessage('blocked'), '无法打开文件选择器：blocked');
-    expect(fileReadFailureMessage('missing'), '无法读取文件：missing');
+    expect(clipboardFilesReadFailureMessage('denied'), '无法读取剪贴板中的文件');
+    expect(filePickerOpenFailureMessage('blocked'), '无法打开文件选择器');
+    expect(fileReadFailureMessage('missing'), '无法读取文件');
     expect(fileEmptyMessage(), '文件为空');
     expect(
       fileDownloadUri('https://example.test/file.txt')?.host,
@@ -208,7 +205,7 @@ void main() {
     failedTransfer.markFailed('network failed');
     state = fileTransferProgressState(failedTransfer);
     expect(state.value, 0.25);
-    expect(state.label, 'network failed');
+    expect(state.label, '网络连接失败，请检查网络后重试');
     expect(state.failed, isTrue);
   });
 

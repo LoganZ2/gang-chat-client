@@ -9,7 +9,64 @@ void main() {
     expect(normalizeAvatarPresetKey('room-1'), 'blue-3');
     expect(avatarFallbackColor('room-1'), const Color(0xFF526C9F));
     expect(avatarFallbackColor('graphite-2'), const Color(0xFF5B5D63));
+    expect(avatarFallbackColor('red-2'), const Color(0xFF7B4F52));
     expect(avatarFallbackColor('missing'), const Color(0xFF526C9F));
+    expect(avatarPresetLabel('room-1'), '蓝色');
+    expect(avatarPresetLabel('purple-2'), '紫色');
+    expect(avatarPresetLabel('missing'), '蓝色');
+    expect(
+      kAvatarPresetKeys,
+      containsAll(<String>['red-2', 'gold-2', 'black-2']),
+    );
+  });
+
+  testWidgets('uploaded avatar keeps its background transparent', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Center(
+          child: Avatar(
+            label: 'Kai',
+            imageUrl: 'uploaded-avatar',
+            defaultAvatarKey: 'red-2',
+          ),
+        ),
+      ),
+    );
+
+    final container = tester.widget<Container>(
+      find.descendant(
+        of: find.byType(Avatar),
+        matching: find.byType(Container),
+      ),
+    );
+    final decoration = container.decoration! as BoxDecoration;
+    expect(decoration.color, Colors.transparent);
+  });
+
+  testWidgets('avatar picker exposes Chinese color names', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AvatarPicker(
+            label: '头像',
+            displayName: '凯',
+            imageUrl: null,
+            defaultAvatarKey: 'red-2',
+            usingPreset: true,
+            uploading: false,
+            enabled: true,
+            presetKeys: const ['red-2'],
+            onUpload: () {},
+            onPresetSelected: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byTooltip('红色'), findsOneWidget);
+    expect(find.byTooltip('red-2'), findsNothing);
   });
 
   testWidgets('active avatar paints the status border above its content', (

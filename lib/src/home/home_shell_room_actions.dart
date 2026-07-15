@@ -88,7 +88,7 @@ extension _HomeShellRoomActions on _HomeShellState {
       if (!mounted) return;
       _setHomeState(() {
         _loadingServers = false;
-        _serverLoadError = error.toString();
+        _serverLoadError = userFacingErrorMessage(error, fallback: '加载服务器失败');
       });
     }
   }
@@ -174,7 +174,7 @@ extension _HomeShellRoomActions on _HomeShellState {
       if (!mounted || _selectedServerId != server.id) return;
       _setHomeState(() {
         _loadingRoom = false;
-        _roomError = error.toString();
+        _roomError = userFacingErrorMessage(error);
       });
     }
   }
@@ -538,7 +538,7 @@ extension _HomeShellRoomActions on _HomeShellState {
     } catch (error) {
       if (!mounted || _joinedLiveRoomId != roomId) return;
       if (_selectedServerId == roomId) {
-        _setHomeState(() => _roomError = error.toString());
+        _setHomeState(() => _roomError = userFacingErrorMessage(error));
       }
     }
   }

@@ -102,11 +102,11 @@ String profileSavedNotice() {
 }
 
 String avatarPickerOpenFailureMessage(Object error) {
-  return '无法打开文件选择器：$error';
+  return '无法打开文件选择器';
 }
 
 String avatarReadFailureMessage(Object error) {
-  return '无法读取图片：$error';
+  return '无法读取图片';
 }
 
 String avatarEmptyFileMessage() {

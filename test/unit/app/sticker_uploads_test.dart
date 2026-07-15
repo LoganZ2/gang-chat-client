@@ -54,7 +54,7 @@ void main() {
 
   test('sticker upload error copy stays outside UI', () {
     expect(stickerPackRequiresServerMessage(), '表情包需要登录后从服务端读取');
-    expect(stickerPickerOpenFailureMessage('denied'), '无法打开文件选择器：denied');
+    expect(stickerPickerOpenFailureMessage('denied'), '无法打开文件选择器');
     expect(stickerNoUploadableImagesMessage(), '没有找到可上传的图片');
   });
 }

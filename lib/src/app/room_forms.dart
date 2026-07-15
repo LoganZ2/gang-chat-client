@@ -1,4 +1,5 @@
 import '../protocol/models.dart';
+import 'error_display.dart';
 import 'room_display.dart';
 
 class CreateRoomDraft {
@@ -162,7 +163,10 @@ CreateRoomDialogPatch createRoomSubmitStarted() {
 }
 
 CreateRoomDialogPatch createRoomSubmitFailed({required Object failure}) {
-  return CreateRoomDialogPatch(busy: true, error: failure.toString());
+  return CreateRoomDialogPatch(
+    busy: true,
+    error: userFacingErrorMessage(failure),
+  );
 }
 
 CreateRoomDialogPatch createRoomSubmitFinished({required String? error}) {
@@ -253,7 +257,7 @@ RoomProfileDialogStatePatch roomProfileAvatarPickFailed({
     saving: saving,
     leaving: leaving,
     uploadingAvatar: uploadingAvatar,
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
     notice: notice,
   );
 }
@@ -321,7 +325,7 @@ RoomProfileDialogStatePatch roomProfileAvatarUploadFailed({
     saving: saving,
     leaving: leaving,
     uploadingAvatar: false,
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
     notice: null,
   );
 }
@@ -410,7 +414,7 @@ RoomProfileDialogStatePatch roomProfileSaveFailed({
     saving: false,
     leaving: leaving,
     uploadingAvatar: uploadingAvatar,
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
     notice: null,
   );
 }
@@ -457,7 +461,7 @@ RoomProfileDialogStatePatch roomProfileLeaveFailed({
     saving: saving,
     leaving: false,
     uploadingAvatar: uploadingAvatar,
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
     notice: null,
   );
 }
@@ -504,7 +508,7 @@ RoomManagementDialogStatePatch roomManagementAvatarPickFailed({
     saving: saving,
     deleting: deleting,
     changed: changed,
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
     notice: notice,
   );
 }
@@ -585,7 +589,7 @@ RoomManagementDialogStatePatch roomManagementAvatarUploadFailed({
     saving: saving,
     deleting: deleting,
     changed: changed,
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
     notice: null,
   );
 }
@@ -787,7 +791,7 @@ RoomManagementDialogStatePatch roomManagementInfoSaveFailed({
     saving: false,
     deleting: deleting,
     changed: changed,
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
     notice: null,
   );
 }
@@ -842,7 +846,7 @@ RoomManagementDialogStatePatch roomManagementDeletionFailed({
     saving: saving,
     deleting: false,
     changed: changed,
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure),
     notice: null,
   );
 }

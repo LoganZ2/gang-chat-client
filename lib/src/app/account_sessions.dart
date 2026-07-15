@@ -1,4 +1,5 @@
 import '../protocol/models.dart';
+import 'error_display.dart';
 
 class AccountSessionsLoadPatch {
   const AccountSessionsLoadPatch({
@@ -50,6 +51,6 @@ AccountSessionsLoadPatch accountSessionsLoadFailed({
   return AccountSessionsLoadPatch(
     sessions: sessions,
     loading: false,
-    securityError: failure.toString(),
+    securityError: userFacingErrorMessage(failure),
   );
 }

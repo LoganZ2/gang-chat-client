@@ -124,7 +124,7 @@ void main() {
       failure: 'network failed',
     );
     expect(transfer.failed, isTrue);
-    expect(transfer.error, 'network failed');
+    expect(transfer.error, '网络连接失败，请检查网络后重试');
 
     patch = controller.patchRemovedDownload(
       downloads: patch.downloads,

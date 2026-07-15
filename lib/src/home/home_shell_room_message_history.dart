@@ -104,7 +104,10 @@ class _RoomMessageHistoryPaneState extends State<_RoomMessageHistoryPane> {
     } catch (error) {
       if (!mounted) return;
       setState(() => _membersLoading = false);
-      showFloatingErrorNotice(context, '加载房间成员失败：$error');
+      showFloatingErrorNotice(
+        context,
+        userFacingErrorMessage(error, fallback: '加载房间成员失败'),
+      );
     }
   }
 
@@ -148,7 +151,7 @@ class _RoomMessageHistoryPaneState extends State<_RoomMessageHistoryPane> {
       if (!mounted || serial != _loadSerial) return;
       setState(() {
         _loading = false;
-        _error = error.toString();
+        _error = userFacingErrorMessage(error, fallback: '加载消息记录失败');
       });
     }
   }
@@ -173,7 +176,10 @@ class _RoomMessageHistoryPaneState extends State<_RoomMessageHistoryPane> {
     } catch (error) {
       if (!mounted || serial != _loadSerial) return;
       setState(() => _loadingMore = false);
-      showFloatingErrorNotice(context, '加载更多消息记录失败：$error');
+      showFloatingErrorNotice(
+        context,
+        userFacingErrorMessage(error, fallback: '加载更多消息记录失败'),
+      );
     }
   }
 
@@ -397,7 +403,12 @@ class _RoomMessageHistoryPaneState extends State<_RoomMessageHistoryPane> {
         messages.length == 1 ? '已删除消息记录' : '已删除 ${messages.length} 条消息记录',
       );
     } catch (error) {
-      if (mounted) showFloatingErrorNotice(context, '$error');
+      if (mounted) {
+        showFloatingErrorNotice(
+          context,
+          userFacingErrorMessage(error, fallback: '删除消息记录失败'),
+        );
+      }
     }
   }
 

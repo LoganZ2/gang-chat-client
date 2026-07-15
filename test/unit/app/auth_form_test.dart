@@ -57,7 +57,7 @@ void main() {
         password: 'secret',
         confirmPassword: 'secret',
       ).error,
-      'Username 需为 3-32 位，只能包含英文字母、数字、下划线或连字符',
+      '登录用户名需为 3-32 位，只能包含英文字母、数字、下划线或连字符',
     );
     expect(
       authRequestFromForm(
@@ -75,7 +75,7 @@ void main() {
         login: 'a@example.test',
         password: 'secret',
       ).error,
-      '用户名不能为空',
+      '登录用户名不能为空',
     );
     expect(
       authRequestFromForm(
@@ -139,7 +139,7 @@ void main() {
     final failed = authSubmitFailed(StateError('offline'));
 
     expect(failed.busy, isFalse);
-    expect(failed.error, '无法连接服务器：Bad state: offline');
+    expect(failed.error, '无法连接服务器');
   });
 
   test('auth submit failure gives a concise TLS recovery message', () {

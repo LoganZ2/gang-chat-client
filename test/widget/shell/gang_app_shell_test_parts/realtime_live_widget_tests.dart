@@ -571,7 +571,7 @@ void registerShellRealtimeLiveWidgetTests() {
       (widget) => widget is TextField && widget.controller?.text == 'kai',
     );
     expect(usernameField, findsOneWidget);
-    expect(find.widgetWithText(ui.Button, '保存登录 Username'), findsNothing);
+    expect(find.widgetWithText(ui.Button, '保存登录用户名'), findsNothing);
     expect(find.text('合法'), findsNothing);
 
     await tester.enterText(usernameField, 'kai_new');

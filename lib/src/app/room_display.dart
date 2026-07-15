@@ -238,7 +238,7 @@ String roomCopySuccessNotice(String label) {
 }
 
 String roomCopyFailureMessage(Object error) {
-  return '无法复制：$error';
+  return '无法复制';
 }
 
 String userUidCopySuccessNotice() {
@@ -246,11 +246,11 @@ String userUidCopySuccessNotice() {
 }
 
 String userUidCopyFailureMessage(Object error) {
-  return '无法复制 UID：$error';
+  return '无法复制 UID';
 }
 
 String roomOpenFailureMessage(Object error) {
-  return '无法打开房间：$error';
+  return '无法打开房间';
 }
 
 String roomOptimisticOpenRefreshFailureNotice() {

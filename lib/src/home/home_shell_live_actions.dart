@@ -673,7 +673,7 @@ extension _HomeShellLiveActions on _HomeShellState {
       if (!mounted) return;
       _setHomeState(() {
         _busyLiveMemberModerationIds.remove(userId);
-        _roomError = error.toString();
+        _roomError = userFacingErrorMessage(error);
       });
     }
   }
@@ -712,7 +712,7 @@ extension _HomeShellLiveActions on _HomeShellState {
       if (!mounted) return;
       _setHomeState(() {
         _busyLiveMemberRemovalIds.remove(userId);
-        _roomError = error.toString();
+        _roomError = userFacingErrorMessage(error);
       });
     }
   }
@@ -826,7 +826,9 @@ extension _HomeShellLiveActions on _HomeShellState {
           isCancelled: () => !mounted,
         );
       } catch (error) {
-        if (mounted) _setHomeState(() => _roomError = error.toString());
+        if (mounted) {
+          _setHomeState(() => _roomError = userFacingErrorMessage(error));
+        }
         return;
       }
       if (!mounted) return;
@@ -848,7 +850,9 @@ extension _HomeShellLiveActions on _HomeShellState {
         connectionState: 'online',
       );
     } catch (error) {
-      if (mounted) _setHomeState(() => _roomError = error.toString());
+      if (mounted) {
+        _setHomeState(() => _roomError = userFacingErrorMessage(error));
+      }
     } finally {
       if (mounted) {
         _setHomeState(
@@ -912,7 +916,9 @@ extension _HomeShellLiveActions on _HomeShellState {
           isCancelled: () => !mounted || _joinedLiveRoomId != roomId,
         );
       } catch (error) {
-        if (mounted) _setHomeState(() => _roomError = error.toString());
+        if (mounted) {
+          _setHomeState(() => _roomError = userFacingErrorMessage(error));
+        }
         return;
       }
       if (!mounted || _joinedLiveRoomId != roomId) return;
@@ -930,7 +936,9 @@ extension _HomeShellLiveActions on _HomeShellState {
             _liveSessionController.isScreenSharing,
       );
     } catch (error) {
-      if (mounted) _setHomeState(() => _roomError = error.toString());
+      if (mounted) {
+        _setHomeState(() => _roomError = userFacingErrorMessage(error));
+      }
     } finally {
       if (mounted) _setHomeState(() => _joiningLive = false);
     }
@@ -951,7 +959,9 @@ extension _HomeShellLiveActions on _HomeShellState {
       await _liveSessionController.setCameraEnabled(restoredCameraOn);
     } catch (error) {
       restoredCameraOn = false;
-      if (mounted) _setHomeState(() => _roomError = error.toString());
+      if (mounted) {
+        _setHomeState(() => _roomError = userFacingErrorMessage(error));
+      }
     }
     if (!screenSharing && _liveSessionController.isScreenSharing) {
       try {
@@ -1001,7 +1011,7 @@ extension _HomeShellLiveActions on _HomeShellState {
     } catch (error) {
       await liveKitMicFuture;
       if (!mounted || isBenignGoneLiveStatePatch(error)) return;
-      _setHomeState(() => _roomError = error.toString());
+      _setHomeState(() => _roomError = userFacingErrorMessage(error));
     }
   }
 
@@ -1022,7 +1032,9 @@ extension _HomeShellLiveActions on _HomeShellState {
       await _notifyLiveLeft(roomId);
       await _liveSessionController.disconnect();
     } catch (error) {
-      if (mounted) _setHomeState(() => _roomError = error.toString());
+      if (mounted) {
+        _setHomeState(() => _roomError = userFacingErrorMessage(error));
+      }
     } finally {
       if (mounted) {
         _setHomeState(
@@ -1043,7 +1055,7 @@ extension _HomeShellLiveActions on _HomeShellState {
       await _liveController.leaveLive(roomId: roomId);
     } catch (error) {
       if (!mounted || isBenignGoneLiveStatePatch(error)) return;
-      _setHomeState(() => _roomError = error.toString());
+      _setHomeState(() => _roomError = userFacingErrorMessage(error));
     }
   }
 
@@ -1101,7 +1113,7 @@ extension _HomeShellLiveActions on _HomeShellState {
       });
     } catch (error) {
       if (!mounted || isBenignGoneLiveStatePatch(error)) return;
-      _setHomeState(() => _roomError = error.toString());
+      _setHomeState(() => _roomError = userFacingErrorMessage(error));
     }
   }
 
@@ -1123,14 +1135,18 @@ extension _HomeShellLiveActions on _HomeShellState {
         }
         await _patchLiveState(screenSharing: false);
       } catch (error) {
-        if (mounted) _setHomeState(() => _roomError = error.toString());
+        if (mounted) {
+          _setHomeState(() => _roomError = userFacingErrorMessage(error));
+        }
         return;
       }
     }
     try {
       await _liveSessionController.setCameraEnabled(enable);
     } catch (error) {
-      if (mounted) _setHomeState(() => _roomError = error.toString());
+      if (mounted) {
+        _setHomeState(() => _roomError = userFacingErrorMessage(error));
+      }
       return;
     }
     await _patchLiveState(
@@ -1179,7 +1195,9 @@ extension _HomeShellLiveActions on _HomeShellState {
         await _liveSessionController.setCameraEnabled(false);
         if (mounted && _cameraOn) _setHomeState(() => _cameraOn = false);
       } catch (error) {
-        if (mounted) _setHomeState(() => _roomError = error.toString());
+        if (mounted) {
+          _setHomeState(() => _roomError = userFacingErrorMessage(error));
+        }
         return;
       }
     }
@@ -1196,7 +1214,9 @@ extension _HomeShellLiveActions on _HomeShellState {
           if (mounted) _setHomeState(() => _cameraOn = true);
         } catch (_) {}
       }
-      if (mounted) _setHomeState(() => _roomError = error.toString());
+      if (mounted) {
+        _setHomeState(() => _roomError = userFacingErrorMessage(error));
+      }
       return;
     }
     await _patchLiveState(screenSharing: true, cameraOn: false);

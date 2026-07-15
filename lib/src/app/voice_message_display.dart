@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import '../protocol/models.dart';
+import 'error_display.dart';
 import 'file_display.dart' as file_display;
 
 /// Pure logic for the voice-message recorder shown in the chat composer.
@@ -124,7 +125,7 @@ VoiceRecorderState voiceSendFailed({
   // Drop back to review so the user can retry sending the same clip.
   return state.copyWith(
     phase: VoiceRecorderPhase.review,
-    error: failure.toString(),
+    error: userFacingErrorMessage(failure, fallback: '发送语音消息失败'),
   );
 }
 
