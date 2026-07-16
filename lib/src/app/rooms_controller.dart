@@ -662,6 +662,7 @@ class RoomsController {
     String? notificationPolicy,
     String? roomDisplayName,
     bool? isPinned,
+    bool? aiVoiceAnnouncementsEnabled,
   }) {
     return api.updateMyRoomSettings(
       roomId: roomId,
@@ -669,6 +670,7 @@ class RoomsController {
       notificationPolicy: notificationPolicy,
       roomDisplayName: roomDisplayName,
       isPinned: isPinned,
+      aiVoiceAnnouncementsEnabled: aiVoiceAnnouncementsEnabled,
     );
   }
 

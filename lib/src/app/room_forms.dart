@@ -76,7 +76,6 @@ class RoomInfoUpdateDraft {
     this.description,
     this.visibility,
     this.joinPolicy,
-    this.aiVoiceAnnouncementsEnabled,
     this.avatarAssetId,
     this.defaultAvatarKey,
     this.error,
@@ -89,7 +88,6 @@ class RoomInfoUpdateDraft {
     required this.description,
     required this.visibility,
     required this.joinPolicy,
-    required this.aiVoiceAnnouncementsEnabled,
     required this.avatarAssetId,
     required this.defaultAvatarKey,
   }) : error = null;
@@ -98,7 +96,6 @@ class RoomInfoUpdateDraft {
   final String? description;
   final String? visibility;
   final String? joinPolicy;
-  final bool? aiVoiceAnnouncementsEnabled;
   final String? avatarAssetId;
   final String? defaultAvatarKey;
   final String? error;
@@ -142,12 +139,10 @@ class RoomManagementInfoFieldsPatch {
   const RoomManagementInfoFieldsPatch({
     required this.visibility,
     required this.joinPolicy,
-    required this.aiVoiceAnnouncementsEnabled,
   });
 
   final String visibility;
   final String joinPolicy;
-  final bool aiVoiceAnnouncementsEnabled;
 }
 
 bool canStartRoomProfileSave({required bool saving, required bool leaving}) {
@@ -655,36 +650,20 @@ RoomManagementDialogStatePatch roomManagementSectionChanged({
 RoomManagementInfoFieldsPatch roomManagementVisibilityChanged({
   required String visibility,
   required String joinPolicy,
-  required bool aiVoiceAnnouncementsEnabled,
 }) {
   return RoomManagementInfoFieldsPatch(
     visibility: normalizeRoomVisibility(visibility),
     joinPolicy: joinPolicy,
-    aiVoiceAnnouncementsEnabled: aiVoiceAnnouncementsEnabled,
   );
 }
 
 RoomManagementInfoFieldsPatch roomManagementJoinPolicyChanged({
   required String visibility,
   required String joinPolicy,
-  required bool aiVoiceAnnouncementsEnabled,
 }) {
   return RoomManagementInfoFieldsPatch(
     visibility: visibility,
     joinPolicy: normalizeRoomJoinPolicy(joinPolicy),
-    aiVoiceAnnouncementsEnabled: aiVoiceAnnouncementsEnabled,
-  );
-}
-
-RoomManagementInfoFieldsPatch roomManagementAiVoiceAnnouncementsChanged({
-  required String visibility,
-  required String joinPolicy,
-  required bool aiVoiceAnnouncementsEnabled,
-}) {
-  return RoomManagementInfoFieldsPatch(
-    visibility: visibility,
-    joinPolicy: joinPolicy,
-    aiVoiceAnnouncementsEnabled: aiVoiceAnnouncementsEnabled,
   );
 }
 
@@ -898,7 +877,6 @@ RoomInfoUpdateDraft roomInfoUpdateDraftFromForm({
   required String description,
   required String visibility,
   required String joinPolicy,
-  required bool aiVoiceAnnouncementsEnabled,
   String? pendingAvatarAssetId,
   required bool usingPresetAvatar,
   required String defaultAvatarKey,
@@ -912,7 +890,6 @@ RoomInfoUpdateDraft roomInfoUpdateDraftFromForm({
     description: description.trim(),
     visibility: normalizeRoomVisibility(visibility),
     joinPolicy: normalizeRoomJoinPolicy(joinPolicy),
-    aiVoiceAnnouncementsEnabled: aiVoiceAnnouncementsEnabled,
     avatarAssetId: roomAvatarAssetIdForSave(
       pendingAvatarAssetId: pendingAvatarAssetId,
       usingPresetAvatar: usingPresetAvatar,

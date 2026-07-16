@@ -2432,7 +2432,7 @@ void main() {
     },
   );
 
-  test('RoomCard parses the AI voice announcement room switch', () {
+  test('RoomCard defaults the personal AI voice preference to disabled', () {
     final room = RoomCard.fromJson({
       'id': 'room_1',
       'name': 'Alpha',
@@ -2443,7 +2443,6 @@ void main() {
       'live_avatar_preview': const [],
       'last_message': null,
       'unread_count': 0,
-      'ai_voice_announcements_enabled': false,
       'updated_at': '2026-07-11T10:00:00Z',
     });
 
@@ -2484,6 +2483,7 @@ void main() {
     expect(room.onlineMemberCount, 1);
     expect(room.toCard().onlineMemberCount, 1);
     expect(room.aiVoiceAnnouncementsEnabled, isFalse);
+    expect(room.myMembership.aiVoiceAnnouncementsEnabled, isFalse);
     expect(room.isAdmin, isTrue);
     expect(room.isSuperuser, isTrue);
     expect(room.canDelete, isTrue);
@@ -2535,6 +2535,7 @@ void main() {
               'notification_policy': 'silent',
               'room_display_name': 'Alice Ops',
               'is_pinned': true,
+              'ai_voice_announcements_enabled': false,
             });
             return http.Response(
               jsonEncode({
@@ -2653,6 +2654,7 @@ void main() {
       notificationPolicy: 'silent',
       roomDisplayName: 'Alice Ops',
       isPinned: true,
+      aiVoiceAnnouncementsEnabled: false,
     );
     await api.leaveRoom(roomId: 'room_1', confirmDeleteIfEmpty: true);
     await api.deleteRoom(roomId: 'room_1', confirmName: 'New Room');

@@ -1178,7 +1178,7 @@ RoomCard _roomCard(
   int liveParticipantCount = 0,
   DateTime? lastMessageAt,
   DateTime? updatedAt,
-  bool aiVoiceAnnouncementsEnabled = true,
+  bool aiVoiceAnnouncementsEnabled = false,
 }) {
   return RoomCard(
     id: id,

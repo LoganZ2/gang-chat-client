@@ -247,7 +247,6 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
       description: _descriptionController.text,
       visibility: _visibility,
       joinPolicy: _joinPolicy,
-      aiVoiceAnnouncementsEnabled: _aiVoiceAnnouncementsEnabled,
       pendingAvatarAssetId: _pendingAvatarAssetId,
       usingPresetAvatar: _usingPresetAvatar,
       defaultAvatarKey: _defaultAvatarKey,
@@ -282,7 +281,6 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
               description: draft.description,
               visibility: draft.visibility,
               joinPolicy: draft.joinPolicy,
-              aiVoiceAnnouncementsEnabled: draft.aiVoiceAnnouncementsEnabled,
               avatarAssetId: draft.avatarAssetId,
               defaultAvatarKey: draft.defaultAvatarKey,
             )
@@ -292,7 +290,6 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
               description: draft.description,
               visibility: draft.visibility,
               joinPolicy: draft.joinPolicy,
-              aiVoiceAnnouncementsEnabled: draft.aiVoiceAnnouncementsEnabled,
               avatarAssetId: draft.avatarAssetId,
               defaultAvatarKey: draft.defaultAvatarKey,
             );
@@ -393,6 +390,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
         notificationPolicy: draft.notificationPolicy,
         roomDisplayName: draft.roomDisplayName,
         isPinned: _isPinned,
+        aiVoiceAnnouncementsEnabled: _aiVoiceAnnouncementsEnabled,
       );
       if (!mounted) return;
       setState(() {
@@ -401,6 +399,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
           updated.notificationPolicy,
         );
         _isPinned = updated.isPinned;
+        _aiVoiceAnnouncementsEnabled = updated.aiVoiceAnnouncementsEnabled;
         _remarkNameController.text = updated.remarkName ?? '';
         _roomDisplayNameController.text =
             updated.personalProfile.displayName ?? '';
@@ -772,13 +771,6 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
               ],
               onChanged: (value) => setState(() => _joinPolicy = value),
             ),
-            _ToggleRow(
-              label: 'AI 语音播报',
-              value: _aiVoiceAnnouncementsEnabled,
-              enabled: _canManageRoom && !_saving,
-              onChanged: (value) =>
-                  setState(() => _aiVoiceAnnouncementsEnabled = value),
-            ),
             Button(
               width: double.infinity,
               tone: ButtonTone.primary,
@@ -869,6 +861,13 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
               value: _isPinned,
               enabled: !_savingPreferences,
               onChanged: (value) => setState(() => _isPinned = value),
+            ),
+            _ToggleRow(
+              label: 'AI 语音播报',
+              value: _aiVoiceAnnouncementsEnabled,
+              enabled: !_savingPreferences,
+              onChanged: (value) =>
+                  setState(() => _aiVoiceAnnouncementsEnabled = value),
             ),
             Button(
               width: double.infinity,

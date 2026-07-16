@@ -701,7 +701,7 @@ class RoomCard {
     this.unreadMentionCount = 0,
     this.hasUnreadMentionCount = false,
     this.hasPendingJoinRequests = false,
-    this.aiVoiceAnnouncementsEnabled = true,
+    this.aiVoiceAnnouncementsEnabled = false,
   });
 
   final String id;
@@ -778,7 +778,7 @@ class RoomCard {
             'ai_voice_announcements_enabled',
             'ai_voice_announce_enabled',
           ]) ??
-          true,
+          false,
       updatedAt: DateTime.parse(json['updated_at']! as String),
     );
   }
@@ -1098,15 +1098,23 @@ class JoinRoomResult {
 }
 
 class RoomMembership {
-  const RoomMembership({required this.joinedAt, required this.role});
+  const RoomMembership({
+    required this.joinedAt,
+    required this.role,
+    this.aiVoiceAnnouncementsEnabled = false,
+  });
 
   final DateTime joinedAt;
   final String role;
+  final bool aiVoiceAnnouncementsEnabled;
 
   factory RoomMembership.fromJson(Map<String, Object?> json) {
     return RoomMembership(
       joinedAt: DateTime.parse(json['joined_at']! as String),
       role: json['role'] as String? ?? 'member',
+      aiVoiceAnnouncementsEnabled:
+          _boolFromJson(json, const ['ai_voice_announcements_enabled']) ??
+          false,
     );
   }
 }
@@ -1550,7 +1558,7 @@ class RoomDetail {
     this.notificationPolicy = 'all',
     this.isPinned = false,
     this.personalProfile = const RoomPersonalProfile(),
-    this.aiVoiceAnnouncementsEnabled = true,
+    this.aiVoiceAnnouncementsEnabled = false,
     this.messageRecallPolicy = 'sender_only',
     this.messageRecallWindowSeconds,
     this.canDeleteRoom,
@@ -1620,7 +1628,10 @@ class RoomDetail {
             'ai_voice_announcements_enabled',
             'ai_voice_auto_broadcast',
           ]) ??
-          true,
+          _boolFromJson(_nullableMap(json['my_membership']), const [
+            'ai_voice_announcements_enabled',
+          ]) ??
+          false,
       messageRecallPolicy:
           _stringFromJson(json, const ['message_recall_policy']) ??
           'sender_only',
@@ -1693,7 +1704,11 @@ class RoomDetail {
       memberCount: memberCount,
       onlineMemberCount: onlineMemberCount,
       createdBy: createdBy,
-      myMembership: RoomMembership(joinedAt: myMembership.joinedAt, role: role),
+      myMembership: RoomMembership(
+        joinedAt: myMembership.joinedAt,
+        role: role,
+        aiVoiceAnnouncementsEnabled: myMembership.aiVoiceAnnouncementsEnabled,
+      ),
       live: live,
       createdAt: createdAt,
       updatedAt: updatedAt,

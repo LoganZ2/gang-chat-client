@@ -154,7 +154,8 @@ extension _HomeShellRealtime on _HomeShellState {
     final room = _roomsController.roomCardFromSnapshot(data);
     if (room == null || !mounted) return;
     if (room.id == _joinedLiveRoomId) {
-      _joinedLiveAiVoiceAnnouncementsEnabled = room.aiVoiceAnnouncementsEnabled;
+      _joinedLivePersonalAiVoiceAnnouncementsEnabled =
+          room.aiVoiceAnnouncementsEnabled;
     }
     final shouldRefreshMessages =
         room.id == _selectedServerId &&

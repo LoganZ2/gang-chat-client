@@ -243,7 +243,7 @@ class _HomeShellState extends State<HomeShell> {
   int _pendingRoomNotificationCount = 0;
   bool _selectedRoomHasPendingJoinRequests = false;
   String? _joinedLiveRoomId;
-  bool _joinedLiveAiVoiceAnnouncementsEnabled = true;
+  bool _joinedLivePersonalAiVoiceAnnouncementsEnabled = false;
   final Map<String, UserSummary> _joinedLiveParticipantUsers = {};
   bool _joiningLive = false;
   bool _syncingLiveConnectedParticipants = false;
@@ -425,7 +425,7 @@ class _HomeShellState extends State<HomeShell> {
       _pendingRoomNotificationCount = 0;
       _selectedRoomHasPendingJoinRequests = false;
       _joinedLiveRoomId = null;
-      _joinedLiveAiVoiceAnnouncementsEnabled = true;
+      _joinedLivePersonalAiVoiceAnnouncementsEnabled = false;
       _joinedLiveParticipantUsers.clear();
       _joiningLive = false;
       _micMuted = true;

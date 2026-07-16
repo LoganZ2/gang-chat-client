@@ -195,8 +195,10 @@ extension _HomeShellLiveActions on _HomeShellState {
         ? 0.0
         : normalizedAudioVolume(_liveSessionController.outputVolume);
     LivePresenceAnnouncement? announcement;
+    // This personal preference gates only synthesized speech. The coordinator
+    // below always receives the join/leave cue, even when announcements are off.
     final shouldAnnounce = shouldSpeakLivePresenceAnnouncement(
-      enabled: _joinedLiveAiVoiceAnnouncementsEnabled,
+      enabled: _joinedLivePersonalAiVoiceAnnouncementsEnabled,
       participantIdentity: participantIdentity,
       currentUserIdentity: _currentUser.id,
     );
@@ -281,7 +283,7 @@ extension _HomeShellLiveActions on _HomeShellState {
     _contentMode = patch.livePanelOpen ? _ContentMode.live : _contentMode;
     _roomError = patch.error;
     if (patch.joinedLiveRoomId == null) {
-      _joinedLiveAiVoiceAnnouncementsEnabled = true;
+      _joinedLivePersonalAiVoiceAnnouncementsEnabled = false;
       _joinedLiveParticipantUsers.clear();
     }
   }
@@ -310,7 +312,7 @@ extension _HomeShellLiveActions on _HomeShellState {
     _screenSharing = patch.screenSharing;
     _voiceBlocked = patch.voiceBlocked;
     if (patch.joinedLiveRoomId == null) {
-      _joinedLiveAiVoiceAnnouncementsEnabled = true;
+      _joinedLivePersonalAiVoiceAnnouncementsEnabled = false;
       _joinedLiveParticipantUsers.clear();
     }
   }
@@ -813,7 +815,7 @@ extension _HomeShellLiveActions on _HomeShellState {
             showMicUnmutedWhenAllowed: true,
           ),
         );
-        _joinedLiveAiVoiceAnnouncementsEnabled =
+        _joinedLivePersonalAiVoiceAnnouncementsEnabled =
             room.aiVoiceAnnouncementsEnabled;
         _joinedLiveParticipantUsers.clear();
         for (final participant in displayResult.live.participants) {

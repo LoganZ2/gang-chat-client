@@ -89,7 +89,6 @@ void main() {
         description: '',
         visibility: 'public',
         joinPolicy: 'open',
-        aiVoiceAnnouncementsEnabled: true,
         usingPresetAvatar: false,
         defaultAvatarKey: 'room-1',
       ).error,
@@ -101,7 +100,6 @@ void main() {
       description: '  Team room  ',
       visibility: 'PRIVATE',
       joinPolicy: 'allow_anyone',
-      aiVoiceAnnouncementsEnabled: false,
       pendingAvatarAssetId: 'asset_2',
       usingPresetAvatar: false,
       defaultAvatarKey: 'room-2',
@@ -112,7 +110,6 @@ void main() {
     expect(draft.description, 'Team room');
     expect(draft.visibility, 'private');
     expect(draft.joinPolicy, 'open');
-    expect(draft.aiVoiceAnnouncementsEnabled, isFalse);
     expect(draft.avatarAssetId, 'asset_2');
     expect(draft.defaultAvatarKey, 'room-2');
   });
@@ -489,32 +486,18 @@ void main() {
     final visibility = roomManagementVisibilityChanged(
       visibility: 'private',
       joinPolicy: 'open',
-      aiVoiceAnnouncementsEnabled: false,
     );
 
     expect(visibility.visibility, 'private');
     expect(visibility.joinPolicy, 'open');
-    expect(visibility.aiVoiceAnnouncementsEnabled, isFalse);
 
     final joinPolicy = roomManagementJoinPolicyChanged(
       visibility: visibility.visibility,
       joinPolicy: 'unknown',
-      aiVoiceAnnouncementsEnabled: visibility.aiVoiceAnnouncementsEnabled,
     );
 
     expect(joinPolicy.visibility, 'private');
     expect(joinPolicy.joinPolicy, 'approval_required');
-    expect(joinPolicy.aiVoiceAnnouncementsEnabled, isFalse);
-
-    final voiceAnnouncements = roomManagementAiVoiceAnnouncementsChanged(
-      visibility: joinPolicy.visibility,
-      joinPolicy: joinPolicy.joinPolicy,
-      aiVoiceAnnouncementsEnabled: true,
-    );
-
-    expect(voiceAnnouncements.visibility, 'private');
-    expect(voiceAnnouncements.joinPolicy, 'approval_required');
-    expect(voiceAnnouncements.aiVoiceAnnouncementsEnabled, isTrue);
   });
 
   test('room management dialog patches save invalid success and failure', () {

@@ -692,7 +692,8 @@ extension _HomeShellRoomActions on _HomeShellState {
   void _applyManagedRoomUpdated(RoomDetail room) {
     if (_selectedServerId != room.id) return;
     if (_joinedLiveRoomId == room.id) {
-      _joinedLiveAiVoiceAnnouncementsEnabled = room.aiVoiceAnnouncementsEnabled;
+      _joinedLivePersonalAiVoiceAnnouncementsEnabled =
+          room.aiVoiceAnnouncementsEnabled;
     }
     final patch = _roomsController.patchRoomDetailApplied(
       rooms: _servers,

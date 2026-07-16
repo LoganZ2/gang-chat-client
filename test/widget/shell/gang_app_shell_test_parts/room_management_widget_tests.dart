@@ -171,7 +171,7 @@ void registerShellRoomManagementWidgetTests() {
     expect(find.text('消息记录'), findsOneWidget);
     expect(find.text('设置'), findsNothing);
     expect(find.byIcon(Icons.info_outline), findsOneWidget);
-    expect(find.byType(ui.UiSwitch), findsOneWidget);
+    expect(find.byType(ui.UiSwitch), findsNothing);
     expect(find.byType(Switch), findsNothing);
     expect(
       find.byWidgetPredicate(
@@ -250,6 +250,14 @@ void registerShellRoomManagementWidgetTests() {
     expect(find.text('全部'), findsOneWidget);
     expect(find.text('接收但不提醒'), findsOneWidget);
     expect(find.text('屏蔽'), findsOneWidget);
+    expect(find.text('AI 语音播报'), findsOneWidget);
+    expect(find.byType(ui.UiSwitch), findsNWidgets(2));
+    expect(
+      tester.getRect(find.text('AI 语音播报')).top,
+      greaterThan(tester.getRect(find.text('置顶房间')).bottom),
+    );
+    await tester.tap(find.byType(ui.UiSwitch).last);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('接收但不提醒'));
     await tester.pumpAndSettle();
     final savePreferencesButton = find.widgetWithText(ui.Button, '保存个人偏好');
@@ -262,6 +270,10 @@ void registerShellRoomManagementWidgetTests() {
     expect(myRoomSettingsUpdates, hasLength(1));
     expect(myRoomSettingsUpdates.single['notification_policy'], 'silent');
     expect(myRoomSettingsUpdates.single['is_pinned'], isFalse);
+    expect(
+      myRoomSettingsUpdates.single['ai_voice_announcements_enabled'],
+      isTrue,
+    );
     await tester.drag(find.byType(ListView).last, const Offset(0, 600));
     await tester.pumpAndSettle();
     expect(find.text('个人偏好已保存'), findsOneWidget);

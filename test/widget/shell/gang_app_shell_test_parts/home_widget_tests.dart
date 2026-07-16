@@ -923,7 +923,7 @@ void registerShellHomeWidgetTests() {
     expect(body['description'], 'A focused room');
     expect(body['visibility'], 'public');
     expect(body['join_policy'], 'approval_required');
-    expect(body['ai_voice_announcements_enabled'], isTrue);
+    expect(body.containsKey('ai_voice_announcements_enabled'), isFalse);
     expect(body['default_avatar_key'], 'blue-3');
     expect(find.text('Project Nest'), findsAtLeastNWidgets(1));
     expect(find.text('创建房间'), findsNothing);
@@ -1789,4 +1789,69 @@ void registerShellHomeWidgetTests() {
     expect(find.text('Hello from Morgan'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'disabling personal AI announcements keeps participant join and leave cues',
+    (WidgetTester tester) async {
+      final realtime = _FakeRealtimeService();
+      final liveSession = _FakeLiveSession();
+      final liveSessionController = _FakeLiveSessionController(
+        session: liveSession,
+      );
+      final presenceSounds = _RecordingLivePresenceSoundPlayer();
+      final presenceSpeech = _RecordingLivePresenceSpeechPlayer();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: HomePage(
+            app: _homeTestAppContext(),
+            audioDeviceStore: const _FakeAudioDeviceStore(),
+            liveSessionController: liveSessionController,
+            livePresenceSoundPlayer: presenceSounds,
+            livePresenceSpeechPlayer: presenceSpeech,
+            realtime: realtime,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Alpha Room'));
+      await tester.pumpAndSettle();
+      await _openLiveChannelFromHeader(tester);
+      await tester.tap(find.widgetWithText(ui.Button, '加入'));
+      await tester.pumpAndSettle();
+
+      realtime.add(
+        RealtimeEvent(
+          type: 'room_updated',
+          data: {
+            ..._roomCardJson(
+              id: 'server-alpha',
+              name: 'Alpha Room',
+              memberCount: 2,
+              liveParticipantCount: 2,
+            ),
+            'ai_voice_announcements_enabled': false,
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final initialCueCount = presenceSounds.sounds.length;
+      liveSession.emitParticipantJoined();
+      liveSession.emitParticipantLeft();
+      for (var index = 0; index < 4; index += 1) {
+        await tester.pump(const Duration(milliseconds: 500));
+      }
+      await tester.pumpAndSettle();
+
+      expect(presenceSounds.sounds.skip(initialCueCount), [
+        LivePresenceSound.joined,
+        LivePresenceSound.left,
+      ]);
+      expect(presenceSpeech.announcements, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

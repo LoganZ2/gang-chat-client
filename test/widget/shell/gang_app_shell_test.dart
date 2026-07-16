@@ -294,7 +294,7 @@ GangApi _roomsApi({
   var alphaRoomDescription = '';
   var alphaRoomVisibility = 'private';
   var alphaRoomJoinPolicy = currentRoomJoinPolicy;
-  var alphaRoomAiVoiceAnnouncementsEnabled = true;
+  var alphaRoomAiVoiceAnnouncementsEnabled = false;
   var alphaRoomNotificationPolicy = 'all';
   return GangApiClient(
     baseUrl: 'http://example.test/api/v1',
@@ -323,7 +323,7 @@ GangApi _roomsApi({
               visibility: body['visibility'] as String? ?? 'public',
               joinPolicy: body['join_policy'] as String? ?? 'approval_required',
               aiVoiceAnnouncementsEnabled:
-                  body['ai_voice_announcements_enabled'] as bool? ?? true,
+                  body['ai_voice_announcements_enabled'] as bool? ?? false,
             ),
           });
         }
@@ -649,6 +649,9 @@ GangApi _roomsApi({
         alphaRoomNotificationPolicy =
             body['notification_policy'] as String? ??
             alphaRoomNotificationPolicy;
+        alphaRoomAiVoiceAnnouncementsEnabled =
+            body['ai_voice_announcements_enabled'] as bool? ??
+            alphaRoomAiVoiceAnnouncementsEnabled;
         myRoomSettingsUpdates?.add(body);
         return _jsonResponse({
           'room': {
@@ -1199,7 +1202,7 @@ Map<String, Object?> _roomDetailJson({
   String description = '',
   String visibility = 'private',
   String joinPolicy = 'approval_required',
-  bool aiVoiceAnnouncementsEnabled = true,
+  bool aiVoiceAnnouncementsEnabled = false,
   String role = 'owner',
   Map<String, Object?>? createdBy,
 }) {
