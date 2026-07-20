@@ -21,12 +21,18 @@ const _homeTitleBarLiveRoomMinWidth =
             _homeTitleBarLiveRoomSearchGap) *
         2;
 
+bool _homeTitleBarShowsCustomWindowControls(BuildContext context) {
+  final platform = Theme.of(context).platform;
+  return platform != TargetPlatform.macOS &&
+      platform != TargetPlatform.android;
+}
+
 double _homeTitleBarBrandWidth(BuildContext context, double maxWidth) {
-  final nativeMacControls = Theme.of(context).platform == TargetPlatform.macOS;
+  final showWindowControls = _homeTitleBarShowsCustomWindowControls(context);
   final wide = maxWidth >= narrowBreakpoint;
   final compactBrandWidth =
       (maxWidth -
-              (nativeMacControls ? 0 : _homeTitleBarControlsWidth) -
+              (showWindowControls ? _homeTitleBarControlsWidth : 0) -
               _homeTitleBarMinSearchWidth)
           .clamp(118.0, 168.0)
           .toDouble();
@@ -34,8 +40,7 @@ double _homeTitleBarBrandWidth(BuildContext context, double maxWidth) {
 }
 
 bool _homeTitleBarCanShowSearch(BuildContext context, double maxWidth) {
-  final nativeMacControls = Theme.of(context).platform == TargetPlatform.macOS;
-  if (nativeMacControls) {
+  if (!_homeTitleBarShowsCustomWindowControls(context)) {
     return maxWidth >= _homeTitleBarSearchWidth;
   }
   return maxWidth >= _homeTitleBarWindowsSearchMinWidth;
@@ -131,9 +136,11 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            // mac 使用系统原生红绿灯,其它平台用自定义窗口按钮。
-            final nativeMacControls =
-                Theme.of(context).platform == TargetPlatform.macOS;
+            // Windows/Linux 使用自定义窗口按钮；macOS 使用系统原生红绿灯，
+            // Android/iOS 等非桌面平台不构建窗口控制区。
+            final showWindowControls = _homeTitleBarShowsCustomWindowControls(
+              context,
+            );
             final brandWidth = _homeTitleBarBrandWidth(
               context,
               constraints.maxWidth,
@@ -165,7 +172,7 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
                         child: const SizedBox.expand(),
                       ),
                     ),
-                    if (!nativeMacControls)
+                    if (showWindowControls)
                       SelectionContainer.disabled(
                         child: AppWindowControls(
                           maximized: _maximized,
@@ -180,12 +187,12 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
                   Positioned(
                     top:
                         (_homeTitleBarHeight - _homeTitleBarLiveRoomHeight) / 2,
-                    left: nativeMacControls
-                        ? null
-                        : _homeTitleBarLiveRoomHorizontalInset,
-                    right: nativeMacControls
+                    left: showWindowControls
                         ? _homeTitleBarLiveRoomHorizontalInset
                         : null,
+                    right: showWindowControls
+                        ? null
+                        : _homeTitleBarLiveRoomHorizontalInset,
                     child: IgnorePointer(
                       ignoring: widget.interactionLocked,
                       child: Opacity(
@@ -808,37 +815,38 @@ class _TitleSearchResultsPanel extends StatelessWidget {
               ),
             )
             .toList(),
-      search_display.GlobalSearchCategory.userSettings => snapshot.userSettings
-          .map(
-            (user) => _RoomSearchResultTile(
-              title: user.displayName.trim().isEmpty
-                  ? user.username
-                  : user.displayName,
-              subtitle: '@${user.username}',
-              query: query,
-              leading: UserHoverCard(
-                user: user,
-                currentUser: currentUser,
-                onResolveProfile: onResolveUserProfile,
-                child: Avatar(
-                  label: user.displayName,
-                  imageUrl: AppConfigScope.of(
-                    context,
-                  ).resolveAssetUrl(user.avatarUrl),
-                  defaultAvatarKey: user.defaultAvatarKey,
-                  size: 30,
+      search_display.GlobalSearchCategory.userSettings =>
+        snapshot.userSettings
+            .map(
+              (user) => _RoomSearchResultTile(
+                title: user.displayName.trim().isEmpty
+                    ? user.username
+                    : user.displayName,
+                subtitle: '@${user.username}',
+                query: query,
+                leading: UserHoverCard(
+                  user: user,
+                  currentUser: currentUser,
+                  onResolveProfile: onResolveUserProfile,
+                  child: Avatar(
+                    label: user.displayName,
+                    imageUrl: AppConfigScope.of(
+                      context,
+                    ).resolveAssetUrl(user.avatarUrl),
+                    defaultAvatarKey: user.defaultAvatarKey,
+                    size: 30,
+                  ),
+                ),
+                trailing: Button(
+                  key: ValueKey('open-user-settings-${user.id}'),
+                  height: 30,
+                  onPressed: () => onUserSettingsSelected(user),
+                  icon: const Icon(Icons.manage_accounts_outlined, size: 15),
+                  child: const Text('进入设置'),
                 ),
               ),
-              trailing: Button(
-                key: ValueKey('open-user-settings-${user.id}'),
-                height: 30,
-                onPressed: () => onUserSettingsSelected(user),
-                icon: const Icon(Icons.manage_accounts_outlined, size: 15),
-                child: const Text('进入设置'),
-              ),
-            ),
-          )
-          .toList(),
+            )
+            .toList(),
       search_display.GlobalSearchCategory.messages =>
         snapshot.messages
             .map(

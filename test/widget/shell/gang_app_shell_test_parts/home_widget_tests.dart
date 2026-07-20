@@ -8,7 +8,7 @@ void registerShellHomeWidgetTests() {
 
     await tester.pumpWidget(
       MaterialApp(
-        theme: ui.uiTheme(),
+        theme: ui.uiTheme().copyWith(platform: TargetPlatform.windows),
         home: HomePage(
           app: _homeTestAppContext(
             requestedPaths: requestedPaths,
@@ -232,7 +232,7 @@ void registerShellHomeWidgetTests() {
         tester.view.physicalSize = Size(width, 620);
         await tester.pumpWidget(
           MaterialApp(
-            theme: ui.uiTheme(),
+            theme: ui.uiTheme().copyWith(platform: TargetPlatform.windows),
             home: SizedBox(
               width: width,
               height: 620,
@@ -987,7 +987,7 @@ void registerShellHomeWidgetTests() {
 
       await tester.pumpWidget(
         MaterialApp(
-          theme: ui.uiTheme(),
+          theme: ui.uiTheme().copyWith(platform: TargetPlatform.windows),
           home: HomePage(
             app: _homeTestAppContext(requestedUris: requestedUris),
             realtime: _NoopRealtimeService(),
@@ -1049,6 +1049,20 @@ void registerShellHomeWidgetTests() {
       expect(
         find.byKey(const ValueKey('notification-room-avatar-invite-alpha')),
         findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<ui.Avatar>(
+              find.byKey(
+                const ValueKey('notification-inviter-avatar-invite-alpha'),
+              ),
+            )
+            .size,
+        34,
+      );
+      expect(
+        find.byKey(const ValueKey('notification-mobile-body-invite-alpha')),
+        findsNothing,
       );
       final notificationRects = [
         tester.getRect(
@@ -1193,6 +1207,81 @@ void registerShellHomeWidgetTests() {
           .length,
       greaterThanOrEqualTo(2),
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('narrow notifications wrap content and split the timestamp', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(360, 740));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme().copyWith(platform: TargetPlatform.android),
+        home: HomePage(
+          app: _homeTestAppContext(includeUnreadRoomNotification: true),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('通知'));
+    await tester.pumpAndSettle();
+
+    const bodyKey = ValueKey(
+      'notification-mobile-body-room-event-room-event-alpha',
+    );
+    const timeKey = ValueKey('notification-room-event-time-room-event-alpha');
+    expect(find.byKey(bodyKey), findsOneWidget);
+    expect(tester.widget<ui.HighlightedText>(find.byKey(bodyKey)).maxLines, 4);
+    expect(
+      tester.widget<ui.HighlightedText>(find.byKey(timeKey)).text,
+      contains('\n'),
+    );
+    final roomEventCard = find.byKey(
+      const ValueKey('notification-row-surface-room-event:room-event-alpha'),
+    );
+    final jumpButton = find.descendant(
+      of: roomEventCard,
+      matching: find.byType(ui.ButtonIcon),
+    );
+    final messageAvatar = find.descendant(
+      of: roomEventCard,
+      matching: find.byType(ui.Avatar),
+    );
+    expect(messageAvatar, findsOneWidget);
+    expect(tester.widget<ui.Avatar>(messageAvatar).size, 18);
+    expect(
+      tester.getRect(messageAvatar).top,
+      closeTo(tester.getRect(find.byKey(bodyKey)).top, 1),
+    );
+    final notificationTime = tester.widget<ui.HighlightedText>(
+      find.byKey(timeKey),
+    );
+    expect(notificationTime.textAlign, TextAlign.center);
+    final notificationRows = find.byWidgetPredicate(
+      (widget) =>
+          widget.key is ValueKey<String> &&
+          (widget.key! as ValueKey<String>).value.startsWith(
+            'notification-row-surface-',
+          ),
+    );
+    final notificationAvatars = find.descendant(
+      of: notificationRows,
+      matching: find.byType(ui.Avatar),
+    );
+    expect(notificationAvatars, findsWidgets);
+    for (final avatar in tester.widgetList<ui.Avatar>(notificationAvatars)) {
+      expect(avatar.size, 18);
+    }
+    final cardCenterY = tester.getRect(roomEventCard).center.dy;
+    expect(
+      tester.getRect(find.byKey(timeKey)).center.dy,
+      closeTo(cardCenterY, 1),
+    );
+    expect(tester.getRect(jumpButton).center.dy, closeTo(cardCenterY, 1));
     expect(tester.takeException(), isNull);
   });
 

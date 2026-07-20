@@ -2,6 +2,7 @@ part of 'chat_pane.dart';
 
 class _RoomHeader extends StatelessWidget {
   const _RoomHeader({
+    this.onNavigateBack,
     required this.title,
     required this.avatarLabel,
     required this.avatarUrl,
@@ -16,6 +17,7 @@ class _RoomHeader extends StatelessWidget {
     required this.onSettingsPressed,
   });
 
+  final VoidCallback? onNavigateBack;
   final String title;
   final String avatarLabel;
   final String? avatarUrl;
@@ -46,6 +48,7 @@ class _RoomHeader extends StatelessWidget {
           children: [
             Expanded(
               child: _LiveChannelHeaderCard(
+                onNavigateBack: onNavigateBack,
                 title: title,
                 avatarLabel: avatarLabel,
                 avatarUrl: avatarUrl,
@@ -72,6 +75,7 @@ class _RoomHeader extends StatelessWidget {
 
 class _LiveChannelHeaderCard extends StatelessWidget {
   const _LiveChannelHeaderCard({
+    this.onNavigateBack,
     required this.title,
     required this.avatarLabel,
     required this.avatarUrl,
@@ -83,6 +87,7 @@ class _LiveChannelHeaderCard extends StatelessWidget {
     required this.onPressed,
   });
 
+  final VoidCallback? onNavigateBack;
   final String title;
   final String avatarLabel;
   final String? avatarUrl;
@@ -96,6 +101,13 @@ class _LiveChannelHeaderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final liveActive = (liveParticipantCount ?? 0) > 0;
+    if (Theme.of(context).platform != TargetPlatform.android) {
+      return _buildDesktopCard(liveActive);
+    }
+    return _buildAndroidCard(liveActive);
+  }
+
+  Widget _buildDesktopCard(bool liveActive) {
     return PressableSurface(
       key: const ValueKey('chat-header-live-button'),
       width: double.infinity,
@@ -114,7 +126,10 @@ class _LiveChannelHeaderCard extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final previewMaxWidth = liveActive
-              ? math.min(_liveHeaderPreviewMaxWidth, constraints.maxWidth)
+              ? math.min(
+                  _desktopLiveHeaderPreviewMaxWidth,
+                  constraints.maxWidth,
+                )
               : 0.0;
           final roomInfoWidth = math.max(
             0.0,
@@ -141,7 +156,8 @@ class _LiveChannelHeaderCard extends StatelessWidget {
                     ),
                   ),
                 ),
-              if (liveActive && previewMaxWidth >= _liveHeaderPreviewMinWidth)
+              if (liveActive &&
+                  previewMaxWidth >= _desktopLiveHeaderPreviewMinWidth)
                 Align(
                   alignment: Alignment.centerRight,
                   child: ConstrainedBox(
@@ -158,12 +174,152 @@ class _LiveChannelHeaderCard extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildAndroidCard(bool liveActive) {
+    return PressableSurface(
+      key: const ValueKey('chat-header-live-button'),
+      width: double.infinity,
+      height: _liveHeaderCardHeight,
+      hoverLift: _headerSurfaceHoverLift,
+      baseDepth: _headerSurfaceBaseDepth,
+      borderRadius: UiRadii.md,
+      backgroundColor: UiColors.surface,
+      selectedBackgroundColor: UiColors.selected,
+      borderColor: UiColors.border,
+      selectedBorderColor: UiColors.selectedBorder,
+      selected: liveActive,
+      interactive: true,
+      padding: const EdgeInsets.only(
+        left: _liveHeaderLeftPadding,
+        right: _liveHeaderRightPadding,
+      ),
+      child: Row(
+        children: [
+          if (onNavigateBack != null) ...[
+            _LiveHeaderBackColumn(onPressed: onNavigateBack!),
+            const SizedBox(width: _liveHeaderBackGap),
+          ],
+          Expanded(
+            child: Tooltip(
+              message: '进入语音频道',
+              child: Semantics(
+                button: true,
+                label: '进入语音频道',
+                onTap: onPressed,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    excludeFromSemantics: true,
+                    onTap: onPressed,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final previewMaxWidth = liveActive
+                            ? math.min(
+                                _androidLiveHeaderPreviewMaxWidth,
+                                constraints.maxWidth,
+                              )
+                            : 0.0;
+                        final roomInfoWidth = math.max(
+                          0.0,
+                          constraints.maxWidth -
+                              (previewMaxWidth > 0
+                                  ? previewMaxWidth + _liveHeaderSideGap
+                                  : 0),
+                        );
+                        return Stack(
+                          children: [
+                            if (roomInfoWidth >= _liveHeaderRoomInfoMinWidth)
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: SizedBox(
+                                  width: roomInfoWidth,
+                                  child: _LiveHeaderRoomInfo(
+                                    title: title,
+                                    avatarLabel: avatarLabel,
+                                    avatarUrl: avatarUrl,
+                                    defaultAvatarKey: defaultAvatarKey,
+                                    memberCount: memberCount,
+                                    onlineMemberCount: onlineMemberCount,
+                                    liveActive: liveActive,
+                                  ),
+                                ),
+                              ),
+                            if (liveActive &&
+                                previewMaxWidth >=
+                                    _androidLiveHeaderPreviewMinWidth)
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxWidth: previewMaxWidth,
+                                  ),
+                                  child: _LiveHeaderParticipantCount(
+                                    participantCount: liveParticipantCount ?? 0,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-const _liveHeaderPreviewMaxWidth = 190.0;
+const _liveHeaderLeftPadding = 7.0;
+const _liveHeaderRightPadding = 13.0;
+const _liveHeaderBackColumnWidth = 30.0;
+const _liveHeaderBackGap = 3.0;
+const _androidLiveHeaderPreviewMaxWidth = 52.0;
+const _desktopLiveHeaderPreviewMaxWidth = 190.0;
 const _liveHeaderSideGap = 10.0;
 const _liveHeaderRoomInfoMinWidth = 44.0;
-const _liveHeaderPreviewMinWidth = 60.0;
+const _androidLiveHeaderPreviewMinWidth = 32.0;
+const _desktopLiveHeaderPreviewMinWidth = 60.0;
+
+class _LiveHeaderBackColumn extends StatelessWidget {
+  const _LiveHeaderBackColumn({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: '返回房间列表',
+      child: Semantics(
+        button: true,
+        label: '返回房间列表',
+        onTap: onPressed,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            excludeFromSemantics: true,
+            onTap: onPressed,
+            child: SizedBox(
+              key: const ValueKey('chat-header-back-button'),
+              width: _liveHeaderBackColumnWidth,
+              height: double.infinity,
+              child: const Icon(
+                Icons.arrow_back_rounded,
+                color: UiColors.textSecondary,
+                size: 20,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _LiveHeaderRoomInfo extends StatelessWidget {
   const _LiveHeaderRoomInfo({
@@ -189,6 +345,7 @@ class _LiveHeaderRoomInfo extends StatelessWidget {
     return Row(
       children: [
         Avatar(
+          key: const ValueKey('chat-header-room-avatar'),
           label: avatarLabel,
           imageUrl: AppConfigScope.of(context).resolveAssetUrl(avatarUrl),
           defaultAvatarKey: defaultAvatarKey,
@@ -224,6 +381,41 @@ class _LiveHeaderRoomInfo extends StatelessWidget {
                 style: UiTypography.label.copyWith(color: UiColors.textMuted),
               ),
             ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LiveHeaderParticipantCount extends StatelessWidget {
+  const _LiveHeaderParticipantCount({required this.participantCount});
+
+  final int participantCount;
+
+  @override
+  Widget build(BuildContext context) {
+    if (participantCount <= 0) return const SizedBox.shrink();
+    return Row(
+      key: const ValueKey('chat-header-live-preview'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(
+          Icons.volume_up,
+          key: ValueKey('chat-header-live-preview-icon'),
+          color: UiColors.accent,
+          size: 18,
+        ),
+        const SizedBox(width: 6),
+        Text(
+          '$participantCount',
+          key: const ValueKey('chat-header-live-preview-count'),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: UiTypography.label.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
           ),
         ),
       ],

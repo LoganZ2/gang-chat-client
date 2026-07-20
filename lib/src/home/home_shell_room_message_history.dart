@@ -306,7 +306,7 @@ class _RoomMessageHistoryPaneState extends State<_RoomMessageHistoryPane> {
           alignment: Alignment.centerLeft,
           wrapAlignment: WrapAlignment.start,
           textStyle: UiTypography.body,
-          avatarSize: 18,
+          avatarSize: CompactActivityLayout.avatarSize,
           onResolveSenderProfile: widget.onResolveRoomUserProfile == null
               ? null
               : (user) =>
@@ -643,7 +643,9 @@ class _RoomMessageHistoryPaneState extends State<_RoomMessageHistoryPane> {
           context,
         ).resolveAssetUrl(message.sender.avatarUrl),
         defaultAvatarKey: message.sender.defaultAvatarKey,
-        size: 38,
+        size: Theme.of(context).platform == TargetPlatform.android
+            ? CompactActivityLayout.avatarSize
+            : 38,
       ),
     );
   }
@@ -708,7 +710,7 @@ class _HistoryMessageRowState extends State<_HistoryMessageRow> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(width: 82),
+              const SizedBox(width: CompactActivityLayout.timestampColumnWidth),
               const SizedBox(width: 8),
               if (!widget.inlineContent) ...[
                 widget.senderAvatar!,
@@ -761,11 +763,19 @@ class _HistoryMessageRowState extends State<_HistoryMessageRow> {
             left: 0,
             top: 0,
             bottom: 0,
-            width: 82,
+            width: CompactActivityLayout.timestampColumnWidth,
             child: Center(
               child: Text(
                 key: ValueKey('room-message-history-time-${message.id}'),
-                room_notifications.roomInviteTimestampLabel(message.createdAt),
+                Theme.of(context).platform == TargetPlatform.android
+                    ? CompactActivityLayout.splitTimestamp(
+                        room_notifications.roomInviteTimestampLabel(
+                          message.createdAt,
+                        ),
+                      )
+                    : room_notifications.roomInviteTimestampLabel(
+                        message.createdAt,
+                      ),
                 textAlign: TextAlign.center,
                 style: UiTypography.label.copyWith(color: UiColors.textMuted),
               ),

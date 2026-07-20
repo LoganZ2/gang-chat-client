@@ -77,6 +77,7 @@ extension _HomeShellNotifications on _HomeShellState {
     _setHomeState(() {
       _settingsOpen = false;
       _contentMode = _ContentMode.notifications;
+      _auxiliaryOpenedFromNarrowSidebar = openContent;
       if (openContent) _narrowContentOpen = true;
     });
     unawaited(
@@ -93,7 +94,7 @@ extension _HomeShellNotifications on _HomeShellState {
     _setHomeState(() {
       _clearDeferredRoomNotificationVisualMarkersInState();
       _contentMode = _ContentMode.chat;
-      if (_selectedServerId == null) _narrowContentOpen = false;
+      _restorePaneAfterAuxiliaryInState();
     });
   }
 

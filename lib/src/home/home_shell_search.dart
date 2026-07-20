@@ -223,6 +223,10 @@ extension _HomeShellSearch on _HomeShellState {
     _setHomeState(() {
       _superuserSettingsTarget = null;
       _contentMode = _ContentMode.chat;
+      if (Theme.of(context).platform == TargetPlatform.android &&
+          _selectedServerId == null) {
+        _narrowContentOpen = false;
+      }
     });
   }
 

@@ -73,6 +73,7 @@ import '../shell/voice_playback_service.dart';
 import '../shell/window_controls.dart';
 import '../ui/ui.dart';
 import 'chat_pane.dart';
+import 'compact_activity_layout.dart';
 import 'home_content.dart';
 import 'hover_card_anchor.dart';
 import 'home_notifications.dart';
@@ -99,6 +100,20 @@ part 'home_shell_join_dialog.dart';
 
 const _windowEdgeBorder = Color(0xFF303842);
 const _defaultLiveVolumeRestore = 0.5;
+
+Widget _withAndroidBottomSafeArea({
+  required bool enabled,
+  required Widget child,
+}) {
+  if (!enabled) return child;
+  return SafeArea(
+    top: false,
+    left: false,
+    right: false,
+    bottom: true,
+    child: child,
+  );
+}
 
 bool get _supportsWindowManagement =>
     !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
@@ -230,6 +245,7 @@ class _HomeShellState extends State<HomeShell> {
   bool _closeConfirming = false;
   bool _exitingApplication = false;
   bool _narrowContentOpen = false;
+  bool _auxiliaryOpenedFromNarrowSidebar = false;
   _ContentMode _contentMode = _ContentMode.chat;
   UserSummary? _superuserSettingsTarget;
   // Bumped to ask an open members panel to reload (e.g. after a
@@ -423,6 +439,7 @@ class _HomeShellState extends State<HomeShell> {
       _settingsAppUpdate = null;
       _logoutConfirming = false;
       _narrowContentOpen = false;
+      _auxiliaryOpenedFromNarrowSidebar = false;
       _contentMode = _ContentMode.chat;
       _superuserSettingsTarget = null;
       _membersInitialSearchQuery = '';
@@ -513,9 +530,23 @@ class _HomeShellState extends State<HomeShell> {
 
   void _setHomeState(VoidCallback update) => setState(update);
 
+  void _restorePaneAfterAuxiliaryInState() {
+    if (Theme.of(context).platform != TargetPlatform.android) {
+      _auxiliaryOpenedFromNarrowSidebar = false;
+      if (_selectedServerId == null) _narrowContentOpen = false;
+      return;
+    }
+    final returnToNarrowSidebar = _auxiliaryOpenedFromNarrowSidebar;
+    _auxiliaryOpenedFromNarrowSidebar = false;
+    if (returnToNarrowSidebar || _selectedServerId == null) {
+      _narrowContentOpen = false;
+    }
+  }
+
   void _showSettingsAppUpdateInState(AvailableAppUpdate update) {
     _settingsOpen = true;
     _settingsAppUpdate = update;
+    _auxiliaryOpenedFromNarrowSidebar = false;
     _contentMode = _ContentMode.chat;
     _narrowContentOpen = true;
   }
@@ -564,6 +595,8 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     final fullScreenTrack = _resolveFullScreenLiveTrack();
+    final platform = Theme.of(context).platform;
+    final useAndroidLayout = platform == TargetPlatform.android;
     final joinedLiveRoom = live_display.joinedLiveRoomSummary(
       joinedLiveRoomId: _joinedLiveRoomId,
       selectedRoom: _selectedRoom,
@@ -575,140 +608,164 @@ class _HomeShellState extends State<HomeShell> {
         actions: _imagePreviewActions,
         child: Scaffold(
           backgroundColor: UiColors.background,
-          body: DecoratedBox(
-            decoration: BoxDecoration(
-              border: Border.all(color: _windowEdgeBorder),
-            ),
-            child: LayoutBuilder(
-              builder: (context, shellConstraints) {
-                final showSearchOverlay =
-                    _homeTitleBarCanShowSearch(
-                      context,
-                      shellConstraints.maxWidth,
-                    ) &&
-                    !_appUpdateDownloadInProgress;
-                return Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    KeyedSubtree(
-                      key: ValueKey(widget.app.currentUser.id),
-                      child: Column(
-                        children: [
-                          _HomeTitleBar(
-                            windowController: widget.windowController,
-                            searchController: _titleSearchController,
-                            searchTapRegionGroup: _searchTapRegionGroup,
-                            liveRoom: joinedLiveRoom,
-                            micMuted: _micMuted,
-                            headphonesMuted: _headphonesMuted,
-                            voiceBlocked: _voiceBlocked,
-                            interactionLocked: _appUpdateDownloadInProgress,
-                            onActivateSearch: _activateSearch,
-                            onSearchTapOutside: _collapseSearch,
-                            onSearchContextMenuOpenChanged:
-                                _handleTitleSearchContextMenuOpenChanged,
-                            onClearSearchQuery: _clearSearchQuery,
-                            onOpenLiveRoom: () =>
-                                unawaited(_openJoinedLiveChannel()),
-                            onToggleMic: _voiceBlocked ? null : _toggleMicMute,
-                            onToggleHeadphones: _toggleHeadphonesMute,
-                            onLeaveLive: () => unawaited(_leaveLive()),
-                          ),
-                          Expanded(
-                            child: _buildAppUpdateLockedBody(
-                              LayoutBuilder(
-                                builder: (context, constraints) {
-                                  final narrow =
-                                      constraints.maxWidth < narrowBreakpoint;
-                                  if (narrow) {
-                                    return _buildNarrowLayout(
-                                      constraints.maxWidth,
-                                    );
-                                  }
+          body: _withAndroidBottomSafeArea(
+            enabled: useAndroidLayout,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border.all(color: _windowEdgeBorder),
+              ),
+              child: LayoutBuilder(
+                builder: (context, shellConstraints) {
+                  final narrowLayout =
+                      shellConstraints.maxWidth < narrowBreakpoint;
+                  final showSearchOverlay =
+                      _homeTitleBarCanShowSearch(
+                        context,
+                        shellConstraints.maxWidth,
+                      ) &&
+                      !_appUpdateDownloadInProgress;
+                  final content = Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      KeyedSubtree(
+                        key: ValueKey(widget.app.currentUser.id),
+                        child: Column(
+                          children: [
+                            _HomeTitleBar(
+                              windowController: widget.windowController,
+                              searchController: _titleSearchController,
+                              searchTapRegionGroup: _searchTapRegionGroup,
+                              liveRoom: joinedLiveRoom,
+                              micMuted: _micMuted,
+                              headphonesMuted: _headphonesMuted,
+                              voiceBlocked: _voiceBlocked,
+                              interactionLocked: _appUpdateDownloadInProgress,
+                              onActivateSearch: _activateSearch,
+                              onSearchTapOutside: _collapseSearch,
+                              onSearchContextMenuOpenChanged:
+                                  _handleTitleSearchContextMenuOpenChanged,
+                              onClearSearchQuery: _clearSearchQuery,
+                              onOpenLiveRoom: () =>
+                                  unawaited(_openJoinedLiveChannel()),
+                              onToggleMic: _voiceBlocked
+                                  ? null
+                                  : _toggleMicMute,
+                              onToggleHeadphones: _toggleHeadphonesMute,
+                              onLeaveLive: () => unawaited(_leaveLive()),
+                            ),
+                            Expanded(
+                              child: _buildAppUpdateLockedBody(
+                                LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    final narrow =
+                                        constraints.maxWidth < narrowBreakpoint;
+                                    if (narrow) {
+                                      return _buildNarrowLayout(
+                                        constraints.maxWidth,
+                                      );
+                                    }
 
-                                  return Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      _buildSidebar(
-                                        width: sidebarWidth,
-                                        openContentOnSelect: false,
-                                      ),
-                                      Expanded(child: _buildContentPane()),
-                                    ],
-                                  );
-                                },
+                                    return Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        _buildSidebar(
+                                          width: sidebarWidth,
+                                          openContentOnSelect: false,
+                                        ),
+                                        Expanded(child: _buildContentPane()),
+                                      ],
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_hasSearchQuery &&
+                          _searchExpanded &&
+                          showSearchOverlay)
+                        Positioned(
+                          top: _homeTitleBarHeight - 1,
+                          left:
+                              (shellConstraints.maxWidth -
+                                  _homeTitleBarSearchWidth) /
+                              2,
+                          width: _homeTitleBarSearchWidth,
+                          child: TapRegion(
+                            key: const ValueKey('home-title-search-results'),
+                            groupId: _searchTapRegionGroup,
+                            child: HoverCardTapRegionScope(
+                              tapRegionGroup: _searchTapRegionGroup,
+                              child: _TitleSearchResultsPanel(
+                                query: _searchQuery,
+                                results: _searchResults,
+                                loading: _searching,
+                                loadingMore: _searchLoadingMore,
+                                error: _searchError,
+                                timestampNow: _serverNow,
+                                currentUser: widget.app.currentUser,
+                                activeCategory: _activeSearchCategory,
+                                visibleCategories: _visibleSearchCategories,
+                                busyPublicRoomId: _busySearchPublicRoomId,
+                                pendingPublicRoomIds:
+                                    _searchPendingPublicRoomIds,
+                                onCategorySelected: _selectSearchCategory,
+                                onLoadMore: () =>
+                                    unawaited(_loadMoreSearchResults()),
+                                onMyRoomSelected: _openSearchRoom,
+                                onProfileRoomSelected: _openSearchProfileRoom,
+                                onResolveRoomProfile: _resolveRoomProfile,
+                                onResolveRoomUserProfile:
+                                    _resolveRoomUserProfile,
+                                onResolveUserProfile: _resolveUserProfile,
+                                onPublicRoomAction: (room) => unawaited(
+                                  _handlePublicRoomSearchAction(room),
+                                ),
+                                onUserSettingsSelected:
+                                    _openSuperuserUserSettings,
+                                onMessageSelected: _openMessageSearchResult,
+                                onFileSelected: _openMessageSearchResult,
                               ),
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                    if (_hasSearchQuery && _searchExpanded && showSearchOverlay)
-                      Positioned(
-                        top: _homeTitleBarHeight - 1,
-                        left:
-                            (shellConstraints.maxWidth -
-                                _homeTitleBarSearchWidth) /
-                            2,
-                        width: _homeTitleBarSearchWidth,
-                        child: TapRegion(
-                          key: const ValueKey('home-title-search-results'),
-                          groupId: _searchTapRegionGroup,
-                          child: HoverCardTapRegionScope(
-                            tapRegionGroup: _searchTapRegionGroup,
-                            child: _TitleSearchResultsPanel(
-                              query: _searchQuery,
-                              results: _searchResults,
-                              loading: _searching,
-                              loadingMore: _searchLoadingMore,
-                              error: _searchError,
-                              timestampNow: _serverNow,
-                              currentUser: widget.app.currentUser,
-                              activeCategory: _activeSearchCategory,
-                              visibleCategories: _visibleSearchCategories,
-                              busyPublicRoomId: _busySearchPublicRoomId,
-                              pendingPublicRoomIds: _searchPendingPublicRoomIds,
-                              onCategorySelected: _selectSearchCategory,
-                              onLoadMore: () =>
-                                  unawaited(_loadMoreSearchResults()),
-                              onMyRoomSelected: _openSearchRoom,
-                              onProfileRoomSelected: _openSearchProfileRoom,
-                              onResolveRoomProfile: _resolveRoomProfile,
-                              onResolveRoomUserProfile: _resolveRoomUserProfile,
-                              onResolveUserProfile: _resolveUserProfile,
-                              onPublicRoomAction: (room) => unawaited(
-                                _handlePublicRoomSearchAction(room),
-                              ),
-                              onUserSettingsSelected:
-                                  _openSuperuserUserSettings,
-                              onMessageSelected: _openMessageSearchResult,
-                              onFileSelected: _openMessageSearchResult,
-                            ),
+                        ),
+                      if (fullScreenTrack != null)
+                        Positioned.fill(
+                          child: LiveFullScreenStage(
+                            track: fullScreenTrack,
+                            label: liveStageTrackLabel(_live, fullScreenTrack),
+                            screenShareViewers: fullScreenTrack.isScreenShare
+                                ? live_display.liveScreenShareViewers(
+                                    _live,
+                                    fullScreenTrack.identity,
+                                  )
+                                : const <UserSummary>[],
+                            screenShareVolume:
+                                _liveSessionController.screenShareVolume,
+                            onScreenShareVolumeChanged:
+                                _changeScreenShareVolume,
+                            onScreenShareMuteToggled:
+                                _toggleScreenShareAudioMute,
+                            onExit: _exitLiveFullScreen,
                           ),
                         ),
-                      ),
-                    if (fullScreenTrack != null)
-                      Positioned.fill(
-                        child: LiveFullScreenStage(
-                          track: fullScreenTrack,
-                          label: liveStageTrackLabel(_live, fullScreenTrack),
-                          screenShareViewers: fullScreenTrack.isScreenShare
-                              ? live_display.liveScreenShareViewers(
-                                  _live,
-                                  fullScreenTrack.identity,
-                                )
-                              : const <UserSummary>[],
-                          screenShareVolume:
-                              _liveSessionController.screenShareVolume,
-                          onScreenShareVolumeChanged: _changeScreenShareVolume,
-                          onScreenShareMuteToggled: _toggleScreenShareAudioMute,
-                          onExit: _exitLiveFullScreen,
-                        ),
-                      ),
-                  ],
-                );
-              },
+                    ],
+                  );
+                  if (!useAndroidLayout) return content;
+                  return PopScope(
+                    key: const ValueKey('android-shell-back-scope'),
+                    canPop: !_canHandleShellBack(narrowLayout: narrowLayout),
+                    onPopInvokedWithResult: (didPop, result) {
+                      if (!didPop) {
+                        _handleShellBack(narrowLayout: narrowLayout);
+                      }
+                    },
+                    child: content,
+                  );
+                },
+              ),
             ),
           ),
         ),

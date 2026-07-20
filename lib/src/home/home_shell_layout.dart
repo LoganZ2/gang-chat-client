@@ -45,14 +45,77 @@ extension _HomeShellLayout on _HomeShellState {
   }
 
   Widget _buildNarrowLayout(double width) {
+    final useAndroidLayout =
+        Theme.of(context).platform == TargetPlatform.android;
     if (!_narrowContentOpen) {
-      return _buildSidebar(width: width, openContentOnSelect: true);
+      if (!useAndroidLayout) {
+        return _buildSidebar(width: width, openContentOnSelect: true);
+      }
+      return KeyedSubtree(
+        key: const ValueKey('home-narrow-room-list'),
+        child: _buildSidebar(width: width, openContentOnSelect: true),
+      );
     }
 
-    return _buildContentPane();
+    if (!useAndroidLayout) return _buildContentPane();
+    return KeyedSubtree(
+      key: const ValueKey('home-narrow-content'),
+      child: _buildContentPane(onNavigateBack: _showNarrowRoomList),
+    );
   }
 
-  Widget _buildContentPane() {
+  void _showNarrowRoomList() {
+    _setHomeState(() => _narrowContentOpen = false);
+  }
+
+  bool _canHandleShellBack({required bool narrowLayout}) {
+    return _appUpdateDownloadInProgress ||
+        _fullScreenLiveTrack != null ||
+        (_hasSearchQuery && _searchExpanded) ||
+        _settingsOpen ||
+        _contentMode != _ContentMode.chat ||
+        (narrowLayout && _narrowContentOpen);
+  }
+
+  void _handleShellBack({required bool narrowLayout}) {
+    if (_appUpdateDownloadInProgress) return;
+    if (_fullScreenLiveTrack != null) {
+      _exitLiveFullScreen();
+      return;
+    }
+    if (_hasSearchQuery && _searchExpanded) {
+      _collapseSearch();
+      return;
+    }
+    if (_settingsOpen) {
+      _closeSettings();
+      return;
+    }
+
+    switch (_contentMode) {
+      case _ContentMode.superuserUserSettings:
+        _closeSuperuserUserSettings();
+        return;
+      case _ContentMode.createRoom:
+        _closeCreateRoom();
+        return;
+      case _ContentMode.notifications:
+        _closeNotifications();
+        return;
+      case _ContentMode.live:
+      case _ContentMode.members:
+      case _ContentMode.roomSettings:
+        _openChat();
+        return;
+      case _ContentMode.chat:
+        if (narrowLayout && _narrowContentOpen) {
+          _showNarrowRoomList();
+        }
+        return;
+    }
+  }
+
+  Widget _buildContentPane({VoidCallback? onNavigateBack}) {
     if (_settingsOpen) {
       return SettingsPage(
         isSubWindow: true,
@@ -391,6 +454,7 @@ extension _HomeShellLayout on _HomeShellState {
       onRemoveAttachment: _removeAttachment,
       onRetryAttachment: _retryAttachment,
       onRetry: () => unawaited(_retryOpenSelectedRoom()),
+      onNavigateBack: onNavigateBack,
       onOpenLiveChannel: _openLiveChannel,
       onOpenRoomMembers: () => unawaited(_openRoomMembers()),
       onOpenRoomSettings: () => unawaited(_openRoomSettings()),

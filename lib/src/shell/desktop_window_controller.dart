@@ -141,26 +141,9 @@ class DesktopWindowController {
 
   Future<void> restoreHiddenAppWindow() {
     return _configure(() async {
-      await clearMessageAttention();
       await windowManager.setSkipTaskbar(false);
       await windowManager.show();
       await windowManager.focus();
-    });
-  }
-
-  /// Highlights the Windows taskbar entry while the app is visible, or
-  /// flashes the notification-area icon while it is hidden in the tray.
-  Future<void> requestMessageAttention() {
-    return _configure(() async {
-      if (!Platform.isWindows || await windowManager.isFocused()) return;
-      await _trayChannel.invokeMethod<void>('requestAttention');
-    });
-  }
-
-  Future<void> clearMessageAttention() {
-    return _configure(() async {
-      if (!Platform.isWindows) return;
-      await _trayChannel.invokeMethod<void>('clearAttention');
     });
   }
 
@@ -418,9 +401,8 @@ class DesktopWindowController {
   }
 
   Future<void> _disposeTrayIcon() async {
+    if (!_trayInitialized) return;
     try {
-      await clearMessageAttention();
-      if (!_trayInitialized) return;
       await _trayChannel.invokeMethod<void>('dispose');
     } catch (_) {}
     _trayInitialized = false;
@@ -458,11 +440,6 @@ class _AppWindowListener extends WindowListener {
   @override
   void onWindowClose() {
     unawaited(_handleClose());
-  }
-
-  @override
-  void onWindowFocus() {
-    unawaited(_controller.clearMessageAttention());
   }
 
   Future<void> _handleClose() async {

@@ -2,7 +2,7 @@ part of '../gang_app_shell_test.dart';
 
 void registerShellRealtimeLiveWidgetTests() {
   testWidgets(
-    'only realtime all-policy message updates play and request attention',
+    'only realtime all-policy message updates play a notification sound',
     (WidgetTester tester) async {
       final realtime = _FakeRealtimeService();
       final sound = _RecordingMessageNotificationSoundPlayer();
@@ -61,7 +61,7 @@ void registerShellRealtimeLiveWidgetTests() {
 
       expect(sound.volumes, hasLength(1));
       expect(sound.volumes.single, greaterThan(0));
-      expect(windowEvents, ['message-attention']);
+      expect(windowEvents, isEmpty);
 
       // A duplicate delivery, a reconnect/history-style room snapshot and a
       // room outside the "all" policy must all remain silent.
@@ -89,7 +89,7 @@ void registerShellRealtimeLiveWidgetTests() {
       await tester.pumpAndSettle();
 
       expect(sound.volumes, hasLength(1));
-      expect(windowEvents, ['message-attention']);
+      expect(windowEvents, isEmpty);
       expect(tester.takeException(), isNull);
     },
   );
@@ -299,40 +299,27 @@ void registerShellRealtimeLiveWidgetTests() {
     final livePreviewIcon = find.byKey(
       const ValueKey('chat-header-live-preview-icon'),
     );
+    final livePreviewCount = find.byKey(
+      const ValueKey('chat-header-live-preview-count'),
+    );
     expect(chatLiveButton, findsOneWidget);
     expect(livePreview, findsOneWidget);
     expect(livePreviewIcon, findsOneWidget);
     expect(
       tester.getRect(chatLiveButton).right - tester.getRect(livePreview).right,
-      closeTo(10, 1),
-    );
-    final initialPreviewAvatars = find.descendant(
-      of: livePreview,
-      matching: find.byType(ui.Avatar),
-    );
-    expect(initialPreviewAvatars, findsOneWidget);
-    expect(
-      tester.getRect(livePreviewIcon).right,
-      lessThan(tester.getRect(initialPreviewAvatars.first).left),
-    );
-    expect(tester.widget<Icon>(livePreviewIcon).color, ui.UiColors.accent);
-    expect(
-      find.descendant(of: livePreview, matching: find.text('共 1 人')),
-      findsOneWidget,
+      closeTo(13, 1),
     );
     expect(
-      tester
-          .widget<Text>(
-            find.descendant(of: livePreview, matching: find.text('共 1 人')),
-          )
-          .style
-          ?.color,
-      Colors.white,
-    );
-    expect(
-      find.descendant(of: livePreview, matching: find.text('等共 1 人')),
+      find.descendant(of: livePreview, matching: find.byType(ui.Avatar)),
       findsNothing,
     );
+    expect(
+      tester.getRect(livePreviewIcon).right,
+      lessThan(tester.getRect(livePreviewCount).left),
+    );
+    expect(tester.widget<Icon>(livePreviewIcon).color, ui.UiColors.accent);
+    expect(tester.widget<Text>(livePreviewCount).data, '1');
+    expect(tester.widget<Text>(livePreviewCount).style?.color, Colors.white);
 
     realtime.add(
       liveSnapshotEvent([
@@ -354,29 +341,13 @@ void registerShellRealtimeLiveWidgetTests() {
 
     expect(
       find.descendant(of: livePreview, matching: find.byType(ui.Avatar)),
-      findsNWidgets(2),
+      findsNothing,
     );
     expect(
       tester.getRect(chatLiveButton).right - tester.getRect(livePreview).right,
-      closeTo(10, 1),
+      closeTo(13, 1),
     );
-    expect(
-      find.descendant(of: livePreview, matching: find.text('共 2 人')),
-      findsOneWidget,
-    );
-    expect(
-      tester
-          .widget<Text>(
-            find.descendant(of: livePreview, matching: find.text('共 2 人')),
-          )
-          .style
-          ?.color,
-      Colors.white,
-    );
-    expect(
-      find.descendant(of: livePreview, matching: find.text('等共 2 人')),
-      findsNothing,
-    );
+    expect(tester.widget<Text>(livePreviewCount).data, '2');
 
     realtime.add(
       liveSnapshotEvent([
@@ -422,25 +393,13 @@ void registerShellRealtimeLiveWidgetTests() {
 
     expect(
       find.descendant(of: livePreview, matching: find.byType(ui.Avatar)),
-      findsNWidgets(5),
+      findsNothing,
     );
     expect(
       tester.getRect(chatLiveButton).right - tester.getRect(livePreview).right,
-      closeTo(10, 1),
+      closeTo(13, 1),
     );
-    expect(
-      find.descendant(of: livePreview, matching: find.text('等共 6 人')),
-      findsOneWidget,
-    );
-    expect(
-      tester
-          .widget<Text>(
-            find.descendant(of: livePreview, matching: find.text('等共 6 人')),
-          )
-          .style
-          ?.color,
-      Colors.white,
-    );
+    expect(tester.widget<Text>(livePreviewCount).data, '6');
     expect(
       tester
           .widget<Text>(find.byKey(const ValueKey('chat-header-room-meta')))
@@ -860,11 +819,11 @@ void registerShellRealtimeLiveWidgetTests() {
   });
 
   testWidgets(
-    'authenticated home shell opens chat content from narrow server list',
+    'authenticated home shell uses separate narrow room list and chat screens',
     (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
-          theme: ui.uiTheme(),
+          theme: ui.uiTheme().copyWith(platform: TargetPlatform.android),
           home: Center(
             child: SizedBox(
               width: 420,
@@ -880,20 +839,238 @@ void registerShellRealtimeLiveWidgetTests() {
       await tester.pumpAndSettle();
 
       expect(find.text('Alpha Room'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('home-narrow-room-list')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('home-narrow-content')), findsNothing);
+      expect(find.byTooltip('返回房间列表'), findsNothing);
       expect(find.byTooltip('Show servers'), findsNothing);
+      expect(find.byTooltip('最小化'), findsNothing);
+      expect(find.byTooltip('最大化'), findsNothing);
+      expect(find.byTooltip('关闭'), findsNothing);
+
+      await tester.tap(find.byTooltip('设置'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('用户资料'), findsOneWidget);
+      expect(find.byKey(const ValueKey('home-narrow-room-list')), findsNothing);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('home-narrow-room-list')),
+        findsOneWidget,
+      );
+      expect(find.text('用户资料'), findsNothing);
 
       await tester.tap(find.text('Alpha Room'));
       await tester.pumpAndSettle();
 
       expect(find.text('Beta Room'), findsNothing);
+      expect(find.byKey(const ValueKey('home-narrow-room-list')), findsNothing);
+      expect(find.byKey(const ValueKey('home-narrow-content')), findsOneWidget);
       expect(find.byTooltip('Show servers'), findsNothing);
+      expect(find.byTooltip('返回房间列表'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('chat-header-live-button')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const ValueKey('chat-header-room-title')),
+        findsOneWidget,
+      );
+      expect(
+        tester.getRect(find.byTooltip('返回房间列表')).left,
+        greaterThanOrEqualTo(
+          tester
+              .getRect(find.byKey(const ValueKey('chat-header-live-button')))
+              .left,
+        ),
+      );
+      expect(
+        tester.getRect(find.byTooltip('返回房间列表')).right,
+        lessThan(
+          tester
+              .getRect(find.byKey(const ValueKey('chat-header-room-avatar')))
+              .left,
+        ),
+      );
       expect(find.text('进入语音频道'), findsNothing);
       expect(find.text('Hello from Morgan'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('返回房间列表'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('home-narrow-room-list')),
+        findsOneWidget,
+      );
+      expect(find.text('Beta Room'), findsOneWidget);
+      expect(find.byKey(const ValueKey('home-narrow-content')), findsNothing);
+      expect(find.byTooltip('返回房间列表'), findsNothing);
+
+      for (final entry in ['创建房间', '通知', '设置']) {
+        await tester.tap(find.byTooltip(entry));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const ValueKey('home-narrow-room-list')),
+          findsNothing,
+        );
+        expect(find.byTooltip('返回'), findsOneWidget);
+
+        await tester.tap(find.byTooltip('返回'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const ValueKey('home-narrow-room-list')),
+          findsOneWidget,
+        );
+        expect(find.byKey(const ValueKey('home-narrow-content')), findsNothing);
+        expect(find.byTooltip('返回房间列表'), findsNothing);
+      }
+
+      await tester.tap(find.text('Alpha Room'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('房间成员'));
+      await tester.pumpAndSettle();
+
+      expect(find.byTooltip('返回'), findsOneWidget);
+      expect(find.byTooltip('返回房间列表'), findsNothing);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(find.byTooltip('返回房间列表'), findsOneWidget);
+      expect(find.byTooltip('返回'), findsNothing);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('home-narrow-room-list')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('home-narrow-content')), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('windows narrow shell keeps the previous desktop behavior', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme().copyWith(platform: TargetPlatform.windows),
+        home: Center(
+          child: SizedBox(
+            width: 420,
+            height: 620,
+            child: HomePage(
+              app: _homeTestAppContext(),
+              realtime: _NoopRealtimeService(),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('android-shell-back-scope')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('home-narrow-room-list')), findsNothing);
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('返回房间列表'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('chat-header-live-preview-count')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('chat-header-live-preview')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('narrow live chat header keeps the room identity visible', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme().copyWith(platform: TargetPlatform.android),
+        home: Center(
+          child: SizedBox(
+            width: 360,
+            height: 740,
+            child: HomePage(
+              app: _homeTestAppContext(),
+              realtime: _NoopRealtimeService(),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('返回房间列表'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('chat-header-room-title')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('chat-header-live-preview-count')),
+      findsOneWidget,
+    );
+    expect(find.text('Alpha Room'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('android shell stays above the system navigation safe area', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(360, 740));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme().copyWith(platform: TargetPlatform.android),
+        builder: (context, child) {
+          final media = MediaQuery.of(context);
+          return MediaQuery(
+            data: media.copyWith(
+              padding: const EdgeInsets.only(bottom: 32),
+              viewPadding: const EdgeInsets.only(bottom: 32),
+            ),
+            child: child!,
+          );
+        },
+        home: HomePage(
+          app: _homeTestAppContext(),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.getRect(find.byTooltip('设置')).bottom, lessThanOrEqualTo(708));
+    expect(
+      tester
+          .getRect(
+            find.byKey(const ValueKey('home-sidebar-notifications-button')),
+          )
+          .bottom,
+      lessThanOrEqualTo(708),
+    );
+    expect(tester.takeException(), isNull);
+  });
 }

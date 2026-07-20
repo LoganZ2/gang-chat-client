@@ -222,7 +222,6 @@ extension _HomeShellRealtime on _HomeShellState {
     unawaited(
       _messageNotificationSoundPlayer.play(volume: volume).catchError((_) {}),
     );
-    unawaited(widget.windowController.requestMessageAttention());
   }
 
   String? _latestLoadedServerMessageId() {

@@ -191,6 +191,7 @@ extension _HomeShellRoomActions on _HomeShellState {
         _contentMode = _ContentMode.chat;
         _settingsAppUpdate = null;
       }
+      _auxiliaryOpenedFromNarrowSidebar = opening && openContent;
       if (openContent) {
         _narrowContentOpen = opening;
       }
@@ -206,6 +207,7 @@ extension _HomeShellRoomActions on _HomeShellState {
       _clearDeferredRoomNotificationVisualMarkersInState();
       _settingsOpen = false;
       _contentMode = _ContentMode.createRoom;
+      _auxiliaryOpenedFromNarrowSidebar = openContent;
       if (openContent) _narrowContentOpen = true;
     });
   }
@@ -213,7 +215,7 @@ extension _HomeShellRoomActions on _HomeShellState {
   void _closeCreateRoom() {
     _setHomeState(() {
       _contentMode = _ContentMode.chat;
-      if (_selectedServerId == null) _narrowContentOpen = false;
+      _restorePaneAfterAuxiliaryInState();
     });
   }
 
@@ -221,6 +223,11 @@ extension _HomeShellRoomActions on _HomeShellState {
     _setHomeState(() {
       _settingsOpen = false;
       _settingsAppUpdate = null;
+      if (Theme.of(context).platform == TargetPlatform.android) {
+        _restorePaneAfterAuxiliaryInState();
+      } else {
+        _auxiliaryOpenedFromNarrowSidebar = false;
+      }
     });
   }
 

@@ -10,7 +10,7 @@ void registerShellRoomManagementWidgetTests() {
 
     await tester.pumpWidget(
       MaterialApp(
-        theme: ui.uiTheme(),
+        theme: ui.uiTheme().copyWith(platform: TargetPlatform.windows),
         home: HomePage(
           app: _homeTestAppContext(
             requestedPaths: requestedPaths,
@@ -414,7 +414,9 @@ void registerShellRoomManagementWidgetTests() {
       of: systemHistoryContent,
       matching: find.byType(ui.Avatar),
     );
+    expect(tester.getSize(historyAvatar), const Size.square(38));
     expect(tester.getSize(systemHistoryAvatar), const Size.square(18));
+    expect(tester.widget<Text>(historyTime).data, isNot(contains('\n')));
     expect(
       tester.getRect(systemHistoryAvatar).left,
       closeTo(tester.getRect(historyAvatar).left, 0.01),

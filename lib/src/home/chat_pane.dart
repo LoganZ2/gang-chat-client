@@ -111,6 +111,7 @@ class ChatPane extends StatelessWidget {
     required this.onRemoveAttachment,
     required this.onRetryAttachment,
     required this.onRetry,
+    this.onNavigateBack,
     required this.onOpenLiveChannel,
     required this.onOpenRoomMembers,
     required this.onOpenRoomSettings,
@@ -177,6 +178,7 @@ class ChatPane extends StatelessWidget {
   final ValueChanged<String> onRemoveAttachment;
   final ValueChanged<String> onRetryAttachment;
   final VoidCallback onRetry;
+  final VoidCallback? onNavigateBack;
   final VoidCallback onOpenLiveChannel;
   final VoidCallback onOpenRoomMembers;
   final VoidCallback onOpenRoomSettings;
@@ -227,6 +229,7 @@ class ChatPane extends StatelessWidget {
       child: Column(
         children: [
           _RoomHeader(
+            onNavigateBack: onNavigateBack,
             title: title,
             avatarLabel: avatarLabel,
             avatarUrl: avatarUrl,
