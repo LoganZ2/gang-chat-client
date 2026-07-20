@@ -875,6 +875,40 @@ void main() {
     expect(find.text('UID: 1000999'), findsNothing);
     expect(find.text('管理成员'), findsNothing);
   });
+
+  testWidgets('suspended user keeps their profile with a red status pill', (
+    tester,
+  ) async {
+    const suspended = UserSummary(
+      id: 'user_suspended',
+      uid: '1000888',
+      username: 'suspended_user',
+      displayName: '被封禁用户',
+      bio: '资料仍然保留',
+      avatarUrl: null,
+      defaultAvatarKey: 'green-2',
+      isOnline: true,
+      isSuspended: true,
+    );
+
+    await tester.pumpWidget(
+      _host(const AvatarHoverCardForTest(user: suspended, inLive: true)),
+    );
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await gesture.moveTo(tester.getCenter(find.byType(Avatar).first));
+    await tester.pumpAndSettle();
+
+    expect(find.text('被封禁用户'), findsOneWidget);
+    expect(find.text('@suspended_user'), findsOneWidget);
+    expect(find.text('资料仍然保留'), findsOneWidget);
+    expect(find.text('封禁中'), findsOneWidget);
+    expect(find.text('在线'), findsNothing);
+    expect(find.text('语音'), findsNothing);
+    expect(tester.widget<Text>(find.text('封禁中')).style?.color, UiColors.danger);
+  });
 }
 
 Future<void> _ensureUserProfileCardOpen(

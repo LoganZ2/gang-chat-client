@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../app/room_members_filter.dart';
 import 'tokens.dart';
 
-enum PresencePillTone { voice, online, offline }
+enum PresencePillTone { voice, online, offline, suspended }
 
 IconData roomMemberPresenceIcon(RoomMemberPresence presence) {
   return switch (presence) {
@@ -44,10 +44,19 @@ class PresencePill extends StatelessWidget {
     return PresencePill(key: key, label: label, tone: PresencePillTone.voice);
   }
 
+  factory PresencePill.suspended({Key? key, String label = '封禁中'}) {
+    return PresencePill(
+      key: key,
+      label: label,
+      tone: PresencePillTone.suspended,
+    );
+  }
+
   factory PresencePill.fromLabel(String label, {Key? key}) {
     final tone = switch (label.trim()) {
       '语音' => PresencePillTone.voice,
       '离线' => PresencePillTone.offline,
+      '封禁中' => PresencePillTone.suspended,
       _ => PresencePillTone.online,
     };
     return PresencePill(key: key, label: label, tone: tone);
@@ -140,6 +149,12 @@ _PresencePillStyle _presencePillStyle(PresencePillTone tone) {
       surface: UiColors.presenceOfflineSurface,
       border: UiColors.presenceOfflineBorder,
       dotFilled: false,
+    ),
+    PresencePillTone.suspended => const _PresencePillStyle(
+      foreground: UiColors.danger,
+      surface: UiColors.roleSuperuserSurface,
+      border: UiColors.dangerBorder,
+      dotFilled: true,
     ),
   };
 }

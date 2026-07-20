@@ -467,6 +467,66 @@ void main() {
     expect(currentUserProfile.roomRole, 'admin');
   });
 
+  test('former room member profile keeps current default account fields', () {
+    final currentDefault = UserSummary(
+      id: 'former',
+      username: 'current_name',
+      displayName: '当前默认名',
+      avatarUrl: null,
+      defaultAvatarKey: 'green-2',
+      uid: '10002001',
+      roomRole: 'left',
+    );
+    final historicalSnapshot = UserSummary(
+      id: 'former',
+      username: 'old_name',
+      displayName: '发送时默认名',
+      avatarUrl: '/old-avatar.png',
+      defaultAvatarKey: 'blue-1',
+      uid: '10002001',
+      roomDisplayName: '发送时房间名',
+      roomRole: 'member',
+    );
+
+    final resolved = resolvedRoomMemberProfileUser(
+      profile: RoomMemberProfile(
+        user: currentDefault,
+        role: 'left',
+        joinedAt: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      ),
+      fallback: historicalSnapshot,
+    );
+
+    expect(resolved.username, 'current_name');
+    expect(resolved.displayName, '当前默认名');
+    expect(resolved.avatarUrl, isNull);
+    expect(resolved.defaultAvatarKey, 'green-2');
+    expect(resolved.roomDisplayName, isNull);
+    expect(resolved.roomRole, 'left');
+  });
+
+  test(
+    'current room member profile can still fill omitted snapshot fields',
+    () {
+      final resolved = resolvedRoomMemberProfileUser(
+        profile: RoomMemberProfile(
+          user: _user(id: 'member', bio: null, roomRole: 'member'),
+          role: 'member',
+          joinedAt: DateTime.utc(2026, 7, 20),
+        ),
+        fallback: _user(
+          id: 'member',
+          bio: '历史签名',
+          roomDisplayName: '房间名',
+          roomRole: 'member',
+        ),
+      );
+
+      expect(resolved.bio, '历史签名');
+      expect(resolved.roomDisplayName, '房间名');
+    },
+  );
+
   test('room user info common rooms handles selected room visibility', () {
     const existing = UserCommonRoom(
       id: 'room_2',

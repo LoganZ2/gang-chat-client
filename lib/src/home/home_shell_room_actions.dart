@@ -14,7 +14,10 @@ extension _HomeShellRoomActions on _HomeShellState {
         roomId: room.id,
         userId: sender.id,
       );
-      resolved = profile.user.mergeMissing(sender);
+      resolved = room_display.resolvedRoomMemberProfileUser(
+        profile: profile,
+        fallback: sender,
+      );
     } catch (_) {
       resolved = await _resolveUserProfile(sender);
     }

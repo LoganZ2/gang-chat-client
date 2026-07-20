@@ -106,6 +106,7 @@ class UserSummary {
     this.isOnline,
     this.commonRooms = const [],
     this.isDeleted = false,
+    this.isSuspended = false,
   });
 
   final String id;
@@ -126,6 +127,7 @@ class UserSummary {
   final bool? isOnline;
   final List<UserCommonRoom> commonRooms;
   final bool isDeleted;
+  final bool isSuspended;
 
   factory UserSummary.fromJson(Map<String, Object?> json) {
     final username = json['username']! as String;
@@ -172,6 +174,9 @@ class UserSummary {
         json['common_rooms'],
       ).map(UserCommonRoom.fromJson).where((room) => room.isUsable).toList(),
       isDeleted: json['is_deleted'] as bool? ?? false,
+      isSuspended:
+          json['is_suspended'] as bool? ??
+          _stringFromJson(json, const ['account_status']) == 'suspended',
     );
   }
 
@@ -192,6 +197,7 @@ class UserSummary {
     bool? isOnline,
     List<UserCommonRoom>? commonRooms,
     bool? isDeleted,
+    bool? isSuspended,
   }) {
     return UserSummary(
       id: id,
@@ -212,6 +218,7 @@ class UserSummary {
       isOnline: isOnline ?? this.isOnline,
       commonRooms: commonRooms ?? this.commonRooms,
       isDeleted: isDeleted ?? this.isDeleted,
+      isSuspended: isSuspended ?? this.isSuspended,
     );
   }
 
@@ -247,6 +254,7 @@ class UserSummary {
       isOnline: isOnline ?? fallback.isOnline,
       commonRooms: commonRooms.isNotEmpty ? commonRooms : fallback.commonRooms,
       isDeleted: false,
+      isSuspended: isSuspended || fallback.isSuspended,
     );
   }
 }
@@ -338,16 +346,13 @@ class CurrentUser {
       defaultAvatarKey: defaultAvatarKey,
       isSuperuser: isSuperuser,
       isOnline: _onlineFromStatus(status) ?? true,
+      isSuspended: status?.trim().toLowerCase() == 'suspended',
     );
   }
 }
 
 class UserSearchPage {
-  const UserSearchPage({
-    required this.users,
-    this.nextCursor,
-    this.totalCount,
-  });
+  const UserSearchPage({required this.users, this.nextCursor, this.totalCount});
 
   final List<UserSummary> users;
   final String? nextCursor;
@@ -388,9 +393,7 @@ class UserAudioSettings {
       defaultAudioOutputVolume: volume('default_audio_output_volume'),
       liveMicInputVolume: volume('live_mic_input_volume'),
       liveVoiceOutputVolume: volume('live_voice_output_volume'),
-      liveScreenShareOutputVolume: volume(
-        'live_screen_share_output_volume',
-      ),
+      liveScreenShareOutputVolume: volume('live_screen_share_output_volume'),
       liveMusicOutputVolume: volume('live_music_output_volume'),
       updatedAt: _parseDateTime(json['updated_at']),
     );

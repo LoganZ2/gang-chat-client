@@ -1359,6 +1359,7 @@ void registerShellHomeWidgetTests() {
           app: _homeTestAppContext(
             requestedPaths: requestedPaths,
             liveModerationActions: liveModerationActions,
+            alphaRoomAiVoiceAnnouncementsEnabled: true,
           ),
           audioDeviceStore: const _FakeAudioDeviceStore(),
           liveSessionController: liveSessionController,

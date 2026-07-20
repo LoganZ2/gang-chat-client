@@ -561,6 +561,20 @@ UserSummary roomUserInfoProfile({
   return profile.copyWith(roomRole: roomRole);
 }
 
+/// Merges a room profile with a lightweight list/message snapshot only while
+/// the user is still a room member. A former member's room-scoped name, role,
+/// and avatar snapshot must not override the current default account profile.
+UserSummary resolvedRoomMemberProfileUser({
+  required RoomMemberProfile profile,
+  required UserSummary fallback,
+}) {
+  final role = profile.role.trim().toLowerCase();
+  if (profile.user.isDeleted || role == 'left' || role == 'deleted') {
+    return profile.user;
+  }
+  return profile.user.mergeMissing(fallback);
+}
+
 List<UserCommonRoom> roomUserInfoCommonRooms({
   required UserSummary user,
   required RoomDetail selectedRoom,

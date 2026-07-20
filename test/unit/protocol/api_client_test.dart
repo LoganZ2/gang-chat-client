@@ -730,6 +730,7 @@ void main() {
                   'username': 'alice',
                   'display_name': 'Alice',
                   'default_avatar_key': 'blue-3',
+                  'is_suspended': true,
                 },
               ],
               'next_cursor': '16',
@@ -748,6 +749,7 @@ void main() {
       );
 
       expect(page.users.single.username, 'alice');
+      expect(page.users.single.isSuspended, isTrue);
       expect(page.nextCursor, '16');
       expect(page.totalCount, 21);
       api.close();

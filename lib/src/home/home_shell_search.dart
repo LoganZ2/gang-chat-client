@@ -241,7 +241,10 @@ extension _HomeShellSearch on _HomeShellState {
         userId: user.id,
       );
       return _userWithLocalCommonRoomNames(
-        profile.user.mergeMissing(user),
+        room_display.resolvedRoomMemberProfileUser(
+          profile: profile,
+          fallback: user,
+        ),
         _servers,
       );
     } catch (_) {

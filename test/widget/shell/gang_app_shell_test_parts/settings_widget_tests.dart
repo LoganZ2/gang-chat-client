@@ -115,6 +115,98 @@ void registerShellSettingsWidgetTests() {
   );
 
   testWidgets(
+    'managed user settings can suspend and restore the target account',
+    (WidgetTester tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(980, 820);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final statusUpdates = <String>[];
+      final targetUser = <String, Object?>{
+        ..._currentUserJson,
+        'id': 'suspension_target',
+        'uid': '1000100',
+        'username': 'suspension_target',
+        'display_name': '封禁测试用户',
+        'email': 'suspension-target@example.test',
+        'is_superuser': false,
+        'status': 'active',
+      };
+      final api = GangApiClient(
+        baseUrl: 'http://example.test/api/v1',
+        accessTokenProvider: ({bool forceRefresh = false}) async => 'token',
+        httpClient: MockClient((request) async {
+          if (request.url.path == '/api/v1/users/suspension_target/settings') {
+            if (request.method == 'PATCH') {
+              final body = jsonDecode(request.body) as Map<String, Object?>;
+              final status = body['status']! as String;
+              statusUpdates.add(status);
+              targetUser['status'] = status;
+            }
+            return _jsonResponse({'user': targetUser});
+          }
+          if (request.url.path == '/api/v1/users/suspension_target/sessions') {
+            return _jsonResponse([]);
+          }
+          return http.Response('unexpected request: ${request.url}', 404);
+        }),
+      );
+      final stickerStore = _MemoryStickerPackStore();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: SettingsPage(
+            isSubWindow: true,
+            initialSection: SettingsSection.security,
+            api: api,
+            apiBaseUrl: 'http://example.test/api/v1',
+            controller: SettingsController(
+              api: api,
+              apiBaseUrl: 'http://example.test/api/v1',
+              stickerPackStore: stickerStore,
+              managedUserId: 'suspension_target',
+            ),
+            stickerPackStore: stickerStore,
+            systemAudioDevices: SystemAudioDevices(supported: false),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.drag(find.byType(ListView).last, const Offset(0, -720));
+      await tester.pumpAndSettle();
+      expect(find.text('账号状态正常'), findsOneWidget);
+      final suspendButton = find.widgetWithText(ui.Button, '封禁账号');
+      await tester.ensureVisible(suspendButton);
+      await tester.tap(suspendButton);
+      await tester.pumpAndSettle();
+      expect(find.text('确认封禁账号'), findsOneWidget);
+      await tester.tap(find.widgetWithText(ui.Button, '封禁账号').last);
+      await tester.pumpAndSettle();
+
+      expect(statusUpdates, ['suspended']);
+      expect(find.text('账号封禁中'), findsOneWidget);
+      final suspendedLabel = tester.widget<Text>(find.text('账号封禁中'));
+      expect(suspendedLabel.style?.color, ui.UiColors.danger);
+
+      final restoreButton = find.widgetWithText(ui.Button, '解除封禁');
+      await tester.ensureVisible(restoreButton);
+      await tester.tap(restoreButton);
+      await tester.pumpAndSettle();
+      expect(find.text('确认解除封禁'), findsOneWidget);
+      await tester.tap(find.widgetWithText(ui.Button, '解除封禁').last);
+      await tester.pumpAndSettle();
+
+      expect(statusUpdates, ['suspended', 'active']);
+      expect(find.text('账号状态正常'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      api.close();
+    },
+  );
+
+  testWidgets(
     'direct close exit keeps token while leaving live and going offline',
     (WidgetTester tester) async {
       final events = <String>[];

@@ -155,6 +155,7 @@ class _HomeShellState extends State<HomeShell> {
   final GlobalKey _composerDropKey = GlobalKey();
   final Object _searchTapRegionGroup = Object();
   StreamSubscription<RealtimeEvent>? _realtimeEvents;
+  bool _accountSuspensionLogoutInProgress = false;
   StreamSubscription<RealtimeConnectionStatus>? _realtimeStatusEvents;
   StreamSubscription<FileDropEvent>? _fileDropEvents;
 

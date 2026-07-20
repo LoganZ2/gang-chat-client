@@ -175,6 +175,7 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _pendingAvatarUrl;
   bool _changingPassword = false;
   bool _deletingAccount = false;
+  bool _changingAccountSuspension = false;
   List<StickerPack> _stickerPacks = const [];
   List<String> _selectedStickerIds = <String>[];
   final Map<String, List<String>> _stickerOrderDrafts = {};
@@ -266,6 +267,8 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   bool get _isManagingUser => _settingsController.isManagingUser;
+  bool get _accountSuspended =>
+      _user?.status?.trim().toLowerCase() == 'suspended';
 
   String get _pageTitle {
     if (!_isManagingUser) return '设置';
@@ -2909,6 +2912,72 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Future<void> _toggleManagedAccountSuspension() async {
+    final user = _user;
+    if (!_isManagingUser ||
+        user == null ||
+        user.isSuperuser ||
+        _changingAccountSuspension) {
+      return;
+    }
+    final suspending = !_accountSuspended;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => DialogFrame(
+        title: suspending ? '确认封禁账号' : '确认解除封禁',
+        icon: suspending ? Icons.block_outlined : Icons.lock_open_outlined,
+        actions: [
+          Button(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          Button(
+            onPressed: () => Navigator.of(context).pop(true),
+            tone: suspending ? ButtonTone.danger : ButtonTone.primary,
+            child: Text(suspending ? '封禁账号' : '解除封禁'),
+          ),
+        ],
+        child: Text(
+          suspending
+              ? '封禁后，${user.displayName} 的所有登录会话将立即失效，且无法登录。用户名、头像、资料和历史消息将保留。'
+              : '解除封禁后，${user.displayName} 可以重新登录；此前已撤销的登录会话不会恢复。',
+          style: UiTypography.body.copyWith(
+            color: UiColors.textSecondary,
+            height: 1.55,
+          ),
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _changingAccountSuspension = true);
+    try {
+      final updated = await _settingsController.setManagedAccountSuspended(
+        suspending,
+      );
+      if (!mounted || updated == null) return;
+      setState(() {
+        _user = updated;
+        _changingAccountSuspension = false;
+        _securityError = null;
+        _notice = suspending ? '账号已封禁' : '账号已解除封禁';
+        _markFloatingNoticeEvent('notice', _notice);
+      });
+      widget.onUserUpdated?.call(updated);
+      unawaited(_loadSessions());
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _changingAccountSuspension = false;
+        _securityError = userFacingErrorMessage(
+          error,
+          fallback: suspending ? '封禁账号失败' : '解除封禁失败',
+        );
+        _markFloatingNoticeEvent('securityError', _securityError);
+      });
+    }
+  }
+
   Future<void> _loadStoredAudioSettings() async {
     try {
       final stored = await widget.audioDeviceStore.read();
@@ -3950,6 +4019,51 @@ class _SettingsPageState extends State<SettingsPage> {
               _SessionList(sessions: _sessions, loading: _loadingSessions),
             ],
           ),
+          if (_isManagingUser)
+            _SettingsGroup(
+              title: '账号状态',
+              danger: _accountSuspended,
+              children: [
+                Text(
+                  _accountSuspended ? '账号封禁中' : '账号状态正常',
+                  style: UiTypography.body.copyWith(
+                    color: _accountSuspended
+                        ? UiColors.danger
+                        : UiColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _accountSuspended
+                      ? '该账号当前无法登录；用户名、头像、资料和历史消息仍正常保留。'
+                      : '封禁会立即撤销该账号的所有登录会话，并阻止其再次登录。',
+                  style: UiTypography.body.copyWith(
+                    color: UiColors.textSecondary,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Button(
+                    onPressed: user.isSuperuser || _changingAccountSuspension
+                        ? null
+                        : _toggleManagedAccountSuspension,
+                    loading: _changingAccountSuspension,
+                    icon: Icon(
+                      _accountSuspended
+                          ? Icons.lock_open_outlined
+                          : Icons.block_outlined,
+                    ),
+                    tone: _accountSuspended
+                        ? ButtonTone.primary
+                        : ButtonTone.danger,
+                    child: Text(_accountSuspended ? '解除封禁' : '封禁账号'),
+                  ),
+                ),
+              ],
+            ),
           _SettingsGroup(
             title: '注销账号',
             danger: true,

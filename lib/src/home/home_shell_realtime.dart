@@ -106,12 +106,21 @@ extension _HomeShellRealtime on _HomeShellState {
       case 'room_join_requests_updated':
         _applyRoomJoinRequestsUpdated(event.data);
         break;
+      case 'account_suspended':
+        unawaited(_logoutSuspendedAccount());
+        break;
       case 'music_box_changed':
         _onMusicBoxChanged(event.data);
         break;
       default:
         break;
     }
+  }
+
+  Future<void> _logoutSuspendedAccount() async {
+    if (_accountSuspensionLogoutInProgress) return;
+    _accountSuspensionLogoutInProgress = true;
+    await _logout();
   }
 
   void _applyLiveSnapshot(Map<String, dynamic> data) {

@@ -60,6 +60,8 @@ void main() {
         currentPassword: '',
         newPassword: 'new password',
       );
+      await controller.setManagedAccountSuspended(true);
+      await controller.setManagedAccountSuspended(false);
       await controller.deleteMyAccount();
 
       expect(requests.map((request) => request.url.path), [
@@ -67,6 +69,8 @@ void main() {
         '/api/v1/users/target_user/sessions',
         '/api/v1/users/target_user/settings',
         '/api/v1/users/target_user/password',
+        '/api/v1/users/target_user/settings',
+        '/api/v1/users/target_user/settings',
         '/api/v1/users/target_user/account',
       ]);
       expect(jsonDecode(requests[2].body), {
@@ -75,7 +79,9 @@ void main() {
         'language': 'en',
       });
       expect(jsonDecode(requests[3].body), {'new_password': 'new password'});
-      expect(jsonDecode(requests[4].body), {'confirm': true});
+      expect(jsonDecode(requests[4].body), {'status': 'suspended'});
+      expect(jsonDecode(requests[5].body), {'status': 'active'});
+      expect(jsonDecode(requests[6].body), {'confirm': true});
       api.close();
     },
   );

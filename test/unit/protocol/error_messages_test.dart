@@ -51,4 +51,15 @@ void main() {
       '服务器暂时无法完成请求，请稍后重试',
     );
   });
+
+  test('reports a suspended account instead of a credential error', () {
+    expect(
+      localizedServerErrorMessage(
+        code: 'account_suspended',
+        statusCode: 403,
+        message: 'account suspended',
+      ),
+      '账号已被封禁',
+    );
+  });
 }

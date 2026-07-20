@@ -1,6 +1,47 @@
 part of '../gang_app_shell_test.dart';
 
 void registerShellRealtimeLiveWidgetTests() {
+  testWidgets('account suspension event immediately logs out every client', (
+    WidgetTester tester,
+  ) async {
+    final realtime = _FakeRealtimeService();
+    final liveSession = _FakeLiveSession();
+    final liveSessionController = _FakeLiveSessionController(
+      session: liveSession,
+    );
+    var logoutCalls = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: HomePage(
+          app: _homeTestAppContext(onLogout: () async => logoutCalls += 1),
+          liveSessionController: liveSessionController,
+          realtime: realtime,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    realtime.add(
+      const RealtimeEvent(
+        type: 'account_suspended',
+        data: {'reason': '账号已被封禁'},
+      ),
+    );
+    realtime.add(
+      const RealtimeEvent(
+        type: 'account_suspended',
+        data: {'reason': '账号已被封禁'},
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(logoutCalls, 1);
+    expect(liveSession.disconnects, 1);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('authenticated home shell applies realtime live snapshots', (
     WidgetTester tester,
   ) async {

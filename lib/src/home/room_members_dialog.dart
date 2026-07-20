@@ -778,7 +778,10 @@ class _RoomMembersDialogState extends State<RoomMembersDialog> {
         userId: user.id,
       );
       return _userWithCurrentRoomCommonRoomName(
-        profile.user.mergeMissing(user),
+        room_display.resolvedRoomMemberProfileUser(
+          profile: profile,
+          fallback: user,
+        ),
       );
     } catch (_) {
       return _resolveUserProfile(user);

@@ -211,6 +211,7 @@ AuthenticatedAppContext _homeTestAppContext({
   bool pinAlphaRoom = false,
   int alphaRoomUnreadCount = 3,
   bool alphaRoomHasPendingJoinRequests = false,
+  bool alphaRoomAiVoiceAnnouncementsEnabled = false,
   Future<void> Function(String roomId)? beforeRoomDetailResponse,
 }) {
   final user = CurrentUser(
@@ -262,6 +263,8 @@ AuthenticatedAppContext _homeTestAppContext({
       pinAlphaRoom: pinAlphaRoom,
       alphaRoomUnreadCount: alphaRoomUnreadCount,
       alphaRoomHasPendingJoinRequests: alphaRoomHasPendingJoinRequests,
+      initialAlphaRoomAiVoiceAnnouncementsEnabled:
+          alphaRoomAiVoiceAnnouncementsEnabled,
       beforeRoomDetailResponse: beforeRoomDetailResponse,
     ),
   );
@@ -286,6 +289,7 @@ GangApi _roomsApi({
   bool pinAlphaRoom = false,
   int alphaRoomUnreadCount = 3,
   bool alphaRoomHasPendingJoinRequests = false,
+  bool initialAlphaRoomAiVoiceAnnouncementsEnabled = false,
   Future<void> Function(String roomId)? beforeRoomDetailResponse,
 }) {
   var roomNotificationsMarkedRead = false;
@@ -294,7 +298,8 @@ GangApi _roomsApi({
   var alphaRoomDescription = '';
   var alphaRoomVisibility = 'private';
   var alphaRoomJoinPolicy = currentRoomJoinPolicy;
-  var alphaRoomAiVoiceAnnouncementsEnabled = false;
+  var alphaRoomAiVoiceAnnouncementsEnabled =
+      initialAlphaRoomAiVoiceAnnouncementsEnabled;
   var alphaRoomNotificationPolicy = 'all';
   return GangApiClient(
     baseUrl: 'http://example.test/api/v1',

@@ -188,6 +188,8 @@ class _UserHoverCardState extends State<UserHoverCard> {
     super.didUpdateWidget(oldWidget);
     final userChanged = oldWidget.user.id != widget.user.id;
     final deletionChanged = oldWidget.user.isDeleted != widget.user.isDeleted;
+    final suspensionChanged =
+        oldWidget.user.isSuspended != widget.user.isSuspended;
     final currentUserChanged =
         oldWidget.currentUser?.id != widget.currentUser?.id;
     final resolverPresenceChanged =
@@ -200,6 +202,7 @@ class _UserHoverCardState extends State<UserHoverCard> {
         (widget.profileActionBuilder == null);
     if (!userChanged &&
         !deletionChanged &&
+        !suspensionChanged &&
         !currentUserChanged &&
         !resolverPresenceChanged &&
         !liveChanged &&
@@ -244,6 +247,7 @@ class _UserHoverCardState extends State<UserHoverCard> {
       resetKey: Object.hash(
         widget.user.id,
         widget.user.isDeleted,
+        widget.user.isSuspended,
         widget.onResolveProfile != null,
         widget.onResolveRoomProfile != null,
         widget.currentUser?.id,
@@ -482,8 +486,12 @@ class _UserProfileCard extends StatelessWidget {
     final gender = genderMark(user.gender);
     final role = showRoomRole ? room_display.roomRoleLabel(user) : null;
     final isCurrentUser = currentUser?.id == user.id;
-    final online = inLive || isCurrentUser || (user.isOnline ?? false);
-    final presencePill = inLive
+    final online =
+        !user.isSuspended &&
+        (inLive || isCurrentUser || (user.isOnline ?? false));
+    final presencePill = user.isSuspended
+        ? PresencePill.suspended()
+        : inLive
         ? PresencePill.voice()
         : online
         ? PresencePill.online()

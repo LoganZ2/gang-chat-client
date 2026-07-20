@@ -274,4 +274,14 @@ class SettingsController {
     }
     return client.deleteMyAccount(confirm: true);
   }
+
+  Future<CurrentUser?> setManagedAccountSuspended(bool suspended) {
+    final client = api;
+    final targetUserId = managedUserId;
+    if (client == null || targetUserId == null) return Future.value();
+    return client.updateForcedUserSettings(
+      userId: targetUserId,
+      status: suspended ? 'suspended' : 'active',
+    );
+  }
 }

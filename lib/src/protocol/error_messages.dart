@@ -27,6 +27,7 @@ String localizedServerErrorMessage({
     'email_verification_required' => '请先验证邮箱',
     'password_reset_verification_required' => '请先验证绑定邮箱',
     'account_not_found' => '该用户名或邮箱对应的账号不存在',
+    'account_suspended' => '账号已被封禁',
     'verification_expired' || 'challenge_not_found' => '验证码已失效，请重新获取',
     'invalid_verification_code' => '验证码错误',
     'livekit_error' => '语音服务暂时无法完成操作',
@@ -58,6 +59,7 @@ String? _localizedKnownMessage(String message) {
     return '登录状态无效，请重新登录';
   }
   if (message.contains('user inactive')) return '账号当前不可用';
+  if (message.contains('account suspended')) return '账号已被封禁';
   if (message.contains('no password set')) return '当前账号尚未设置密码';
   if (message.contains('current password incorrect')) return '当前密码不正确';
   if (message.contains('username can be changed once per 24 hours')) {
