@@ -1,6 +1,99 @@
 part of '../gang_app_shell_test.dart';
 
 void registerShellRealtimeLiveWidgetTests() {
+  testWidgets(
+    'only realtime all-policy message updates play and request attention',
+    (WidgetTester tester) async {
+      final realtime = _FakeRealtimeService();
+      final sound = _RecordingMessageNotificationSoundPlayer();
+      final windowEvents = <String>[];
+      final windowController = _RecordingWindowController(windowEvents);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme(),
+          home: HomePage(
+            app: _homeTestAppContext(alphaRoomUnreadCount: 7),
+            realtime: realtime,
+            messageNotificationSoundPlayer: sound,
+            windowController: windowController,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Loading pre-existing unread messages on sign-in never produces a cue.
+      expect(sound.volumes, isEmpty);
+      expect(windowEvents, isEmpty);
+
+      Map<String, Object?> update({
+        required String messageId,
+        String notificationPolicy = 'all',
+        String? reason = 'message_created',
+      }) {
+        return {
+          ..._roomCardJson(
+            id: 'server-alpha',
+            name: 'Alpha Room',
+            memberCount: 2,
+            unreadCount: 8,
+          ),
+          'notification_policy': notificationPolicy,
+          'last_message': {
+            'id': messageId,
+            'type': 'text',
+            'sender_display_name': 'Morgan',
+            'body_preview': 'Realtime message',
+            'created_at': '2026-06-12T02:00:00Z',
+          },
+          'update_reason': ?reason,
+          'updated_at': '2026-06-12T02:00:00Z',
+        };
+      }
+
+      realtime.add(
+        RealtimeEvent(
+          type: 'room_updated',
+          data: update(messageId: 'message-live-1'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(sound.volumes, hasLength(1));
+      expect(sound.volumes.single, greaterThan(0));
+      expect(windowEvents, ['message-attention']);
+
+      // A duplicate delivery, a reconnect/history-style room snapshot and a
+      // room outside the "all" policy must all remain silent.
+      realtime.add(
+        RealtimeEvent(
+          type: 'room_updated',
+          data: update(messageId: 'message-live-1'),
+        ),
+      );
+      realtime.add(
+        RealtimeEvent(
+          type: 'room_updated',
+          data: update(messageId: 'message-history', reason: null),
+        ),
+      );
+      realtime.add(
+        RealtimeEvent(
+          type: 'room_updated',
+          data: update(
+            messageId: 'message-silent',
+            notificationPolicy: 'silent',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(sound.volumes, hasLength(1));
+      expect(windowEvents, ['message-attention']);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('account suspension event immediately logs out every client', (
     WidgetTester tester,
   ) async {

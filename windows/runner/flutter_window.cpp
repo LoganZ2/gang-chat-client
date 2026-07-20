@@ -45,6 +45,8 @@ constexpr char kDefaultOutputDeviceChangedMethod[] =
     "defaultOutputDeviceChanged";
 constexpr char kTrayInitializeMethod[] = "initialize";
 constexpr char kTrayDisposeMethod[] = "dispose";
+constexpr char kTrayRequestAttentionMethod[] = "requestAttention";
+constexpr char kTrayClearAttentionMethod[] = "clearAttention";
 constexpr char kTrayOpenMethod[] = "open";
 constexpr char kTrayExitMethod[] = "exit";
 constexpr wchar_t kFileDropWindowProp[] = L"GangChatFileDropWindow";
@@ -58,6 +60,8 @@ constexpr UINT kTrayIconId = 1;
 constexpr UINT kTrayOpenCommand = 0x4A30;
 constexpr UINT kTrayExitCommand = 0x4A31;
 constexpr UINT kTraySeparatorCommand = 0x4A32;
+constexpr UINT_PTR kTrayAttentionTimerId = 0x4A33;
+constexpr UINT kTrayAttentionIntervalMs = 480;
 constexpr wchar_t kTrayPopupMenuClassName[] = L"GangChatTrayPopupMenu";
 constexpr int kTrayMenuWidth = 184;
 constexpr int kTrayMenuItemHeight = 32;
@@ -80,6 +84,19 @@ const TrayMenuItem kTrayOpenMenuItem{kTrayOpenCommand,
 const TrayMenuItem kTraySeparatorMenuItem{kTraySeparatorCommand, L"", true};
 const TrayMenuItem kTrayExitMenuItem{kTrayExitCommand, L"\u9000\u51fa",
                                      false};
+
+HICON CreateTransparentTrayIcon() {
+  const int width = GetSystemMetrics(SM_CXSMICON);
+  const int height = GetSystemMetrics(SM_CYSMICON);
+  if (width <= 0 || height <= 0) {
+    return nullptr;
+  }
+  const int row_bytes = ((width + 15) / 16) * 2;
+  std::vector<BYTE> and_mask(row_bytes * height, 0xFF);
+  std::vector<BYTE> xor_mask(row_bytes * height, 0x00);
+  return CreateIcon(GetModuleHandle(nullptr), width, height, 1, 1,
+                    and_mask.data(), xor_mask.data());
+}
 
 struct TrayPopupMenuState {
   explicit TrayPopupMenuState(HWND owner_window) : owner(owner_window) {}
@@ -1167,6 +1184,16 @@ void FlutterWindow::RegisterTrayChannel() {
           result->Success(flutter::EncodableValue());
           return;
         }
+        if (call.method_name() == kTrayRequestAttentionMethod) {
+          RequestMessageAttention();
+          result->Success(flutter::EncodableValue());
+          return;
+        }
+        if (call.method_name() == kTrayClearAttentionMethod) {
+          ClearMessageAttention();
+          result->Success(flutter::EncodableValue());
+          return;
+        }
         result->NotImplemented();
       });
 }
@@ -1190,7 +1217,12 @@ bool FlutterWindow::ShowTrayIcon() {
 }
 
 void FlutterWindow::RemoveTrayIcon() {
+  StopTrayAttention();
   if (!tray_icon_added_) {
+    if (tray_attention_blank_icon_) {
+      DestroyIcon(tray_attention_blank_icon_);
+      tray_attention_blank_icon_ = nullptr;
+    }
     return;
   }
   NOTIFYICONDATAW data{};
@@ -1199,6 +1231,97 @@ void FlutterWindow::RemoveTrayIcon() {
   data.uID = kTrayIconId;
   Shell_NotifyIconW(NIM_DELETE, &data);
   tray_icon_added_ = false;
+  if (tray_attention_blank_icon_) {
+    DestroyIcon(tray_attention_blank_icon_);
+    tray_attention_blank_icon_ = nullptr;
+  }
+}
+
+void FlutterWindow::RequestMessageAttention() {
+  const HWND window = GetHandle();
+  if (!window || GetForegroundWindow() == window) {
+    ClearMessageAttention();
+    return;
+  }
+  if (!IsWindowVisible(window) && tray_icon_added_) {
+    StartTrayAttention();
+    return;
+  }
+
+  StopTrayAttention();
+  FLASHWINFO flash{};
+  flash.cbSize = sizeof(flash);
+  flash.hwnd = window;
+  flash.dwFlags = FLASHW_TRAY | FLASHW_TIMERNOFG;
+  flash.uCount = 0;
+  flash.dwTimeout = 0;
+  FlashWindowEx(&flash);
+}
+
+void FlutterWindow::ClearMessageAttention() {
+  StopTrayAttention();
+  const HWND window = GetHandle();
+  if (!window) {
+    return;
+  }
+  FLASHWINFO flash{};
+  flash.cbSize = sizeof(flash);
+  flash.hwnd = window;
+  flash.dwFlags = FLASHW_STOP;
+  FlashWindowEx(&flash);
+}
+
+void FlutterWindow::StartTrayAttention() {
+  if (!tray_icon_added_ || tray_attention_active_) {
+    return;
+  }
+  if (!tray_attention_blank_icon_) {
+    tray_attention_blank_icon_ = CreateTransparentTrayIcon();
+  }
+  if (!tray_attention_blank_icon_) {
+    return;
+  }
+  tray_attention_icon_visible_ = true;
+  tray_attention_active_ =
+      SetTimer(GetHandle(), kTrayAttentionTimerId,
+               kTrayAttentionIntervalMs, nullptr) != 0;
+}
+
+void FlutterWindow::StopTrayAttention() {
+  if (tray_attention_active_) {
+    KillTimer(GetHandle(), kTrayAttentionTimerId);
+  }
+  tray_attention_active_ = false;
+  if (!tray_attention_icon_visible_ && tray_icon_added_) {
+    SetTrayIconImage(
+        LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_APP_ICON)));
+  }
+  tray_attention_icon_visible_ = true;
+}
+
+void FlutterWindow::ToggleTrayAttentionIcon() {
+  if (!tray_attention_active_ || !tray_icon_added_) {
+    return;
+  }
+  tray_attention_icon_visible_ = !tray_attention_icon_visible_;
+  const HICON icon = tray_attention_icon_visible_
+                         ? LoadIcon(GetModuleHandle(nullptr),
+                                    MAKEINTRESOURCE(IDI_APP_ICON))
+                         : tray_attention_blank_icon_;
+  SetTrayIconImage(icon);
+}
+
+bool FlutterWindow::SetTrayIconImage(HICON icon) {
+  if (!tray_icon_added_ || !icon) {
+    return false;
+  }
+  NOTIFYICONDATAW data{};
+  data.cbSize = sizeof(data);
+  data.hWnd = GetHandle();
+  data.uID = kTrayIconId;
+  data.uFlags = NIF_ICON;
+  data.hIcon = icon;
+  return Shell_NotifyIconW(NIM_MODIFY, &data) != FALSE;
 }
 
 void FlutterWindow::ShowTrayMenu() {
@@ -1518,6 +1641,7 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       case WM_LBUTTONUP:
       case WM_LBUTTONDBLCLK:
       case NIN_SELECT:
+        ClearMessageAttention();
         InvokeTrayMethod(kTrayOpenMethod);
         return 0;
       case WM_RBUTTONUP:
@@ -1525,6 +1649,15 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
         ShowTrayMenu();
         return 0;
     }
+  }
+
+  if (message == WM_TIMER && wparam == kTrayAttentionTimerId) {
+    ToggleTrayAttentionIcon();
+    return 0;
+  }
+
+  if (message == WM_ACTIVATE && LOWORD(wparam) != WA_INACTIVE) {
+    ClearMessageAttention();
   }
 
   // Give Flutter, including plugins, an opportunity to handle window messages.

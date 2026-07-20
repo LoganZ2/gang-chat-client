@@ -43,6 +43,7 @@ import 'package:client/src/shell/desktop_window_controller.dart';
 import 'package:client/src/shell/feedback_mail_service.dart';
 import 'package:client/src/shell/install_info_service.dart';
 import 'package:client/src/shell/login_page.dart';
+import 'package:client/src/shell/message_notification_sound_service.dart';
 import 'package:client/src/shell/release_update_service.dart';
 import 'package:client/src/ui/ui.dart' as ui;
 import 'package:client/src/home/hover_card_anchor.dart';
@@ -1637,6 +1638,22 @@ class _RecordingLivePresenceSpeechPlayer implements LivePresenceSpeechPlayer {
   Future<void> dispose() async {}
 }
 
+class _RecordingMessageNotificationSoundPlayer
+    implements MessageNotificationSoundPlayer {
+  final volumes = <double>[];
+  bool disposed = false;
+
+  @override
+  Future<void> play({required double volume}) async {
+    volumes.add(volume);
+  }
+
+  @override
+  Future<void> dispose() async {
+    disposed = true;
+  }
+}
+
 class _FixedCloseBehaviorStore extends CloseBehaviorStore {
   const _FixedCloseBehaviorStore(this.behavior);
 
@@ -1674,6 +1691,11 @@ class _RecordingWindowController extends DesktopWindowController {
   @override
   Future<void> terminateApplication() async {
     events.add('terminate');
+  }
+
+  @override
+  Future<void> requestMessageAttention() async {
+    events.add('message-attention');
   }
 }
 

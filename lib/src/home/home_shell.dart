@@ -30,6 +30,7 @@ import '../app/live_display.dart' as live_display;
 import '../app/live_session_controller.dart';
 import '../app/language_preference.dart';
 import '../app/message_mentions.dart' as message_mentions;
+import '../app/message_notifications.dart';
 import '../app/message_display.dart' as message_display;
 import '../app/messages_controller.dart';
 import '../app/music_box_controller.dart';
@@ -65,6 +66,7 @@ import '../shell/clipboard_service.dart';
 import '../shell/desktop_window_controller.dart';
 import '../shell/file_drop_service.dart';
 import '../shell/file_selection_service.dart';
+import '../shell/message_notification_sound_service.dart';
 import '../shell/release_update_service.dart';
 import '../shell/system_live_presence_speech_player.dart';
 import '../shell/voice_playback_service.dart';
@@ -122,6 +124,7 @@ class HomeShell extends StatefulWidget {
     this.liveSessionController,
     this.livePresenceSoundPlayer,
     this.livePresenceSpeechPlayer,
+    this.messageNotificationSoundPlayer,
     this.realtime,
     this.detectedAppUpdate,
     this.onDetectedAppUpdateShown,
@@ -135,6 +138,7 @@ class HomeShell extends StatefulWidget {
   final LiveSessionController? liveSessionController;
   final LivePresenceSoundPlayer? livePresenceSoundPlayer;
   final LivePresenceSpeechPlayer? livePresenceSpeechPlayer;
+  final MessageNotificationSoundPlayer? messageNotificationSoundPlayer;
   final RealtimeService? realtime;
   final AvailableAppUpdate? detectedAppUpdate;
   final VoidCallback? onDetectedAppUpdateShown;
@@ -202,6 +206,9 @@ class _HomeShellState extends State<HomeShell> {
   late final LivePresenceSoundPlayer _livePresenceSoundPlayer;
   late final LivePresenceSpeechPlayer _livePresenceSpeechPlayer;
   late final LivePresenceAudioCoordinator _livePresenceAudioCoordinator;
+  late final MessageNotificationSoundPlayer _messageNotificationSoundPlayer;
+  final RealtimeMessageNotificationTracker _messageNotificationTracker =
+      RealtimeMessageNotificationTracker();
   Future<void> _livePresenceEventTail = Future<void>.value();
   VoicePlaybackSnapshot _voicePlayback = const VoicePlaybackSnapshot();
   Timer? _voiceTicker;
@@ -319,6 +326,9 @@ class _HomeShellState extends State<HomeShell> {
       soundPlayer: _livePresenceSoundPlayer,
       speechPlayer: _livePresenceSpeechPlayer,
     );
+    _messageNotificationSoundPlayer =
+        widget.messageNotificationSoundPlayer ??
+        MessageNotificationSoundService();
     _composerController.addListener(_handleComposerDraftChanged);
     _titleSearchController.addListener(_handleTitleSearchChanged);
     _musicBoxSearchController.addListener(_handleMusicBoxSearchChanged);
@@ -375,6 +385,7 @@ class _HomeShellState extends State<HomeShell> {
     _detachLiveSessionCallbacks();
     _services.close();
     _installServices();
+    _messageNotificationTracker.clear();
     _attachLiveSessionCallbacks();
     _startRealtime();
     _searchDebounce?.cancel();
@@ -479,6 +490,7 @@ class _HomeShellState extends State<HomeShell> {
     _livePresenceAudioCoordinator.dispose();
     unawaited(_livePresenceSoundPlayer.dispose());
     unawaited(_livePresenceSpeechPlayer.dispose());
+    unawaited(_messageNotificationSoundPlayer.dispose());
     widget.app.serverClock.removeListener(_handleServerClockChanged);
     _cancelActiveDownloads();
     _services.close();

@@ -162,6 +162,12 @@ extension _HomeShellRealtime on _HomeShellState {
     final previousJoinPolicy = _selectedRoom?.joinPolicy;
     final room = _roomsController.roomCardFromSnapshot(data);
     if (room == null || !mounted) return;
+    final shouldNotifyMessage = _messageNotificationTracker.register(
+      roomId: room.id,
+      updateReason: data['update_reason']?.toString() ?? '',
+      notificationPolicy: room.notificationPolicy,
+      messageId: room.lastMessage?.id,
+    );
     if (room.id == _joinedLiveRoomId) {
       _joinedLivePersonalAiVoiceAnnouncementsEnabled =
           room.aiVoiceAnnouncementsEnabled;
@@ -206,6 +212,17 @@ extension _HomeShellRealtime on _HomeShellState {
     if (shouldRefreshMessages) {
       unawaited(_refreshSelectedMessagesSilently(room.id));
     }
+    if (shouldNotifyMessage) _notifyRealtimeRoomMessage();
+  }
+
+  void _notifyRealtimeRoomMessage() {
+    final volume = _headphonesMuted
+        ? 0.0
+        : normalizedAudioVolume(_liveSessionController.outputVolume);
+    unawaited(
+      _messageNotificationSoundPlayer.play(volume: volume).catchError((_) {}),
+    );
+    unawaited(widget.windowController.requestMessageAttention());
   }
 
   String? _latestLoadedServerMessageId() {

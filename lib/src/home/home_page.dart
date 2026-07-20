@@ -13,6 +13,7 @@ import '../shell/local_close_behavior_store.dart';
 import '../shell/desktop_window_controller.dart';
 import '../shell/local_audio_device_store.dart';
 import '../shell/local_language_preference_store.dart';
+import '../shell/message_notification_sound_service.dart';
 import 'home_shell.dart';
 
 class HomePage extends StatelessWidget {
@@ -23,6 +24,7 @@ class HomePage extends StatelessWidget {
     this.liveSessionController,
     this.livePresenceSoundPlayer,
     this.livePresenceSpeechPlayer,
+    this.messageNotificationSoundPlayer,
     this.realtime,
     this.closeBehaviorStore = const LocalCloseBehaviorStore(),
     this.languageStore = const LocalLanguagePreferenceStore(),
@@ -36,6 +38,7 @@ class HomePage extends StatelessWidget {
   final LiveSessionController? liveSessionController;
   final LivePresenceSoundPlayer? livePresenceSoundPlayer;
   final LivePresenceSpeechPlayer? livePresenceSpeechPlayer;
+  final MessageNotificationSoundPlayer? messageNotificationSoundPlayer;
   final RealtimeService? realtime;
   final CloseBehaviorStore closeBehaviorStore;
   final LanguagePreferenceStore languageStore;
@@ -51,6 +54,7 @@ class HomePage extends StatelessWidget {
       liveSessionController: liveSessionController,
       livePresenceSoundPlayer: livePresenceSoundPlayer,
       livePresenceSpeechPlayer: livePresenceSpeechPlayer,
+      messageNotificationSoundPlayer: messageNotificationSoundPlayer,
       realtime: realtime,
       closeBehaviorStore: closeBehaviorStore,
       languageStore: languageStore,
