@@ -4,6 +4,22 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
+val releaseKeystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
+val releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+val releaseSigningValues =
+    listOf(
+        releaseKeystorePath,
+        releaseKeystorePassword,
+        releaseKeyAlias,
+        releaseKeyPassword,
+    )
+val hasReleaseSigning = releaseSigningValues.all { !it.isNullOrBlank() }
+require(releaseSigningValues.none { !it.isNullOrBlank() } || hasReleaseSigning) {
+    "Android release signing requires all ANDROID_KEYSTORE_* and ANDROID_KEY_* environment variables."
+}
+
 android {
     namespace = "com.gangchat.client"
     compileSdk = flutter.compileSdkVersion
@@ -25,11 +41,24 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseKeystorePath!!)
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Local release runs remain installable with the debug key. The
+            // release workflow always supplies a stable private signing key so
+            // published APKs can upgrade one another across versions.
+            signingConfig =
+                signingConfigs.getByName(if (hasReleaseSigning) "release" else "debug")
         }
     }
 }

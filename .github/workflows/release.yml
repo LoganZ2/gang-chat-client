@@ -18,24 +18,46 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      android_version_code: ${{ steps.version.outputs.android_version_code }}
       tag: ${{ steps.version.outputs.tag }}
       released_at: ${{ steps.version.outputs.released_at }}
     steps:
       - name: Resolve version
         id: version
         shell: bash
+        env:
+          DISPATCH_VERSION: ${{ github.event.inputs.version }}
         run: |
+          set -euo pipefail
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
+            VERSION="$DISPATCH_VERSION"
           else
             VERSION="${GITHUB_REF_NAME#v}"
           fi
           if [ -z "$VERSION" ]; then echo "version is empty"; exit 1; fi
-          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+          if ! printf '%s' "$VERSION" | grep -Eq \
+            '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
             echo "version must be major.minor.patch: $VERSION"
             exit 1
           fi
+          IFS='.' read -r VERSION_MAJOR VERSION_MINOR VERSION_PATCH <<< "$VERSION"
+          if [ "${#VERSION_MAJOR}" -gt 4 ] || \
+             [ "${#VERSION_MINOR}" -gt 3 ] || \
+             [ "${#VERSION_PATCH}" -gt 3 ]; then
+            echo "version components are too large for an Android version code: $VERSION"
+            exit 1
+          fi
+          ANDROID_VERSION_CODE=$((
+            10#$VERSION_MAJOR * 1000000 +
+            10#$VERSION_MINOR * 1000 +
+            10#$VERSION_PATCH
+          ))
+          if [ "$ANDROID_VERSION_CODE" -lt 1 ] || [ "$ANDROID_VERSION_CODE" -gt 2100000000 ]; then
+            echo "Android version code must be between 1 and 2100000000: $ANDROID_VERSION_CODE"
+            exit 1
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "android_version_code=$ANDROID_VERSION_CODE" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
           echo "released_at=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
           echo "Resolved version: $VERSION"
@@ -213,9 +235,120 @@ jobs:
             ${{ steps.windows_zip.outputs.name }}
           if-no-files-found: error
 
+  build-android:
+    runs-on: ubuntu-latest
+    needs: [prepare]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.44.0'
+          cache: true
+
+      - name: Flutter sanity check
+        run: flutter --version
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: UTF-8 encoding check
+        run: dart tool/check_utf8.dart
+
+      - name: Update release metadata
+        run: |
+          dart tool/update_release_metadata.dart \
+            --version "${{ needs.prepare.outputs.version }}" \
+            --released-at "${{ needs.prepare.outputs.released_at }}"
+
+      - name: Prepare Android release signing
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in \
+            ANDROID_KEYSTORE_BASE64 \
+            ANDROID_KEYSTORE_PASSWORD \
+            ANDROID_KEY_ALIAS \
+            ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "required GitHub Actions secret is missing: $name" >&2
+              exit 1
+            fi
+          done
+
+          KEYSTORE_PATH="$RUNNER_TEMP/gang-chat-release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          if [ ! -s "$KEYSTORE_PATH" ]; then
+            echo "decoded Android keystore is empty" >&2
+            exit 1
+          fi
+          chmod 600 "$KEYSTORE_PATH"
+          keytool -list \
+            -keystore "$KEYSTORE_PATH" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" >/dev/null
+          echo "ANDROID_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+
+      - name: Build Android APK (release)
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          flutter build apk --release \
+            --build-name="${{ needs.prepare.outputs.version }}" \
+            --build-number="${{ needs.prepare.outputs.android_version_code }}"
+
+      - name: Prepare and verify Android APK
+        id: android_apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE="build/app/outputs/flutter-apk/app-release.apk"
+          APK="GangChat_v${{ needs.prepare.outputs.version }}.apk"
+          if [ ! -f "$SOURCE" ]; then
+            echo "release APK not found at $SOURCE" >&2
+            exit 1
+          fi
+          cp "$SOURCE" "$APK"
+
+          APKSIGNER="$(find "$ANDROID_SDK_ROOT/build-tools" \
+            -mindepth 2 -maxdepth 2 -type f -name apksigner \
+            | sort -V | tail -n 1)"
+          if [ -z "$APKSIGNER" ]; then
+            echo "apksigner not found under $ANDROID_SDK_ROOT/build-tools" >&2
+            exit 1
+          fi
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          echo "name=$APK" >> "$GITHUB_OUTPUT"
+          sha256sum "$APK"
+          ls -lh "$APK"
+
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: ${{ steps.android_apk.outputs.name }}
+          if-no-files-found: error
+
   release:
     runs-on: ubuntu-latest
-    needs: [prepare, build-macos, build-windows]
+    needs: [prepare, build-macos, build-windows, build-android]
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@v4

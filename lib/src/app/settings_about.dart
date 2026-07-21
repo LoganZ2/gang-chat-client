@@ -1,6 +1,6 @@
 const _gangChatClientBuildVersion = String.fromEnvironment(
   'GANG_CHAT_VERSION',
-  defaultValue: '0.4.0',
+  defaultValue: '1.0.0',
 );
 const _gangChatClientDebugBuild =
     !bool.fromEnvironment('dart.vm.product') &&
