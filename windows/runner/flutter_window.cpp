@@ -45,6 +45,7 @@ constexpr char kDefaultOutputDeviceChangedMethod[] =
     "defaultOutputDeviceChanged";
 constexpr char kTrayInitializeMethod[] = "initialize";
 constexpr char kTrayDisposeMethod[] = "dispose";
+constexpr char kTrayRequestAttentionMethod[] = "requestAttention";
 constexpr char kTrayOpenMethod[] = "open";
 constexpr char kTrayExitMethod[] = "exit";
 constexpr wchar_t kFileDropWindowProp[] = L"GangChatFileDropWindow";
@@ -54,10 +55,13 @@ constexpr DWORD kBiAlphaBitFields = 6;
 constexpr UINT kAudioDefaultDeviceChangedMessage = WM_APP + 0x4A2;
 constexpr UINT kTrayCallbackMessage = WM_APP + 0x4A3;
 constexpr UINT kTrayMenuCommandMessage = WM_APP + 0x4A4;
+constexpr UINT kStopMessageAttentionMessage = WM_APP + 0x4A5;
 constexpr UINT kTrayIconId = 1;
 constexpr UINT kTrayOpenCommand = 0x4A30;
 constexpr UINT kTrayExitCommand = 0x4A31;
 constexpr UINT kTraySeparatorCommand = 0x4A32;
+constexpr UINT_PTR kMessageAttentionTimerId = 0x4A33;
+constexpr UINT kMessageAttentionIntervalMs = 480;
 constexpr wchar_t kTrayPopupMenuClassName[] = L"GangChatTrayPopupMenu";
 constexpr int kTrayMenuWidth = 184;
 constexpr int kTrayMenuItemHeight = 32;
@@ -80,6 +84,19 @@ const TrayMenuItem kTrayOpenMenuItem{kTrayOpenCommand,
 const TrayMenuItem kTraySeparatorMenuItem{kTraySeparatorCommand, L"", true};
 const TrayMenuItem kTrayExitMenuItem{kTrayExitCommand, L"\u9000\u51fa",
                                      false};
+
+HICON CreateTransparentTrayIcon() {
+  const int width = GetSystemMetrics(SM_CXSMICON);
+  const int height = GetSystemMetrics(SM_CYSMICON);
+  if (width <= 0 || height <= 0) {
+    return nullptr;
+  }
+  const int row_bytes = ((width + 15) / 16) * 2;
+  std::vector<BYTE> and_mask(row_bytes * height, 0xFF);
+  std::vector<BYTE> xor_mask(row_bytes * height, 0x00);
+  return CreateIcon(GetModuleHandle(nullptr), width, height, 1, 1,
+                    and_mask.data(), xor_mask.data());
+}
 
 struct TrayPopupMenuState {
   explicit TrayPopupMenuState(HWND owner_window) : owner(owner_window) {}
@@ -1167,6 +1184,11 @@ void FlutterWindow::RegisterTrayChannel() {
           result->Success(flutter::EncodableValue());
           return;
         }
+        if (call.method_name() == kTrayRequestAttentionMethod) {
+          RequestMessageAttention();
+          result->Success(flutter::EncodableValue());
+          return;
+        }
         result->NotImplemented();
       });
 }
@@ -1190,7 +1212,12 @@ bool FlutterWindow::ShowTrayIcon() {
 }
 
 void FlutterWindow::RemoveTrayIcon() {
+  StopMessageAttention();
   if (!tray_icon_added_) {
+    if (tray_attention_blank_icon_) {
+      DestroyIcon(tray_attention_blank_icon_);
+      tray_attention_blank_icon_ = nullptr;
+    }
     return;
   }
   NOTIFYICONDATAW data{};
@@ -1199,6 +1226,128 @@ void FlutterWindow::RemoveTrayIcon() {
   data.uID = kTrayIconId;
   Shell_NotifyIconW(NIM_DELETE, &data);
   tray_icon_added_ = false;
+  if (tray_attention_blank_icon_) {
+    DestroyIcon(tray_attention_blank_icon_);
+    tray_attention_blank_icon_ = nullptr;
+  }
+}
+
+void FlutterWindow::RequestMessageAttention() {
+  const HWND window = GetHandle();
+  if (!window) {
+    return;
+  }
+  const bool window_is_foreground =
+      IsWindowVisible(window) && GetForegroundWindow() == window;
+  if (window_is_foreground) {
+    StopMessageAttention();
+    return;
+  }
+
+  // Keep the notification-area cue active alongside the taskbar cue. The tray
+  // icon is created lazily so normal startup behavior remains unchanged until
+  // an unread message actually needs attention.
+  if (!tray_icon_added_) {
+    ShowTrayIcon();
+  }
+
+  // FlashWindow(TRUE) changes the inactive taskbar button to its attention
+  // state once and leaves it highlighted. Repeated messages must not call it
+  // again because a second inversion would remove the highlight.
+  if (IsWindowVisible(window) && !taskbar_attention_active_) {
+    FlashWindow(window, TRUE);
+    taskbar_attention_active_ = true;
+  }
+
+  StartMessageAttentionTimer();
+}
+
+void FlutterWindow::StartMessageAttentionTimer() {
+  if (attention_timer_active_) {
+    return;
+  }
+  if (tray_icon_added_ && !tray_attention_blank_icon_) {
+    tray_attention_blank_icon_ = CreateTransparentTrayIcon();
+  }
+  const bool can_flash_tray =
+      tray_icon_added_ && tray_attention_blank_icon_ != nullptr;
+  if (!taskbar_attention_active_ && !can_flash_tray) {
+    return;
+  }
+  tray_attention_icon_visible_ = true;
+  attention_timer_active_ =
+      SetTimer(GetHandle(), kMessageAttentionTimerId,
+               kMessageAttentionIntervalMs, nullptr) != 0;
+}
+
+void FlutterWindow::ScheduleMessageAttentionStop() {
+  if (attention_stop_posted_ ||
+      (!attention_timer_active_ && !taskbar_attention_active_)) {
+    return;
+  }
+  // Defer native icon updates until the activation message has returned. This
+  // keeps the response effectively immediate without re-entering Flutter's
+  // child-window focus routing from WM_ACTIVATE.
+  attention_stop_posted_ =
+      PostMessage(GetHandle(), kStopMessageAttentionMessage, 0, 0) != FALSE;
+}
+
+void FlutterWindow::StopMessageAttention() {
+  if (attention_timer_active_) {
+    KillTimer(GetHandle(), kMessageAttentionTimerId);
+  }
+  attention_timer_active_ = false;
+  if (taskbar_attention_active_) {
+    const HWND window = GetHandle();
+    // Windows clears the attention state itself when this window becomes
+    // foreground. Calling FlashWindow(FALSE) after that transition causes one
+    // extra visible taskbar flash, so only clear it explicitly while another
+    // window still owns the foreground.
+    if (window && GetForegroundWindow() != window) {
+      FlashWindow(window, FALSE);
+    }
+    taskbar_attention_active_ = false;
+  }
+  if (!tray_attention_icon_visible_ && tray_icon_added_) {
+    SetTrayIconImage(
+        LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_APP_ICON)));
+  }
+  tray_attention_icon_visible_ = true;
+}
+
+void FlutterWindow::TickMessageAttention() {
+  if (!attention_timer_active_) {
+    return;
+  }
+  const HWND window = GetHandle();
+  if (window && IsWindowVisible(window) && GetForegroundWindow() == window) {
+    // This runs on the attention timer, after Windows has completed its focus
+    // transition. Do not move this cleanup into WM_ACTIVATE or WM_SETFOCUS.
+    StopMessageAttention();
+    return;
+  }
+  if (!tray_icon_added_ || !tray_attention_blank_icon_) {
+    return;
+  }
+  tray_attention_icon_visible_ = !tray_attention_icon_visible_;
+  const HICON icon = tray_attention_icon_visible_
+                         ? LoadIcon(GetModuleHandle(nullptr),
+                                    MAKEINTRESOURCE(IDI_APP_ICON))
+                         : tray_attention_blank_icon_;
+  SetTrayIconImage(icon);
+}
+
+bool FlutterWindow::SetTrayIconImage(HICON icon) {
+  if (!tray_icon_added_ || !icon) {
+    return false;
+  }
+  NOTIFYICONDATAW data{};
+  data.cbSize = sizeof(data);
+  data.hWnd = GetHandle();
+  data.uID = kTrayIconId;
+  data.uFlags = NIF_ICON;
+  data.hIcon = icon;
+  return Shell_NotifyIconW(NIM_MODIFY, &data) != FALSE;
 }
 
 void FlutterWindow::ShowTrayMenu() {
@@ -1224,6 +1373,7 @@ void FlutterWindow::ShowTrayMenu() {
   PostMessage(GetHandle(), WM_NULL, 0, 0);
 
   if (command == kTrayOpenCommand) {
+    StopMessageAttention();
     InvokeTrayMethod(kTrayOpenMethod);
   } else if (command == kTrayExitCommand) {
     InvokeTrayMethod(kTrayExitMethod);
@@ -1486,6 +1636,18 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  if (message == kStopMessageAttentionMessage) {
+    attention_stop_posted_ = false;
+    if (GetForegroundWindow() == hwnd) {
+      StopMessageAttention();
+    }
+    return 0;
+  }
+
+  if (message == WM_ACTIVATE && LOWORD(wparam) != WA_INACTIVE) {
+    ScheduleMessageAttentionStop();
+  }
+
   if (message == kAudioDefaultDeviceChangedMessage) {
     std::unique_ptr<AudioDeviceChange> change(
         reinterpret_cast<AudioDeviceChange*>(lparam));
@@ -1505,6 +1667,7 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   if (message == kTrayMenuCommandMessage) {
     const UINT command = static_cast<UINT>(wparam);
     if (command == kTrayOpenCommand) {
+      StopMessageAttention();
       InvokeTrayMethod(kTrayOpenMethod);
     } else if (command == kTrayExitCommand) {
       InvokeTrayMethod(kTrayExitMethod);
@@ -1518,6 +1681,7 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       case WM_LBUTTONUP:
       case WM_LBUTTONDBLCLK:
       case NIN_SELECT:
+        StopMessageAttention();
         InvokeTrayMethod(kTrayOpenMethod);
         return 0;
       case WM_RBUTTONUP:
@@ -1525,6 +1689,11 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
         ShowTrayMenu();
         return 0;
     }
+  }
+
+  if (message == WM_TIMER && wparam == kMessageAttentionTimerId) {
+    TickMessageAttention();
+    return 0;
   }
 
   // Give Flutter, including plugins, an opportunity to handle window messages.

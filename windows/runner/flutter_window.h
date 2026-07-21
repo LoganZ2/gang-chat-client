@@ -53,6 +53,11 @@ class FlutterWindow : public Win32Window {
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
       tray_channel_;
   bool tray_icon_added_ = false;
+  bool attention_timer_active_ = false;
+  bool attention_stop_posted_ = false;
+  bool taskbar_attention_active_ = false;
+  bool tray_attention_icon_visible_ = true;
+  HICON tray_attention_blank_icon_ = nullptr;
 
   IMMDeviceEnumerator* audio_device_enumerator_ = nullptr;
   IMMNotificationClient* audio_device_notification_client_ = nullptr;
@@ -65,6 +70,12 @@ class FlutterWindow : public Win32Window {
   void RegisterTrayChannel();
   bool ShowTrayIcon();
   void RemoveTrayIcon();
+  void RequestMessageAttention();
+  void StartMessageAttentionTimer();
+  void ScheduleMessageAttentionStop();
+  void StopMessageAttention();
+  void TickMessageAttention();
+  bool SetTrayIconImage(HICON icon);
   void ShowTrayMenu();
   void InvokeTrayMethod(const char* method);
   bool EnsureAudioDeviceNotifications();

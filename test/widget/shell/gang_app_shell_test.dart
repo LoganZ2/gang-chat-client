@@ -1692,6 +1692,11 @@ class _RecordingWindowController extends DesktopWindowController {
   Future<void> terminateApplication() async {
     events.add('terminate');
   }
+
+  @override
+  Future<void> requestMessageAttention() async {
+    events.add('message-attention');
+  }
 }
 
 class _NoopRealtimeService implements RealtimeService {

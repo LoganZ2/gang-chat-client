@@ -2,7 +2,7 @@ part of '../gang_app_shell_test.dart';
 
 void registerShellRealtimeLiveWidgetTests() {
   testWidgets(
-    'only realtime all-policy message updates play a notification sound',
+    'only realtime all-policy message updates play and request attention',
     (WidgetTester tester) async {
       final realtime = _FakeRealtimeService();
       final sound = _RecordingMessageNotificationSoundPlayer();
@@ -61,7 +61,7 @@ void registerShellRealtimeLiveWidgetTests() {
 
       expect(sound.volumes, hasLength(1));
       expect(sound.volumes.single, greaterThan(0));
-      expect(windowEvents, isEmpty);
+      expect(windowEvents, ['message-attention']);
 
       // A duplicate delivery, a reconnect/history-style room snapshot and a
       // room outside the "all" policy must all remain silent.
@@ -89,7 +89,7 @@ void registerShellRealtimeLiveWidgetTests() {
       await tester.pumpAndSettle();
 
       expect(sound.volumes, hasLength(1));
-      expect(windowEvents, isEmpty);
+      expect(windowEvents, ['message-attention']);
       expect(tester.takeException(), isNull);
     },
   );

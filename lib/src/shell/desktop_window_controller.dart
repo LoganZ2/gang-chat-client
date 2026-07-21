@@ -147,6 +147,19 @@ class DesktopWindowController {
     });
   }
 
+  /// Requests the native Windows attention indicator without changing focus.
+  ///
+  /// The native implementation keeps the taskbar highlighted and the tray
+  /// icon blinking until the window becomes foreground. It must not be paired
+  /// with synchronous work in a window-focus callback because that can
+  /// interfere with Flutter's child-window input routing.
+  Future<void> requestMessageAttention() {
+    return _configure(() async {
+      if (!supportsNativeTray) return;
+      await _trayChannel.invokeMethod<void>('requestAttention');
+    });
+  }
+
   Future<void> hideAppWindowForExit() {
     return _configure(() async {
       await windowManager.hide();
