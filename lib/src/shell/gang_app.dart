@@ -16,6 +16,7 @@ import '../app/login_account_history.dart';
 import '../app/password_reset_controller.dart';
 import '../app/server_clock.dart';
 import 'app_update_gate.dart';
+import 'client_system_info.dart';
 import 'desktop_window_controller.dart';
 import 'local_login_account_history_store.dart';
 import 'local_language_preference_store.dart';
@@ -86,6 +87,7 @@ class _AuthGateState extends State<_AuthGate> {
   late final AuthSessionController _auth = AuthSessionController(
     tokenStore: widget.tokenStore,
     apiBaseUrl: widget.config.apiBaseUrl,
+    clientUserAgent: currentGangChatClientUserAgent(),
   );
   late final PasswordResetController _passwordReset = PasswordResetController(
     apiBaseUrl: widget.config.apiBaseUrl,

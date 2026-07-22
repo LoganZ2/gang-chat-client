@@ -170,8 +170,44 @@ String sessionStateText(UserSession session, {DateTime? now}) {
 
 String sessionDeviceLabel(UserSession session) {
   final userAgent = session.userAgent?.trim();
-  if (userAgent == null || userAgent.isEmpty) return '未知设备';
-  return userAgent;
+  if (userAgent == null || userAgent.isEmpty) return '未知系统';
+
+  final gangChatMatch = RegExp(
+    r'^GangChat Client \((Android|Fuchsia|iOS|Linux|macOS|Windows)\)$',
+    caseSensitive: false,
+  ).firstMatch(userAgent);
+  if (gangChatMatch != null) {
+    return _normalizeSystemName(gangChatMatch.group(1)!);
+  }
+
+  final normalized = userAgent.toLowerCase();
+  if (normalized.contains('android')) return 'Android';
+  if (normalized.contains('windows')) return 'Windows';
+  if (normalized.contains('iphone') ||
+      normalized.contains('ipad') ||
+      normalized.contains('ios')) {
+    return 'iOS';
+  }
+  if (normalized.contains('macintosh') ||
+      normalized.contains('mac os x') ||
+      normalized.contains('macos')) {
+    return 'macOS';
+  }
+  if (normalized.contains('linux')) return 'Linux';
+  if (normalized.contains('fuchsia')) return 'Fuchsia';
+  return '未知系统';
+}
+
+String _normalizeSystemName(String value) {
+  return switch (value.toLowerCase()) {
+    'android' => 'Android',
+    'fuchsia' => 'Fuchsia',
+    'ios' => 'iOS',
+    'linux' => 'Linux',
+    'macos' => 'macOS',
+    'windows' => 'Windows',
+    _ => '未知系统',
+  };
 }
 
 String sessionIpAddressLabel(UserSession session) {

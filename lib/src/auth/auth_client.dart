@@ -8,6 +8,7 @@ import 'auth_transport.dart';
 class AuthClient {
   AuthClient({
     required this.baseUrl,
+    this.userAgent,
     http.Client? httpClient,
     AuthHttpClientFactory? environmentProxyClientFactory,
     this.handshakeRetryDelays = const [
@@ -20,6 +21,7 @@ class AuthClient {
            createEnvironmentProxyAuthHttpClient;
 
   final String baseUrl;
+  final String? userAgent;
   final http.Client _httpClient;
   final AuthHttpClientFactory _environmentProxyClientFactory;
   final List<Duration> handshakeRetryDelays;
@@ -320,9 +322,12 @@ class AuthClient {
   }
 
   Map<String, String> _headers({String? accessToken}) {
+    final normalizedUserAgent = userAgent?.trim();
     return {
       'accept': jsonAcceptHeader,
       'content-type': jsonUtf8ContentType,
+      if (normalizedUserAgent != null && normalizedUserAgent.isNotEmpty)
+        'user-agent': normalizedUserAgent,
       if (accessToken != null) 'authorization': 'Bearer $accessToken',
     };
   }

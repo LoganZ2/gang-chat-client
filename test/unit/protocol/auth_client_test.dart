@@ -7,6 +7,23 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
+  test('auth requests report the supplied client system user agent', () async {
+    late http.Request capturedRequest;
+    final client = AuthClient(
+      baseUrl: 'https://api.example.test',
+      userAgent: 'GangChat Client (Android)',
+      httpClient: MockClient((request) async {
+        capturedRequest = request;
+        return _authResponse();
+      }),
+    );
+
+    await client.login(login: 'alice', password: 'secret');
+
+    expect(capturedRequest.headers['user-agent'], 'GangChat Client (Android)');
+    client.close();
+  });
+
   test('auth checks normalized username availability', () async {
     late Uri requestedUri;
     final client = AuthClient(

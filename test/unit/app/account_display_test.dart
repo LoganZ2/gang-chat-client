@@ -170,16 +170,46 @@ void main() {
     },
   );
 
-  test('session display helpers provide fallback device and detail text', () {
+  test('session display helpers provide fallback system and detail text', () {
     final session = _session(userAgent: '  ', ipAddress: '');
 
-    expect(sessionDeviceLabel(session), '未知设备');
+    expect(sessionDeviceLabel(session), '未知系统');
     expect(sessionIpAddressLabel(session), '未知 IP');
     expect(sessionLocationLabel(session), 'Local');
     expect(
       sessionDetailText(session),
       '位置：Local · IP：未知 IP · 最近活动：2026-06-04 00:00',
     );
+  });
+
+  test('session device label extracts systems from Gang Chat clients', () {
+    expect(
+      sessionDeviceLabel(_session(userAgent: 'GangChat Client (Android)')),
+      'Android',
+    );
+    expect(
+      sessionDeviceLabel(_session(userAgent: 'GangChat Client (Windows)')),
+      'Windows',
+    );
+  });
+
+  test('session device label recognizes common legacy user agents', () {
+    expect(
+      sessionDeviceLabel(
+        _session(
+          userAgent:
+              'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36',
+        ),
+      ),
+      'Android',
+    );
+    expect(
+      sessionDeviceLabel(
+        _session(userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'),
+      ),
+      'Windows',
+    );
+    expect(sessionDeviceLabel(_session(userAgent: 'Dart/3.9')), '未知系统');
   });
 
   test('sessionListBodyState separates loading empty and result states', () {

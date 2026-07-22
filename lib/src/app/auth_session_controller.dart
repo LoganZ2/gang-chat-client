@@ -49,10 +49,13 @@ class AuthSessionController {
   AuthSessionController({
     required TokenStore tokenStore,
     required this.apiBaseUrl,
+    String? clientUserAgent,
     AuthClientFactory? authClientFactory,
   }) : _tokenStore = tokenStore,
        _authClientFactory =
-           authClientFactory ?? ((baseUrl) => AuthClient(baseUrl: baseUrl));
+           authClientFactory ??
+           ((baseUrl) =>
+               AuthClient(baseUrl: baseUrl, userAgent: clientUserAgent));
 
   final TokenStore _tokenStore;
   final String apiBaseUrl;
