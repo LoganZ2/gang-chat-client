@@ -103,6 +103,7 @@ class ButtonIcon extends StatelessWidget {
     this.loading = false,
     this.backgroundColor,
     this.borderColor,
+    this.baseBorderColor,
   });
 
   final VoidCallback? onPressed;
@@ -116,6 +117,7 @@ class ButtonIcon extends StatelessWidget {
   final bool loading;
   final Color? backgroundColor;
   final Color? borderColor;
+  final Color? baseBorderColor;
 
   @override
   Widget build(BuildContext context) {
@@ -147,6 +149,7 @@ class ButtonIcon extends StatelessWidget {
       pressedBackgroundColor: colors.pressedBackground,
       borderColor: border,
       selectedBorderColor: border,
+      baseBorderColor: baseBorderColor,
       child: IconTheme.merge(
         data: IconThemeData(color: colors.foreground, size: size * 0.46),
         child: Center(child: icon),

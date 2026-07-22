@@ -45,19 +45,20 @@ extension _HomeShellLayout on _HomeShellState {
   }
 
   Widget _buildNarrowLayout(double width) {
-    final useAndroidLayout =
-        Theme.of(context).platform == TargetPlatform.android;
     if (!_narrowContentOpen) {
-      if (!useAndroidLayout) {
-        return _buildSidebar(width: width, openContentOnSelect: true);
-      }
       return KeyedSubtree(
         key: const ValueKey('home-narrow-room-list'),
-        child: _buildSidebar(width: width, openContentOnSelect: true),
+        child: _buildSidebar(
+          width: width,
+          openContentOnSelect: true,
+          header: _buildCompactSearchField(),
+          bodyOverride: _hasSearchQuery && _searchExpanded
+              ? _buildSearchResultsTapRegion()
+              : null,
+        ),
       );
     }
 
-    if (!useAndroidLayout) return _buildContentPane();
     return KeyedSubtree(
       key: const ValueKey('home-narrow-content'),
       child: _buildContentPane(onNavigateBack: _showNarrowRoomList),
@@ -471,6 +472,8 @@ extension _HomeShellLayout on _HomeShellState {
   Widget _buildSidebar({
     required double width,
     required bool openContentOnSelect,
+    Widget? header,
+    Widget? bodyOverride,
   }) {
     return HomeSidebar(
       width: width,
@@ -495,6 +498,8 @@ extension _HomeShellLayout on _HomeShellState {
       hasPendingNotifications: _hasPendingRoomInvites,
       pendingNotificationCount: _pendingRoomNotificationCount,
       includeWindowChromeOffset: false,
+      header: header,
+      bodyOverride: bodyOverride,
       onServerSelected: (server) =>
           _selectServer(server, openContent: openContentOnSelect),
       onCreateRoom: () => _openCreateRoom(openContent: openContentOnSelect),

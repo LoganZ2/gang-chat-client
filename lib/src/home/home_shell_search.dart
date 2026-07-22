@@ -3,6 +3,59 @@ part of 'home_shell.dart';
 extension _HomeShellSearch on _HomeShellState {
   bool get _hasSearchQuery => search_display.hasGlobalSearchQuery(_searchQuery);
 
+  Widget _buildCompactSearchField() {
+    return TapRegion(
+      groupId: _searchTapRegionGroup,
+      onTapOutside: (_) => _collapseSearch(),
+      child: SizedBox.expand(
+        key: const ValueKey('home-title-search'),
+        child: _TitleSearchField(
+          controller: _titleSearchController,
+          tapRegionGroup: _searchTapRegionGroup,
+          enabled: !_appUpdateDownloadInProgress,
+          onContextMenuOpenChanged: _handleTitleSearchContextMenuOpenChanged,
+          onActivated: _activateSearch,
+          onClearQuery: _clearSearchQuery,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchResultsTapRegion() {
+    return TapRegion(
+      key: const ValueKey('home-title-search-results'),
+      groupId: _searchTapRegionGroup,
+      child: HoverCardTapRegionScope(
+        tapRegionGroup: _searchTapRegionGroup,
+        child: _TitleSearchResultsPanel(
+          query: _searchQuery,
+          results: _searchResults,
+          loading: _searching,
+          loadingMore: _searchLoadingMore,
+          error: _searchError,
+          timestampNow: _serverNow,
+          currentUser: widget.app.currentUser,
+          activeCategory: _activeSearchCategory,
+          visibleCategories: _visibleSearchCategories,
+          busyPublicRoomId: _busySearchPublicRoomId,
+          pendingPublicRoomIds: _searchPendingPublicRoomIds,
+          onCategorySelected: _selectSearchCategory,
+          onLoadMore: () => unawaited(_loadMoreSearchResults()),
+          onMyRoomSelected: _openSearchRoom,
+          onProfileRoomSelected: _openSearchProfileRoom,
+          onResolveRoomProfile: _resolveRoomProfile,
+          onResolveRoomUserProfile: _resolveRoomUserProfile,
+          onResolveUserProfile: _resolveUserProfile,
+          onPublicRoomAction: (room) =>
+              unawaited(_handlePublicRoomSearchAction(room)),
+          onUserSettingsSelected: _openSuperuserUserSettings,
+          onMessageSelected: _openMessageSearchResult,
+          onFileSelected: _openMessageSearchResult,
+        ),
+      ),
+    );
+  }
+
   bool get _filteringSidebarBySearch =>
       _hasSearchQuery &&
       _activeSearchCategory == search_display.GlobalSearchCategory.myRooms;
@@ -190,8 +243,7 @@ extension _HomeShellSearch on _HomeShellState {
   }
 
   void _openSearchRoom(RoomCard room) {
-    final narrow = MediaQuery.sizeOf(context).width < narrowBreakpoint;
-    _selectServer(room, openContent: narrow);
+    _selectServer(room, openContent: _compactLayout);
   }
 
   void _openSearchProfileRoom(PublicRoom room) {
@@ -223,8 +275,7 @@ extension _HomeShellSearch on _HomeShellState {
     _setHomeState(() {
       _superuserSettingsTarget = null;
       _contentMode = _ContentMode.chat;
-      if (Theme.of(context).platform == TargetPlatform.android &&
-          _selectedServerId == null) {
+      if (_compactLayout && _selectedServerId == null) {
         _narrowContentOpen = false;
       }
     });

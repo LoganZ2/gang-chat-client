@@ -690,11 +690,11 @@ class _HistoryMessageRowState extends State<_HistoryMessageRow> {
     final message = widget.message;
     final senderName = _historySenderName(message.sender);
     final highlighted = widget.selected || _contextMenuActive;
-    final isAndroid = Theme.of(context).platform == TargetPlatform.android;
-    final timestampColumnWidth = isAndroid
+    final useCompactLayout = HomeAdaptiveLayout.usesCompactLayout(context);
+    final timestampColumnWidth = useCompactLayout
         ? CompactActivityLayout.androidTimestampColumnWidth
         : CompactActivityLayout.timestampColumnWidth;
-    final timestampContentGap = isAndroid
+    final timestampContentGap = useCompactLayout
         ? CompactActivityLayout.androidTimestampContentGap
         : 8.0;
     final surface = AnimatedContainer(
@@ -772,7 +772,7 @@ class _HistoryMessageRowState extends State<_HistoryMessageRow> {
             child: Center(
               child: Text(
                 key: ValueKey('room-message-history-time-${message.id}'),
-                isAndroid
+                useCompactLayout
                     ? CompactActivityLayout.splitTimestamp(
                         room_notifications.roomInviteTimestampLabel(
                           message.createdAt,

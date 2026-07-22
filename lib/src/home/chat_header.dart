@@ -101,7 +101,7 @@ class _LiveChannelHeaderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final liveActive = (liveParticipantCount ?? 0) > 0;
-    if (Theme.of(context).platform != TargetPlatform.android) {
+    if (!HomeAdaptiveLayout.usesCompactLayout(context)) {
       return _buildDesktopCard(liveActive);
     }
     return _buildAndroidCard(liveActive);
@@ -522,6 +522,7 @@ class _LiveHeaderAvatarPreview extends StatelessWidget {
             const SizedBox(width: gap),
             Text(
               countLabel,
+              key: const ValueKey('chat-header-live-preview-count'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: labelStyle,

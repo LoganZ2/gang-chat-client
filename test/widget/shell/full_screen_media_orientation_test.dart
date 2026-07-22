@@ -11,6 +11,7 @@ void main() {
     final requests = <List<DeviceOrientation>>[];
     final controller = AppOrientationController(
       platform: TargetPlatform.android,
+      logicalViewSize: () => const Size(400, 800),
       setPreferredOrientations: (orientations) async {
         requests.add(List<DeviceOrientation>.of(orientations));
       },
@@ -34,6 +35,34 @@ void main() {
     expect(requests, <List<DeviceOrientation>>[
       AppOrientationController.fullScreenMedia,
       AppOrientationController.portraitOnly,
+    ]);
+  });
+
+  testWidgets('Android tablet keeps unrestricted rotation after media exits', (
+    tester,
+  ) async {
+    final requests = <List<DeviceOrientation>>[];
+    final controller = AppOrientationController(
+      platform: TargetPlatform.android,
+      logicalViewSize: () => const Size(1280, 800),
+      setPreferredOrientations: (orientations) async {
+        requests.add(List<DeviceOrientation>.of(orientations));
+      },
+    );
+
+    await tester.pumpWidget(
+      FullScreenMediaOrientation(
+        controller: controller,
+        child: const SizedBox(),
+      ),
+    );
+    await tester.pump();
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+
+    expect(requests, <List<DeviceOrientation>>[
+      AppOrientationController.unrestricted,
+      AppOrientationController.unrestricted,
     ]);
   });
 

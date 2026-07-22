@@ -1,33 +1,97 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as dart_ui;
 
 import 'package:flutter/gestures.dart' show PointerScrollEvent;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 
 import '../app/media_cache_controller.dart';
 import '../app/error_display.dart';
 import '../protocol/models.dart';
+import '../shell/android_display_rotation_service.dart';
+import '../shell/android_form_factor.dart';
+import '../shell/app_orientation_controller.dart';
+import '../shell/full_screen_media_orientation.dart';
 import '../ui/ui.dart';
 
-class ChatImagePreviewActionsScope extends InheritedWidget {
+class ChatImagePreviewActionsScope extends StatefulWidget {
   const ChatImagePreviewActionsScope({
     super.key,
     required this.actions,
+    required this.child,
+  });
+
+  final ChatImagePreviewActions actions;
+  final Widget child;
+
+  static ChatImagePreviewActions? maybeOf(BuildContext context) {
+    return context
+        .dependOnInheritedWidgetOfExactType<_ChatImagePreviewActionsInherited>()
+        ?.actions;
+  }
+
+  static Future<ImagePreviewBackdropSnapshot?> captureBackdrop(
+    BuildContext context,
+  ) {
+    final inherited = context
+        .getInheritedWidgetOfExactType<_ChatImagePreviewActionsInherited>();
+    return inherited?.captureBackdrop() ??
+        Future<ImagePreviewBackdropSnapshot?>.value();
+  }
+
+  @override
+  State<ChatImagePreviewActionsScope> createState() =>
+      _ChatImagePreviewActionsScopeState();
+}
+
+class _ChatImagePreviewActionsScopeState
+    extends State<ChatImagePreviewActionsScope> {
+  final GlobalKey _backdropBoundaryKey = GlobalKey();
+
+  Future<ImagePreviewBackdropSnapshot?> _captureBackdrop() async {
+    final renderObject = _backdropBoundaryKey.currentContext
+        ?.findRenderObject();
+    if (renderObject is! RenderRepaintBoundary) return null;
+    final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
+    try {
+      final image = await renderObject.toImage(
+        pixelRatio: math.min(devicePixelRatio, 2.0),
+      );
+      return ImagePreviewBackdropSnapshot(
+        image: image,
+        logicalSize: renderObject.size,
+      );
+    } catch (_) {
+      // A snapshot failure must not break image preview navigation.
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _ChatImagePreviewActionsInherited(
+      actions: widget.actions,
+      captureBackdrop: _captureBackdrop,
+      child: RepaintBoundary(key: _backdropBoundaryKey, child: widget.child),
+    );
+  }
+}
+
+class _ChatImagePreviewActionsInherited extends InheritedWidget {
+  const _ChatImagePreviewActionsInherited({
+    required this.actions,
+    required this.captureBackdrop,
     required super.child,
   });
 
   final ChatImagePreviewActions actions;
-
-  static ChatImagePreviewActions? maybeOf(BuildContext context) {
-    return context
-        .dependOnInheritedWidgetOfExactType<ChatImagePreviewActionsScope>()
-        ?.actions;
-  }
+  final ImagePreviewBackdropCapture captureBackdrop;
 
   @override
-  bool updateShouldNotify(ChatImagePreviewActionsScope oldWidget) {
+  bool updateShouldNotify(_ChatImagePreviewActionsInherited oldWidget) {
     return !identical(actions, oldWidget.actions);
   }
 }
@@ -91,6 +155,24 @@ class ImagePreviewActionCancelled implements Exception {
   const ImagePreviewActionCancelled();
 }
 
+/// A frozen copy of the UI behind an Android image preview. [logicalSize]
+/// preserves the portrait layout dimensions independently of later device
+/// orientation changes.
+class ImagePreviewBackdropSnapshot {
+  const ImagePreviewBackdropSnapshot({
+    required this.image,
+    required this.logicalSize,
+  });
+
+  final dart_ui.Image image;
+  final Size logicalSize;
+
+  void dispose() => image.dispose();
+}
+
+typedef ImagePreviewBackdropCapture =
+    Future<ImagePreviewBackdropSnapshot?> Function();
+
 /// Opens the full-screen image preview as an overlay route. [imageUrl] is the
 /// already-resolved absolute URL to display. [suggestedName] seeds the
 /// download/save-as filename. When [stickerSource] is non-null and
@@ -103,29 +185,74 @@ Future<void> showChatImagePreview(
   ({Message message, MessageAttachment attachment})? stickerSource,
   bool showActionBar = true,
   bool forceSquare = false,
-}) {
-  return Navigator.of(context, rootNavigator: true).push(
-    PageRouteBuilder<void>(
-      opaque: false,
-      barrierColor: const Color(0xD1000000),
-      barrierDismissible: true,
-      transitionDuration: const Duration(milliseconds: 140),
-      reverseTransitionDuration: const Duration(milliseconds: 120),
-      pageBuilder: (context, animation, secondaryAnimation) {
-        return _ImagePreviewOverlay(
-          imageUrl: imageUrl,
-          suggestedName: suggestedName,
-          actions: actions,
-          stickerSource: stickerSource,
-          showActionBar: showActionBar,
-          forceSquare: forceSquare,
-        );
-      },
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        return FadeTransition(opacity: animation, child: child);
-      },
-    ),
-  );
+  AppOrientationController? orientationController,
+  ImagePreviewBackdropCapture? backdropCapture,
+  AndroidDisplayRotationReader? displayRotationReader,
+}) async {
+  final previewPlatform = Theme.of(context).platform;
+  final useAndroidPhonePreview =
+      previewPlatform == TargetPlatform.android &&
+      !isAndroidTabletLogicalSize(MediaQuery.sizeOf(context));
+  final navigator = Navigator.of(context, rootNavigator: true);
+  ImagePreviewBackdropSnapshot? frozenBackdrop;
+  if (useAndroidPhonePreview) {
+    frozenBackdrop =
+        await (backdropCapture?.call() ??
+            ChatImagePreviewActionsScope.captureBackdrop(context));
+  }
+  if (!context.mounted || !navigator.mounted) {
+    frozenBackdrop?.dispose();
+    return;
+  }
+  final hasFrozenAndroidBackdrop =
+      useAndroidPhonePreview && frozenBackdrop != null;
+  final previewOrientationController = hasFrozenAndroidBackdrop
+      ? orientationController ?? AppOrientationController()
+      : null;
+  final activeDisplayRotationReader = hasFrozenAndroidBackdrop
+      ? displayRotationReader ??
+            AndroidDisplayRotationService().currentQuarterTurns
+      : null;
+  try {
+    await navigator.push(
+      PageRouteBuilder<void>(
+        opaque: hasFrozenAndroidBackdrop,
+        barrierColor: hasFrozenAndroidBackdrop ? null : const Color(0xD1000000),
+        barrierDismissible: !hasFrozenAndroidBackdrop,
+        transitionDuration: hasFrozenAndroidBackdrop
+            ? Duration.zero
+            : const Duration(milliseconds: 140),
+        reverseTransitionDuration: hasFrozenAndroidBackdrop
+            ? Duration.zero
+            : const Duration(milliseconds: 120),
+        pageBuilder: (context, animation, secondaryAnimation) {
+          final overlay = _ImagePreviewOverlay(
+            imageUrl: imageUrl,
+            suggestedName: suggestedName,
+            actions: actions,
+            stickerSource: stickerSource,
+            showActionBar: showActionBar,
+            forceSquare: forceSquare,
+            frozenBackdrop: frozenBackdrop,
+            orientationController: previewOrientationController,
+            previewPlatform: previewPlatform,
+            displayRotationReader: activeDisplayRotationReader,
+          );
+          if (!hasFrozenAndroidBackdrop) return overlay;
+          return FullScreenMediaOrientation(
+            controller: previewOrientationController,
+            child: overlay,
+          );
+        },
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          if (hasFrozenAndroidBackdrop) return child;
+          return FadeTransition(opacity: animation, child: child);
+        },
+      ),
+    );
+  } finally {
+    frozenBackdrop?.dispose();
+  }
 }
 
 class _ImagePreviewOverlay extends StatefulWidget {
@@ -136,6 +263,10 @@ class _ImagePreviewOverlay extends StatefulWidget {
     required this.stickerSource,
     required this.showActionBar,
     required this.forceSquare,
+    required this.frozenBackdrop,
+    required this.orientationController,
+    required this.previewPlatform,
+    required this.displayRotationReader,
   });
 
   final String imageUrl;
@@ -144,6 +275,10 @@ class _ImagePreviewOverlay extends StatefulWidget {
   final ({Message message, MessageAttachment attachment})? stickerSource;
   final bool showActionBar;
   final bool forceSquare;
+  final ImagePreviewBackdropSnapshot? frozenBackdrop;
+  final AppOrientationController? orientationController;
+  final TargetPlatform previewPlatform;
+  final AndroidDisplayRotationReader? displayRotationReader;
 
   @override
   State<_ImagePreviewOverlay> createState() => _ImagePreviewOverlayState();
@@ -151,7 +286,9 @@ class _ImagePreviewOverlay extends StatefulWidget {
 
 enum _PreviewAction { download, saveAs, copy, saveSticker, saveRoomSticker }
 
-class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
+class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay>
+    with WidgetsBindingObserver {
+  static const Duration _controlsAutoHideDelay = Duration(seconds: 3);
   static const double _minImageScale = 0.25;
   static const double _maxImageScale = 5.0;
   static const double _wheelScaleBase = 1.25;
@@ -165,6 +302,14 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
   double? _gestureStartScale;
   Offset? _gestureStartContentFocal;
   _PreviewAction? _busy;
+  bool _closing = false;
+  bool _routeCanPop = false;
+  bool _controlsVisible = true;
+  Timer? _controlsHideTimer;
+  Completer<void>? _portraitViewportCompleter;
+  Orientation? _lastAndroidPreviewOrientation;
+  int _backdropQuarterTurns = 0;
+  int _displayRotationReadGeneration = 0;
 
   bool get _canSaveSticker =>
       widget.stickerSource != null && widget.actions.onSaveSticker != null;
@@ -172,9 +317,72 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
   bool get _canSaveRoomSticker =>
       widget.stickerSource != null && widget.actions.onSaveRoomSticker != null;
 
+  // The Android route uses a semi-transparent cap over a frozen backdrop. Its
+  // base border would otherwise show through as an extra horizontal line.
+  Color? get _previewButtonBaseBorderColor =>
+      widget.frozenBackdrop == null ? null : Colors.transparent;
+
+  bool get _isAndroidPreview =>
+      widget.previewPlatform == TargetPlatform.android;
+
+  bool get _usesImmersiveControls =>
+      _isAndroidPreview || widget.previewPlatform == TargetPlatform.windows;
+
+  bool get _isPortraitViewport {
+    final size = View.of(context).physicalSize;
+    return size.height >= size.width;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _scheduleControlsAutoHide();
+    unawaited(_refreshBackdropRotation());
+  }
+
+  @override
+  void didChangeMetrics() {
+    if (mounted && _isPortraitViewport) {
+      final completer = _portraitViewportCompleter;
+      if (completer != null && !completer.isCompleted) completer.complete();
+    }
+    unawaited(_refreshBackdropRotation());
+  }
+
+  Future<void> _refreshBackdropRotation() async {
+    final reader = widget.displayRotationReader;
+    if (reader == null) return;
+    final generation = ++_displayRotationReadGeneration;
+    try {
+      final displayQuarterTurns = await reader();
+      if (!mounted || generation != _displayRotationReadGeneration) return;
+      final nextQuarterTurns = counterDisplayRotationQuarterTurns(
+        displayQuarterTurns,
+      );
+      if (_backdropQuarterTurns == nextQuarterTurns) return;
+      setState(() => _backdropQuarterTurns = nextQuarterTurns);
+    } catch (_) {
+      // Preserve the last valid counter-rotation if the platform channel is
+      // temporarily unavailable during Android's display transition.
+    }
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (_isAndroidPreview) {
+      final orientation = MediaQuery.orientationOf(context);
+      final previousOrientation = _lastAndroidPreviewOrientation;
+      _lastAndroidPreviewOrientation = orientation;
+      if (previousOrientation != null && previousOrientation != orientation) {
+        _resetImageTransform();
+        if (!_closing) {
+          _controlsVisible = true;
+          _scheduleControlsAutoHide();
+        }
+      }
+    }
     _ensurePreviewImageData();
   }
 
@@ -194,9 +402,28 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
     if (_previewImageDataKey == key) return;
     _previewImageDataKey = key;
     _previewImageData = _loadPreviewImageData(cache);
+    _resetImageTransform();
+  }
+
+  void _resetImageTransform() {
     _imageTransform.value = const _PreviewImageTransform();
     _gestureStartScale = null;
     _gestureStartContentFocal = null;
+  }
+
+  void _scheduleControlsAutoHide() {
+    if (!_usesImmersiveControls || _closing) return;
+    _controlsHideTimer?.cancel();
+    _controlsHideTimer = Timer(_controlsAutoHideDelay, () {
+      if (!mounted || _closing || !_controlsVisible) return;
+      setState(() => _controlsVisible = false);
+    });
+  }
+
+  void _handlePreviewInteraction() {
+    if (!_usesImmersiveControls || _closing) return;
+    if (!_controlsVisible) setState(() => _controlsVisible = true);
+    _scheduleControlsAutoHide();
   }
 
   Future<_PreviewImageData> _loadPreviewImageData(
@@ -255,19 +482,61 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
     }
   }
 
-  void _close() {
-    Navigator.of(context).maybePop();
+  Future<void> _close() async {
+    if (_closing) return;
+    _closing = true;
+    _controlsHideTimer?.cancel();
+
+    final orientationController = widget.orientationController;
+    if (orientationController != null) {
+      final restorePortrait = orientationController.restoresPortraitByDefault;
+      try {
+        await orientationController.restoreDefaultOrientation();
+      } catch (_) {
+        // Keep the opaque preview in place even if the platform request fails;
+        // it must never expose a landscape layout from the route underneath.
+      }
+      if (restorePortrait && mounted && !_isPortraitViewport) {
+        final completer = Completer<void>();
+        _portraitViewportCompleter = completer;
+        await completer.future;
+      }
+      _portraitViewportCompleter = null;
+    }
+
+    if (!mounted) return;
+    if (orientationController != null) {
+      setState(() => _routeCanPop = true);
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+    }
+    final popped = await Navigator.of(context).maybePop();
+    if (mounted && !popped) {
+      setState(() {
+        _closing = false;
+        _routeCanPop = false;
+        _controlsVisible = true;
+      });
+      _scheduleControlsAutoHide();
+    }
   }
 
   @override
   void dispose() {
+    _displayRotationReadGeneration += 1;
+    WidgetsBinding.instance.removeObserver(this);
+    _controlsHideTimer?.cancel();
+    final completer = _portraitViewportCompleter;
+    if (completer != null && !completer.isCompleted) completer.complete();
     _imageTransform.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final showControls =
+        !_closing && (!_usesImmersiveControls || _controlsVisible);
+    final scaffold = Scaffold(
       backgroundColor: Colors.transparent,
       body: Shortcuts(
         shortcuts: const {
@@ -284,49 +553,88 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
           },
           child: Focus(
             autofocus: true,
-            child: Stack(
-              children: [
-                // Tapping the backdrop (anywhere outside the image/controls)
-                // dismisses the overlay.
-                Positioned.fill(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _close,
-                  ),
-                ),
-                Positioned.fill(
-                  child: SafeArea(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 56, 24, 24),
-                      child: Column(
-                        children: [
-                          Expanded(child: _buildImage()),
-                          if (widget.showActionBar) ...[
-                            const SizedBox(height: 16),
-                            _buildActionBar(),
-                          ],
-                        ],
+            child: MouseRegion(
+              onHover: (_) => _handlePreviewInteraction(),
+              child: Listener(
+                behavior: HitTestBehavior.translucent,
+                onPointerDown: (_) => _handlePreviewInteraction(),
+                child: Stack(
+                  children: [
+                    if (widget.frozenBackdrop != null)
+                      Positioned.fill(
+                        child: _FrozenPortraitBackdrop(
+                          snapshot: widget.frozenBackdrop!,
+                          quarterTurns: _backdropQuarterTurns,
+                        ),
+                      ),
+                    // Tapping the backdrop (anywhere outside the image/controls)
+                    // dismisses the overlay.
+                    Positioned.fill(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _close,
                       ),
                     ),
-                  ),
+                    if (_usesImmersiveControls)
+                      Positioned.fill(child: _buildImage())
+                    else
+                      Positioned.fill(
+                        child: SafeArea(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(24, 56, 24, 24),
+                            child: Column(
+                              children: [
+                                Expanded(child: _buildImage()),
+                                if (widget.showActionBar) ...[
+                                  const SizedBox(height: 16),
+                                  _buildActionBar(),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (_usesImmersiveControls &&
+                        widget.showActionBar &&
+                        showControls)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 14,
+                        child: SafeArea(
+                          top: false,
+                          child: Center(child: _buildActionBar()),
+                        ),
+                      ),
+                    if (showControls)
+                      Positioned(
+                        top: 14,
+                        right: 14,
+                        child: SafeArea(
+                          child: ButtonIcon(
+                            icon: const Icon(Icons.close_rounded),
+                            tooltip: '关闭',
+                            onPressed: _close,
+                            backgroundColor: const Color(0x66000000),
+                            baseBorderColor: _previewButtonBaseBorderColor,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-                Positioned(
-                  top: 14,
-                  right: 14,
-                  child: SafeArea(
-                    child: ButtonIcon(
-                      icon: const Icon(Icons.close_rounded),
-                      tooltip: '关闭',
-                      onPressed: _close,
-                      backgroundColor: const Color(0x66000000),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
       ),
+    );
+    if (widget.orientationController == null) return scaffold;
+    return PopScope<void>(
+      canPop: _routeCanPop,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) unawaited(_close());
+      },
+      child: scaffold,
     );
   }
 
@@ -388,6 +696,7 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
             valueListenable: _imageTransform,
             builder: (context, transform, child) {
               return Transform(
+                key: const ValueKey('chat-image-preview-image-transform'),
                 transform: transform.matrix,
                 alignment: Alignment.topLeft,
                 child: child,
@@ -405,6 +714,10 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
   }
 
   void _handlePreviewTap(Offset position, Rect contentRect) {
+    if (_isAndroidPreview) {
+      _handlePreviewInteraction();
+      return;
+    }
     if (!_visibleContentRect(contentRect).contains(position)) _close();
   }
 
@@ -614,6 +927,7 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
                 )
               : null,
           backgroundColor: const Color(0x66000000),
+          baseBorderColor: _previewButtonBaseBorderColor,
         ),
         const SizedBox(width: 10),
         ButtonIcon(
@@ -631,6 +945,7 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
                 )
               : null,
           backgroundColor: const Color(0x66000000),
+          baseBorderColor: _previewButtonBaseBorderColor,
         ),
         const SizedBox(width: 10),
         ButtonIcon(
@@ -645,6 +960,7 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
                 )
               : null,
           backgroundColor: const Color(0x66000000),
+          baseBorderColor: _previewButtonBaseBorderColor,
         ),
         if (_canSaveSticker) ...[
           const SizedBox(width: 10),
@@ -666,6 +982,7 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
                   }
                 : null,
             backgroundColor: const Color(0x66000000),
+            baseBorderColor: _previewButtonBaseBorderColor,
           ),
         ],
         if (_canSaveRoomSticker) ...[
@@ -688,9 +1005,73 @@ class _ImagePreviewOverlayState extends State<_ImagePreviewOverlay> {
                   }
                 : null,
             backgroundColor: const Color(0x66000000),
+            baseBorderColor: _previewButtonBaseBorderColor,
           ),
         ],
       ],
+    );
+  }
+}
+
+class _FrozenPortraitBackdrop extends StatelessWidget {
+  const _FrozenPortraitBackdrop({
+    required this.snapshot,
+    required this.quarterTurns,
+  });
+
+  final ImagePreviewBackdropSnapshot snapshot;
+  final int quarterTurns;
+
+  @override
+  Widget build(BuildContext context) {
+    final normalizedQuarterTurns = quarterTurns % 4;
+    final rotatedSize = normalizedQuarterTurns.isOdd
+        ? Size(snapshot.logicalSize.height, snapshot.logicalSize.width)
+        : snapshot.logicalSize;
+    return ColoredBox(
+      color: Colors.black,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ClipRect(
+            child: OverflowBox(
+              key: const ValueKey('chat-image-preview-frozen-backdrop-frame'),
+              alignment: Alignment.center,
+              minWidth: rotatedSize.width,
+              maxWidth: rotatedSize.width,
+              minHeight: rotatedSize.height,
+              maxHeight: rotatedSize.height,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 140),
+                reverseDuration: const Duration(milliseconds: 110),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                layoutBuilder: (currentChild, previousChildren) => Stack(
+                  alignment: Alignment.center,
+                  children: [...previousChildren, ?currentChild],
+                ),
+                child: RotatedBox(
+                  key: ValueKey(
+                    'chat-image-preview-frozen-backdrop-rotation-'
+                    '$normalizedQuarterTurns',
+                  ),
+                  quarterTurns: normalizedQuarterTurns,
+                  child: SizedBox.fromSize(
+                    size: snapshot.logicalSize,
+                    child: RawImage(
+                      key: const ValueKey('chat-image-preview-frozen-backdrop'),
+                      image: snapshot.image,
+                      fit: BoxFit.fill,
+                      filterQuality: FilterQuality.medium,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const ColoredBox(color: Color(0xD1000000)),
+        ],
+      ),
     );
   }
 }

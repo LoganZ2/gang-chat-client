@@ -1,3 +1,4 @@
+import 'package:client/src/shell/android_form_factor.dart';
 import 'package:client/src/shell/app_orientation_controller.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +8,7 @@ void main() {
     final requests = <List<DeviceOrientation>>[];
     final controller = AppOrientationController(
       platform: TargetPlatform.android,
+      logicalViewSize: () => const Size(400, 800),
       setPreferredOrientations: (orientations) async {
         requests.add(List<DeviceOrientation>.of(orientations));
       },
@@ -23,6 +25,7 @@ void main() {
     final requests = <List<DeviceOrientation>>[];
     final controller = AppOrientationController(
       platform: TargetPlatform.android,
+      logicalViewSize: () => const Size(400, 800),
       setPreferredOrientations: (orientations) async {
         requests.add(List<DeviceOrientation>.of(orientations));
       },
@@ -37,6 +40,32 @@ void main() {
         DeviceOrientation.landscapeRight,
       ],
     ]);
+  });
+
+  test('Android tablet keeps unrestricted default orientation', () async {
+    final requests = <List<DeviceOrientation>>[];
+    final controller = AppOrientationController(
+      platform: TargetPlatform.android,
+      logicalViewSize: () => const Size(1280, 800),
+      setPreferredOrientations: (orientations) async {
+        requests.add(List<DeviceOrientation>.of(orientations));
+      },
+    );
+
+    await controller.restoreDefaultOrientation();
+    await controller.allowFullScreenMediaLandscape();
+
+    expect(controller.restoresPortraitByDefault, isFalse);
+    expect(requests, <List<DeviceOrientation>>[
+      AppOrientationController.unrestricted,
+      AppOrientationController.unrestricted,
+    ]);
+  });
+
+  test('Android tablet boundary uses the standard 600dp shortest side', () {
+    expect(isAndroidTabletLogicalSize(const Size(599, 1024)), isFalse);
+    expect(isAndroidTabletLogicalSize(const Size(600, 960)), isTrue);
+    expect(isAndroidTabletLogicalSize(const Size(1280, 800)), isTrue);
   });
 
   test('orientation requests never reach non-Android platforms', () async {
@@ -59,6 +88,7 @@ void main() {
       var calls = 0;
       final controller = AppOrientationController(
         platform: TargetPlatform.android,
+        logicalViewSize: () => const Size(400, 800),
         setPreferredOrientations: (orientations) async {
           calls += 1;
           requests.add(List<DeviceOrientation>.of(orientations));

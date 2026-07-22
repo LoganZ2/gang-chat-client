@@ -71,6 +71,7 @@ Widget _host(
   ChatImagePreviewActions? imagePreviewActions,
   TargetPlatform? platform,
   TextScaler? textScaler,
+  Size? layoutSize,
 }) {
   final scaffold = Scaffold(body: Center(child: child));
   final scopedScaffold = imagePreviewActions == null
@@ -79,18 +80,22 @@ Widget _host(
           actions: imagePreviewActions,
           child: scaffold,
         );
+  final effectiveLayoutSize =
+      layoutSize ??
+      (platform == TargetPlatform.android ? const Size(360, 740) : null);
   return MaterialApp(
     theme: platform == null
         ? uiTheme()
         : uiTheme().copyWith(platform: platform),
-    home: textScaler == null
-        ? scopedScaffold
-        : Builder(
-            builder: (context) => MediaQuery(
-              data: MediaQuery.of(context).copyWith(textScaler: textScaler),
-              child: scopedScaffold,
-            ),
+    builder: effectiveLayoutSize == null && textScaler == null
+        ? null
+        : (context, appChild) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(size: effectiveLayoutSize, textScaler: textScaler),
+            child: appChild!,
           ),
+    home: scopedScaffold,
   );
 }
 

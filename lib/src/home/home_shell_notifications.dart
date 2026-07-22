@@ -101,18 +101,16 @@ extension _HomeShellNotifications on _HomeShellState {
   void _openNotificationRoom(PublicRoom room) {
     if (!room.joined) return;
     _setHomeState(_clearDeferredRoomNotificationVisualMarkersInState);
-    final narrow = MediaQuery.sizeOf(context).width < narrowBreakpoint;
-    _selectServer(_roomCardForPublicRoom(room), openContent: narrow);
+    _selectServer(_roomCardForPublicRoom(room), openContent: _compactLayout);
   }
 
   void _openNotificationRoomEvent(RoomEventNotification notification) {
     final room = notification.room;
     if (!room.joined) return;
     _setHomeState(_clearDeferredRoomNotificationVisualMarkersInState);
-    final narrow = MediaQuery.sizeOf(context).width < narrowBreakpoint;
     _selectServer(
       _roomCardForPublicRoom(room),
-      openContent: narrow,
+      openContent: _compactLayout,
       focusMessageId: notification.messageId,
     );
   }

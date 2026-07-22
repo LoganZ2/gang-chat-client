@@ -155,6 +155,10 @@ void registerShellRealtimeLiveWidgetTests() {
     );
     expect(chatLiveButton, findsOneWidget);
     expect(
+      tester.widget<ui.PressableSurface>(chatLiveButton).tooltip,
+      isNotNull,
+    );
+    expect(
       find.descendant(
         of: chatLiveButton,
         matching: find.byKey(const ValueKey('chat-header-room-title')),
@@ -307,18 +311,18 @@ void registerShellRealtimeLiveWidgetTests() {
     expect(livePreviewIcon, findsOneWidget);
     expect(
       tester.getRect(chatLiveButton).right - tester.getRect(livePreview).right,
-      closeTo(13, 1),
+      closeTo(10, 1),
     );
     expect(
       find.descendant(of: livePreview, matching: find.byType(ui.Avatar)),
-      findsNothing,
+      findsOneWidget,
     );
     expect(
       tester.getRect(livePreviewIcon).right,
       lessThan(tester.getRect(livePreviewCount).left),
     );
     expect(tester.widget<Icon>(livePreviewIcon).color, ui.UiColors.accent);
-    expect(tester.widget<Text>(livePreviewCount).data, '1');
+    expect(tester.widget<Text>(livePreviewCount).data, contains('1'));
     expect(tester.widget<Text>(livePreviewCount).style?.color, Colors.white);
 
     realtime.add(
@@ -341,13 +345,13 @@ void registerShellRealtimeLiveWidgetTests() {
 
     expect(
       find.descendant(of: livePreview, matching: find.byType(ui.Avatar)),
-      findsNothing,
+      findsNWidgets(2),
     );
     expect(
       tester.getRect(chatLiveButton).right - tester.getRect(livePreview).right,
-      closeTo(13, 1),
+      closeTo(10, 1),
     );
-    expect(tester.widget<Text>(livePreviewCount).data, '2');
+    expect(tester.widget<Text>(livePreviewCount).data, contains('2'));
 
     realtime.add(
       liveSnapshotEvent([
@@ -393,13 +397,13 @@ void registerShellRealtimeLiveWidgetTests() {
 
     expect(
       find.descendant(of: livePreview, matching: find.byType(ui.Avatar)),
-      findsNothing,
+      findsNWidgets(5),
     );
     expect(
       tester.getRect(chatLiveButton).right - tester.getRect(livePreview).right,
-      closeTo(13, 1),
+      closeTo(10, 1),
     );
-    expect(tester.widget<Text>(livePreviewCount).data, '6');
+    expect(tester.widget<Text>(livePreviewCount).data, contains('6'));
     expect(
       tester
           .widget<Text>(find.byKey(const ValueKey('chat-header-room-meta')))
@@ -745,8 +749,8 @@ void registerShellRealtimeLiveWidgetTests() {
         theme: ui.uiTheme(),
         home: Center(
           child: SizedBox(
-            width: 420,
-            height: 190,
+            width: 360,
+            height: 320,
             child: HomePage(
               app: _homeTestAppContext(),
               realtime: _NoopRealtimeService(),
@@ -821,6 +825,7 @@ void registerShellRealtimeLiveWidgetTests() {
   testWidgets(
     'authenticated home shell uses separate narrow room list and chat screens',
     (WidgetTester tester) async {
+      final requestedPaths = <String>[];
       await tester.pumpWidget(
         MaterialApp(
           theme: ui.uiTheme().copyWith(platform: TargetPlatform.android),
@@ -829,7 +834,7 @@ void registerShellRealtimeLiveWidgetTests() {
               width: 420,
               height: 620,
               child: HomePage(
-                app: _homeTestAppContext(),
+                app: _homeTestAppContext(requestedPaths: requestedPaths),
                 realtime: _NoopRealtimeService(),
               ),
             ),
@@ -838,6 +843,35 @@ void registerShellRealtimeLiveWidgetTests() {
       );
       await tester.pumpAndSettle();
 
+      final compactSearchRect = tester.getRect(
+        find.byKey(const ValueKey('home-title-search')),
+      );
+      final userSummaryRect = tester.getRect(
+        find.byKey(const ValueKey('home-sidebar-user-summary')),
+      );
+      final firstRoomCardRect = tester.getRect(
+        find.ancestor(
+          of: find.text('Alpha Room'),
+          matching: find.byType(ui.PressableSurface),
+        ),
+      );
+      final firstRoomCard = tester.widget<ui.PressableSurface>(
+        find.byKey(const ValueKey('home-sidebar-room-server-alpha')),
+      );
+      final roomScrollbarFinder = find.byKey(
+        const ValueKey('home-sidebar-room-scrollbar'),
+      );
+      final roomScrollbar = tester.widget<RawScrollbar>(roomScrollbarFinder);
+
+      expect(compactSearchRect.width, closeTo(userSummaryRect.width, 0.01));
+      expect(compactSearchRect.bottom, lessThan(userSummaryRect.top));
+      expect(
+        tester.getRect(roomScrollbarFinder).top,
+        closeTo(firstRoomCardRect.top, 0.01),
+      );
+      expect(roomScrollbar.controller!.position.extentBefore, 0);
+      expect(roomScrollbar.padding, EdgeInsets.zero);
+      expect(firstRoomCard.hoverLift, 0);
       expect(find.text('Alpha Room'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('home-narrow-room-list')),
@@ -849,6 +883,35 @@ void registerShellRealtimeLiveWidgetTests() {
       expect(find.byTooltip('最小化'), findsNothing);
       expect(find.byTooltip('最大化'), findsNothing);
       expect(find.byTooltip('关闭'), findsNothing);
+
+      final compactSearchField = find.descendant(
+        of: find.byKey(const ValueKey('home-title-search')),
+        matching: find.byType(TextField),
+      );
+      await tester.enterText(compactSearchField, 'Beta');
+      await tester.pump(const Duration(milliseconds: 320));
+      await tester.pumpAndSettle();
+
+      expect(requestedPaths, contains('/api/v1/search'));
+      expect(
+        find.byKey(const ValueKey('home-title-search-results')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('home-sidebar-user-summary')),
+        findsNothing,
+      );
+
+      await tester.enterText(compactSearchField, '');
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('home-title-search-results')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('home-sidebar-user-summary')),
+        findsOneWidget,
+      );
 
       await tester.tap(find.byTooltip('设置'));
       await tester.pumpAndSettle();
@@ -958,12 +1021,153 @@ void registerShellRealtimeLiveWidgetTests() {
     },
   );
 
-  testWidgets('windows narrow shell keeps the previous desktop behavior', (
+  testWidgets('Android tablet uses the persistent wide desktop layout', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme().copyWith(platform: TargetPlatform.android),
+        home: HomePage(
+          app: _homeTestAppContext(),
+          realtime: _NoopRealtimeService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('home-narrow-room-list')), findsNothing);
+    expect(find.byKey(const ValueKey('home-narrow-content')), findsNothing);
+    expect(find.text('Alpha Room'), findsOneWidget);
+    expect(find.text('Beta Room'), findsOneWidget);
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Beta Room'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('chat-header-live-preview')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<ui.PressableSurface>(
+            find.byKey(const ValueKey('chat-header-live-button')),
+          )
+          .tooltip,
+      isNotNull,
+    );
+    expect(find.byTooltip('鏈€灏忓寲'), findsNothing);
+    expect(find.byTooltip('鏈€澶у寲'), findsNothing);
+    expect(find.byTooltip('鍏抽棴'), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    tester.view.physicalSize = const Size(600, 960);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('home-narrow-room-list')), findsOneWidget);
+    expect(find.text('Beta Room'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    tester.view.physicalSize = const Size(540, 720);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('home-narrow-room-list')), findsOneWidget);
+    expect(find.text('Beta Room'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('windows narrow shell uses adaptive room navigation', (
+    WidgetTester tester,
+  ) async {
+    final requestedPaths = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme().copyWith(platform: TargetPlatform.windows),
+        home: Center(
+          child: SizedBox(
+            width: 360,
+            height: 620,
+            child: HomePage(
+              app: _homeTestAppContext(requestedPaths: requestedPaths),
+              realtime: _NoopRealtimeService(),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('android-shell-back-scope')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('home-narrow-room-list')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-title-search')), findsOneWidget);
+    expect(find.byTooltip('最小化'), findsOneWidget);
+    expect(find.byTooltip('最大化'), findsOneWidget);
+    expect(find.byTooltip('关闭'), findsOneWidget);
+
+    final compactSearchField = find.descendant(
+      of: find.byKey(const ValueKey('home-title-search')),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(compactSearchField, 'Beta');
+    await tester.pump(const Duration(milliseconds: 320));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('聊天记录 1').first);
+    await tester.pumpAndSettle();
+
+    expect(requestedPaths, contains('/api/v1/search'));
+    final firstMessageResult = find.byKey(
+      const ValueKey('search-message-result-msg-beta'),
+    );
+    final searchResults = find.byKey(
+      const ValueKey('home-title-search-results'),
+    );
+    expect(firstMessageResult, findsOneWidget);
+    expect(
+      tester.getRect(firstMessageResult).top,
+      greaterThanOrEqualTo(tester.getRect(searchResults).top),
+    );
+    final firstMessageSubtitle = tester.widget<ui.HighlightedText>(
+      find.descendant(
+        of: firstMessageResult,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is ui.HighlightedText && widget.text.contains('Morgan'),
+        ),
+      ),
+    );
+    expect(firstMessageSubtitle.style?.height, 1.35);
+
+    await tester.enterText(compactSearchField, '');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('返回房间列表'), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-narrow-content')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('chat-header-live-preview-count')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('chat-header-live-preview')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('macOS narrow shell uses adaptive room navigation', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: ui.uiTheme().copyWith(platform: TargetPlatform.windows),
+        theme: ui.uiTheme().copyWith(platform: TargetPlatform.macOS),
         home: Center(
           child: SizedBox(
             width: 420,
@@ -978,24 +1182,17 @@ void registerShellRealtimeLiveWidgetTests() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('android-shell-back-scope')),
-      findsNothing,
-    );
-    expect(find.byKey(const ValueKey('home-narrow-room-list')), findsNothing);
+    expect(find.byKey(const ValueKey('home-narrow-room-list')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-title-search')), findsOneWidget);
+    expect(find.byTooltip('最小化'), findsNothing);
+    expect(find.byTooltip('最大化'), findsNothing);
+    expect(find.byTooltip('关闭'), findsNothing);
 
     await tester.tap(find.text('Alpha Room'));
     await tester.pumpAndSettle();
 
-    expect(find.byTooltip('返回房间列表'), findsNothing);
-    expect(
-      find.byKey(const ValueKey('chat-header-live-preview-count')),
-      findsNothing,
-    );
-    expect(
-      find.byKey(const ValueKey('chat-header-live-preview')),
-      findsOneWidget,
-    );
+    expect(find.byTooltip('返回房间列表'), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-narrow-content')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

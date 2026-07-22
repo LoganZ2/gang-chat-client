@@ -25,6 +25,7 @@ class PressableSurface extends StatefulWidget {
     this.pressedBackgroundColor = UiColors.surfacePressed,
     this.disabledBackgroundColor = UiColors.disabledSurface,
     this.borderColor = UiColors.border,
+    this.baseBorderColor,
     this.selectedBorderColor = UiColors.selectedBorder,
     this.disabledBorderColor = UiColors.disabledBorder,
     this.borderRadius = UiRadii.sm,
@@ -57,6 +58,10 @@ class PressableSurface extends StatefulWidget {
   final Color pressedBackgroundColor;
   final Color disabledBackgroundColor;
   final Color borderColor;
+
+  /// Optional border used by the lower depth layer. When omitted, the lower
+  /// layer keeps the same border as the cap for backwards compatibility.
+  final Color? baseBorderColor;
   final Color selectedBorderColor;
   final Color disabledBorderColor;
   final double borderRadius;
@@ -234,7 +239,7 @@ class _PressableSurfaceState extends State<PressableSurface> {
                       opacity: baseOpacity,
                       child: _SurfaceLayer(
                         background: shadowColor,
-                        borderColor: borderColor,
+                        borderColor: widget.baseBorderColor ?? borderColor,
                         borderRadius: radius,
                         cornerCut: widget.cornerCut,
                         cutCorner: widget.cutCorner,

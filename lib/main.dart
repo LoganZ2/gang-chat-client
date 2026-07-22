@@ -17,10 +17,10 @@ Future<void> main(List<String> args) async {
   final binding = WidgetsFlutterBinding.ensureInitialized();
   installWindowsAltKeyEventGuard();
 
-  // Android launches portrait-only. Full-screen live media temporarily relaxes
-  // this through FullScreenMediaOrientation and restores it on exit.
+  // Android phones launch portrait-only. Large-screen Android devices keep the
+  // platform's normal rotation behavior and naturally use the wide app layout.
   try {
-    await AppOrientationController().lockPortrait();
+    await AppOrientationController().restoreDefaultOrientation();
   } catch (_) {
     // A platform orientation failure must not prevent the app from starting.
   }
@@ -45,9 +45,7 @@ Future<void> main(List<String> args) async {
       (await tokenStore.readRefreshToken())?.isNotEmpty ?? false;
   final windowController = DesktopWindowController();
 
-  await windowController.prepareForLaunch(
-    authenticated: hasStoredSession,
-  );
+  await windowController.prepareForLaunch(authenticated: hasStoredSession);
   runApp(
     GangApp(
       config: config,

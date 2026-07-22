@@ -8,6 +8,8 @@ import '../ui/ui.dart';
 const _sidebarHorizontalPadding = 14.0;
 const _sidebarTopPadding = 16.0;
 const _sidebarBottomPadding = 16.0;
+const _homeSidebarHeaderHeight = 30.0;
+const _homeSidebarHeaderGap = 14.0;
 const _serverCardHeight = 68.0;
 const _serverCardHoverLift = 2.0;
 const _serverCardBaseDepth = 4.0;
@@ -50,6 +52,8 @@ class HomeSidebar extends StatelessWidget {
     required this.onOpenSettings,
     required this.onLogout,
     this.includeWindowChromeOffset = true,
+    this.header,
+    this.bodyOverride,
   });
 
   final double width;
@@ -71,6 +75,8 @@ class HomeSidebar extends StatelessWidget {
   final bool hasPendingNotifications;
   final int pendingNotificationCount;
   final bool includeWindowChromeOffset;
+  final Widget? header;
+  final Widget? bodyOverride;
   final ValueChanged<RoomCard> onServerSelected;
   final VoidCallback onCreateRoom;
   final VoidCallback onOpenNotifications;
@@ -99,46 +105,75 @@ class HomeSidebar extends StatelessWidget {
           ),
           child: LayoutBuilder(
             builder: (context, constraints) {
+              final header = this.header;
+              final headerHeight = header == null
+                  ? 0.0
+                  : _homeSidebarHeaderHeight + _homeSidebarHeaderGap;
+              final availableBodyHeight = constraints.maxHeight - headerHeight;
               final showSummary =
-                  constraints.maxHeight >= _compactSummaryBreakpoint;
+                  availableBodyHeight >= _compactSummaryBreakpoint;
               final showFooter =
-                  constraints.maxHeight >= _compactFooterBreakpoint;
+                  availableBodyHeight >= _compactFooterBreakpoint;
               return Column(
                 children: [
-                  if (showSummary) ...[
+                  if (header != null) ...[
                     Padding(
                       padding: const EdgeInsets.only(
                         right: _serverListScrollbarGutter,
                       ),
-                      child: _UserSummaryBar(
-                        user: currentUser,
-                        inLive: joinedLiveRoomId != null,
-                        reconnecting: realtimeReconnecting,
-                        requestRoundTrip: requestRoundTrip,
-                        logoutActive: logoutActive,
-                        onLogout: onLogout,
+                      child: SizedBox(
+                        height: _homeSidebarHeaderHeight,
+                        width: double.infinity,
+                        child: header,
                       ),
                     ),
-                    SizedBox(height: showFooter ? 14 : 10),
+                    const SizedBox(height: _homeSidebarHeaderGap),
                   ],
-                  Expanded(child: _buildServerList(context)),
-                  if (showFooter) ...[
-                    const SizedBox(height: 12),
-                    Padding(
-                      padding: const EdgeInsets.only(
-                        right: _serverListScrollbarGutter,
+                  if (bodyOverride != null)
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(
+                          right: _serverListScrollbarGutter,
+                        ),
+                        child: bodyOverride!,
                       ),
-                      child: _SidebarFooter(
-                        settingsActive: settingsActive,
-                        createRoomActive: createRoomActive,
-                        notificationsActive: notificationsActive,
-                        hasPendingNotifications: hasPendingNotifications,
-                        pendingNotificationCount: pendingNotificationCount,
-                        onCreateRoom: onCreateRoom,
-                        onOpenNotifications: onOpenNotifications,
-                        onOpenSettings: onOpenSettings,
+                    )
+                  else ...[
+                    if (showSummary) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(
+                          right: _serverListScrollbarGutter,
+                        ),
+                        child: _UserSummaryBar(
+                          user: currentUser,
+                          inLive: joinedLiveRoomId != null,
+                          reconnecting: realtimeReconnecting,
+                          requestRoundTrip: requestRoundTrip,
+                          logoutActive: logoutActive,
+                          onLogout: onLogout,
+                        ),
                       ),
-                    ),
+                      SizedBox(height: showFooter ? 14 : 10),
+                    ],
+                    Expanded(child: _buildServerList(context)),
+                    if (showFooter) ...[
+                      const SizedBox(height: 12),
+                      Padding(
+                        padding: const EdgeInsets.only(
+                          right: _serverListScrollbarGutter,
+                        ),
+                        child: _SidebarFooter(
+                          settingsActive: settingsActive,
+                          createRoomActive: createRoomActive,
+                          notificationsActive: notificationsActive,
+                          hasPendingNotifications: hasPendingNotifications,
+                          pendingNotificationCount: pendingNotificationCount,
+                          onCreateRoom: onCreateRoom,
+                          onOpenNotifications: onOpenNotifications,
+                          onOpenSettings: onOpenSettings,
+                        ),
+                      ),
+                    ],
                   ],
                 ],
               );
@@ -223,15 +258,22 @@ class _ServerListState extends State<_ServerList> {
 
   @override
   Widget build(BuildContext context) {
+    final platform = Theme.of(context).platform;
     return RawScrollbar(
+      key: const ValueKey('home-sidebar-room-scrollbar'),
       controller: _controller,
       interactive: true,
       radius: const Radius.circular(999),
       thickness: 7,
       thumbColor: UiColors.textMuted.withValues(alpha: 0.82),
+      // This scrollbar is already laid out inside the app's safe content.
+      // RawScrollbar otherwise inherits the window MediaQuery padding and
+      // applies the Android status/navigation insets a second time.
+      padding: platform == TargetPlatform.android ? EdgeInsets.zero : null,
       child: ScrollConfiguration(
         behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
         child: ListView.separated(
+          key: const ValueKey('home-sidebar-room-list'),
           controller: _controller,
           primary: false,
           padding: const EdgeInsets.only(right: _serverListScrollbarGutter),
@@ -566,6 +608,9 @@ class _ServerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hoverLift = Theme.of(context).platform == TargetPlatform.android
+        ? 0.0
+        : _serverCardHoverLift;
     final lastMessageTime = room_display.roomSidebarLastMessageTime(
       server,
       now: timestampNow,
@@ -577,7 +622,7 @@ class _ServerCard extends StatelessWidget {
       key: ValueKey('home-sidebar-room-${server.id}'),
       width: double.infinity,
       height: _serverCardHeight,
-      hoverLift: _serverCardHoverLift,
+      hoverLift: hoverLift,
       baseDepth: _serverCardBaseDepth,
       selected: selected,
       backgroundColor: UiColors.surfaceLow,

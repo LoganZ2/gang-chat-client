@@ -23,8 +23,7 @@ const _homeTitleBarLiveRoomMinWidth =
 
 bool _homeTitleBarShowsCustomWindowControls(BuildContext context) {
   final platform = Theme.of(context).platform;
-  return platform != TargetPlatform.macOS &&
-      platform != TargetPlatform.android;
+  return platform != TargetPlatform.macOS && platform != TargetPlatform.android;
 }
 
 double _homeTitleBarBrandWidth(BuildContext context, double maxWidth) {
@@ -40,6 +39,7 @@ double _homeTitleBarBrandWidth(BuildContext context, double maxWidth) {
 }
 
 bool _homeTitleBarCanShowSearch(BuildContext context, double maxWidth) {
+  if (maxWidth < narrowBreakpoint) return false;
   if (!_homeTitleBarShowsCustomWindowControls(context)) {
     return maxWidth >= _homeTitleBarSearchWidth;
   }
@@ -1137,6 +1137,7 @@ class _MessageSearchResultTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _SearchResultTile(
+      key: ValueKey('search-message-result-${result.message.id}'),
       onPressed: onPressed,
       leading: Avatar(
         label: result.room.name,
@@ -1161,6 +1162,7 @@ class _MessageSearchResultTile extends StatelessWidget {
 
 class _SearchResultTile extends StatefulWidget {
   const _SearchResultTile({
+    super.key,
     required this.leading,
     required this.title,
     required this.subtitle,
@@ -1188,6 +1190,7 @@ class _SearchResultTileState extends State<_SearchResultTile> {
   @override
   Widget build(BuildContext context) {
     final interactive = widget.onPressed != null;
+    final compact = HomeAdaptiveLayout.usesCompactLayout(context);
     return MouseRegion(
       cursor: interactive ? SystemMouseCursors.click : SystemMouseCursors.basic,
       onEnter: (_) => setState(() => _hovered = true),
@@ -1249,7 +1252,7 @@ class _SearchResultTileState extends State<_SearchResultTile> {
                               overflow: TextOverflow.ellipsis,
                               style: UiTypography.label.copyWith(
                                 color: UiColors.textMuted,
-                                height: 1.2,
+                                height: compact ? 1.35 : 1.2,
                               ),
                             ),
                           ),

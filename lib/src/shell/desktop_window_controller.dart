@@ -10,7 +10,10 @@ import '../lifecycle/shutdown_hooks.dart';
 
 const appWindowBackground = Color(0xFF14171D);
 
-const _responsiveAppWindowMinSize = Size(560, 600);
+// The authenticated desktop shell can use the same compact navigation as a
+// phone, so its minimum width should match that layout instead of the old
+// desktop-only floor.
+const _responsiveAppWindowMinSize = Size(360, 600);
 const _appWindowSize = Size(1180, 760);
 const _unboundedWindowSize = Size(100000, 100000);
 const _minimumWindowSize = Size(1, 1);

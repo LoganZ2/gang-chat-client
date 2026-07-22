@@ -73,6 +73,7 @@ import '../shell/system_live_presence_speech_player.dart';
 import '../shell/voice_playback_service.dart';
 import '../shell/window_controls.dart';
 import '../ui/ui.dart';
+import 'adaptive_layout.dart';
 import 'chat_pane.dart';
 import 'compact_activity_layout.dart';
 import 'home_content.dart';
@@ -246,6 +247,7 @@ class _HomeShellState extends State<HomeShell> {
   bool _closeConfirming = false;
   bool _exitingApplication = false;
   bool _narrowContentOpen = false;
+  bool _compactLayout = false;
   bool _auxiliaryOpenedFromNarrowSidebar = false;
   _ContentMode _contentMode = _ContentMode.chat;
   UserSummary? _superuserSettingsTarget;
@@ -532,11 +534,6 @@ class _HomeShellState extends State<HomeShell> {
   void _setHomeState(VoidCallback update) => setState(update);
 
   void _restorePaneAfterAuxiliaryInState() {
-    if (Theme.of(context).platform != TargetPlatform.android) {
-      _auxiliaryOpenedFromNarrowSidebar = false;
-      if (_selectedServerId == null) _narrowContentOpen = false;
-      return;
-    }
     final returnToNarrowSidebar = _auxiliaryOpenedFromNarrowSidebar;
     _auxiliaryOpenedFromNarrowSidebar = false;
     if (returnToNarrowSidebar || _selectedServerId == null) {
@@ -619,6 +616,7 @@ class _HomeShellState extends State<HomeShell> {
                 builder: (context, shellConstraints) {
                   final narrowLayout =
                       shellConstraints.maxWidth < narrowBreakpoint;
+                  _compactLayout = narrowLayout;
                   final showSearchOverlay =
                       _homeTitleBarCanShowSearch(
                         context,
@@ -694,43 +692,7 @@ class _HomeShellState extends State<HomeShell> {
                                   _homeTitleBarSearchWidth) /
                               2,
                           width: _homeTitleBarSearchWidth,
-                          child: TapRegion(
-                            key: const ValueKey('home-title-search-results'),
-                            groupId: _searchTapRegionGroup,
-                            child: HoverCardTapRegionScope(
-                              tapRegionGroup: _searchTapRegionGroup,
-                              child: _TitleSearchResultsPanel(
-                                query: _searchQuery,
-                                results: _searchResults,
-                                loading: _searching,
-                                loadingMore: _searchLoadingMore,
-                                error: _searchError,
-                                timestampNow: _serverNow,
-                                currentUser: widget.app.currentUser,
-                                activeCategory: _activeSearchCategory,
-                                visibleCategories: _visibleSearchCategories,
-                                busyPublicRoomId: _busySearchPublicRoomId,
-                                pendingPublicRoomIds:
-                                    _searchPendingPublicRoomIds,
-                                onCategorySelected: _selectSearchCategory,
-                                onLoadMore: () =>
-                                    unawaited(_loadMoreSearchResults()),
-                                onMyRoomSelected: _openSearchRoom,
-                                onProfileRoomSelected: _openSearchProfileRoom,
-                                onResolveRoomProfile: _resolveRoomProfile,
-                                onResolveRoomUserProfile:
-                                    _resolveRoomUserProfile,
-                                onResolveUserProfile: _resolveUserProfile,
-                                onPublicRoomAction: (room) => unawaited(
-                                  _handlePublicRoomSearchAction(room),
-                                ),
-                                onUserSettingsSelected:
-                                    _openSuperuserUserSettings,
-                                onMessageSelected: _openMessageSearchResult,
-                                onFileSelected: _openMessageSearchResult,
-                              ),
-                            ),
-                          ),
+                          child: _buildSearchResultsTapRegion(),
                         ),
                       if (fullScreenTrack != null)
                         Positioned.fill(
@@ -759,7 +721,11 @@ class _HomeShellState extends State<HomeShell> {
                         ),
                     ],
                   );
-                  if (!useAndroidLayout) return content;
+                  final responsiveContent = HomeAdaptiveLayout(
+                    compact: narrowLayout,
+                    child: content,
+                  );
+                  if (!useAndroidLayout) return responsiveContent;
                   return PopScope(
                     key: const ValueKey('android-shell-back-scope'),
                     canPop: !_canHandleShellBack(narrowLayout: narrowLayout),
@@ -768,7 +734,7 @@ class _HomeShellState extends State<HomeShell> {
                         _handleShellBack(narrowLayout: narrowLayout);
                       }
                     },
-                    child: content,
+                    child: responsiveContent,
                   );
                 },
               ),

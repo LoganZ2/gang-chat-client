@@ -26,6 +26,7 @@ import '../app/voice_message_display.dart' as voice_display;
 import '../protocol/models.dart';
 import '../shell/external_uri_launcher.dart';
 import '../ui/ui.dart';
+import 'adaptive_layout.dart';
 import 'chat_image_preview.dart';
 import 'hover_card_anchor.dart';
 import 'room_profile_card.dart';

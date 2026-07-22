@@ -223,11 +223,7 @@ extension _HomeShellRoomActions on _HomeShellState {
     _setHomeState(() {
       _settingsOpen = false;
       _settingsAppUpdate = null;
-      if (Theme.of(context).platform == TargetPlatform.android) {
-        _restorePaneAfterAuxiliaryInState();
-      } else {
-        _auxiliaryOpenedFromNarrowSidebar = false;
-      }
+      _restorePaneAfterAuxiliaryInState();
     });
   }
 

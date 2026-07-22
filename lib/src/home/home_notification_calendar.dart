@@ -304,7 +304,7 @@ class _NotificationCalendarDialogState
   }
 
   Widget _monthNavigation() {
-    if (Theme.of(context).platform == TargetPlatform.android) {
+    if (HomeAdaptiveLayout.usesCompactLayout(context)) {
       final month = _visibleMonth.month.toString().padLeft(2, '0');
       return Row(
         children: [

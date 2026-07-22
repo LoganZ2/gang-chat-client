@@ -652,7 +652,7 @@ void registerShellRoomManagementWidgetTests() {
   testWidgets(
     'android message history enlarges user avatars without changing system avatars',
     (WidgetTester tester) async {
-      await tester.binding.setSurfaceSize(const Size(900, 900));
+      await tester.binding.setSurfaceSize(const Size(700, 1000));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
       await tester.pumpWidget(

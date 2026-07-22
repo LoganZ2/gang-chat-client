@@ -5,6 +5,7 @@ import '../app/room_notifications.dart';
 import '../app/error_display.dart';
 import '../protocol/models.dart';
 import '../ui/ui.dart';
+import 'adaptive_layout.dart';
 import 'compact_activity_layout.dart';
 import 'hover_card_anchor.dart';
 import 'room_profile_card.dart';
@@ -2008,7 +2009,7 @@ class _RoomEventInfoCard extends StatelessWidget {
 }
 
 double _notificationAvatarSize(BuildContext context) {
-  return Theme.of(context).platform == TargetPlatform.android
+  return HomeAdaptiveLayout.usesCompactLayout(context)
       ? CompactActivityLayout.avatarSize
       : 34;
 }
@@ -2067,9 +2068,7 @@ class _ResponsiveNotificationContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Theme.of(context).platform == TargetPlatform.android
-        ? compact
-        : wide;
+    return HomeAdaptiveLayout.usesCompactLayout(context) ? compact : wide;
   }
 }
 
@@ -2275,7 +2274,7 @@ class _InlineUserTarget extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 7),
-        if (Theme.of(context).platform == TargetPlatform.android)
+        if (HomeAdaptiveLayout.usesCompactLayout(context))
           _InviteRoleBadge(
             key: ValueKey('notification-room-event-actor-role-$targetId'),
             label: roomInviteRoleLabel(user),
@@ -2363,7 +2362,7 @@ class _InlineRoomTarget extends StatelessWidget {
         fontWeight: FontWeight.w600,
       ),
     );
-    if (Theme.of(context).platform != TargetPlatform.android) {
+    if (!HomeAdaptiveLayout.usesCompactLayout(context)) {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
