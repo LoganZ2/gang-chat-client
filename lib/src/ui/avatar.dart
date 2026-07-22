@@ -142,6 +142,8 @@ class Avatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final initials = avatarInitials(label);
+    final useAndroidFallbackText =
+        Theme.of(context).platform == TargetPlatform.android;
     final key = defaultAvatarKey == null
         ? null
         : normalizeAvatarPresetKey(defaultAvatarKey!);
@@ -174,12 +176,23 @@ class Avatar extends StatelessWidget {
                     ? Center(
                         child: Text(
                           initials,
+                          textAlign: TextAlign.center,
+                          textScaler: useAndroidFallbackText
+                              ? TextScaler.noScaling
+                              : null,
                           style: TextStyle(
                             color: key == null && borderActive
                                 ? activeColor
                                 : UiColors.text,
                             fontSize: size * 0.34,
                             fontWeight: FontWeight.w600,
+                            // The desktop font family is unavailable on
+                            // Android. Keep the native font's own ascent and
+                            // descent so Center can align its complete line box
+                            // without a size- or density-specific offset.
+                            fontFamily: useAndroidFallbackText
+                                ? 'sans-serif'
+                                : null,
                           ),
                         ),
                       )

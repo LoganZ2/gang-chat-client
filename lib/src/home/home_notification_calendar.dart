@@ -236,6 +236,11 @@ class _NotificationCalendarDialogState
 
   @override
   Widget build(BuildContext context) {
+    final isAndroid = Theme.of(context).platform == TargetPlatform.android;
+    final hideCalendarForAndroidInput =
+        isAndroid &&
+        (_entryMode == _NotificationCalendarEntryMode.input ||
+            MediaQuery.viewInsetsOf(context).bottom > 0);
     return DialogFrame(
       title: widget.title,
       icon: Icons.calendar_month_outlined,
@@ -258,13 +263,15 @@ class _NotificationCalendarDialogState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _toolbar(),
-          const SizedBox(height: 14),
-          if (_showingYearPicker) ...[
-            _yearPicker(),
-          ] else ...[
-            _weekdayHeader(),
-            const SizedBox(height: 6),
-            _monthGrid(),
+          if (!hideCalendarForAndroidInput) ...[
+            const SizedBox(height: 14),
+            if (_showingYearPicker) ...[
+              _yearPicker(),
+            ] else ...[
+              _weekdayHeader(),
+              const SizedBox(height: 6),
+              _monthGrid(),
+            ],
           ],
         ],
       ),
@@ -297,6 +304,42 @@ class _NotificationCalendarDialogState
   }
 
   Widget _monthNavigation() {
+    if (Theme.of(context).platform == TargetPlatform.android) {
+      final month = _visibleMonth.month.toString().padLeft(2, '0');
+      return Row(
+        children: [
+          ButtonIcon(
+            key: const ValueKey('notification-calendar-previous-month'),
+            tooltip: '上个月',
+            icon: const Icon(Icons.chevron_left),
+            onPressed: _canMoveMonth(-1) ? () => _moveMonth(-1) : null,
+            size: 32,
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _entryMode == _NotificationCalendarEntryMode.input
+                ? _inlineInput()
+                : _navigationLabel(
+                    key: const ValueKey(
+                      'notification-calendar-year-picker-toggle',
+                    ),
+                    label: '${_visibleMonth.year}/$month',
+                    tooltip: '展开年份选择',
+                    expanded: false,
+                    onPressed: _toggleYearPicker,
+                  ),
+          ),
+          const SizedBox(width: 4),
+          ButtonIcon(
+            key: const ValueKey('notification-calendar-next-month'),
+            tooltip: '下个月',
+            icon: const Icon(Icons.chevron_right),
+            onPressed: _canMoveMonth(1) ? () => _moveMonth(1) : null,
+            size: 32,
+          ),
+        ],
+      );
+    }
     return Row(
       children: [
         ButtonIcon(

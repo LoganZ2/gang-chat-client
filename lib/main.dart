@@ -6,6 +6,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 
 import 'src/auth/token_store.dart';
 import 'src/config/app_config.dart';
+import 'src/shell/app_orientation_controller.dart';
 import 'src/shell/desktop_window_controller.dart';
 import 'src/shell/gang_app.dart';
 import 'src/shell/windows_key_event_guard.dart';
@@ -15,6 +16,14 @@ export 'src/shell/gang_app.dart' show GangApp;
 Future<void> main(List<String> args) async {
   final binding = WidgetsFlutterBinding.ensureInitialized();
   installWindowsAltKeyEventGuard();
+
+  // Android launches portrait-only. Full-screen live media temporarily relaxes
+  // this through FullScreenMediaOrientation and restores it on exit.
+  try {
+    await AppOrientationController().lockPortrait();
+  } catch (_) {
+    // A platform orientation failure must not prevent the app from starting.
+  }
 
   // Bypass Apple's voice-processing unit on macOS before the WebRTC factory is
   // created. On Windows, eagerly touching WebRTC during app launch can make the

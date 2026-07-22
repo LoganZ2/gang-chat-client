@@ -643,9 +643,7 @@ class _RoomMessageHistoryPaneState extends State<_RoomMessageHistoryPane> {
           context,
         ).resolveAssetUrl(message.sender.avatarUrl),
         defaultAvatarKey: message.sender.defaultAvatarKey,
-        size: Theme.of(context).platform == TargetPlatform.android
-            ? CompactActivityLayout.avatarSize
-            : 38,
+        size: 38,
       ),
     );
   }
@@ -692,6 +690,13 @@ class _HistoryMessageRowState extends State<_HistoryMessageRow> {
     final message = widget.message;
     final senderName = _historySenderName(message.sender);
     final highlighted = widget.selected || _contextMenuActive;
+    final isAndroid = Theme.of(context).platform == TargetPlatform.android;
+    final timestampColumnWidth = isAndroid
+        ? CompactActivityLayout.androidTimestampColumnWidth
+        : CompactActivityLayout.timestampColumnWidth;
+    final timestampContentGap = isAndroid
+        ? CompactActivityLayout.androidTimestampContentGap
+        : 8.0;
     final surface = AnimatedContainer(
       key: ValueKey('room-message-history-row-${message.id}'),
       duration: const Duration(milliseconds: 90),
@@ -710,8 +715,8 @@ class _HistoryMessageRowState extends State<_HistoryMessageRow> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(width: CompactActivityLayout.timestampColumnWidth),
-              const SizedBox(width: 8),
+              SizedBox(width: timestampColumnWidth),
+              SizedBox(width: timestampContentGap),
               if (!widget.inlineContent) ...[
                 widget.senderAvatar!,
                 const SizedBox(width: 10),
@@ -763,11 +768,11 @@ class _HistoryMessageRowState extends State<_HistoryMessageRow> {
             left: 0,
             top: 0,
             bottom: 0,
-            width: CompactActivityLayout.timestampColumnWidth,
+            width: timestampColumnWidth,
             child: Center(
               child: Text(
                 key: ValueKey('room-message-history-time-${message.id}'),
-                Theme.of(context).platform == TargetPlatform.android
+                isAndroid
                     ? CompactActivityLayout.splitTimestamp(
                         room_notifications.roomInviteTimestampLabel(
                           message.createdAt,

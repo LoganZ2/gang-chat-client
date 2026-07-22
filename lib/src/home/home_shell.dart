@@ -66,6 +66,7 @@ import '../shell/clipboard_service.dart';
 import '../shell/desktop_window_controller.dart';
 import '../shell/file_drop_service.dart';
 import '../shell/file_selection_service.dart';
+import '../shell/full_screen_media_orientation.dart';
 import '../shell/message_notification_sound_service.dart';
 import '../shell/release_update_service.dart';
 import '../shell/system_live_presence_speech_player.dart';
@@ -733,22 +734,27 @@ class _HomeShellState extends State<HomeShell> {
                         ),
                       if (fullScreenTrack != null)
                         Positioned.fill(
-                          child: LiveFullScreenStage(
-                            track: fullScreenTrack,
-                            label: liveStageTrackLabel(_live, fullScreenTrack),
-                            screenShareViewers: fullScreenTrack.isScreenShare
-                                ? live_display.liveScreenShareViewers(
-                                    _live,
-                                    fullScreenTrack.identity,
-                                  )
-                                : const <UserSummary>[],
-                            screenShareVolume:
-                                _liveSessionController.screenShareVolume,
-                            onScreenShareVolumeChanged:
-                                _changeScreenShareVolume,
-                            onScreenShareMuteToggled:
-                                _toggleScreenShareAudioMute,
-                            onExit: _exitLiveFullScreen,
+                          child: FullScreenMediaOrientation(
+                            child: LiveFullScreenStage(
+                              track: fullScreenTrack,
+                              label: liveStageTrackLabel(
+                                _live,
+                                fullScreenTrack,
+                              ),
+                              screenShareViewers: fullScreenTrack.isScreenShare
+                                  ? live_display.liveScreenShareViewers(
+                                      _live,
+                                      fullScreenTrack.identity,
+                                    )
+                                  : const <UserSummary>[],
+                              screenShareVolume:
+                                  _liveSessionController.screenShareVolume,
+                              onScreenShareVolumeChanged:
+                                  _changeScreenShareVolume,
+                              onScreenShareMuteToggled:
+                                  _toggleScreenShareAudioMute,
+                              onExit: _exitLiveFullScreen,
+                            ),
                           ),
                         ),
                     ],

@@ -617,6 +617,89 @@ void registerShellRoomManagementWidgetTests() {
   });
 
   testWidgets(
+    'android room description input centers its first line vertically',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(360, 740));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme().copyWith(platform: TargetPlatform.android),
+          home: HomePage(
+            app: _homeTestAppContext(),
+            realtime: _NoopRealtimeService(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Alpha Room'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('房间设置'));
+      await tester.pumpAndSettle();
+
+      final description = tester.widget<TextField>(
+        _roomSettingsTextField('description'),
+      );
+      final padding = description.decoration!.contentPadding! as EdgeInsets;
+      expect(description.maxLines, isNull);
+      expect(description.textAlignVertical, TextAlignVertical.center);
+      expect(padding.top, closeTo(padding.bottom, 0.01));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'android message history enlarges user avatars without changing system avatars',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(900, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme().copyWith(platform: TargetPlatform.android),
+          home: HomePage(
+            app: _homeTestAppContext(),
+            realtime: _NoopRealtimeService(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Alpha Room'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('房间设置'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('消息记录'));
+      await tester.pumpAndSettle();
+
+      final userAvatar = find.byKey(
+        const ValueKey('room-message-history-avatar-msg-1'),
+      );
+      final systemContent = find.descendant(
+        of: find.byKey(const ValueKey('room-message-history-row-msg-system')),
+        matching: find.byType(ChatSystemMessageContent),
+      );
+      final systemAvatar = find.descendant(
+        of: systemContent,
+        matching: find.byType(ui.Avatar),
+      );
+
+      expect(tester.getSize(userAvatar), const Size.square(38));
+      expect(tester.getSize(systemAvatar), const Size.square(18));
+      expect(
+        tester
+            .getSize(
+              find.byKey(const ValueKey('room-message-history-time-msg-1')),
+            )
+            .width,
+        lessThan(82),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'room settings confirms auto-reviewing pending applications before join policy change',
     (WidgetTester tester) async {
       final requestedPaths = <String>[];

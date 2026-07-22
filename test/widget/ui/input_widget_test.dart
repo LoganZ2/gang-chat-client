@@ -80,6 +80,124 @@ void main() {
     expect(submissions, ['alice']);
   });
 
+  testWidgets('android search input centers text and icon vertically', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(platform: TargetPlatform.android),
+        home: const Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 320,
+              child: Input(hintText: '搜索', prefixIcon: Icons.search),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final field = tester.widget<TextField>(find.byType(TextField));
+    final padding = field.decoration!.contentPadding! as EdgeInsets;
+    expect(padding.top, closeTo(padding.bottom, 0.01));
+    expect(
+      tester
+          .widgetList<Transform>(
+            find.ancestor(
+              of: find.byIcon(Icons.search),
+              matching: find.byType(Transform),
+            ),
+          )
+          .map((transform) => transform.transform.storage[13]),
+      contains(closeTo(0, 0.01)),
+    );
+  });
+
+  testWidgets('android regular input centers text and icon vertically', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(platform: TargetPlatform.android),
+        home: const Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 320,
+              child: Input(hintText: '普通输入', prefixIcon: Icons.person_outline),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final field = tester.widget<TextField>(find.byType(TextField));
+    final padding = field.decoration!.contentPadding! as EdgeInsets;
+    expect(padding.top, closeTo(padding.bottom, 0.01));
+    expect(
+      tester
+          .widgetList<Transform>(
+            find.ancestor(
+              of: find.byIcon(Icons.person_outline),
+              matching: find.byType(Transform),
+            ),
+          )
+          .map((transform) => transform.transform.storage[13]),
+      contains(closeTo(0, 0.01)),
+    );
+  });
+
+  testWidgets('android unbounded multiline input centers its first line', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(platform: TargetPlatform.android),
+        home: const Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 320,
+              child: Input(hintText: '简介', maxLines: null),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final field = tester.widget<TextField>(find.byType(TextField));
+    final padding = field.decoration!.contentPadding! as EdgeInsets;
+    expect(field.maxLines, isNull);
+    expect(padding.top, closeTo(padding.bottom, 0.01));
+  });
+
+  testWidgets('windows unbounded multiline input keeps desktop spacing', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(platform: TargetPlatform.windows),
+        home: const Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 320,
+              child: Input(hintText: '简介', maxLines: null),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final field = tester.widget<TextField>(find.byType(TextField));
+    final padding = field.decoration!.contentPadding! as EdgeInsets;
+    expect(field.maxLines, isNull);
+    expect(padding.top, closeTo(padding.bottom, 0.01));
+    final linePainter = TextPainter(
+      text: TextSpan(text: ' ', style: field.style),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final centeredPadding = (Input.defaultHeight - linePainter.height) / 2;
+    expect(padding.top, greaterThan(centeredPadding));
+  });
+
   testWidgets('input forwards explicit text alignment', (tester) async {
     final controller = TextEditingController(text: '2026-07-10');
     addTearDown(controller.dispose);

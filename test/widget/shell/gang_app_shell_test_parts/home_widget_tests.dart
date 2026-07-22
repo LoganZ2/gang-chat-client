@@ -1060,6 +1060,18 @@ void registerShellHomeWidgetTests() {
             .size,
         34,
       );
+      for (final key in const [
+        'notification-inviter-name-invite-alpha',
+        'notification-application-reviewer-name-application-approved',
+      ]) {
+        expect(
+          tester
+              .widget<ui.HighlightedText>(find.byKey(ValueKey(key)))
+              .style
+              ?.fontSize,
+          ui.UiTypography.label.fontSize,
+        );
+      }
       expect(
         find.byKey(const ValueKey('notification-mobile-body-invite-alpha')),
         findsNothing,
@@ -1210,7 +1222,7 @@ void registerShellHomeWidgetTests() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('narrow notifications wrap content and split the timestamp', (
+  testWidgets('android notifications keep every inline avatar in desktop order', (
     WidgetTester tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(360, 740));
@@ -1235,11 +1247,11 @@ void registerShellHomeWidgetTests() {
     );
     const timeKey = ValueKey('notification-room-event-time-room-event-alpha');
     expect(find.byKey(bodyKey), findsOneWidget);
-    expect(tester.widget<ui.HighlightedText>(find.byKey(bodyKey)).maxLines, 4);
     expect(
       tester.widget<ui.HighlightedText>(find.byKey(timeKey)).text,
       contains('\n'),
     );
+    expect(tester.getSize(find.byKey(timeKey)).width, lessThan(82));
     final roomEventCard = find.byKey(
       const ValueKey('notification-row-surface-room-event:room-event-alpha'),
     );
@@ -1247,15 +1259,72 @@ void registerShellHomeWidgetTests() {
       of: roomEventCard,
       matching: find.byType(ui.ButtonIcon),
     );
-    final messageAvatar = find.descendant(
-      of: roomEventCard,
-      matching: find.byType(ui.Avatar),
-    );
-    expect(messageAvatar, findsOneWidget);
-    expect(tester.widget<ui.Avatar>(messageAvatar).size, 18);
+    List<String> avatarKeysIn(Finder card) => tester
+        .widgetList<ui.Avatar>(
+          find.descendant(of: card, matching: find.byType(ui.Avatar)),
+        )
+        .map((avatar) => (avatar.key! as ValueKey<String>).value)
+        .toList();
+
     expect(
-      tester.getRect(messageAvatar).top,
-      closeTo(tester.getRect(find.byKey(bodyKey)).top, 1),
+      avatarKeysIn(
+        find.byKey(
+          const ValueKey('notification-row-surface-invite:invite-alpha'),
+        ),
+      ),
+      [
+        'notification-inviter-avatar-invite-alpha',
+        'notification-room-avatar-invite-alpha',
+      ],
+    );
+    expect(
+      avatarKeysIn(
+        find.byKey(
+          const ValueKey(
+            'notification-row-surface-application-requested:application-alpha',
+          ),
+        ),
+      ),
+      ['notification-room-avatar-application-application-alpha'],
+    );
+    expect(
+      avatarKeysIn(
+        find.byKey(
+          const ValueKey(
+            'notification-row-surface-application-reviewed:application-approved',
+          ),
+        ),
+      ),
+      [
+        'notification-application-reviewer-avatar-application-approved',
+        'notification-room-avatar-application-reviewed-application-approved',
+      ],
+    );
+    expect(avatarKeysIn(roomEventCard), [
+      'notification-room-avatar-room-event-room-event-alpha',
+      'notification-room-event-actor-avatar-room-event-alpha',
+    ]);
+    for (final key in const [
+      'notification-inviter-name-invite-alpha',
+      'notification-application-reviewer-name-application-approved',
+      'notification-room-event-actor-name-room-event-alpha',
+    ]) {
+      expect(
+        tester
+            .widget<ui.HighlightedText>(find.byKey(ValueKey(key)))
+            .style
+            ?.fontSize,
+        ui.UiTypography.label.fontSize,
+      );
+    }
+    final firstMessageAvatar = find.byKey(
+      const ValueKey('notification-room-avatar-room-event-room-event-alpha'),
+    );
+    expect(
+      tester
+          .getRect(find.byKey(bodyKey))
+          .contains(tester.getRect(firstMessageAvatar).center),
+      isTrue,
     );
     final notificationTime = tester.widget<ui.HighlightedText>(
       find.byKey(timeKey),

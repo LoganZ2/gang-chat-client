@@ -268,7 +268,10 @@ class _InputState extends State<Input> {
                       right: UiSpacing.sm,
                     ),
                     child: Transform.translate(
-                      offset: const Offset(0, _inputIconVerticalOffset),
+                      offset: Offset(
+                        0,
+                        _verticalOffsetFor(context, icon: true),
+                      ),
                       child: Icon(
                         widget.prefixIcon,
                         size: _inputIconSize,
@@ -288,7 +291,10 @@ class _InputState extends State<Input> {
                       right: _inputHorizontalPadding,
                     ),
                     child: Transform.translate(
-                      offset: const Offset(0, _inputIconVerticalOffset),
+                      offset: Offset(
+                        0,
+                        _verticalOffsetFor(context, icon: true),
+                      ),
                       child: suffix,
                     ),
                   ),
@@ -372,15 +378,23 @@ class _InputState extends State<Input> {
     )..layout();
     final lineHeight = painter.preferredLineHeight;
     final verticalPadding = math.max(0.0, (widget.height - lineHeight) / 2);
-    final textOffset = math.min(_inputTextVerticalOffset, verticalPadding);
+    final textOffset = math.min(_verticalOffsetFor(context), verticalPadding);
+    final unboundedBottomPadding =
+        _effectiveMaxLines == null &&
+            Theme.of(context).platform != TargetPlatform.android
+        ? _inputUnboundedBottomPadding
+        : 0.0;
     return EdgeInsets.fromLTRB(
       _inputHorizontalPadding,
       verticalPadding + textOffset,
       _inputHorizontalPadding,
-      verticalPadding -
-          textOffset +
-          (_effectiveMaxLines == null ? _inputUnboundedBottomPadding : 0),
+      verticalPadding - textOffset + unboundedBottomPadding,
     );
+  }
+
+  double _verticalOffsetFor(BuildContext context, {bool icon = false}) {
+    if (Theme.of(context).platform == TargetPlatform.android) return 0;
+    return icon ? _inputIconVerticalOffset : _inputTextVerticalOffset;
   }
 }
 

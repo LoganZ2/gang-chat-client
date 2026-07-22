@@ -389,7 +389,7 @@ void registerShellUiShowcaseWidgetTests() {
 
     await tester.pumpWidget(
       MaterialApp(
-        theme: ui.uiTheme(),
+        theme: ui.uiTheme().copyWith(platform: TargetPlatform.windows),
         home: Scaffold(
           body: Center(
             child: SizedBox(

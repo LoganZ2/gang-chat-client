@@ -69,6 +69,37 @@ void main() {
     expect(find.byTooltip('red-2'), findsNothing);
   });
 
+  testWidgets('Android avatar picker reuses centered preset avatar text', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: uiTheme().copyWith(platform: TargetPlatform.android),
+        home: Scaffold(
+          body: AvatarPicker(
+            label: '头像',
+            displayName: 'Test',
+            imageUrl: null,
+            defaultAvatarKey: 'blue-3',
+            usingPreset: true,
+            uploading: false,
+            enabled: true,
+            presetKeys: const ['blue-3'],
+            onUpload: () {},
+            onPresetSelected: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    final preview = find.byKey(const ValueKey('avatar-picker-preview'));
+    final avatar = find.descendant(of: preview, matching: find.byType(Avatar));
+    final text = find.descendant(of: avatar, matching: find.text('TE'));
+    expect(avatar, findsOneWidget);
+    expect(tester.getCenter(text).dx, tester.getCenter(avatar).dx);
+    expect(tester.getCenter(text).dy, tester.getCenter(avatar).dy);
+  });
+
   testWidgets('active avatar paints the status border above its content', (
     tester,
   ) async {
@@ -113,6 +144,96 @@ void main() {
       ),
     );
     expect(container.foregroundDecoration, isNull);
+  });
+
+  testWidgets(
+    'Android preset avatar text stays geometrically centered at fixed scale',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: uiTheme().copyWith(platform: TargetPlatform.android),
+          home: const MediaQuery(
+            data: MediaQueryData(textScaler: TextScaler.linear(1.8)),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Avatar(
+                  key: ValueKey('android-avatar-latin'),
+                  label: 'Test',
+                  defaultAvatarKey: 'blue-3',
+                  size: 18,
+                ),
+                Avatar(
+                  key: ValueKey('android-avatar-digits'),
+                  label: '12',
+                  defaultAvatarKey: 'green-2',
+                  size: 34,
+                ),
+                Avatar(
+                  key: ValueKey('android-avatar-chinese'),
+                  label: '暗影',
+                  defaultAvatarKey: 'purple-2',
+                  size: 40,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      for (final (avatarKey, initials, size) in const [
+        ('android-avatar-latin', 'TE', 18.0),
+        ('android-avatar-digits', '12', 34.0),
+        ('android-avatar-chinese', '暗影', 40.0),
+      ]) {
+        final avatar = find.byKey(ValueKey(avatarKey));
+        final textFinder = find.descendant(
+          of: avatar,
+          matching: find.text(initials),
+        );
+        final text = tester.widget<Text>(textFinder);
+        expect(text.textAlign, TextAlign.center);
+        expect(text.textScaler, TextScaler.noScaling);
+        expect(text.style?.fontFamily, 'sans-serif');
+        expect(text.style?.fontSize, size * 0.34);
+        expect(text.style?.height, isNull);
+        expect(text.style?.leadingDistribution, isNull);
+        final avatarCenter = tester.getCenter(avatar);
+        final textCenter = tester.getCenter(textFinder);
+        expect(textCenter.dx, avatarCenter.dx);
+        expect(textCenter.dy, avatarCenter.dy);
+      }
+    },
+  );
+
+  testWidgets('Windows preset avatar text keeps desktop font behavior', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: uiTheme().copyWith(platform: TargetPlatform.windows),
+        home: const Center(
+          child: Avatar(
+            key: ValueKey('windows-avatar'),
+            label: 'Test',
+            defaultAvatarKey: 'blue-3',
+            size: 18,
+          ),
+        ),
+      ),
+    );
+
+    final avatar = find.byKey(const ValueKey('windows-avatar'));
+    final textFinder = find.descendant(
+      of: avatar,
+      matching: find.text('TE'),
+    );
+    final text = tester.widget<Text>(textFinder);
+    expect(text.textScaler, isNull);
+    expect(text.style?.fontFamily, isNull);
+    expect(text.style?.height, isNull);
+    expect(text.style?.leadingDistribution, isNull);
+    expect(tester.getCenter(textFinder), tester.getCenter(avatar));
   });
 
   testWidgets('avatar can suppress shared status and base borders', (

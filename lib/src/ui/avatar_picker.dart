@@ -168,18 +168,11 @@ class _AvatarPickerPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fallback = ColoredBox(
-      color: avatarFallbackColor(defaultAvatarKey),
-      child: Center(
-        child: Text(
-          avatarInitials(label),
-          style: TextStyle(
-            color: UiColors.text,
-            fontSize: size * 0.34,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
+    final fallback = Avatar(
+      label: label,
+      defaultAvatarKey: defaultAvatarKey,
+      size: size,
+      showBorder: false,
     );
     final url = imageUrl;
     final preview = SizedBox.square(

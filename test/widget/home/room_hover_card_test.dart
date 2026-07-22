@@ -34,6 +34,16 @@ const _creator = UserSummary(
   defaultAvatarKey: 'blue-3',
 );
 
+const _superuser = UserSummary(
+  id: 'u_superuser',
+  username: 'GANG',
+  displayName: 'GANG',
+  avatarUrl: null,
+  defaultAvatarKey: 'blue-3',
+  roomRole: 'superuser',
+  isSuperuser: true,
+);
+
 final _joinedRoom = PublicRoom(
   id: 'room_1',
   rid: 'R10001',
@@ -56,15 +66,30 @@ final _joinedRoom = PublicRoom(
   ),
 );
 
-Widget _host(Widget child, {ChatImagePreviewActions? imagePreviewActions}) {
+Widget _host(
+  Widget child, {
+  ChatImagePreviewActions? imagePreviewActions,
+  TargetPlatform? platform,
+  TextScaler? textScaler,
+}) {
   final scaffold = Scaffold(body: Center(child: child));
+  final scopedScaffold = imagePreviewActions == null
+      ? scaffold
+      : ChatImagePreviewActionsScope(
+          actions: imagePreviewActions,
+          child: scaffold,
+        );
   return MaterialApp(
-    theme: uiTheme(),
-    home: imagePreviewActions == null
-        ? scaffold
-        : ChatImagePreviewActionsScope(
-            actions: imagePreviewActions,
-            child: scaffold,
+    theme: platform == null
+        ? uiTheme()
+        : uiTheme().copyWith(platform: platform),
+    home: textScaler == null
+        ? scopedScaffold
+        : Builder(
+            builder: (context) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+              child: scopedScaffold,
+            ),
           ),
   );
 }
@@ -454,6 +479,7 @@ void main() {
           onOpenRoom: (_) {},
           onOpenRoomEvent: (_) {},
         ),
+        platform: TargetPlatform.windows,
       ),
     );
     await tester.enterText(find.byType(TextField).first, 'Launch');
@@ -560,6 +586,10 @@ void main() {
     expect(
       find.byKey(const ValueKey('notification-calendar-year-picker')),
       findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('notification-calendar-month-grid')),
+      findsOneWidget,
     );
     expect(
       tester
@@ -681,6 +711,420 @@ void main() {
           .selected,
       isFalse,
     );
+  });
+
+  testWidgets('android notification date filters fit narrow screens', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(360, 740));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    addTearDown(tester.view.resetViewInsets);
+    final invite = RoomInvite(
+      id: 'invite_android_date_filter',
+      status: 'accepted',
+      room: _joinedRoom,
+      inviter: _creator,
+      createdAt: DateTime(2026, 6, 1),
+    );
+
+    await tester.pumpWidget(
+      _host(
+        HomeNotificationsPane(
+          invites: [invite],
+          applications: const [],
+          roomNotifications: const [],
+          loading: false,
+          error: null,
+          busyInviteId: null,
+          busyApplicationId: null,
+          currentUser: _currentUser,
+          onClose: () {},
+          onRefresh: () {},
+          onReviewInvite: (_, _) async {},
+          onWithdrawApplication: (_) async {},
+          onOpenRoom: (_) {},
+          onOpenRoomEvent: (_) {},
+        ),
+        platform: TargetPlatform.android,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('筛选通知日期'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('notification-start-date-field')),
+        matching: find.byType(PressableSurface),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('选择开始日期'), findsOneWidget);
+    expect(find.text('1970/01'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('notification-calendar-previous-year')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('notification-calendar-next-year')),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('notification-calendar-input-mode-toggle')),
+    );
+    await tester.pumpAndSettle();
+
+    final inlineInput = find.descendant(
+      of: find.byKey(const ValueKey('notification-calendar-inline-date-input')),
+      matching: find.byType(TextField),
+    );
+    final field = tester.widget<TextField>(inlineInput);
+    expect(field.controller!.text, '1970-01-01');
+    expect(field.focusNode!.hasFocus, isTrue);
+    expect(
+      field.controller!.selection,
+      const TextSelection(baseOffset: 0, extentOffset: 10),
+    );
+    expect(tester.testTextInput.hasAnyClients, isTrue);
+    expect(tester.testTextInput.isVisible, isTrue);
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('notification-calendar-month-grid')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.tap(
+      find.byKey(const ValueKey('notification-calendar-input-mode-toggle')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('notification-calendar-inline-date-input')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('notification-calendar-month-grid')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+    tester.view.resetViewInsets();
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('notification-calendar-month-grid')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('notification-calendar-confirm-button')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('notification-end-date-field')),
+        matching: find.byType(PressableSurface),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('notification-calendar-input-mode-toggle')),
+    );
+    await tester.pumpAndSettle();
+
+    final endInlineInput = find.descendant(
+      of: find.byKey(const ValueKey('notification-calendar-inline-date-input')),
+      matching: find.byType(TextField),
+    );
+    final endField = tester.widget<TextField>(endInlineInput);
+    expect(endField.focusNode!.hasFocus, isTrue);
+    expect(
+      endField.controller!.selection,
+      TextSelection(
+        baseOffset: 0,
+        extentOffset: endField.controller!.text.length,
+      ),
+    );
+    expect(tester.testTextInput.hasAnyClients, isTrue);
+    expect(tester.testTextInput.isVisible, isTrue);
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('notification-calendar-month-grid')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'android notification user targets keep full badges and correct avatars',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(360, 740));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final invite = RoomInvite(
+        id: 'invite_android_superuser',
+        status: 'accepted',
+        room: _joinedRoom,
+        inviter: _superuser,
+        createdAt: DateTime.utc(2026, 7, 20),
+      );
+      final application = RoomApplication(
+        id: 'application_android_superuser',
+        status: 'approved',
+        room: _joinedRoom,
+        createdAt: DateTime.utc(2026, 7, 20),
+        updatedAt: DateTime.utc(2026, 7, 21),
+        reviewedAt: DateTime.utc(2026, 7, 21),
+        reviewer: _superuser,
+      );
+      final notification = RoomEventNotification(
+        id: 'event_android_superuser',
+        type: kRoomEventNotificationRolePromoted,
+        room: _joinedRoom,
+        actor: _superuser,
+        createdAt: DateTime.utc(2026, 7, 22),
+        fromRole: 'member',
+        toRole: 'superuser',
+      );
+
+      await tester.pumpWidget(
+        _host(
+          HomeNotificationsPane(
+            invites: [invite],
+            applications: [application],
+            roomNotifications: [notification],
+            loading: false,
+            error: null,
+            busyInviteId: null,
+            busyApplicationId: null,
+            currentUser: _currentUser,
+            onClose: () {},
+            onRefresh: () {},
+            onReviewInvite: (_, _) async {},
+            onWithdrawApplication: (_) async {},
+            onOpenRoom: (_) {},
+            onOpenRoomEvent: (_) {},
+          ),
+          platform: TargetPlatform.android,
+          textScaler: const TextScaler.linear(1.25),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      for (final key in const [
+        'notification-inviter-role-invite_android_superuser',
+        'notification-application-reviewer-role-application_android_superuser',
+        'notification-room-event-actor-role-event_android_superuser',
+        'notification-room-event-target-role-event_android_superuser',
+      ]) {
+        final roleBadge = find.byKey(ValueKey(key));
+        final roleText = find.descendant(
+          of: roleBadge,
+          matching: find.text('超级用户'),
+        );
+        final text = tester.widget<Text>(roleText);
+        final textPainter = TextPainter(
+          text: TextSpan(text: text.data, style: text.style),
+          textDirection: TextDirection.ltr,
+          textScaler: MediaQuery.textScalerOf(tester.element(roleText)),
+          maxLines: 1,
+        )..layout();
+        expect(
+          tester.getSize(roleText).width,
+          greaterThanOrEqualTo(textPainter.width - 0.01),
+          reason: '$key should not ellipsize 超级用户',
+        );
+      }
+
+      for (final key in const [
+        'notification-inviter-avatar-invite_android_superuser',
+        'notification-application-reviewer-avatar-application_android_superuser',
+        'notification-room-event-actor-avatar-event_android_superuser',
+      ]) {
+        final avatar = find.byKey(ValueKey(key));
+        expect(tester.getSize(avatar), const Size.square(18));
+        final brandImage = tester.widget<Image>(
+          find.descendant(of: avatar, matching: find.byType(Image)),
+        );
+        expect(
+          (brandImage.image as AssetImage).assetName,
+          'assets/branding/auth_brand_icon.png',
+        );
+      }
+
+      final notificationRows = find.byWidgetPredicate(
+        (widget) =>
+            widget.key is ValueKey<String> &&
+            (widget.key! as ValueKey<String>).value.startsWith(
+              'notification-row-surface-',
+            ),
+      );
+      final presetAvatars = find.descendant(
+        of: notificationRows,
+        matching: find.byType(Avatar),
+      );
+      expect(presetAvatars, findsWidgets);
+      for (final avatar in tester.widgetList<Avatar>(presetAvatars)) {
+        expect(avatar.size, 18);
+      }
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('windows superuser notifications use desktop brand avatars', (
+    tester,
+  ) async {
+    final invite = RoomInvite(
+      id: 'invite_windows_superuser',
+      status: 'accepted',
+      room: _joinedRoom,
+      inviter: _superuser,
+      createdAt: DateTime.utc(2026, 7, 20),
+    );
+    final application = RoomApplication(
+      id: 'application_windows_superuser',
+      status: 'approved',
+      room: _joinedRoom,
+      createdAt: DateTime.utc(2026, 7, 20),
+      updatedAt: DateTime.utc(2026, 7, 21),
+      reviewedAt: DateTime.utc(2026, 7, 21),
+      reviewer: _superuser,
+    );
+    final notification = RoomEventNotification(
+      id: 'event_windows_superuser',
+      type: kRoomEventNotificationRolePromoted,
+      room: _joinedRoom,
+      actor: _superuser,
+      createdAt: DateTime.utc(2026, 7, 22),
+      fromRole: 'member',
+      toRole: 'superuser',
+    );
+
+    await tester.pumpWidget(
+      _host(
+        HomeNotificationsPane(
+          invites: [invite],
+          applications: [application],
+          roomNotifications: [notification],
+          loading: false,
+          error: null,
+          busyInviteId: null,
+          busyApplicationId: null,
+          currentUser: _currentUser,
+          onClose: () {},
+          onRefresh: () {},
+          onReviewInvite: (_, _) async {},
+          onWithdrawApplication: (_) async {},
+          onOpenRoom: (_) {},
+          onOpenRoomEvent: (_) {},
+        ),
+        platform: TargetPlatform.windows,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    for (final key in const [
+      'notification-inviter-avatar-invite_windows_superuser',
+      'notification-application-reviewer-avatar-application_windows_superuser',
+      'notification-room-event-actor-avatar-event_windows_superuser',
+    ]) {
+      final avatar = find.byKey(ValueKey(key));
+      expect(tester.getSize(avatar), const Size.square(34));
+      final brandImage = tester.widget<Image>(
+        find.descendant(of: avatar, matching: find.byType(Image)),
+      );
+      expect(
+        (brandImage.image as AssetImage).assetName,
+        'assets/branding/auth_brand_icon.png',
+      );
+    }
+    expect(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey('notification-inviter-role-invite_windows_superuser'),
+        ),
+        matching: find.text('超级用户'),
+      ),
+      findsOneWidget,
+    );
+    final roomAvatars = find.byWidgetPredicate(
+      (widget) =>
+          widget is Avatar &&
+          widget.key is ValueKey<String> &&
+          (widget.key! as ValueKey<String>).value.startsWith(
+            'notification-room-avatar-',
+          ),
+    );
+    expect(roomAvatars, findsWidgets);
+    for (final avatar in tester.widgetList<Avatar>(roomAvatars)) {
+      expect(avatar.size, 34);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Android and Windows superusers prefer a custom avatar', (
+    tester,
+  ) async {
+    const customAvatar =
+        'data:image/png;base64,'
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    final superuserWithAvatar = UserSummary(
+      id: _superuser.id,
+      username: _superuser.username,
+      displayName: _superuser.displayName,
+      avatarUrl: customAvatar,
+      defaultAvatarKey: _superuser.defaultAvatarKey,
+      roomRole: _superuser.roomRole,
+      isSuperuser: true,
+    );
+    final invite = RoomInvite(
+      id: 'invite_superuser_custom_avatar',
+      status: 'accepted',
+      room: _joinedRoom,
+      inviter: superuserWithAvatar,
+      createdAt: DateTime.utc(2026, 7, 20),
+    );
+
+    for (final (platform, size) in const [
+      (TargetPlatform.android, 18.0),
+      (TargetPlatform.windows, 34.0),
+    ]) {
+      await tester.pumpWidget(
+        _host(
+          HomeNotificationsPane(
+            invites: [invite],
+            applications: const [],
+            roomNotifications: const [],
+            loading: false,
+            error: null,
+            busyInviteId: null,
+            busyApplicationId: null,
+            currentUser: _currentUser,
+            onClose: () {},
+            onRefresh: () {},
+            onReviewInvite: (_, _) async {},
+            onWithdrawApplication: (_) async {},
+            onOpenRoom: (_) {},
+            onOpenRoomEvent: (_) {},
+          ),
+          platform: platform,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final avatar = tester.widget<Avatar>(
+        find.byKey(
+          const ValueKey(
+            'notification-inviter-avatar-invite_superuser_custom_avatar',
+          ),
+        ),
+      );
+      expect(avatar.imageUrl, customAvatar);
+      expect(avatar.size, size);
+    }
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('room event notification avatars open profile cards', (
