@@ -11,6 +11,12 @@ const double hoverCardDefaultGap = 10;
 
 typedef HoverCardBuilder = Widget Function(BuildContext context);
 
+EdgeInsets hoverCardOverlaySafeInsets(BuildContext context) {
+  return Theme.of(context).platform == TargetPlatform.android
+      ? MediaQuery.viewPaddingOf(context)
+      : EdgeInsets.zero;
+}
+
 double hoverInfoCardWidth(
   BuildContext context,
   String message, {
@@ -390,11 +396,13 @@ class _HoverCardAnchorState extends State<HoverCardAnchor> {
             builder: (context, constraints) {
               final anchorRect = _anchorRectInOverlay();
               if (anchorRect == null) return const SizedBox.shrink();
+              final safeInsets = hoverCardOverlaySafeInsets(context);
               return CustomSingleChildLayout(
                 delegate: _HoverCardLayoutDelegate(
                   anchorRect: anchorRect,
                   gap: widget.gap,
                   cardWidth: widget.cardWidth,
+                  safeInsets: safeInsets,
                 ),
                 child: TapRegion(
                   groupId: _tapRegionGroup,
@@ -507,31 +515,48 @@ class _HoverCardLayoutDelegate extends SingleChildLayoutDelegate {
     required this.anchorRect,
     required this.gap,
     required this.cardWidth,
+    required this.safeInsets,
   });
 
   final Rect anchorRect;
   final double gap;
   final double cardWidth;
+  final EdgeInsets safeInsets;
 
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
-    return BoxConstraints.loose(
-      constraints.biggest,
-    ).copyWith(minWidth: cardWidth, maxWidth: cardWidth);
+    final availableWidth = math.max(
+      0.0,
+      constraints.maxWidth - safeInsets.horizontal,
+    );
+    final availableHeight = math.max(
+      0.0,
+      constraints.maxHeight - safeInsets.vertical,
+    );
+    final effectiveCardWidth = math.min(cardWidth, availableWidth);
+    return BoxConstraints(
+      minWidth: effectiveCardWidth,
+      maxWidth: effectiveCardWidth,
+      maxHeight: availableHeight,
+    );
   }
 
   @override
   Offset getPositionForChild(Size size, Size childSize) {
-    final spaceRight = size.width - anchorRect.right - gap;
+    final minLeft = safeInsets.left.clamp(0.0, size.width).toDouble();
+    final safeRight = math.max(minLeft, size.width - safeInsets.right);
+    final spaceRight = safeRight - anchorRect.right - gap;
     final placeRight = spaceRight >= childSize.width;
     final rawLeft = placeRight
         ? anchorRect.right + gap
         : anchorRect.left - gap - childSize.width;
-    final maxLeft = math.max(0.0, size.width - childSize.width);
-    final left = rawLeft.clamp(0.0, maxLeft).toDouble();
+    final maxLeft = math.max(minLeft, safeRight - childSize.width);
+    final left = rawLeft.clamp(minLeft, maxLeft).toDouble();
 
-    final maxTop = math.max(0.0, size.height - childSize.height);
-    final top = anchorRect.top.clamp(0.0, maxTop).toDouble();
+    final minTop = safeInsets.top.clamp(0.0, size.height).toDouble();
+    final safeBottom = math.max(minTop, size.height - safeInsets.bottom);
+    final maxTop = math.max(minTop, safeBottom - childSize.height);
+    final top = anchorRect.top.clamp(minTop, maxTop).toDouble();
     return Offset(left, top);
   }
 
@@ -539,6 +564,7 @@ class _HoverCardLayoutDelegate extends SingleChildLayoutDelegate {
   bool shouldRelayout(_HoverCardLayoutDelegate oldDelegate) {
     return oldDelegate.anchorRect != anchorRect ||
         oldDelegate.gap != gap ||
-        oldDelegate.cardWidth != cardWidth;
+        oldDelegate.cardWidth != cardWidth ||
+        oldDelegate.safeInsets != safeInsets;
   }
 }

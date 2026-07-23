@@ -16,12 +16,16 @@ class UiContextMenuSection {
 class UiContextMenuItem {
   const UiContextMenuItem({
     required this.label,
+    this.icon,
     this.shortcut,
+    this.danger = false,
     required this.onPressed,
   });
 
   final String label;
+  final IconData? icon;
   final String? shortcut;
+  final bool danger;
   final VoidCallback? onPressed;
 }
 
@@ -177,7 +181,11 @@ class _UiContextMenuItemWidgetState extends State<_UiContextMenuItemWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final foreground = _enabled ? UiColors.text : UiColors.textMuted;
+    final foreground = !_enabled
+        ? UiColors.textMuted
+        : widget.item.danger
+        ? UiColors.danger
+        : UiColors.text;
     final shortcut = widget.item.shortcut?.trim() ?? '';
     return MouseRegion(
       cursor: _enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
@@ -205,6 +213,10 @@ class _UiContextMenuItemWidgetState extends State<_UiContextMenuItemWidget> {
           color: _enabled && _hovered ? UiColors.selected : Colors.transparent,
           child: Row(
             children: [
+              if (widget.item.icon case final icon?) ...[
+                Icon(icon, size: 18, color: foreground),
+                const SizedBox(width: 10),
+              ],
               Expanded(
                 child: Text(
                   widget.item.label,

@@ -19,95 +19,149 @@ class _MemberFilters extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Input(
-          controller: controller,
-          hintText: '搜索成员',
-          prefixIcon: Icons.search,
-          showClearButton: true,
+    final presence = SegmentedControl<member_filter.RoomMemberPresenceFilter>(
+      key: const ValueKey('member-presence-filter'),
+      expanded: true,
+      value: presenceFilter,
+      onChanged: onPresenceChanged,
+      segments: [
+        Segment(
+          value: member_filter.RoomMemberPresenceFilter.all,
+          label: member_filter.roomMemberPresenceFilterLabel(
+            member_filter.RoomMemberPresenceFilter.all,
+            filterCounts,
+          ),
         ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: SegmentedControl<member_filter.RoomMemberPresenceFilter>(
-                expanded: true,
-                value: presenceFilter,
-                onChanged: onPresenceChanged,
-                segments: [
-                  Segment(
-                    value: member_filter.RoomMemberPresenceFilter.all,
-                    label: member_filter.roomMemberPresenceFilterLabel(
-                      member_filter.RoomMemberPresenceFilter.all,
-                      filterCounts,
-                    ),
-                  ),
-                  Segment(
-                    value: member_filter.RoomMemberPresenceFilter.live,
-                    label: member_filter.roomMemberPresenceFilterLabel(
-                      member_filter.RoomMemberPresenceFilter.live,
-                      filterCounts,
-                    ),
-                  ),
-                  Segment(
-                    value: member_filter.RoomMemberPresenceFilter.online,
-                    label: member_filter.roomMemberPresenceFilterLabel(
-                      member_filter.RoomMemberPresenceFilter.online,
-                      filterCounts,
-                    ),
-                  ),
-                  Segment(
-                    value: member_filter.RoomMemberPresenceFilter.offline,
-                    label: member_filter.roomMemberPresenceFilterLabel(
-                      member_filter.RoomMemberPresenceFilter.offline,
-                      filterCounts,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: SegmentedControl<member_filter.RoomMemberRoleFilter>(
-                expanded: true,
-                value: roleFilter,
-                onChanged: onRoleChanged,
-                segments: [
-                  Segment(
-                    value: member_filter.RoomMemberRoleFilter.all,
-                    label: member_filter.roomMemberRoleFilterLabel(
-                      member_filter.RoomMemberRoleFilter.all,
-                      filterCounts,
-                    ),
-                  ),
-                  Segment(
-                    value: member_filter.RoomMemberRoleFilter.member,
-                    label: member_filter.roomMemberRoleFilterLabel(
-                      member_filter.RoomMemberRoleFilter.member,
-                      filterCounts,
-                    ),
-                  ),
-                  Segment(
-                    value: member_filter.RoomMemberRoleFilter.admin,
-                    label: member_filter.roomMemberRoleFilterLabel(
-                      member_filter.RoomMemberRoleFilter.admin,
-                      filterCounts,
-                    ),
-                  ),
-                  Segment(
-                    value: member_filter.RoomMemberRoleFilter.creator,
-                    label: member_filter.roomMemberRoleFilterLabel(
-                      member_filter.RoomMemberRoleFilter.creator,
-                      filterCounts,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+        Segment(
+          value: member_filter.RoomMemberPresenceFilter.live,
+          label: member_filter.roomMemberPresenceFilterLabel(
+            member_filter.RoomMemberPresenceFilter.live,
+            filterCounts,
+          ),
+        ),
+        Segment(
+          value: member_filter.RoomMemberPresenceFilter.online,
+          label: member_filter.roomMemberPresenceFilterLabel(
+            member_filter.RoomMemberPresenceFilter.online,
+            filterCounts,
+          ),
+        ),
+        Segment(
+          value: member_filter.RoomMemberPresenceFilter.offline,
+          label: member_filter.roomMemberPresenceFilterLabel(
+            member_filter.RoomMemberPresenceFilter.offline,
+            filterCounts,
+          ),
         ),
       ],
+    );
+    final roles = SegmentedControl<member_filter.RoomMemberRoleFilter>(
+      key: const ValueKey('member-role-filter'),
+      expanded: true,
+      value: roleFilter,
+      onChanged: onRoleChanged,
+      segments: [
+        Segment(
+          value: member_filter.RoomMemberRoleFilter.all,
+          label: member_filter.roomMemberRoleFilterLabel(
+            member_filter.RoomMemberRoleFilter.all,
+            filterCounts,
+          ),
+        ),
+        Segment(
+          value: member_filter.RoomMemberRoleFilter.member,
+          label: member_filter.roomMemberRoleFilterLabel(
+            member_filter.RoomMemberRoleFilter.member,
+            filterCounts,
+          ),
+        ),
+        Segment(
+          value: member_filter.RoomMemberRoleFilter.admin,
+          label: member_filter.roomMemberRoleFilterLabel(
+            member_filter.RoomMemberRoleFilter.admin,
+            filterCounts,
+          ),
+        ),
+        Segment(
+          value: member_filter.RoomMemberRoleFilter.creator,
+          label: member_filter.roomMemberRoleFilterLabel(
+            member_filter.RoomMemberRoleFilter.creator,
+            filterCounts,
+          ),
+        ),
+      ],
+    );
+    return LayoutBuilder(
+      builder: (context, _) {
+        final narrow = HomeAdaptiveLayout.usesCompactLayout(context);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Input(
+              controller: controller,
+              hintText: '搜索成员',
+              prefixIcon: Icons.search,
+              showClearButton: true,
+            ),
+            const SizedBox(height: 10),
+            if (narrow) ...[
+              presence,
+              const SizedBox(height: 10),
+              roles,
+            ] else
+              Row(
+                children: [
+                  Expanded(child: presence),
+                  const SizedBox(width: 10),
+                  Expanded(child: roles),
+                ],
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _MemberActionsButton extends StatefulWidget {
+  const _MemberActionsButton({super.key, required this.items});
+
+  final List<UiContextMenuItem> items;
+
+  @override
+  State<_MemberActionsButton> createState() => _MemberActionsButtonState();
+}
+
+class _MemberActionsButtonState extends State<_MemberActionsButton> {
+  final GlobalKey _anchorKey = GlobalKey();
+  bool _open = false;
+
+  Future<void> _showMenu() async {
+    if (_open || widget.items.isEmpty) return;
+    final anchorBox = _anchorKey.currentContext?.findRenderObject();
+    if (anchorBox is! RenderBox || !anchorBox.hasSize) return;
+    final position = anchorBox.localToGlobal(Offset(0, anchorBox.size.height));
+    setState(() => _open = true);
+    try {
+      await showUiContextMenu(
+        context,
+        position: position,
+        sections: [UiContextMenuSection(widget.items)],
+      );
+    } finally {
+      if (mounted) setState(() => _open = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ButtonIcon(
+      key: _anchorKey,
+      tooltip: '成员设置',
+      icon: const Icon(Icons.settings_outlined),
+      selected: _open,
+      onPressed: () => unawaited(_showMenu()),
+      size: 34,
     );
   }
 }
@@ -147,6 +201,39 @@ class _MemberRow extends StatelessWidget {
   final VoidCallback onRemoveMember;
   final VoidCallback onTransferCreator;
 
+  List<UiContextMenuItem> _menuItems() {
+    return [
+      if (permission.canEditRoomDisplayName)
+        UiContextMenuItem(
+          label: '修改房间内用户名',
+          icon: Icons.edit_outlined,
+          onPressed: onEditRoomDisplayName,
+        ),
+      if (permission.canRoleEdit)
+        UiContextMenuItem(
+          label: permission.isAdmin ? '移除管理员' : '设为管理员',
+          icon: permission.isAdmin
+              ? Icons.admin_panel_settings_outlined
+              : Icons.admin_panel_settings,
+          onPressed: permission.isAdmin ? onUnsetAdmin : onSetAdmin,
+        ),
+      if (permission.canRemoveMember)
+        UiContextMenuItem(
+          label: '踢出此用户',
+          icon: Icons.person_remove_outlined,
+          danger: true,
+          onPressed: onRemoveMember,
+        ),
+      if (permission.canRoleEdit)
+        UiContextMenuItem(
+          label: '转让创建者',
+          icon: Icons.swap_horiz,
+          danger: true,
+          onPressed: onTransferCreator,
+        ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final presence = member_filter.roomMemberPresence(member, live: live);
@@ -162,114 +249,130 @@ class _MemberRow extends StatelessWidget {
       defaultAvatarKey: member.user.defaultAvatarKey,
       size: 38,
     );
+    final menuItems = _menuItems();
     return _RowSurface(
-      child: SizedBox(
-        height: 48,
-        child: Row(
-          children: [
-            UserHoverCard(
-              user: member.user,
-              currentUser: currentUser,
-              onResolveProfile: onResolveProfile,
-              onResolveRoomProfile: onResolveRoomProfile,
-              onEnterCommonRoom: onOpenRoom,
-              inLive: presence == member_filter.RoomMemberPresence.live,
-              showRoomRole: true,
-              child: avatar,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  HighlightedText(
-                    text: member_filter.roomMemberDisplayName(member),
-                    query: query,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: UiTypography.body.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '@${member.user.username}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: UiTypography.label.copyWith(
-                      color: UiColors.textMuted,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            PresencePill.member(presence),
-            const SizedBox(width: 6),
-            RoleBadge(
-              label: role,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-            ),
-            if (busy) ...[
-              const SizedBox(width: 10),
-              const SizedBox.square(
-                dimension: 18,
-                child: CircularProgressIndicator(
-                  color: UiColors.accent,
-                  strokeWidth: 2,
+      child: LayoutBuilder(
+        builder: (context, _) {
+          final narrow = HomeAdaptiveLayout.usesCompactLayout(context);
+          return SizedBox(
+            height: 48,
+            child: Row(
+              children: [
+                UserHoverCard(
+                  user: member.user,
+                  currentUser: currentUser,
+                  onResolveProfile: onResolveProfile,
+                  onResolveRoomProfile: onResolveRoomProfile,
+                  onEnterCommonRoom: onOpenRoom,
+                  inLive: presence == member_filter.RoomMemberPresence.live,
+                  showRoomRole: true,
+                  child: avatar,
                 ),
-              ),
-            ] else if (permission.canEditRoomDisplayName ||
-                permission.canRoleEdit ||
-                permission.canRemoveMember) ...[
-              const SizedBox(width: 8),
-              if (permission.canEditRoomDisplayName) ...[
-                ButtonIcon(
-                  tooltip: '修改房间内用户名',
-                  icon: const Icon(Icons.edit_outlined),
-                  onPressed: onEditRoomDisplayName,
-                  size: 34,
-                ),
-                if (permission.canRoleEdit || permission.canRemoveMember)
-                  const SizedBox(width: 6),
-              ],
-              if (permission.canRoleEdit) ...[
-                ButtonIcon(
-                  tooltip: permission.isAdmin ? '移除管理员' : '设为管理员',
-                  icon: Icon(
-                    permission.isAdmin
-                        ? Icons.admin_panel_settings_outlined
-                        : Icons.admin_panel_settings,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      HighlightedText(
+                        text: member_filter.roomMemberDisplayName(member),
+                        query: query,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: UiTypography.body.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '@${member.user.username}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: UiTypography.label.copyWith(
+                          color: UiColors.textMuted,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
-                  selected: permission.isAdmin,
-                  onPressed: permission.isAdmin ? onUnsetAdmin : onSetAdmin,
-                  size: 34,
                 ),
+                const SizedBox(width: 10),
+                PresencePill.member(presence),
                 const SizedBox(width: 6),
-              ],
-              if (permission.canRemoveMember) ...[
-                ButtonIcon(
-                  tooltip: '踢出此用户',
-                  icon: const Icon(Icons.person_remove_outlined),
-                  tone: ButtonTone.danger,
-                  onPressed: onRemoveMember,
-                  size: 34,
+                RoleBadge(
+                  label: role,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 5,
+                  ),
                 ),
-                if (permission.canRoleEdit) const SizedBox(width: 6),
+                if (busy) ...[
+                  const SizedBox(width: 10),
+                  const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(
+                      color: UiColors.accent,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                ] else if (menuItems.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  if (narrow)
+                    _MemberActionsButton(
+                      key: ValueKey('member-actions-${member.user.id}'),
+                      items: menuItems,
+                    )
+                  else ...[
+                    if (permission.canEditRoomDisplayName) ...[
+                      ButtonIcon(
+                        tooltip: '修改房间内用户名',
+                        icon: const Icon(Icons.edit_outlined),
+                        onPressed: onEditRoomDisplayName,
+                        size: 34,
+                      ),
+                      if (permission.canRoleEdit || permission.canRemoveMember)
+                        const SizedBox(width: 6),
+                    ],
+                    if (permission.canRoleEdit) ...[
+                      ButtonIcon(
+                        tooltip: permission.isAdmin ? '移除管理员' : '设为管理员',
+                        icon: Icon(
+                          permission.isAdmin
+                              ? Icons.admin_panel_settings_outlined
+                              : Icons.admin_panel_settings,
+                        ),
+                        selected: permission.isAdmin,
+                        onPressed: permission.isAdmin
+                            ? onUnsetAdmin
+                            : onSetAdmin,
+                        size: 34,
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    if (permission.canRemoveMember) ...[
+                      ButtonIcon(
+                        tooltip: '踢出此用户',
+                        icon: const Icon(Icons.person_remove_outlined),
+                        tone: ButtonTone.danger,
+                        onPressed: onRemoveMember,
+                        size: 34,
+                      ),
+                      if (permission.canRoleEdit) const SizedBox(width: 6),
+                    ],
+                    if (permission.canRoleEdit)
+                      ButtonIcon(
+                        tooltip: '转让创建者',
+                        icon: const Icon(Icons.swap_horiz),
+                        tone: ButtonTone.danger,
+                        onPressed: onTransferCreator,
+                        size: 34,
+                      ),
+                  ],
+                ],
               ],
-              if (permission.canRoleEdit)
-                ButtonIcon(
-                  tooltip: '转让创建者',
-                  icon: const Icon(Icons.swap_horiz),
-                  tone: ButtonTone.danger,
-                  onPressed: onTransferCreator,
-                  size: 34,
-                ),
-            ],
-          ],
-        ),
+            ),
+          );
+        },
       ),
     );
   }

@@ -671,6 +671,100 @@ void main() {
     expect(find.text('@logan'), findsNothing);
   });
 
+  testWidgets(
+    'Android hover cards stay inside the system navigation safe area',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(360, 640);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      Widget safeAreaHost(TargetPlatform platform) {
+        return MaterialApp(
+          theme: uiTheme().copyWith(platform: platform),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(viewPadding: const EdgeInsets.fromLTRB(12, 24, 16, 48)),
+            child: child!,
+          ),
+          home: const Scaffold(
+            body: Align(
+              alignment: Alignment.bottomCenter,
+              child: AvatarHoverCardForTest(user: _user),
+            ),
+          ),
+        );
+      }
+
+      await tester.pumpWidget(safeAreaHost(TargetPlatform.android));
+      await tester.tap(find.byType(Avatar).first);
+      await tester.pumpAndSettle();
+
+      final androidCard = tester.getRect(find.byType(AnchoredPanel));
+      expect(androidCard.left, greaterThanOrEqualTo(12));
+      expect(androidCard.top, greaterThanOrEqualTo(24));
+      expect(androidCard.right, lessThanOrEqualTo(344));
+      expect(androidCard.bottom, lessThanOrEqualTo(592));
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpWidget(safeAreaHost(TargetPlatform.windows));
+      await tester.tap(find.byType(Avatar).first);
+      await tester.pumpAndSettle();
+
+      final windowsCard = tester.getRect(find.byType(AnchoredPanel));
+      expect(windowsCard.left, closeTo(0, 0.01));
+      expect(windowsCard.bottom, closeTo(640, 0.01));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'Android positioned user cards stay inside every system safe edge',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(360, 640);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      late BuildContext launchContext;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: uiTheme().copyWith(platform: TargetPlatform.android),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(viewPadding: const EdgeInsets.fromLTRB(12, 24, 16, 48)),
+            child: child!,
+          ),
+          home: Builder(
+            builder: (context) {
+              launchContext = context;
+              return const Scaffold(body: SizedBox.expand());
+            },
+          ),
+        ),
+      );
+
+      unawaited(
+        showUserProfileCardAtPosition(
+          launchContext,
+          position: const Offset(350, 620),
+          user: _user,
+          resolveOnOpen: false,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final card = tester.getRect(find.byType(AnchoredPanel));
+      expect(card.left, greaterThanOrEqualTo(20));
+      expect(card.top, greaterThanOrEqualTo(32));
+      expect(card.right, lessThanOrEqualTo(336));
+      expect(card.bottom, lessThanOrEqualTo(584));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('resolves gender and common rooms before opening', (
     tester,
   ) async {

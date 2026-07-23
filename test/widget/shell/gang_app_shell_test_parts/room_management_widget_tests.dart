@@ -846,6 +846,72 @@ void registerShellRoomManagementWidgetTests() {
     },
   );
 
+  testWidgets(
+    'narrow member management stacks filters and groups member actions',
+    (WidgetTester tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(360, 800);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme().copyWith(platform: TargetPlatform.android),
+          home: HomePage(
+            app: _homeTestAppContext(),
+            realtime: _NoopRealtimeService(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Alpha Room'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('房间成员'));
+      await tester.pumpAndSettle();
+
+      final presenceFilter = find.byKey(
+        const ValueKey('member-presence-filter'),
+      );
+      final roleFilter = find.byKey(const ValueKey('member-role-filter'));
+      expect(presenceFilter, findsOneWidget);
+      expect(roleFilter, findsOneWidget);
+      final presenceRect = tester.getRect(presenceFilter);
+      final roleRect = tester.getRect(roleFilter);
+      expect(presenceRect.bottom, lessThan(roleRect.top));
+      expect(presenceRect.left, closeTo(roleRect.left, 0.01));
+      expect(presenceRect.right, closeTo(roleRect.right, 0.01));
+
+      expect(find.byKey(const ValueKey('member-actions-user-1')), findsNothing);
+      final memberActions = find.byKey(const ValueKey('member-actions-user-2'));
+      expect(memberActions, findsOneWidget);
+      expect(find.byTooltip('修改房间内用户名'), findsNothing);
+      expect(find.byTooltip('设为管理员'), findsNothing);
+      expect(find.byTooltip('踢出此用户'), findsNothing);
+      expect(find.byTooltip('转让创建者'), findsNothing);
+
+      await tester.ensureVisible(memberActions);
+      await tester.pumpAndSettle();
+      await tester.tap(memberActions);
+      await tester.pumpAndSettle();
+
+      expect(find.text('修改房间内用户名'), findsOneWidget);
+      expect(find.text('设为管理员'), findsOneWidget);
+      expect(find.text('踢出此用户'), findsOneWidget);
+      expect(find.text('转让创建者'), findsOneWidget);
+      expect(find.byIcon(Icons.edit_outlined), findsOneWidget);
+      expect(find.byIcon(Icons.admin_panel_settings), findsOneWidget);
+      expect(find.byIcon(Icons.person_remove_outlined), findsOneWidget);
+      expect(find.byIcon(Icons.swap_horiz), findsOneWidget);
+
+      await tester.tap(find.text('修改房间内用户名'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('修改Morgan Account的房间内用户名'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('authenticated home shell hides new members for closed rooms', (
     WidgetTester tester,
   ) async {

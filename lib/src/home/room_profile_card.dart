@@ -318,8 +318,12 @@ class _UserProfileCardPopupRoute extends PopupRoute<void> {
     Animation<double> animation,
     Animation<double> secondaryAnimation,
   ) {
+    final safeInsets = hoverCardOverlaySafeInsets(context);
     return CustomSingleChildLayout(
-      delegate: _UserProfileCardPopupLayoutDelegate(position),
+      delegate: _UserProfileCardPopupLayoutDelegate(
+        position,
+        safeInsets: safeInsets,
+      ),
       child: FadeTransition(
         opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
         child: AnchoredPanel(
@@ -345,46 +349,56 @@ class _UserProfileCardPopupRoute extends PopupRoute<void> {
 }
 
 class _UserProfileCardPopupLayoutDelegate extends SingleChildLayoutDelegate {
-  const _UserProfileCardPopupLayoutDelegate(this.anchor);
+  const _UserProfileCardPopupLayoutDelegate(
+    this.anchor, {
+    required this.safeInsets,
+  });
 
   static const double _screenPadding = 8;
   static const double _gap = 10;
 
   final Offset anchor;
+  final EdgeInsets safeInsets;
 
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
     final maxWidth = constraints.hasBoundedWidth
-        ? math.max(0.0, constraints.maxWidth - _screenPadding * 2)
+        ? math.max(
+            0.0,
+            constraints.maxWidth - safeInsets.horizontal - _screenPadding * 2,
+          )
         : double.infinity;
     final maxHeight = constraints.hasBoundedHeight
-        ? math.max(0.0, constraints.maxHeight - _screenPadding * 2)
+        ? math.max(
+            0.0,
+            constraints.maxHeight - safeInsets.vertical - _screenPadding * 2,
+          )
         : double.infinity;
     return BoxConstraints(maxWidth: maxWidth, maxHeight: maxHeight);
   }
 
   @override
   Offset getPositionForChild(Size size, Size childSize) {
+    final minX = safeInsets.left + _screenPadding;
     final maxX = math.max(
-      _screenPadding,
-      size.width - childSize.width - _screenPadding,
+      minX,
+      size.width - safeInsets.right - childSize.width - _screenPadding,
     );
-    final x = anchor.dx.clamp(_screenPadding, maxX).toDouble();
+    final x = anchor.dx.clamp(minX, maxX).toDouble();
     var y = anchor.dy + _gap;
-    if (y + childSize.height + _screenPadding > size.height) {
+    final safeBottom = size.height - safeInsets.bottom - _screenPadding;
+    if (y + childSize.height > safeBottom) {
       y = anchor.dy - childSize.height - _gap;
     }
-    final maxY = math.max(
-      _screenPadding,
-      size.height - childSize.height - _screenPadding,
-    );
-    y = y.clamp(_screenPadding, maxY).toDouble();
+    final minY = safeInsets.top + _screenPadding;
+    final maxY = math.max(minY, safeBottom - childSize.height);
+    y = y.clamp(minY, maxY).toDouble();
     return Offset(x, y);
   }
 
   @override
   bool shouldRelayout(_UserProfileCardPopupLayoutDelegate oldDelegate) {
-    return anchor != oldDelegate.anchor;
+    return anchor != oldDelegate.anchor || safeInsets != oldDelegate.safeInsets;
   }
 }
 
