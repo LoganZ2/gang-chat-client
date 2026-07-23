@@ -4,7 +4,6 @@ import '../app/network_latency.dart' as network_latency;
 import '../app/room_display.dart' as room_display;
 import '../protocol/models.dart';
 import '../ui/ui.dart';
-import 'hover_card_anchor.dart';
 
 const _sidebarHorizontalPadding = 14.0;
 const _sidebarTopPadding = 16.0;
@@ -461,39 +460,12 @@ class _UserSummaryBar extends StatelessWidget {
                     Positioned(
                       right: -3,
                       bottom: -2,
-                      child: HoverCardAnchor(
-                        resetKey: latencyLabel,
-                        gap: 6,
-                        cardWidth: hoverInfoCardWidth(
-                          context,
-                          latencyLabel,
-                          horizontalPadding: 16,
-                          minWidth: 64,
-                          maxWidth: 128,
+                      child: LatencySignalBadge(
+                        activeBars: network_latency.networkLatencySignalBars(
+                          requestRoundTrip,
                         ),
-                        cardBuilder: (context) => Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 6,
-                          ),
-                          child: Text(
-                            latencyLabel,
-                            key: const ValueKey('latency-signal-card-label'),
-                            maxLines: 1,
-                            textAlign: TextAlign.center,
-                            style: UiTypography.body.copyWith(
-                              fontSize: 12,
-                              height: 1.2,
-                            ),
-                          ),
-                        ),
-                        child: LatencySignalBadge(
-                          activeBars: network_latency.networkLatencySignalBars(
-                            requestRoundTrip,
-                          ),
-                          activeColor: latencyColor,
-                          semanticLabel: latencyLabel,
-                        ),
+                        activeColor: latencyColor,
+                        tooltip: latencyLabel,
                       ),
                     ),
                   ],

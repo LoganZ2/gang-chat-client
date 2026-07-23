@@ -87,7 +87,7 @@ void main() {
     expect(_latencyBarColor(tester, 1), const Color(0xFF26B36F));
 
     await tester.tap(find.byKey(const ValueKey('latency-signal-badge')));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('96 ms'), findsOneWidget);
 
@@ -107,12 +107,12 @@ void main() {
     await hover.addPointer(location: Offset.zero);
     addTearDown(hover.removePointer);
     await hover.moveTo(tester.getCenter(badge));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 350));
 
     expect(find.text('96 ms'), findsOneWidget);
 
     await tester.tap(badge, kind: PointerDeviceKind.mouse);
-    await tester.pump();
+    await tester.pumpAndSettle();
     await hover.moveTo(const Offset(5, 5));
     await tester.pump(const Duration(milliseconds: 150));
 

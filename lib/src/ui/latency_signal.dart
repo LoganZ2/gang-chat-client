@@ -1,43 +1,87 @@
 import 'package:flutter/material.dart';
 
-class LatencySignalBadge extends StatelessWidget {
+class LatencySignalBadge extends StatefulWidget {
   const LatencySignalBadge({
     super.key,
     required this.activeBars,
     required this.activeColor,
-    required this.semanticLabel,
+    required this.tooltip,
     this.size = 18,
   });
 
   final int activeBars;
   final Color activeColor;
-  final String semanticLabel;
+  final String tooltip;
   final double size;
 
   @override
+  State<LatencySignalBadge> createState() => _LatencySignalBadgeState();
+}
+
+class _LatencySignalBadgeState extends State<LatencySignalBadge> {
+  static const _hoverWaitDuration = Duration(milliseconds: 350);
+  static const _pinnedExitDuration = Duration(days: 365);
+
+  final GlobalKey<TooltipState> _tooltipKey = GlobalKey<TooltipState>();
+  bool _pinned = false;
+
+  void _togglePinned() {
+    if (_pinned) {
+      setState(() => _pinned = false);
+      Tooltip.dismissAllToolTips();
+      return;
+    }
+    setState(() => _pinned = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_pinned) return;
+      _tooltipKey.currentState?.ensureTooltipVisible();
+    });
+  }
+
+  void _handleTapOutside(PointerDownEvent event) {
+    if (!_pinned) return;
+    setState(() => _pinned = false);
+    Tooltip.dismissAllToolTips();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final bars = activeBars.clamp(0, 3);
-    return Semantics(
-      label: semanticLabel,
-      child: SizedBox(
-        key: const ValueKey('latency-signal-badge'),
-        width: size,
-        height: size - 2,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(3.5, 3, 3.5, 3),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              for (var index = 1; index <= 3; index++) ...[
-                _SignalBar(
-                  index: index,
-                  active: bars >= index,
-                  color: activeColor,
-                ),
-                if (index != 3) const SizedBox(width: 1),
-              ],
-            ],
+    final bars = widget.activeBars.clamp(0, 3);
+    return TapRegion(
+      onTapOutside: _handleTapOutside,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: _togglePinned,
+        child: Tooltip(
+          key: _tooltipKey,
+          message: widget.tooltip,
+          waitDuration: _hoverWaitDuration,
+          triggerMode: TooltipTriggerMode.manual,
+          // Material Tooltip has no persistent-hover flag. A pinned tooltip
+          // therefore keeps its hover-exit timer dormant; any outside pointer
+          // down still dismisses it immediately through the normal route.
+          exitDuration: _pinned ? _pinnedExitDuration : null,
+          child: SizedBox(
+            key: const ValueKey('latency-signal-badge'),
+            width: widget.size,
+            height: widget.size - 2,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(3.5, 3, 3.5, 3),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  for (var index = 1; index <= 3; index++) ...[
+                    _SignalBar(
+                      index: index,
+                      active: bars >= index,
+                      color: widget.activeColor,
+                    ),
+                    if (index != 3) const SizedBox(width: 1),
+                  ],
+                ],
+              ),
+            ),
           ),
         ),
       ),
