@@ -1,6 +1,159 @@
 part of '../gang_app_shell_test.dart';
 
 void registerShellAuthWidgetTests() {
+  testWidgets(
+    'android auth keeps the registration field group centered in both modes',
+    (WidgetTester tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(360, 720);
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme().copyWith(platform: TargetPlatform.android),
+          home: LoginPage(
+            sizeForMode: (registering, {showingError = false}) =>
+                Size(430, registering ? 436 : 368),
+            consumeInitialWindowLock: () => true,
+            lockAuthWindow:
+                ({
+                  bool registering = false,
+                  bool moveWindow = false,
+                  bool centerWindow = false,
+                  Size? size,
+                }) async {},
+            onSubmit: (_, {required rememberPassword}) async {},
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final loginSurface = tester.getRect(
+        find.byKey(const ValueKey('auth-surface')),
+      );
+      final loginFirstInput = tester.getRect(find.byType(ui.Input).first);
+      final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
+      final systemUi = tester.widget<AnnotatedRegion<SystemUiOverlayStyle>>(
+        find.byType(AnnotatedRegion<SystemUiOverlayStyle>),
+      );
+
+      expect(loginSurface.height, 436);
+      expect(scaffold.backgroundColor, ui.UiColors.surfaceLow);
+      expect(systemUi.value.statusBarColor, ui.UiColors.surfaceLow);
+      expect(systemUi.value.systemNavigationBarColor, ui.UiColors.surfaceLow);
+
+      await tester.tap(find.text('注册'));
+      await tester.pump();
+
+      final inputs = find.byType(ui.Input);
+      expect(inputs, findsNWidgets(4));
+      final firstInput = tester.getRect(inputs.at(0));
+      final lastInput = tester.getRect(inputs.at(3));
+      expect(firstInput.top, closeTo(loginFirstInput.top, 0.01));
+      expect(
+        (firstInput.top + lastInput.bottom) / 2,
+        closeTo(tester.view.physicalSize.height / 2, 1.01),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('desktop auth keeps its original mode-specific geometry', (
+    WidgetTester tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(800, 700);
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme().copyWith(platform: TargetPlatform.windows),
+        home: LoginPage(
+          sizeForMode: (registering, {showingError = false}) =>
+              Size(430, registering ? 436 : 368),
+          consumeInitialWindowLock: () => true,
+          lockAuthWindow:
+              ({
+                bool registering = false,
+                bool moveWindow = false,
+                bool centerWindow = false,
+                Size? size,
+              }) async {},
+          onSubmit: (_, {required rememberPassword}) async {},
+        ),
+      ),
+    );
+    await tester.pump();
+
+    var surface = tester.getRect(find.byKey(const ValueKey('auth-surface')));
+    expect(surface, const Rect.fromLTWH(185, 0, 430, 368));
+    expect(find.byType(AnnotatedRegion<SystemUiOverlayStyle>), findsNothing);
+
+    await tester.tap(find.text('注册'));
+    await tester.pump();
+
+    surface = tester.getRect(find.byKey(const ValueKey('auth-surface')));
+    expect(surface, const Rect.fromLTWH(185, 0, 430, 436));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'android auth submit does not overwrite authenticated avatar metadata',
+    (WidgetTester tester) async {
+      final store = _MemoryLoginAccountHistoryStore([
+        LoginAccountRecord(
+          login: 'kai',
+          password: 'old-password',
+          useCount: 2,
+          updatedAt: DateTime.utc(2026, 1, 1),
+        ),
+      ]);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme().copyWith(platform: TargetPlatform.android),
+          home: LoginPage(
+            sizeForMode: (_, {showingError = false}) => const Size(430, 436),
+            consumeInitialWindowLock: () => true,
+            lockAuthWindow:
+                ({
+                  bool registering = false,
+                  bool moveWindow = false,
+                  bool centerWindow = false,
+                  Size? size,
+                }) async {},
+            accountHistoryStore: store,
+            submitPersistsAccountHistory: true,
+            onSubmit: (request, {required rememberPassword}) async {
+              store.records = rememberLoginAccount(
+                records: store.records,
+                login: request.login,
+                password: request.password,
+                rememberPassword: rememberPassword,
+                avatarUrl: '/assets/avatar-kai/custom.png',
+                defaultAvatarKey: 'green-2',
+                updateAvatarMetadata: true,
+                now: DateTime.utc(2026, 7, 23),
+              );
+            },
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      await tester.enterText(_textFieldWithHint('登录用户名或邮箱地址'), 'kai');
+      await tester.enterText(_textFieldWithHint('密码'), 'new-password');
+      await tester.tap(find.widgetWithText(ui.Button, '登录'));
+      await tester.pump();
+
+      final record = findLoginAccountRecord(store.records, 'kai')!;
+      expect(record.avatarUrl, '/assets/avatar-kai/custom.png');
+      expect(record.defaultAvatarKey, 'green-2');
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('auth surface fits a narrow mobile viewport', (
     WidgetTester tester,
   ) async {
@@ -534,6 +687,7 @@ void registerShellAuthWidgetTests() {
       LoginAccountRecord(
         login: 'kai',
         password: 'secret123',
+        avatarUrl: '/assets/avatar-kai/custom.png',
         defaultAvatarKey: 'green-2',
         useCount: 3,
         updatedAt: DateTime.utc(2026, 1, 1),
@@ -593,6 +747,10 @@ void registerShellAuthWidgetTests() {
     expect(
       tester.widget<ui.Avatar>(find.byType(ui.Avatar).first).defaultAvatarKey,
       'green-2',
+    );
+    expect(
+      tester.widget<ui.Avatar>(find.byType(ui.Avatar).first).imageUrl,
+      'http://127.0.0.1:21116/assets/avatar-kai/custom.png',
     );
     expect(
       tester.getTopLeft(find.text('kai')).dy,

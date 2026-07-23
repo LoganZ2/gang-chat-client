@@ -107,6 +107,57 @@ void main() {
     expect(latest?.login, 'morgan');
   });
 
+  test('avatar metadata refreshes matching username and email aliases', () {
+    final updatedAt = DateTime.utc(2026, 1, 4);
+    final records = updateLoginAccountAvatarMetadata(
+      records: [
+        LoginAccountRecord(
+          login: 'Kai@example.com',
+          password: 'secret',
+          useCount: 3,
+          updatedAt: updatedAt,
+        ),
+        LoginAccountRecord(
+          login: 'morgan',
+          defaultAvatarKey: 'green-2',
+          updatedAt: DateTime.utc(2026, 1, 3),
+        ),
+      ],
+      accountAliases: const ['kai', 'kai@example.com'],
+      avatarUrl: '/assets/avatar-kai/custom.png',
+      defaultAvatarKey: 'purple-2',
+    );
+
+    final kai = findLoginAccountRecord(records, 'kai@example.com')!;
+    expect(kai.avatarUrl, '/assets/avatar-kai/custom.png');
+    expect(kai.defaultAvatarKey, 'purple-2');
+    expect(kai.password, 'secret');
+    expect(kai.useCount, 3);
+    expect(kai.updatedAt, updatedAt);
+    expect(
+      findLoginAccountRecord(records, 'morgan')!.defaultAvatarKey,
+      'green-2',
+    );
+  });
+
+  test('avatar metadata refresh clears a removed custom avatar', () {
+    final records = updateLoginAccountAvatarMetadata(
+      records: [
+        LoginAccountRecord(
+          login: 'kai',
+          avatarUrl: '/assets/avatar-kai/old.png',
+          defaultAvatarKey: 'green-2',
+        ),
+      ],
+      accountAliases: const ['KAI'],
+      avatarUrl: null,
+      defaultAvatarKey: 'blue-3',
+    );
+
+    expect(records.single.avatarUrl, isNull);
+    expect(records.single.defaultAvatarKey, 'blue-3');
+  });
+
   test('deleteLoginAccountRecord removes records case-insensitively', () {
     final records = deleteLoginAccountRecord(
       records: [

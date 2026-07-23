@@ -8,6 +8,7 @@ import 'password_reset_controller.dart';
 
 typedef LogoutCallback = Future<void> Function();
 typedef ExitSessionCallback = Future<void> Function();
+typedef CurrentUserUpdatedCallback = void Function(CurrentUser user);
 
 class AuthenticatedAppContext {
   const AuthenticatedAppContext({
@@ -19,6 +20,7 @@ class AuthenticatedAppContext {
     required this.serverClock,
     this.emailVerificationController,
     this.passwordResetController,
+    this.onCurrentUserUpdated,
     this.api,
     this.stickerPackStore = const StickerPackStore(),
   });
@@ -31,6 +33,7 @@ class AuthenticatedAppContext {
   final ServerClock serverClock;
   final EmailVerificationController? emailVerificationController;
   final PasswordResetController? passwordResetController;
+  final CurrentUserUpdatedCallback? onCurrentUserUpdated;
   final GangApi? api;
   final StickerPackStore stickerPackStore;
 

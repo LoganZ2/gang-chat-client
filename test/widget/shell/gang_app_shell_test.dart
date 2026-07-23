@@ -4,7 +4,8 @@ import 'dart:convert';
 import 'package:flutter/gestures.dart'
     show PointerDeviceKind, PointerEnterEvent, kSecondaryMouseButton;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show LogicalKeyboardKey;
+import 'package:flutter/services.dart'
+    show LogicalKeyboardKey, SystemUiOverlayStyle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';

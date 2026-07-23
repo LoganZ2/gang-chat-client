@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../app/auth_form.dart';
 import '../app/auth_session_controller.dart';
@@ -58,12 +59,29 @@ const double _accountHistoryDropdownTop =
     _authModeGap +
     _authInputOuterHeight +
     _authFieldGap;
+const double _authRegisterFieldsCenter =
+    _authTitleBarTopInset +
+    _authTitleBarHeight +
+    _authTitleBarGap +
+    _authSegmentedControlOuterHeight +
+    _authModeGap +
+    (_authInputOuterHeight * 4 + _authFieldGap * 3) / 2;
 const _authTitleBarStyle = TextStyle(
   color: UiColors.text,
   fontSize: 22,
   fontWeight: FontWeight.w700,
   height: 1,
   letterSpacing: 0,
+);
+const _androidAuthSystemUiOverlayStyle = SystemUiOverlayStyle(
+  statusBarColor: UiColors.surfaceLow,
+  statusBarBrightness: Brightness.dark,
+  statusBarIconBrightness: Brightness.light,
+  systemStatusBarContrastEnforced: false,
+  systemNavigationBarColor: UiColors.surfaceLow,
+  systemNavigationBarDividerColor: UiColors.surfaceLow,
+  systemNavigationBarIconBrightness: Brightness.light,
+  systemNavigationBarContrastEnforced: false,
 );
 
 class LoginPage extends StatefulWidget {
@@ -79,6 +97,7 @@ class LoginPage extends StatefulWidget {
     this.passwordResetController,
     this.language = defaultLanguagePreference,
     this.accountHistoryStore = const NoopLoginAccountHistoryStore(),
+    this.submitPersistsAccountHistory = false,
     this.windowController,
   });
 
@@ -92,6 +111,7 @@ class LoginPage extends StatefulWidget {
   final PasswordResetController? passwordResetController;
   final String language;
   final LoginAccountHistoryStore accountHistoryStore;
+  final bool submitPersistsAccountHistory;
   final DesktopWindowController? windowController;
 
   @override
@@ -228,7 +248,7 @@ class _LoginPageState extends State<LoginPage> {
         rememberPassword: !_registering && _rememberPassword,
       );
       if (!mounted) return;
-      if (!request.registering) {
+      if (!request.registering && !widget.submitPersistsAccountHistory) {
         await _rememberSubmittedAccount(request);
       }
     } catch (e) {
@@ -593,203 +613,221 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    final size = widget.sizeForMode(_registering);
+    final isAndroid = Theme.of(context).platform == TargetPlatform.android;
+    // Android keeps both modes on the registration geometry. The four
+    // registration fields are centered by that surface size, and the login
+    // fields retain the same starting position when switching modes.
+    final size = widget.sizeForMode(isAndroid ? true : _registering);
     final showWindowControls =
         widget.windowController != null &&
         Theme.of(context).platform == TargetPlatform.windows;
     final page = Scaffold(
-      backgroundColor: UiColors.background,
+      backgroundColor: isAndroid ? UiColors.surfaceLow : UiColors.background,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
             final surfaceWidth = math.min(size.width, constraints.maxWidth);
             final surfaceHeight = math.min(size.height, constraints.maxHeight);
-            return Align(
-              alignment: Alignment.topCenter,
-              child: SizedBox(
-                key: const ValueKey('auth-surface'),
-                width: surfaceWidth,
-                height: surfaceHeight,
-                child: DecoratedBox(
-                  decoration: const BoxDecoration(color: UiColors.surfaceLow),
-                  child: Stack(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(
-                          24,
-                          _authTitleBarTopInset,
-                          24,
-                          7,
-                        ),
-                        child: AutofillGroup(
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              return Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  SingleChildScrollView(
-                                    physics: const ClampingScrollPhysics(),
-                                    child: ConstrainedBox(
-                                      constraints: BoxConstraints(
-                                        minHeight: constraints.maxHeight,
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.stretch,
-                                        children: [
-                                          _buildTitleBar(),
-                                          const SizedBox(
-                                            height: _authTitleBarGap,
-                                          ),
-                                          SegmentedControl<_AuthMode>(
-                                            expanded: true,
-                                            value: _registering
-                                                ? _AuthMode.register
-                                                : _AuthMode.login,
-                                            segments: const [
-                                              Segment(
-                                                value: _AuthMode.login,
-                                                label: '登录',
-                                                icon: Icons.login_outlined,
-                                              ),
-                                              Segment(
-                                                value: _AuthMode.register,
-                                                label: '注册',
-                                                icon: Icons
-                                                    .person_add_alt_1_outlined,
-                                              ),
-                                            ],
-                                            onChanged: (mode) {
-                                              if (_submitState.busy) return;
-                                              _setMode(
-                                                mode == _AuthMode.register,
-                                              );
-                                            },
-                                          ),
-                                          const SizedBox(height: _authModeGap),
-                                          TapRegion(
-                                            groupId: _accountHistoryTapRegion,
-                                            onTapOutside: (_) =>
-                                                _closeAccountHistory(),
-                                            child: _buildPrimaryIdentityInput(),
-                                          ),
-                                          if (_registering) ...[
+            final verticalSlack = constraints.maxHeight - surfaceHeight;
+            final surfaceTop = isAndroid
+                ? (constraints.maxHeight / 2 - _authRegisterFieldsCenter)
+                      .clamp(0.0, verticalSlack)
+                      .toDouble()
+                : 0.0;
+            return Padding(
+              padding: EdgeInsets.only(top: surfaceTop),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: SizedBox(
+                  key: const ValueKey('auth-surface'),
+                  width: surfaceWidth,
+                  height: surfaceHeight,
+                  child: DecoratedBox(
+                    decoration: const BoxDecoration(color: UiColors.surfaceLow),
+                    child: Stack(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                            24,
+                            _authTitleBarTopInset,
+                            24,
+                            7,
+                          ),
+                          child: AutofillGroup(
+                            child: LayoutBuilder(
+                              builder: (context, constraints) {
+                                return Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    SingleChildScrollView(
+                                      physics: const ClampingScrollPhysics(),
+                                      child: ConstrainedBox(
+                                        constraints: BoxConstraints(
+                                          minHeight: constraints.maxHeight,
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: [
+                                            _buildTitleBar(),
                                             const SizedBox(
-                                              height: _authFieldGap,
+                                              height: _authTitleBarGap,
                                             ),
-                                            _buildRegisterEmailInput(),
-                                          ],
-                                          const SizedBox(height: _authFieldGap),
-                                          Input(
-                                            controller: _password,
-                                            enabled: !_submitState.busy,
-                                            hintText: '密码',
-                                            prefixIcon: Icons.lock_outline,
-                                            autofillHints: [
-                                              _registering
-                                                  ? AutofillHints.newPassword
-                                                  : AutofillHints.password,
-                                            ],
-                                            obscureText: _obscurePassword,
-                                            suffix: _PasswordVisibilityToggle(
-                                              obscure: _obscurePassword,
-                                              enabled: !_submitState.busy,
-                                              onPressed: () {
-                                                setState(
-                                                  () => _obscurePassword =
-                                                      !_obscurePassword,
+                                            SegmentedControl<_AuthMode>(
+                                              expanded: true,
+                                              value: _registering
+                                                  ? _AuthMode.register
+                                                  : _AuthMode.login,
+                                              segments: const [
+                                                Segment(
+                                                  value: _AuthMode.login,
+                                                  label: '登录',
+                                                  icon: Icons.login_outlined,
+                                                ),
+                                                Segment(
+                                                  value: _AuthMode.register,
+                                                  label: '注册',
+                                                  icon: Icons
+                                                      .person_add_alt_1_outlined,
+                                                ),
+                                              ],
+                                              onChanged: (mode) {
+                                                if (_submitState.busy) return;
+                                                _setMode(
+                                                  mode == _AuthMode.register,
                                                 );
                                               },
                                             ),
-                                            maxLines: 1,
-                                            onSubmitted: _registering
-                                                ? null
-                                                : (_) => _submit(),
-                                          ),
-                                          if (!_registering) ...[
-                                            _buildLoginTail(),
-                                          ],
-                                          if (_registering) ...[
+                                            const SizedBox(
+                                              height: _authModeGap,
+                                            ),
+                                            TapRegion(
+                                              groupId: _accountHistoryTapRegion,
+                                              onTapOutside: (_) =>
+                                                  _closeAccountHistory(),
+                                              child:
+                                                  _buildPrimaryIdentityInput(),
+                                            ),
+                                            if (_registering) ...[
+                                              const SizedBox(
+                                                height: _authFieldGap,
+                                              ),
+                                              _buildRegisterEmailInput(),
+                                            ],
                                             const SizedBox(
                                               height: _authFieldGap,
                                             ),
                                             Input(
-                                              controller: _confirmPassword,
+                                              controller: _password,
                                               enabled: !_submitState.busy,
-                                              hintText: '确认密码',
+                                              hintText: '密码',
                                               prefixIcon: Icons.lock_outline,
-                                              autofillHints: const [
-                                                AutofillHints.newPassword,
+                                              autofillHints: [
+                                                _registering
+                                                    ? AutofillHints.newPassword
+                                                    : AutofillHints.password,
                                               ],
-                                              obscureText:
-                                                  _obscureConfirmPassword,
+                                              obscureText: _obscurePassword,
                                               suffix: _PasswordVisibilityToggle(
-                                                obscure:
-                                                    _obscureConfirmPassword,
+                                                obscure: _obscurePassword,
                                                 enabled: !_submitState.busy,
                                                 onPressed: () {
                                                   setState(
-                                                    () => _obscureConfirmPassword =
-                                                        !_obscureConfirmPassword,
+                                                    () => _obscurePassword =
+                                                        !_obscurePassword,
                                                   );
                                                 },
                                               ),
                                               maxLines: 1,
-                                              onSubmitted: (_) => _submit(),
+                                              onSubmitted: _registering
+                                                  ? null
+                                                  : (_) => _submit(),
                                             ),
-                                            _buildRegisterTail(),
+                                            if (!_registering) ...[
+                                              _buildLoginTail(),
+                                            ],
+                                            if (_registering) ...[
+                                              const SizedBox(
+                                                height: _authFieldGap,
+                                              ),
+                                              Input(
+                                                controller: _confirmPassword,
+                                                enabled: !_submitState.busy,
+                                                hintText: '确认密码',
+                                                prefixIcon: Icons.lock_outline,
+                                                autofillHints: const [
+                                                  AutofillHints.newPassword,
+                                                ],
+                                                obscureText:
+                                                    _obscureConfirmPassword,
+                                                suffix: _PasswordVisibilityToggle(
+                                                  obscure:
+                                                      _obscureConfirmPassword,
+                                                  enabled: !_submitState.busy,
+                                                  onPressed: () {
+                                                    setState(
+                                                      () => _obscureConfirmPassword =
+                                                          !_obscureConfirmPassword,
+                                                    );
+                                                  },
+                                                ),
+                                                maxLines: 1,
+                                                onSubmitted: (_) => _submit(),
+                                              ),
+                                              _buildRegisterTail(),
+                                            ],
+                                            const SizedBox(
+                                              height: _authActionGap,
+                                            ),
+                                            Button(
+                                              width: double.infinity,
+                                              tone: ButtonTone.primary,
+                                              height: _authSubmitHeight,
+                                              loading: _submitState.busy,
+                                              onPressed: _submit,
+                                              child: Text(
+                                                _registering ? '创建账号' : '登录',
+                                              ),
+                                            ),
                                           ],
-                                          const SizedBox(
-                                            height: _authActionGap,
-                                          ),
-                                          Button(
-                                            width: double.infinity,
-                                            tone: ButtonTone.primary,
-                                            height: _authSubmitHeight,
-                                            loading: _submitState.busy,
-                                            onPressed: _submit,
-                                            child: Text(
-                                              _registering ? '创建账号' : '登录',
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  if (_showAccountHistory &&
-                                      _canShowAccountHistory)
-                                    Positioned(
-                                      top: _accountHistoryDropdownTop,
-                                      left: 0,
-                                      right: 0,
-                                      child: TapRegion(
-                                        groupId: _accountHistoryTapRegion,
-                                        child: _AccountHistoryDropdown(
-                                          records: _accountHistory,
-                                          onSelected: _selectAccountRecord,
-                                          onDeleted: _deleteAccountRecord,
                                         ),
                                       ),
                                     ),
-                                ],
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                      if (showWindowControls)
-                        Positioned(
-                          top: 4,
-                          right: 0,
-                          child: SelectionContainer.disabled(
-                            child: AppWindowControls(
-                              onMinimize: _minimizeWindow,
-                              onClose: _closeWindow,
-                              showMaximize: false,
+                                    if (_showAccountHistory &&
+                                        _canShowAccountHistory)
+                                      Positioned(
+                                        top: _accountHistoryDropdownTop,
+                                        left: 0,
+                                        right: 0,
+                                        child: TapRegion(
+                                          groupId: _accountHistoryTapRegion,
+                                          child: _AccountHistoryDropdown(
+                                            records: _accountHistory,
+                                            onSelected: _selectAccountRecord,
+                                            onDeleted: _deleteAccountRecord,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                );
+                              },
                             ),
                           ),
                         ),
-                    ],
+                        if (showWindowControls)
+                          Positioned(
+                            top: 4,
+                            right: 0,
+                            child: SelectionContainer.disabled(
+                              child: AppWindowControls(
+                                onMinimize: _minimizeWindow,
+                                onClose: _closeWindow,
+                                showMaximize: false,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -798,7 +836,11 @@ class _LoginPageState extends State<LoginPage> {
         ),
       ),
     );
-    return page;
+    if (!isAndroid) return page;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: _androidAuthSystemUiOverlayStyle,
+      child: page,
+    );
   }
 
   Widget _buildLoginTail() {

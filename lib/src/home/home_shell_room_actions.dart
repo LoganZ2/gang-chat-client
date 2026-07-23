@@ -507,6 +507,7 @@ extension _HomeShellRoomActions on _HomeShellState {
 
   void _handleUserUpdated(CurrentUser user) {
     _setHomeState(() => _currentUser = user);
+    widget.app.onCurrentUserUpdated?.call(user);
   }
 
   Future<void> _retryOpenSelectedRoom() async {

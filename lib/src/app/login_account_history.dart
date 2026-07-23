@@ -164,6 +164,37 @@ List<LoginAccountRecord> rememberLoginAccount({
   ], limit: limit);
 }
 
+List<LoginAccountRecord> updateLoginAccountAvatarMetadata({
+  required Iterable<LoginAccountRecord> records,
+  required Iterable<String> accountAliases,
+  required String? avatarUrl,
+  required String? defaultAvatarKey,
+  int limit = loginAccountHistoryLimit,
+}) {
+  final aliasKeys = accountAliases
+      .map(loginAccountKey)
+      .where((key) => key.isNotEmpty)
+      .toSet();
+  if (aliasKeys.isEmpty) {
+    return normalizeLoginAccountHistory(records, limit: limit);
+  }
+
+  final normalizedAvatarUrl = _nonEmptyString(avatarUrl);
+  final normalizedDefaultAvatarKey = _nonEmptyString(defaultAvatarKey);
+  return normalizeLoginAccountHistory(
+    records.map((record) {
+      if (!aliasKeys.contains(loginAccountKey(record.login))) return record;
+      return record.copyWith(
+        avatarUrl: normalizedAvatarUrl,
+        defaultAvatarKey: normalizedDefaultAvatarKey,
+        clearAvatarUrl: normalizedAvatarUrl == null,
+        clearDefaultAvatarKey: normalizedDefaultAvatarKey == null,
+      );
+    }),
+    limit: limit,
+  );
+}
+
 List<LoginAccountRecord> deleteLoginAccountRecord({
   required Iterable<LoginAccountRecord> records,
   required String login,

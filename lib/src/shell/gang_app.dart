@@ -15,6 +15,7 @@ import '../app/language_preference.dart';
 import '../app/login_account_history.dart';
 import '../app/password_reset_controller.dart';
 import '../app/server_clock.dart';
+import '../protocol/models.dart';
 import 'app_update_gate.dart';
 import 'client_system_info.dart';
 import 'desktop_window_controller.dart';
@@ -152,6 +153,7 @@ class _AuthGateState extends State<_AuthGate> {
     if (result.hasSession) {
       final session = _auth.session;
       if (session != null) {
+        await _syncAndroidLoginAccountAvatarMetadata(session.user);
         unawaited(_rememberAuthLanguage(session.user.language));
       }
       if (widget.startsAuthenticated) {
@@ -283,6 +285,25 @@ class _AuthGateState extends State<_AuthGate> {
     }
   }
 
+  Future<void> _syncAndroidLoginAccountAvatarMetadata(CurrentUser user) async {
+    if (!mounted || Theme.of(context).platform != TargetPlatform.android) {
+      return;
+    }
+    try {
+      final records = await widget.loginAccountHistoryStore.read();
+      await widget.loginAccountHistoryStore.write(
+        updateLoginAccountAvatarMetadata(
+          records: records,
+          accountAliases: [user.username, if (user.email != null) user.email!],
+          avatarUrl: user.avatarUrl,
+          defaultAvatarKey: user.defaultAvatarKey,
+        ),
+      );
+    } catch (_) {
+      // Remembered-account decoration must never block auth or profile edits.
+    }
+  }
+
   @override
   void dispose() {
     _auth.removeListener(_onAuthChanged);
@@ -316,6 +337,8 @@ class _AuthGateState extends State<_AuthGate> {
           lockAuthWindow: _window.lockAuthWindow,
           windowController: _window,
           accountHistoryStore: widget.loginAccountHistoryStore,
+          submitPersistsAccountHistory:
+              Theme.of(context).platform == TargetPlatform.android,
         ),
       );
     }
@@ -329,6 +352,9 @@ class _AuthGateState extends State<_AuthGate> {
       serverClock: _serverClock,
       emailVerificationController: _emailVerification,
       passwordResetController: _passwordReset,
+      onCurrentUserUpdated: Theme.of(context).platform == TargetPlatform.android
+          ? (user) => unawaited(_syncAndroidLoginAccountAvatarMetadata(user))
+          : null,
     );
 
     return SelectionArea(
