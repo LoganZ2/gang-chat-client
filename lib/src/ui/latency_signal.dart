@@ -5,43 +5,39 @@ class LatencySignalBadge extends StatelessWidget {
     super.key,
     required this.activeBars,
     required this.activeColor,
-    required this.tooltip,
+    required this.semanticLabel,
     this.size = 18,
   });
 
   final int activeBars;
   final Color activeColor;
-  final String tooltip;
+  final String semanticLabel;
   final double size;
 
   @override
   Widget build(BuildContext context) {
     final bars = activeBars.clamp(0, 3);
-    return Tooltip(
-      message: tooltip,
-      waitDuration: const Duration(milliseconds: 350),
-      child: Semantics(
-        label: tooltip,
-        child: SizedBox(
-          key: const ValueKey('latency-signal-badge'),
-          width: size,
-          height: size - 2,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(3.5, 3, 3.5, 3),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                for (var index = 1; index <= 3; index++) ...[
-                  _SignalBar(
-                    index: index,
-                    active: bars >= index,
-                    color: activeColor,
-                  ),
-                  if (index != 3) const SizedBox(width: 1),
-                ],
+    return Semantics(
+      label: semanticLabel,
+      child: SizedBox(
+        key: const ValueKey('latency-signal-badge'),
+        width: size,
+        height: size - 2,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(3.5, 3, 3.5, 3),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              for (var index = 1; index <= 3; index++) ...[
+                _SignalBar(
+                  index: index,
+                  active: bars >= index,
+                  color: activeColor,
+                ),
+                if (index != 3) const SizedBox(width: 1),
               ],
-            ),
+            ],
           ),
         ),
       ),

@@ -864,7 +864,7 @@ void registerShellRealtimeLiveWidgetTests() {
       final roomScrollbar = tester.widget<RawScrollbar>(roomScrollbarFinder);
 
       expect(compactSearchRect.width, closeTo(userSummaryRect.width, 0.01));
-      expect(compactSearchRect.bottom, lessThan(userSummaryRect.top));
+      expect(userSummaryRect.bottom, lessThan(compactSearchRect.top));
       expect(
         tester.getRect(roomScrollbarFinder).top,
         closeTo(firstRoomCardRect.top, 0.01),
@@ -899,7 +899,7 @@ void registerShellRealtimeLiveWidgetTests() {
       );
       expect(
         find.byKey(const ValueKey('home-sidebar-user-summary')),
-        findsNothing,
+        findsOneWidget,
       );
 
       await tester.enterText(compactSearchField, '');

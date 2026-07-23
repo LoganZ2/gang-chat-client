@@ -4,6 +4,7 @@ import '../app/network_latency.dart' as network_latency;
 import '../app/room_display.dart' as room_display;
 import '../protocol/models.dart';
 import '../ui/ui.dart';
+import 'hover_card_anchor.dart';
 
 const _sidebarHorizontalPadding = 14.0;
 const _sidebarTopPadding = 16.0;
@@ -116,6 +117,26 @@ class HomeSidebar extends StatelessWidget {
                   availableBodyHeight >= _compactFooterBreakpoint;
               return Column(
                 children: [
+                  if (showSummary) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(
+                        right: _serverListScrollbarGutter,
+                      ),
+                      child: _UserSummaryBar(
+                        user: currentUser,
+                        inLive: joinedLiveRoomId != null,
+                        reconnecting: realtimeReconnecting,
+                        requestRoundTrip: requestRoundTrip,
+                        logoutActive: logoutActive,
+                        onLogout: onLogout,
+                      ),
+                    ),
+                    SizedBox(
+                      height: header != null || showFooter
+                          ? _homeSidebarHeaderGap
+                          : 10,
+                    ),
+                  ],
                   if (header != null) ...[
                     Padding(
                       padding: const EdgeInsets.only(
@@ -139,22 +160,6 @@ class HomeSidebar extends StatelessWidget {
                       ),
                     )
                   else ...[
-                    if (showSummary) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          right: _serverListScrollbarGutter,
-                        ),
-                        child: _UserSummaryBar(
-                          user: currentUser,
-                          inLive: joinedLiveRoomId != null,
-                          reconnecting: realtimeReconnecting,
-                          requestRoundTrip: requestRoundTrip,
-                          logoutActive: logoutActive,
-                          onLogout: onLogout,
-                        ),
-                      ),
-                      SizedBox(height: showFooter ? 14 : 10),
-                    ],
                     Expanded(child: _buildServerList(context)),
                     if (showFooter) ...[
                       const SizedBox(height: 12),
@@ -423,6 +428,9 @@ class _UserSummaryBar extends StatelessWidget {
       requestRoundTrip,
     );
     final latencyColor = _latencySignalColor(latencyQuality);
+    final latencyLabel = network_latency.networkLatencyTooltip(
+      requestRoundTrip,
+    );
     return DecoratedBox(
       key: const ValueKey('home-sidebar-user-summary'),
       decoration: BoxDecoration(
@@ -453,13 +461,38 @@ class _UserSummaryBar extends StatelessWidget {
                     Positioned(
                       right: -3,
                       bottom: -2,
-                      child: LatencySignalBadge(
-                        activeBars: network_latency.networkLatencySignalBars(
-                          requestRoundTrip,
+                      child: HoverCardAnchor(
+                        resetKey: latencyLabel,
+                        gap: 6,
+                        cardWidth: hoverInfoCardWidth(
+                          context,
+                          latencyLabel,
+                          horizontalPadding: 16,
+                          minWidth: 64,
+                          maxWidth: 128,
                         ),
-                        activeColor: latencyColor,
-                        tooltip: network_latency.networkLatencyTooltip(
-                          requestRoundTrip,
+                        cardBuilder: (context) => Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 6,
+                          ),
+                          child: Text(
+                            latencyLabel,
+                            key: const ValueKey('latency-signal-card-label'),
+                            maxLines: 1,
+                            textAlign: TextAlign.center,
+                            style: UiTypography.body.copyWith(
+                              fontSize: 12,
+                              height: 1.2,
+                            ),
+                          ),
+                        ),
+                        child: LatencySignalBadge(
+                          activeBars: network_latency.networkLatencySignalBars(
+                            requestRoundTrip,
+                          ),
+                          activeColor: latencyColor,
+                          semanticLabel: latencyLabel,
                         ),
                       ),
                     ),

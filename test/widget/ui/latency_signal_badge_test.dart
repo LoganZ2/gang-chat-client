@@ -3,34 +3,31 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('latency signal lights the requested bars and shows tooltip', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ui.uiTheme(),
-        home: const Scaffold(
-          body: Center(
-            child: ui.LatencySignalBadge(
-              activeBars: 2,
-              activeColor: ui.UiColors.presenceReconnecting,
-              tooltip: '228 ms',
-            ),
-          ),
-        ),
-      ),
-    );
+  testWidgets('latency signal lights the requested bars', (tester) async {
+    await _pumpBadge(tester);
 
     expect(_barColor(tester, 1), ui.UiColors.presenceReconnecting);
     expect(_barColor(tester, 2), ui.UiColors.presenceReconnecting);
     expect(_barColor(tester, 3), const Color(0xFF8A93A3));
     expect(_barDecoration(tester, 1).border, isNull);
-
-    await tester.longPress(find.byKey(const ValueKey('latency-signal-badge')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('228 ms'), findsOneWidget);
   });
+}
+
+Future<void> _pumpBadge(WidgetTester tester) {
+  return tester.pumpWidget(
+    MaterialApp(
+      theme: ui.uiTheme(),
+      home: const Scaffold(
+        body: Center(
+          child: ui.LatencySignalBadge(
+            activeBars: 2,
+            activeColor: ui.UiColors.presenceReconnecting,
+            semanticLabel: '228 ms',
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 Color? _barColor(WidgetTester tester, int index) {
