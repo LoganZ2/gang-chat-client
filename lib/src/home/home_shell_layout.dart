@@ -44,7 +44,10 @@ extension _HomeShellLayout on _HomeShellState {
     );
   }
 
-  Widget _buildNarrowLayout(double width) {
+  Widget _buildNarrowLayout(
+    double width, {
+    _TitleLiveRoomDockBuilder? footerLiveRoomDockBuilder,
+  }) {
     if (!_narrowContentOpen) {
       return KeyedSubtree(
         key: const ValueKey('home-narrow-room-list'),
@@ -55,6 +58,19 @@ extension _HomeShellLayout on _HomeShellState {
           bodyOverride: _hasSearchQuery && _searchExpanded
               ? _buildSearchResultsTapRegion()
               : null,
+          footerMiddle: footerLiveRoomDockBuilder == null
+              ? null
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final dockMaxWidth = constraints.maxWidth
+                        .clamp(0.0, double.infinity)
+                        .toDouble();
+                    return footerLiveRoomDockBuilder(
+                      dockMaxWidth,
+                      fillAvailable: true,
+                    );
+                  },
+                ),
         ),
       );
     }
@@ -474,6 +490,7 @@ extension _HomeShellLayout on _HomeShellState {
     required bool openContentOnSelect,
     Widget? header,
     Widget? bodyOverride,
+    Widget? footerMiddle,
   }) {
     return HomeSidebar(
       width: width,
@@ -500,6 +517,7 @@ extension _HomeShellLayout on _HomeShellState {
       includeWindowChromeOffset: false,
       header: header,
       bodyOverride: bodyOverride,
+      footerMiddle: footerMiddle,
       onServerSelected: (server) =>
           _selectServer(server, openContent: openContentOnSelect),
       onCreateRoom: () => _openCreateRoom(openContent: openContentOnSelect),

@@ -182,38 +182,68 @@ void registerShellHomeWidgetTests() {
     expect(find.text('版本信息'), findsOneWidget);
   });
 
-  testWidgets('authenticated home shell title search keeps fixed resize size', (
-    WidgetTester tester,
-  ) async {
-    Future<Size> pumpHomeAtWidth(double width) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ui.uiTheme(),
-          home: Center(
-            child: SizedBox(
-              width: width,
-              height: 620,
-              child: HomePage(
-                app: _homeTestAppContext(),
-                realtime: _NoopRealtimeService(),
+  testWidgets(
+    'authenticated home shell keeps search in every non-narrow title bar',
+    (WidgetTester tester) async {
+      Future<Size> pumpHomeAtWidth(double width) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ui.uiTheme().copyWith(platform: TargetPlatform.windows),
+            home: Center(
+              child: SizedBox(
+                width: width,
+                height: 620,
+                child: HomePage(
+                  app: _homeTestAppContext(),
+                  realtime: _NoopRealtimeService(),
+                ),
               ),
             ),
           ),
-        ),
+        );
+        await tester.pumpAndSettle();
+        return tester.getSize(find.byKey(const ValueKey('home-title-search')));
+      }
+
+      final wideSize = await pumpHomeAtWidth(1180);
+      final resizedSize = await pumpHomeAtWidth(900);
+
+      expect(wideSize.width, closeTo(520, 0.01));
+      expect(wideSize.height, closeTo(30, 0.01));
+      expect(resizedSize.width, closeTo(wideSize.width, 0.01));
+      expect(resizedSize.height, closeTo(wideSize.height, 0.01));
+
+      final compactSize = await pumpHomeAtWidth(760);
+      final compactSearchRect = tester.getRect(
+        find.byKey(const ValueKey('home-title-search')),
       );
+      final userSummaryRect = tester.getRect(
+        find.byKey(const ValueKey('home-sidebar-user-summary')),
+      );
+      expect(compactSize.width, closeTo(wideSize.width, 0.01));
+      expect(compactSize.height, closeTo(wideSize.height, 0.01));
+      expect(compactSearchRect.bottom, lessThan(userSummaryRect.top));
+      expect(
+        compactSearchRect.right,
+        lessThan(tester.getRect(find.byTooltip('最小化')).left),
+      );
+
+      final compactSearchField = find.descendant(
+        of: find.byKey(const ValueKey('home-title-search')),
+        matching: find.byType(TextField),
+      );
+      await tester.enterText(compactSearchField, 'Beta');
+      await tester.pump(const Duration(milliseconds: 320));
       await tester.pumpAndSettle();
-      return tester.getSize(find.byKey(const ValueKey('home-title-search')));
-    }
 
-    final wideSize = await pumpHomeAtWidth(1180);
-    final resizedSize = await pumpHomeAtWidth(900);
-
-    expect(wideSize.width, closeTo(520, 0.01));
-    expect(wideSize.height, closeTo(30, 0.01));
-    expect(resizedSize.width, closeTo(wideSize.width, 0.01));
-    expect(resizedSize.height, closeTo(wideSize.height, 0.01));
-    expect(tester.takeException(), isNull);
-  });
+      final searchResultsRect = tester.getRect(
+        find.byKey(const ValueKey('home-title-search-results')),
+      );
+      expect(searchResultsRect.left, closeTo(compactSearchRect.left, 0.01));
+      expect(searchResultsRect.width, closeTo(compactSearchRect.width, 0.01));
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'authenticated home shell title live room module controls joined voice',
@@ -262,16 +292,33 @@ void registerShellHomeWidgetTests() {
 
       final dock = find.byKey(const ValueKey<String>('home-title-live-room'));
       final search = find.byKey(const ValueKey('home-title-search'));
+      final roomCard = find.byKey(
+        const ValueKey('home-sidebar-room-server-alpha'),
+      );
       expect(dock, findsOneWidget);
-      expect(tester.getSize(dock).width, closeTo(250, 0.01));
+      final roomCardWidth = tester.getSize(roomCard).width;
+      final expandedDockWidth = tester.getSize(dock).width;
+      expect(expandedDockWidth, greaterThan(roomCardWidth));
       expect(tester.getSize(dock).height, closeTo(30, 0.01));
-      expect(tester.getRect(dock).right, lessThan(tester.getRect(search).left));
       expect(
-        find.descendant(of: dock, matching: find.byIcon(Icons.volume_up)),
-        findsOneWidget,
+        tester.getRect(dock).right,
+        lessThanOrEqualTo(tester.getRect(search).left - 14),
       );
       expect(
         find.descendant(of: dock, matching: find.text('Alpha Room')),
+        findsOneWidget,
+      );
+      final truncatedDockRoomName = find.descendant(
+        of: dock,
+        matching: find.byWidgetPredicate((widget) {
+          if (widget is! Text) return false;
+          final text = widget.data ?? '';
+          return text.length > 3 && text.endsWith('...');
+        }),
+      );
+      expect(truncatedDockRoomName, findsNothing);
+      expect(
+        find.descendant(of: dock, matching: find.byIcon(Icons.volume_up)),
         findsOneWidget,
       );
       expect(
@@ -310,11 +357,110 @@ void registerShellHomeWidgetTests() {
       );
 
       await pumpHomeAtWidth(900);
-      expect(dock, findsNothing);
+      expect(dock, findsOneWidget);
+      expect(tester.getSize(dock).width, closeTo(166, 0.01));
+      expect(
+        find.descendant(of: dock, matching: find.text('Alpha Room')),
+        findsNothing,
+      );
+      expect(truncatedDockRoomName, findsNothing);
+      expect(
+        find.descendant(of: dock, matching: find.byIcon(Icons.volume_up)),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: dock, matching: find.byType(ui.Avatar)),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: dock,
+          matching: find.byKey(
+            const ValueKey<String>('home-title-live-room:mic'),
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: dock,
+          matching: find.byKey(
+            const ValueKey<String>('home-title-live-room:headphones'),
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: dock,
+          matching: find.byKey(
+            const ValueKey<String>('home-title-live-room:leave'),
+          ),
+        ),
+        findsOneWidget,
+      );
+
+      await pumpHomeAtWidth(850);
+      expect(dock, findsOneWidget);
+      expect(tester.getSize(dock).width, closeTo(141, 0.01));
+      expect(
+        find.descendant(of: dock, matching: find.text('Alpha Room')),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: dock, matching: find.byIcon(Icons.volume_up)),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: dock, matching: find.byType(ui.Avatar)),
+        findsOneWidget,
+      );
+
+      await pumpHomeAtWidth(760);
+      expect(dock, findsOneWidget);
+      expect(tester.getSize(dock).width, closeTo(80, 0.01));
+      expect(
+        find.descendant(of: dock, matching: find.text('Alpha Room')),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: dock, matching: find.byIcon(Icons.volume_up)),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: dock, matching: find.byType(ui.Avatar)),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: dock,
+          matching: find.byKey(
+            const ValueKey<String>('home-title-live-room:leave'),
+          ),
+        ),
+        findsOneWidget,
+      );
+
+      await pumpHomeAtWidth(680);
+      expect(dock, findsOneWidget);
+      expect(tester.getSize(dock).width, closeTo(expandedDockWidth, 0.01));
+      expect(tester.getRect(dock).left, lessThan(20));
+      expect(
+        find.descendant(of: dock, matching: find.text('Alpha Room')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: dock, matching: find.byIcon(Icons.volume_up)),
+        findsOneWidget,
+      );
+      expect(
+        tester.getRect(dock).right,
+        lessThan(tester.getRect(find.byTooltip('最小化')).left),
+      );
 
       await pumpHomeAtWidth(1180);
       expect(dock, findsOneWidget);
-      expect(tester.getSize(dock).width, closeTo(250, 0.01));
+      expect(tester.getSize(dock).width, closeTo(expandedDockWidth, 0.01));
       expect(tester.getSize(dock).height, closeTo(30, 0.01));
 
       await tester.tap(find.text('Beta Room'));
@@ -344,6 +490,126 @@ void registerShellHomeWidgetTests() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('title live room default width shares the sidebar center', (
+    WidgetTester tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1180, 620);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final liveSessionController = _FakeLiveSessionController(
+      session: _FakeLiveSession(),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme().copyWith(platform: TargetPlatform.windows),
+        home: SizedBox(
+          width: 1180,
+          height: 620,
+          child: HomePage(
+            app: _homeTestAppContext(alphaRoomName: 'A'),
+            audioDeviceStore: const _FakeAudioDeviceStore(),
+            liveSessionController: liveSessionController,
+            realtime: _NoopRealtimeService(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final roomCard = find.byKey(
+      const ValueKey('home-sidebar-room-server-alpha'),
+    );
+    final roomCardWidth = tester.getSize(roomCard).width;
+    await tester.tap(roomCard);
+    await tester.pumpAndSettle();
+    await _openLiveChannelFromHeader(tester);
+    await tester.tap(find.widgetWithText(ui.Button, '加入'));
+    await tester.pumpAndSettle();
+
+    final dock = find.byKey(const ValueKey<String>('home-title-live-room'));
+    final search = find.byKey(const ValueKey('home-title-search'));
+    expect(tester.getSize(dock).width, greaterThan(roomCardWidth));
+    expect(
+      tester.getRect(dock).center.dx,
+      closeTo(tester.getRect(roomCard).center.dx, 0.01),
+    );
+    expect(
+      find.descendant(
+        of: dock,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Text &&
+              widget.data == 'A' &&
+              widget.overflow == TextOverflow.clip,
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      tester.getRect(dock).right,
+      lessThanOrEqualTo(tester.getRect(search).left - 14),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('title live room leaves paint safety for a long room name', (
+    WidgetTester tester,
+  ) async {
+    const roomName = '特别长长长长长长长长长长长的房间名';
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1600, 620);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final liveSessionController = _FakeLiveSessionController(
+      session: _FakeLiveSession(),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme().copyWith(platform: TargetPlatform.windows),
+        home: SizedBox(
+          width: 1600,
+          height: 620,
+          child: HomePage(
+            app: _homeTestAppContext(alphaRoomName: roomName),
+            audioDeviceStore: const _FakeAudioDeviceStore(),
+            liveSessionController: liveSessionController,
+            realtime: _NoopRealtimeService(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('home-sidebar-room-server-alpha')),
+    );
+    await tester.pumpAndSettle();
+    await _openLiveChannelFromHeader(tester);
+    await tester.tap(find.widgetWithText(ui.Button, '加入'));
+    await tester.pumpAndSettle();
+
+    final dock = find.byKey(const ValueKey<String>('home-title-live-room'));
+    final roomNameFinder = find.descendant(
+      of: dock,
+      matching: find.text(roomName),
+    );
+    final roomNameWidget = tester.widget<Text>(roomNameFinder);
+    expect(roomNameWidget.style?.inherit, isFalse);
+    final painter = TextPainter(
+      text: TextSpan(text: roomName, style: roomNameWidget.style),
+      maxLines: 1,
+      textDirection: TextDirection.ltr,
+    )..layout();
+    expect(
+      tester.getSize(roomNameFinder).width,
+      greaterThanOrEqualTo(painter.width.ceilToDouble() + 2),
+    );
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'authenticated home shell title live room module waits for room before switching',
@@ -425,7 +691,7 @@ void registerShellHomeWidgetTests() {
   );
 
   testWidgets(
-    'authenticated home shell title live room module is right on macOS',
+    'authenticated macOS title live room module follows native controls',
     (WidgetTester tester) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(1180, 620);
@@ -435,23 +701,29 @@ void registerShellHomeWidgetTests() {
       final liveSessionController = _FakeLiveSessionController(
         session: liveSession,
       );
+      final app = _homeTestAppContext();
 
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ui.uiTheme().copyWith(platform: TargetPlatform.macOS),
-          home: SizedBox(
-            width: 1180,
-            height: 620,
-            child: HomePage(
-              app: _homeTestAppContext(),
-              audioDeviceStore: const _FakeAudioDeviceStore(),
-              liveSessionController: liveSessionController,
-              realtime: _NoopRealtimeService(),
+      Future<void> pumpHomeAtWidth(double width) async {
+        tester.view.physicalSize = Size(width, 620);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ui.uiTheme().copyWith(platform: TargetPlatform.macOS),
+            home: SizedBox(
+              width: width,
+              height: 620,
+              child: HomePage(
+                app: app,
+                audioDeviceStore: const _FakeAudioDeviceStore(),
+                liveSessionController: liveSessionController,
+                realtime: _NoopRealtimeService(),
+              ),
             ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
+      }
+
+      await pumpHomeAtWidth(1180);
 
       await tester.tap(find.text('Alpha Room'));
       await tester.pumpAndSettle();
@@ -462,13 +734,124 @@ void registerShellHomeWidgetTests() {
       final dock = find.byKey(const ValueKey<String>('home-title-live-room'));
       final search = find.byKey(const ValueKey('home-title-search'));
       expect(dock, findsOneWidget);
+      final searchConstrainedDockWidth = tester.getSize(dock).width;
+      expect(tester.getRect(dock).left, closeTo(81, 1));
       expect(
-        tester.getRect(dock).left,
-        greaterThan(tester.getRect(search).right),
+        tester.getRect(dock).right,
+        closeTo(tester.getRect(search).left - 14, 0.01),
       );
       expect(find.byTooltip('最小化'), findsNothing);
       expect(find.byTooltip('最大化'), findsNothing);
       expect(find.byTooltip('关闭'), findsNothing);
+
+      await pumpHomeAtWidth(600);
+      expect(dock, findsOneWidget);
+      expect(
+        tester.getSize(dock).width,
+        greaterThan(searchConstrainedDockWidth),
+      );
+      expect(tester.getRect(dock).left, closeTo(81, 1));
+      expect(
+        find.descendant(of: dock, matching: find.text('Alpha Room')),
+        findsOneWidget,
+      );
+      expect(find.byTooltip('最小化'), findsNothing);
+      expect(find.byTooltip('最大化'), findsNothing);
+      expect(find.byTooltip('关闭'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'authenticated Android narrow room list places live room module in footer',
+    (WidgetTester tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1180, 620);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final liveSession = _FakeLiveSession();
+      final liveSessionController = _FakeLiveSessionController(
+        session: liveSession,
+      );
+      final app = _homeTestAppContext();
+
+      Future<void> pumpHomeAtWidth(double width) async {
+        tester.view.physicalSize = Size(width, 620);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ui.uiTheme().copyWith(platform: TargetPlatform.android),
+            home: SizedBox(
+              width: width,
+              height: 620,
+              child: HomePage(
+                app: app,
+                audioDeviceStore: const _FakeAudioDeviceStore(),
+                liveSessionController: liveSessionController,
+                realtime: _NoopRealtimeService(),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      await pumpHomeAtWidth(1180);
+      await tester.tap(find.text('Alpha Room'));
+      await tester.pumpAndSettle();
+      await _openLiveChannelFromHeader(tester);
+      await tester.tap(find.widgetWithText(ui.Button, '加入'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey<String>('home-title-live-room')),
+        findsOneWidget,
+      );
+
+      await pumpHomeAtWidth(360);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      final dock = find.byKey(const ValueKey<String>('home-title-live-room'));
+      final notifications = find.byKey(
+        const ValueKey('home-sidebar-notifications-button'),
+      );
+      final settings = find.byKey(
+        const ValueKey('home-sidebar-settings-button'),
+      );
+      expect(notifications, findsOneWidget);
+      expect(settings, findsOneWidget);
+      expect(dock, findsOneWidget);
+      expect(
+        tester.getRect(dock).left,
+        greaterThan(tester.getRect(notifications).right),
+      );
+      expect(
+        tester.getRect(dock).right,
+        lessThan(tester.getRect(settings).left),
+      );
+      expect(
+        tester.getRect(dock).left - tester.getRect(notifications).right,
+        closeTo(8, 0.01),
+      );
+      expect(
+        tester.getRect(settings).left - tester.getRect(dock).right,
+        closeTo(8, 0.01),
+      );
+      expect(
+        find.descendant(of: dock, matching: find.text('Alpha Room')),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: dock, matching: find.byType(ui.Avatar)),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('home-title-live-room:mic')),
+      );
+      await tester.pumpAndSettle();
+      expect(liveSession.inputVolumes.last, 0.0);
       expect(tester.takeException(), isNull);
     },
   );
@@ -762,6 +1145,92 @@ void registerShellHomeWidgetTests() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('narrow search result actions reduce horizontal width', (
+    WidgetTester tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    Future<List<double>> roomActionWidths(double width) async {
+      tester.view.physicalSize = Size(width, 620);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme().copyWith(platform: TargetPlatform.windows),
+          home: SizedBox(
+            width: width,
+            height: 620,
+            child: HomePage(
+              key: ValueKey('regular-search-$width'),
+              app: _homeTestAppContext(),
+              realtime: _NoopRealtimeService(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final searchField = find.descendant(
+        of: find.byKey(const ValueKey('home-title-search')),
+        matching: find.byType(TextField),
+      );
+      await tester.enterText(searchField, 'Beta');
+      await tester.pump(const Duration(milliseconds: 320));
+      await tester.pumpAndSettle();
+
+      return [
+        tester
+            .getSize(find.byKey(const ValueKey('my-room-action-server-beta')))
+            .width,
+        tester
+            .getSize(
+              find.byKey(const ValueKey('public-room-action-server-public')),
+            )
+            .width,
+      ];
+    }
+
+    Future<double> userSettingsActionWidth(double width) async {
+      tester.view.physicalSize = Size(width, 620);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme().copyWith(platform: TargetPlatform.windows),
+          home: SizedBox(
+            width: width,
+            height: 620,
+            child: HomePage(
+              key: ValueKey('superuser-search-$width'),
+              app: _homeTestAppContext(currentUserIsSuperuser: true),
+              realtime: _NoopRealtimeService(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final searchField = find.descendant(
+        of: find.byKey(const ValueKey('home-title-search')),
+        matching: find.byType(TextField),
+      );
+      await tester.enterText(searchField, 'ri');
+      await tester.pump(const Duration(milliseconds: 320));
+      await tester.pumpAndSettle();
+      return tester
+          .getSize(find.byKey(const ValueKey('open-user-settings-user-3')))
+          .width;
+    }
+
+    final wideRoomActions = await roomActionWidths(900);
+    final narrowRoomActions = await roomActionWidths(360);
+    expect(narrowRoomActions[0], lessThan(wideRoomActions[0]));
+    expect(narrowRoomActions[1], lessThan(wideRoomActions[1]));
+
+    final wideUserSettingsAction = await userSettingsActionWidth(900);
+    final narrowUserSettingsAction = await userSettingsActionWidth(360);
+    expect(narrowUserSettingsAction, lessThan(wideUserSettingsAction));
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('authenticated home shell search scroll loads next cursor page', (
     WidgetTester tester,
@@ -1580,12 +2049,12 @@ void registerShellHomeWidgetTests() {
     expect(find.byTooltip('静音'), findsNothing);
     expect(find.byTooltip('麦克风静音'), findsOneWidget);
     expect(find.byTooltip('耳机静音'), findsOneWidget);
-    expect(find.byTooltip('关闭麦克风'), findsOneWidget);
-    expect(find.byTooltip('关闭耳机'), findsOneWidget);
+    expect(find.byTooltip('关闭麦克风'), findsNWidgets(2));
+    expect(find.byTooltip('关闭耳机'), findsNWidgets(2));
     expect(find.byTooltip('共享屏幕'), findsOneWidget);
     expect(find.byTooltip('开启摄像头'), findsOneWidget);
     expect(find.byTooltip('离开'), findsNothing);
-    expect(find.byTooltip('离开语音频道'), findsOneWidget);
+    expect(find.byTooltip('离开语音频道'), findsNWidgets(2));
     expect(find.byTooltip('已加入语音'), findsNothing);
     expect(
       tester

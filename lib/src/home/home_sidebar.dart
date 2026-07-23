@@ -4,8 +4,8 @@ import '../app/network_latency.dart' as network_latency;
 import '../app/room_display.dart' as room_display;
 import '../protocol/models.dart';
 import '../ui/ui.dart';
+import 'navigation.dart';
 
-const _sidebarHorizontalPadding = 14.0;
 const _sidebarTopPadding = 16.0;
 const _sidebarBottomPadding = 16.0;
 const _homeSidebarHeaderHeight = 30.0;
@@ -54,6 +54,7 @@ class HomeSidebar extends StatelessWidget {
     this.includeWindowChromeOffset = true,
     this.header,
     this.bodyOverride,
+    this.footerMiddle,
   });
 
   final double width;
@@ -77,6 +78,7 @@ class HomeSidebar extends StatelessWidget {
   final bool includeWindowChromeOffset;
   final Widget? header;
   final Widget? bodyOverride;
+  final Widget? footerMiddle;
   final ValueChanged<RoomCard> onServerSelected;
   final VoidCallback onCreateRoom;
   final VoidCallback onOpenNotifications;
@@ -98,9 +100,9 @@ class HomeSidebar extends StatelessWidget {
         ),
         child: Padding(
           padding: EdgeInsets.fromLTRB(
-            _sidebarHorizontalPadding,
+            sidebarHorizontalPadding,
             _sidebarTopPadding + topChromeOffset,
-            _sidebarHorizontalPadding - _serverListScrollbarGutter,
+            sidebarHorizontalPadding - _serverListScrollbarGutter,
             _sidebarBottomPadding,
           ),
           child: LayoutBuilder(
@@ -172,6 +174,7 @@ class HomeSidebar extends StatelessWidget {
                           notificationsActive: notificationsActive,
                           hasPendingNotifications: hasPendingNotifications,
                           pendingNotificationCount: pendingNotificationCount,
+                          middle: footerMiddle,
                           onCreateRoom: onCreateRoom,
                           onOpenNotifications: onOpenNotifications,
                           onOpenSettings: onOpenSettings,
@@ -309,6 +312,7 @@ class _SidebarFooter extends StatelessWidget {
     required this.notificationsActive,
     required this.hasPendingNotifications,
     required this.pendingNotificationCount,
+    this.middle,
     required this.onCreateRoom,
     required this.onOpenNotifications,
     required this.onOpenSettings,
@@ -319,6 +323,7 @@ class _SidebarFooter extends StatelessWidget {
   final bool notificationsActive;
   final bool hasPendingNotifications;
   final int pendingNotificationCount;
+  final Widget? middle;
   final VoidCallback onCreateRoom;
   final VoidCallback onOpenNotifications;
   final VoidCallback onOpenSettings;
@@ -344,8 +349,15 @@ class _SidebarFooter extends StatelessWidget {
             count: pendingNotificationCount,
             onPressed: onOpenNotifications,
           ),
-          const Spacer(),
+          if (middle == null)
+            const Spacer()
+          else ...[
+            const SizedBox(width: _footerButtonGap),
+            Expanded(child: Center(child: middle)),
+            const SizedBox(width: _footerButtonGap),
+          ],
           ButtonIcon(
+            key: const ValueKey('home-sidebar-settings-button'),
             tooltip: '设置',
             icon: const Icon(Icons.settings_outlined),
             selected: settingsActive,

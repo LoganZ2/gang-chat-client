@@ -5,21 +5,17 @@ const _homeTitleBarSearchWidth = 520.0;
 const _homeTitleBarSearchHeight = 30.0;
 const _homeTitleBarMinSearchWidth = 122.0;
 const _homeTitleBarControlsWidth = appWindowControlsWidth;
-const _homeTitleBarLiveRoomWidth = 250.0;
 const _homeTitleBarLiveRoomHeight = 30.0;
 const _homeTitleBarLiveRoomHorizontalInset = 10.0;
+const _homeTitleBarLiveRoomDefaultWidth =
+    sidebarWidth - _homeTitleBarLiveRoomHorizontalInset * 2;
 const _homeTitleBarLiveRoomSearchGap = 14.0;
 const _homeTitleBarLiveRoomActionSize = 28.0;
-const _homeTitleBarWindowsSearchMinWidth =
-    _homeTitleBarSearchWidth +
-    _homeTitleBarControlsWidth * 2 +
-    appWindowControlGap * 2;
-const _homeTitleBarLiveRoomMinWidth =
-    _homeTitleBarSearchWidth +
-    (_homeTitleBarLiveRoomWidth +
-            _homeTitleBarLiveRoomHorizontalInset +
-            _homeTitleBarLiveRoomSearchGap) *
-        2;
+const _homeTitleBarLiveRoomMinActionSize = 16.0;
+const _homeTitleBarLiveRoomMinWidth = 80.0;
+const _homeTitleBarLiveRoomTextSafetyWidth = 2.0;
+typedef _TitleLiveRoomDockBuilder =
+    Widget Function(double maxWidth, {bool fillAvailable});
 
 bool _homeTitleBarShowsCustomWindowControls(BuildContext context) {
   final platform = Theme.of(context).platform;
@@ -38,12 +34,88 @@ double _homeTitleBarBrandWidth(BuildContext context, double maxWidth) {
   return wide ? sidebarWidth : compactBrandWidth;
 }
 
-bool _homeTitleBarCanShowSearch(BuildContext context, double maxWidth) {
-  if (maxWidth < narrowBreakpoint) return false;
-  if (!_homeTitleBarShowsCustomWindowControls(context)) {
-    return maxWidth >= _homeTitleBarSearchWidth;
+bool _homeTitleBarCanShowSearch(double maxWidth) {
+  return maxWidth >= narrowBreakpoint;
+}
+
+bool _homeTitleBarPlacesLiveRoomOnRight(BuildContext context) {
+  final platform = Theme.of(context).platform;
+  return !_homeTitleBarShowsCustomWindowControls(context) &&
+      platform != TargetPlatform.macOS;
+}
+
+double _homeTitleBarLiveRoomLeft(BuildContext context) {
+  if (Theme.of(context).platform == TargetPlatform.macOS) {
+    return WindowChromeInsets.of(context).titleBarLeadingControlsSafeInset;
   }
-  return maxWidth >= _homeTitleBarWindowsSearchMinWidth;
+  return _homeTitleBarLiveRoomHorizontalInset;
+}
+
+class _HomeTitleBarSearchLayout {
+  const _HomeTitleBarSearchLayout({required this.left, required this.width});
+
+  final double left;
+  final double width;
+
+  double get right => left + width;
+}
+
+_HomeTitleBarSearchLayout? _homeTitleBarSearchLayout(
+  BuildContext context,
+  double maxWidth, {
+  required bool hasLiveRoom,
+}) {
+  if (!_homeTitleBarCanShowSearch(maxWidth)) return null;
+
+  final showWindowControls = _homeTitleBarShowsCustomWindowControls(context);
+  final placeLiveRoomOnRight = _homeTitleBarPlacesLiveRoomOnRight(context);
+  final liveRoomLeft = _homeTitleBarLiveRoomLeft(context);
+  var minimumLeft = 0.0;
+  var maximumRight = maxWidth;
+  if (showWindowControls) {
+    maximumRight -= _homeTitleBarControlsWidth + appWindowControlGap;
+  }
+  if (hasLiveRoom) {
+    final reservedLiveRoomWidth =
+        _homeTitleBarLiveRoomHorizontalInset +
+        _homeTitleBarLiveRoomMinWidth +
+        _homeTitleBarLiveRoomSearchGap;
+    if (placeLiveRoomOnRight) {
+      maximumRight -= reservedLiveRoomWidth;
+    } else {
+      minimumLeft =
+          liveRoomLeft +
+          _homeTitleBarLiveRoomMinWidth +
+          _homeTitleBarLiveRoomSearchGap;
+    }
+  }
+
+  final availableWidth = maximumRight - minimumLeft;
+  final width = availableWidth
+      .clamp(_homeTitleBarMinSearchWidth, _homeTitleBarSearchWidth)
+      .toDouble();
+  final centeredLeft = (maxWidth - width) / 2;
+  if (hasLiveRoom && !placeLiveRoomOnRight) {
+    final preferredLeft =
+        liveRoomLeft +
+        _homeTitleBarLiveRoomDefaultWidth +
+        _homeTitleBarLiveRoomSearchGap;
+    if (maximumRight - width >= preferredLeft) {
+      minimumLeft = preferredLeft;
+    }
+  }
+  if (hasLiveRoom && placeLiveRoomOnRight) {
+    final preferredRight =
+        maxWidth -
+        _homeTitleBarLiveRoomHorizontalInset -
+        _homeTitleBarLiveRoomDefaultWidth -
+        _homeTitleBarLiveRoomSearchGap;
+    if (preferredRight - width >= minimumLeft) {
+      maximumRight = preferredRight;
+    }
+  }
+  final left = centeredLeft.clamp(minimumLeft, maximumRight - width).toDouble();
+  return _HomeTitleBarSearchLayout(left: left, width: width);
 }
 
 class _HomeTitleBar extends StatefulWidget {
@@ -51,37 +123,23 @@ class _HomeTitleBar extends StatefulWidget {
     required this.windowController,
     required this.searchController,
     required this.searchTapRegionGroup,
-    required this.liveRoom,
-    required this.micMuted,
-    required this.headphonesMuted,
-    required this.voiceBlocked,
+    required this.liveRoomDockBuilder,
     required this.interactionLocked,
     required this.onActivateSearch,
     required this.onSearchTapOutside,
     required this.onSearchContextMenuOpenChanged,
     required this.onClearSearchQuery,
-    required this.onOpenLiveRoom,
-    required this.onToggleMic,
-    required this.onToggleHeadphones,
-    required this.onLeaveLive,
   });
 
   final DesktopWindowController windowController;
   final TextEditingController searchController;
   final Object searchTapRegionGroup;
-  final live_display.JoinedLiveRoomSummary? liveRoom;
-  final bool micMuted;
-  final bool headphonesMuted;
-  final bool voiceBlocked;
+  final _TitleLiveRoomDockBuilder? liveRoomDockBuilder;
   final bool interactionLocked;
   final VoidCallback onActivateSearch;
   final VoidCallback onSearchTapOutside;
   final ValueChanged<bool> onSearchContextMenuOpenChanged;
   final VoidCallback onClearSearchQuery;
-  final VoidCallback onOpenLiveRoom;
-  final VoidCallback? onToggleMic;
-  final VoidCallback onToggleHeadphones;
-  final VoidCallback onLeaveLive;
 
   @override
   State<_HomeTitleBar> createState() => _HomeTitleBarState();
@@ -145,13 +203,40 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
               context,
               constraints.maxWidth,
             );
-            final showSearch = _homeTitleBarCanShowSearch(
+            final searchLayout = _homeTitleBarSearchLayout(
               context,
               constraints.maxWidth,
+              hasLiveRoom: widget.liveRoomDockBuilder != null,
             );
+            final platform = Theme.of(context).platform;
+            final narrow = constraints.maxWidth < narrowBreakpoint;
             final showLiveRoom =
-                widget.liveRoom != null &&
-                constraints.maxWidth >= _homeTitleBarLiveRoomMinWidth;
+                widget.liveRoomDockBuilder != null &&
+                !(narrow && platform == TargetPlatform.android);
+            final placeLiveRoomOnRight = _homeTitleBarPlacesLiveRoomOnRight(
+              context,
+            );
+            final liveRoomLeft = _homeTitleBarLiveRoomLeft(context);
+            final liveRoomBoundary = showWindowControls
+                ? constraints.maxWidth -
+                      _homeTitleBarControlsWidth -
+                      appWindowControlGap
+                : constraints.maxWidth;
+            final liveRoomAvailableWidth = searchLayout == null
+                ? liveRoomBoundary -
+                      liveRoomLeft -
+                      _homeTitleBarLiveRoomHorizontalInset
+                : placeLiveRoomOnRight
+                ? constraints.maxWidth -
+                      _homeTitleBarLiveRoomHorizontalInset -
+                      searchLayout.right -
+                      _homeTitleBarLiveRoomSearchGap
+                : searchLayout.left -
+                      liveRoomLeft -
+                      _homeTitleBarLiveRoomSearchGap;
+            final liveRoomMaxWidth = liveRoomAvailableWidth
+                .clamp(0.0, double.infinity)
+                .toDouble();
 
             return Stack(
               children: [
@@ -187,38 +272,22 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
                   Positioned(
                     top:
                         (_homeTitleBarHeight - _homeTitleBarLiveRoomHeight) / 2,
-                    left: showWindowControls
+                    left: placeLiveRoomOnRight ? null : liveRoomLeft,
+                    right: placeLiveRoomOnRight
                         ? _homeTitleBarLiveRoomHorizontalInset
                         : null,
-                    right: showWindowControls
-                        ? null
-                        : _homeTitleBarLiveRoomHorizontalInset,
-                    child: IgnorePointer(
-                      ignoring: widget.interactionLocked,
-                      child: Opacity(
-                        opacity: widget.interactionLocked ? 0.54 : 1,
-                        child: _TitleLiveRoomDock(
-                          room: widget.liveRoom!,
-                          micMuted: widget.micMuted,
-                          headphonesMuted: widget.headphonesMuted,
-                          voiceBlocked: widget.voiceBlocked,
-                          onOpen: widget.onOpenLiveRoom,
-                          onToggleMic: widget.onToggleMic,
-                          onToggleHeadphones: widget.onToggleHeadphones,
-                          onLeave: widget.onLeaveLive,
-                        ),
-                      ),
-                    ),
+                    child: widget.liveRoomDockBuilder!(liveRoomMaxWidth),
                   ),
-                if (showSearch)
-                  Align(
-                    alignment: Alignment.center,
+                if (searchLayout != null)
+                  Positioned(
+                    left: searchLayout.left,
+                    width: searchLayout.width,
+                    top: (_homeTitleBarHeight - _homeTitleBarSearchHeight) / 2,
                     child: TapRegion(
                       groupId: widget.searchTapRegionGroup,
                       onTapOutside: (_) => widget.onSearchTapOutside(),
                       child: SizedBox(
                         key: const ValueKey('home-title-search'),
-                        width: _homeTitleBarSearchWidth,
                         height: _homeTitleBarSearchHeight,
                         child: _TitleSearchField(
                           controller: widget.searchController,
@@ -241,8 +310,67 @@ class _HomeTitleBarState extends State<_HomeTitleBar> {
   }
 }
 
+String? _titleLiveRoomNameForWidth({
+  required String roomName,
+  required TextStyle style,
+  required TextDirection textDirection,
+  required TextScaler textScaler,
+  required double maxWidth,
+}) {
+  if (roomName.isEmpty || maxWidth <= 0) return null;
+
+  final painter = TextPainter(
+    maxLines: 1,
+    textDirection: textDirection,
+    textScaler: textScaler,
+  );
+  bool fits(String value) {
+    painter.text = TextSpan(text: value, style: style);
+    painter.layout();
+    return painter.width.ceilToDouble() +
+            _homeTitleBarLiveRoomTextSafetyWidth <=
+        maxWidth;
+  }
+
+  if (fits(roomName)) return roomName;
+
+  const suffix = '...';
+  final characters = roomName.characters.toList(growable: false);
+  if (characters.isEmpty || !fits('${characters.first}$suffix')) return null;
+
+  var low = 1;
+  var high = characters.length - 1;
+  while (low < high) {
+    final middle = (low + high + 1) ~/ 2;
+    final candidate = '${characters.take(middle).join()}$suffix';
+    if (fits(candidate)) {
+      low = middle;
+    } else {
+      high = middle - 1;
+    }
+  }
+  return '${characters.take(low).join()}$suffix';
+}
+
+double _titleLiveRoomTextWidth({
+  required String text,
+  required TextStyle style,
+  required TextDirection textDirection,
+  required TextScaler textScaler,
+}) {
+  final painter = TextPainter(
+    text: TextSpan(text: text, style: style),
+    maxLines: 1,
+    textDirection: textDirection,
+    textScaler: textScaler,
+  )..layout();
+  return painter.width.ceilToDouble() + _homeTitleBarLiveRoomTextSafetyWidth;
+}
+
 class _TitleLiveRoomDock extends StatelessWidget {
   const _TitleLiveRoomDock({
+    required this.maxWidth,
+    this.fillAvailable = false,
     required this.room,
     required this.micMuted,
     required this.headphonesMuted,
@@ -251,8 +379,11 @@ class _TitleLiveRoomDock extends StatelessWidget {
     required this.onToggleMic,
     required this.onToggleHeadphones,
     required this.onLeave,
+    required this.interactionLocked,
   });
 
+  final double maxWidth;
+  final bool fillAvailable;
   final live_display.JoinedLiveRoomSummary room;
   final bool micMuted;
   final bool headphonesMuted;
@@ -261,9 +392,17 @@ class _TitleLiveRoomDock extends StatelessWidget {
   final VoidCallback? onToggleMic;
   final VoidCallback onToggleHeadphones;
   final VoidCallback onLeave;
+  final bool interactionLocked;
 
   @override
   Widget build(BuildContext context) {
+    const namedLeadingInset = 7.0;
+    const compactLeadingInset = 6.0;
+    const trailingInset = 4.0;
+    const volumeIconSize = 16.0;
+    const identityGap = 7.0;
+    const avatarSize = 20.0;
+    const nameActionGap = 8.0;
     final micControl = live_display.liveMicControlState(
       micMuted: micMuted,
       voiceBlocked: voiceBlocked,
@@ -271,7 +410,70 @@ class _TitleLiveRoomDock extends StatelessWidget {
     final resolvedAvatar = AppConfigScope.of(
       context,
     ).resolveAssetUrl(room.avatarUrl);
-    return Tooltip(
+    final roomNameStyle = DefaultTextStyle.of(context).style
+        .merge(
+          UiTypography.label.copyWith(
+            color: UiColors.text,
+            fontWeight: FontWeight.w600,
+          ),
+        )
+        .copyWith(inherit: false);
+    final textDirection = Directionality.of(context);
+    final textScaler = MediaQuery.textScalerOf(context);
+    final fullRoomNameWidth = _titleLiveRoomTextWidth(
+      text: room.displayName,
+      style: roomNameStyle,
+      textDirection: textDirection,
+      textScaler: textScaler,
+    );
+    final preferredWidth =
+        (namedLeadingInset +
+                volumeIconSize +
+                identityGap +
+                avatarSize +
+                identityGap +
+                fullRoomNameWidth +
+                nameActionGap +
+                _homeTitleBarLiveRoomActionSize * 3 +
+                trailingInset)
+            .clamp(_homeTitleBarLiveRoomDefaultWidth, double.infinity)
+            .toDouble();
+    final width = fillAvailable
+        ? maxWidth
+        : preferredWidth.clamp(0.0, maxWidth).toDouble();
+    final actionSize = ((width - 32) / 3)
+        .clamp(
+          _homeTitleBarLiveRoomMinActionSize,
+          _homeTitleBarLiveRoomActionSize,
+        )
+        .toDouble();
+    final actionButtonsWidth = actionSize * 3;
+    final namedIdentityFixedWidth =
+        namedLeadingInset +
+        volumeIconSize +
+        identityGap +
+        avatarSize +
+        identityGap +
+        nameActionGap +
+        actionButtonsWidth +
+        trailingInset;
+    final visibleRoomName = _titleLiveRoomNameForWidth(
+      roomName: room.displayName,
+      style: roomNameStyle,
+      textDirection: textDirection,
+      textScaler: textScaler,
+      maxWidth: width - namedIdentityFixedWidth,
+    );
+    final showRoomName = visibleRoomName != null;
+    final volumeIdentityWidth =
+        compactLeadingInset +
+        volumeIconSize +
+        identityGap +
+        avatarSize +
+        actionButtonsWidth +
+        trailingInset;
+    final showVolumeIcon = showRoomName || width >= volumeIdentityWidth;
+    final dock = Tooltip(
       message: '打开语音频道',
       preferBelow: true,
       verticalOffset: 22,
@@ -282,7 +484,7 @@ class _TitleLiveRoomDock extends StatelessWidget {
           behavior: HitTestBehavior.opaque,
           onTap: onOpen,
           child: SizedBox(
-            width: _homeTitleBarLiveRoomWidth,
+            width: width,
             height: _homeTitleBarLiveRoomHeight,
             child: DecoratedBox(
               decoration: BoxDecoration(
@@ -291,33 +493,44 @@ class _TitleLiveRoomDock extends StatelessWidget {
                 border: Border.all(color: UiColors.border),
               ),
               child: Padding(
-                padding: const EdgeInsets.only(left: 8, right: 4),
+                padding: EdgeInsets.only(
+                  left: showRoomName ? namedLeadingInset : compactLeadingInset,
+                  right: trailingInset,
+                ),
                 child: Row(
                   children: [
-                    Icon(Icons.volume_up, size: 16, color: UiColors.accent),
-                    const SizedBox(width: 7),
+                    if (showVolumeIcon) ...[
+                      const Icon(
+                        Icons.volume_up,
+                        size: volumeIconSize,
+                        color: UiColors.accent,
+                      ),
+                      const SizedBox(width: identityGap),
+                    ],
                     Avatar(
                       label: room.avatarLabel,
                       imageUrl: resolvedAvatar,
                       defaultAvatarKey: room.defaultAvatarKey,
-                      size: 20,
+                      size: avatarSize,
                       showBorder: false,
                     ),
-                    const SizedBox(width: 7),
-                    Expanded(
-                      child: Text(
-                        room.displayName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: UiTypography.label.copyWith(
-                          color: UiColors.text,
-                          fontWeight: FontWeight.w600,
+                    if (showRoomName) ...[
+                      const SizedBox(width: identityGap),
+                      Expanded(
+                        child: Text(
+                          visibleRoomName,
+                          maxLines: 1,
+                          softWrap: false,
+                          overflow: TextOverflow.clip,
+                          style: roomNameStyle,
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
+                      const SizedBox(width: nameActionGap),
+                    ] else
+                      const Spacer(),
                     _TitleLiveActionButton(
                       key: const ValueKey<String>('home-title-live-room:mic'),
+                      size: actionSize,
                       tooltip: micControl.mutedForDisplay ? '打开麦克风' : '关闭麦克风',
                       icon: micControl.mutedForDisplay
                           ? Icons.mic_off
@@ -333,6 +546,7 @@ class _TitleLiveRoomDock extends StatelessWidget {
                       key: const ValueKey<String>(
                         'home-title-live-room:headphones',
                       ),
+                      size: actionSize,
                       tooltip: headphonesMuted ? '打开耳机' : '关闭耳机',
                       icon: headphonesMuted
                           ? Icons.headset_off
@@ -344,6 +558,7 @@ class _TitleLiveRoomDock extends StatelessWidget {
                     ),
                     _TitleLiveActionButton(
                       key: const ValueKey<String>('home-title-live-room:leave'),
+                      size: actionSize,
                       tooltip: '离开语音频道',
                       icon: Icons.call_end,
                       color: UiColors.danger,
@@ -357,6 +572,10 @@ class _TitleLiveRoomDock extends StatelessWidget {
         ),
       ),
     );
+    return IgnorePointer(
+      ignoring: interactionLocked,
+      child: Opacity(opacity: interactionLocked ? 0.54 : 1, child: dock),
+    );
   }
 }
 
@@ -367,12 +586,14 @@ class _TitleLiveActionButton extends StatelessWidget {
     required this.icon,
     required this.color,
     required this.onPressed,
+    required this.size,
   });
 
   final String tooltip;
   final IconData icon;
   final Color color;
   final VoidCallback? onPressed;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -389,11 +610,11 @@ class _TitleLiveActionButton extends StatelessWidget {
             if (enabled) onPressed!();
           },
           child: SizedBox.square(
-            dimension: _homeTitleBarLiveRoomActionSize,
+            dimension: size,
             child: Center(
               child: Icon(
                 icon,
-                size: 16,
+                size: (size - 8).clamp(10.0, 16.0).toDouble(),
                 color: enabled ? color : color.withValues(alpha: 0.56),
               ),
             ),
@@ -839,7 +1060,12 @@ class _TitleSearchResultsPanel extends StatelessWidget {
                 ),
                 trailing: Button(
                   key: ValueKey('open-user-settings-${user.id}'),
+                  width: _searchResultActionWidth(context, hasIcon: true),
                   height: 30,
+                  padding: _searchResultActionPadding(
+                    context,
+                    wideHorizontal: 16,
+                  ),
                   onPressed: () => onUserSettingsSelected(user),
                   icon: const Icon(Icons.manage_accounts_outlined, size: 15),
                   child: const Text('进入设置'),
@@ -1086,8 +1312,9 @@ class _MyRoomEnterActivity extends StatelessWidget {
   Widget build(BuildContext context) {
     return Button(
       key: ValueKey('my-room-action-${room.id}'),
+      width: _searchResultActionWidth(context, hasIcon: false),
       height: 30,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      padding: _searchResultActionPadding(context, wideHorizontal: 10),
       tone: ButtonTone.primary,
       onPressed: () => onPressed(room),
       child: const Text('进入房间'),
@@ -1109,14 +1336,34 @@ class _PublicRoomJoinActivity extends StatelessWidget {
     final room = candidate.room;
     return Button(
       key: ValueKey('public-room-action-${room.id}'),
+      width: _searchResultActionWidth(context, hasIcon: false),
       height: 30,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      padding: _searchResultActionPadding(context, wideHorizontal: 10),
       tone: candidate.actionable ? ButtonTone.primary : ButtonTone.neutral,
       loading: candidate.busy,
       onPressed: candidate.actionEnabled ? () => onPressed(room) : null,
       child: Text(_publicRoomSearchActionLabel(candidate)),
     );
   }
+}
+
+EdgeInsets _searchResultActionPadding(
+  BuildContext context, {
+  required double wideHorizontal,
+}) {
+  return EdgeInsets.symmetric(
+    horizontal: HomeAdaptiveLayout.usesCompactLayout(context)
+        ? 4
+        : wideHorizontal,
+  );
+}
+
+double? _searchResultActionWidth(
+  BuildContext context, {
+  required bool hasIcon,
+}) {
+  if (!HomeAdaptiveLayout.usesCompactLayout(context)) return null;
+  return hasIcon ? 90 : 72;
 }
 
 class _MessageSearchResultTile extends StatelessWidget {

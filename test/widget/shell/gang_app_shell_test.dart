@@ -212,6 +212,7 @@ AuthenticatedAppContext _homeTestAppContext({
   bool includeUnreadRoomNotification = false,
   bool includeFreshRoomNotificationOnRefresh = false,
   bool pinAlphaRoom = false,
+  String alphaRoomName = 'Alpha Room',
   int alphaRoomUnreadCount = 3,
   bool alphaRoomHasPendingJoinRequests = false,
   bool alphaRoomAiVoiceAnnouncementsEnabled = false,
@@ -266,6 +267,7 @@ AuthenticatedAppContext _homeTestAppContext({
       includeFreshRoomNotificationOnRefresh:
           includeFreshRoomNotificationOnRefresh,
       pinAlphaRoom: pinAlphaRoom,
+      initialAlphaRoomName: alphaRoomName,
       alphaRoomUnreadCount: alphaRoomUnreadCount,
       alphaRoomHasPendingJoinRequests: alphaRoomHasPendingJoinRequests,
       initialAlphaRoomAiVoiceAnnouncementsEnabled:
@@ -294,6 +296,7 @@ GangApi _roomsApi({
   bool includeUnreadRoomNotification = false,
   bool includeFreshRoomNotificationOnRefresh = false,
   bool pinAlphaRoom = false,
+  String initialAlphaRoomName = 'Alpha Room',
   int alphaRoomUnreadCount = 3,
   bool alphaRoomHasPendingJoinRequests = false,
   bool initialAlphaRoomAiVoiceAnnouncementsEnabled = false,
@@ -301,7 +304,7 @@ GangApi _roomsApi({
 }) {
   var roomNotificationsMarkedRead = false;
   var actionComparisonMemberRole = 'member';
-  var alphaRoomName = 'Alpha Room';
+  var alphaRoomName = initialAlphaRoomName;
   var alphaRoomDescription = '';
   var alphaRoomVisibility = 'private';
   var alphaRoomJoinPolicy = currentRoomJoinPolicy;
@@ -350,6 +353,7 @@ GangApi _roomsApi({
             ..._serverListJson(
               currentRoomJoinPolicy: currentRoomJoinPolicy,
               pinAlphaRoom: pinAlphaRoom,
+              alphaRoomName: initialAlphaRoomName,
               alphaRoomUnreadCount: alphaRoomUnreadCount,
               alphaRoomHasPendingJoinRequests: alphaRoomHasPendingJoinRequests,
             ),
@@ -1185,13 +1189,14 @@ http.Response _jsonResponse(Object body) {
 List<Map<String, Object?>> _serverListJson({
   String currentRoomJoinPolicy = 'approval_required',
   bool pinAlphaRoom = false,
+  String alphaRoomName = 'Alpha Room',
   int alphaRoomUnreadCount = 3,
   bool alphaRoomHasPendingJoinRequests = false,
 }) {
   return [
     _roomCardJson(
       id: 'server-alpha',
-      name: 'Alpha Room',
+      name: alphaRoomName,
       memberCount: 2,
       liveParticipantCount: 1,
       unreadCount: alphaRoomUnreadCount,

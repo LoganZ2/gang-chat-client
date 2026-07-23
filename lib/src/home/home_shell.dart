@@ -600,6 +600,22 @@ class _HomeShellState extends State<HomeShell> {
       selectedRoom: _selectedRoom,
       rooms: _servers,
     );
+    final _TitleLiveRoomDockBuilder? liveRoomDockBuilder =
+        joinedLiveRoom == null
+        ? null
+        : (maxWidth, {fillAvailable = false}) => _TitleLiveRoomDock(
+            maxWidth: maxWidth,
+            fillAvailable: fillAvailable,
+            room: joinedLiveRoom,
+            micMuted: _micMuted,
+            headphonesMuted: _headphonesMuted,
+            voiceBlocked: _voiceBlocked,
+            interactionLocked: _appUpdateDownloadInProgress,
+            onOpen: () => unawaited(_openJoinedLiveChannel()),
+            onToggleMic: _voiceBlocked ? null : _toggleMicMute,
+            onToggleHeadphones: _toggleHeadphonesMute,
+            onLeave: () => unawaited(_leaveLive()),
+          );
     return MediaCacheScope(
       cache: _mediaCacheController,
       child: ChatImagePreviewActionsScope(
@@ -617,11 +633,13 @@ class _HomeShellState extends State<HomeShell> {
                   final narrowLayout =
                       shellConstraints.maxWidth < narrowBreakpoint;
                   _compactLayout = narrowLayout;
+                  final titleSearchLayout = _homeTitleBarSearchLayout(
+                    context,
+                    shellConstraints.maxWidth,
+                    hasLiveRoom: liveRoomDockBuilder != null,
+                  );
                   final showSearchOverlay =
-                      _homeTitleBarCanShowSearch(
-                        context,
-                        shellConstraints.maxWidth,
-                      ) &&
+                      titleSearchLayout != null &&
                       !_appUpdateDownloadInProgress;
                   final content = Stack(
                     fit: StackFit.expand,
@@ -634,23 +652,13 @@ class _HomeShellState extends State<HomeShell> {
                               windowController: widget.windowController,
                               searchController: _titleSearchController,
                               searchTapRegionGroup: _searchTapRegionGroup,
-                              liveRoom: joinedLiveRoom,
-                              micMuted: _micMuted,
-                              headphonesMuted: _headphonesMuted,
-                              voiceBlocked: _voiceBlocked,
+                              liveRoomDockBuilder: liveRoomDockBuilder,
                               interactionLocked: _appUpdateDownloadInProgress,
                               onActivateSearch: _activateSearch,
                               onSearchTapOutside: _collapseSearch,
                               onSearchContextMenuOpenChanged:
                                   _handleTitleSearchContextMenuOpenChanged,
                               onClearSearchQuery: _clearSearchQuery,
-                              onOpenLiveRoom: () =>
-                                  unawaited(_openJoinedLiveChannel()),
-                              onToggleMic: _voiceBlocked
-                                  ? null
-                                  : _toggleMicMute,
-                              onToggleHeadphones: _toggleHeadphonesMute,
-                              onLeaveLive: () => unawaited(_leaveLive()),
                             ),
                             Expanded(
                               child: _buildAppUpdateLockedBody(
@@ -661,6 +669,10 @@ class _HomeShellState extends State<HomeShell> {
                                     if (narrow) {
                                       return _buildNarrowLayout(
                                         constraints.maxWidth,
+                                        footerLiveRoomDockBuilder:
+                                            useAndroidLayout
+                                            ? liveRoomDockBuilder
+                                            : null,
                                       );
                                     }
 
@@ -687,11 +699,8 @@ class _HomeShellState extends State<HomeShell> {
                           showSearchOverlay)
                         Positioned(
                           top: _homeTitleBarHeight - 1,
-                          left:
-                              (shellConstraints.maxWidth -
-                                  _homeTitleBarSearchWidth) /
-                              2,
-                          width: _homeTitleBarSearchWidth,
+                          left: titleSearchLayout.left,
+                          width: titleSearchLayout.width,
                           child: _buildSearchResultsTapRegion(),
                         ),
                       if (fullScreenTrack != null)
