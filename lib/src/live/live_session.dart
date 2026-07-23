@@ -54,6 +54,39 @@ LiveParticipantDepartureKind liveParticipantDepartureKind(
       : LiveParticipantDepartureKind.left;
 }
 
+/// Serializes remote-video subscription reconciliation and makes newer
+/// selections supersede work that has not started yet.
+///
+/// LiveKit's subscribe/unsubscribe methods only enqueue signal messages; they
+/// do not wait for the server to confirm the resulting state. Keeping each
+/// media kind on a single ordered tail ensures that a stale unsubscribe cannot
+/// be sent after the user's newer selection.
+@visibleForTesting
+class LatestLiveSubscriptionReconciler {
+  Future<void> _tail = Future<void>.value();
+  int _revision = 0;
+
+  Future<void> schedule(
+    Future<void> Function(bool Function() isCurrent) reconcile,
+  ) {
+    final revision = ++_revision;
+    final previous = _tail;
+    final next = () async {
+      try {
+        await previous;
+      } catch (_) {}
+      if (revision != _revision) return;
+      await reconcile(() => revision == _revision);
+    }();
+    _tail = next.catchError((_) {});
+    return next;
+  }
+
+  void invalidate() {
+    _revision += 1;
+  }
+}
+
 @visibleForTesting
 bool shouldApplyLivePublishPermissionUpdate({
   required bool currentCanPublish,
@@ -367,6 +400,10 @@ class LiveSession extends ChangeNotifier {
   double _screenShareVolume = defaultAudioVolume;
   String? _watchedScreenShareIdentity;
   String? _watchedCameraIdentity;
+  final LatestLiveSubscriptionReconciler _screenShareSubscriptionReconciler =
+      LatestLiveSubscriptionReconciler();
+  final LatestLiveSubscriptionReconciler _cameraSubscriptionReconciler =
+      LatestLiveSubscriptionReconciler();
   final Map<String, double> _participantVoiceVolumes = <String, double>{};
   bool _outputMuted = false;
   // Local mic mute (Option A): muting keeps the capture running and only zeroes
@@ -461,14 +498,23 @@ class LiveSession extends ChangeNotifier {
   /// Target max height (px) for the local screen share.
   int get screenShareMaxHeight => _screenShareMaxHeight;
 
-  /// Whether the local microphone is muted. With Option A muting keeps the
-  /// LiveKit track live (capture never stops) and only silences the outgoing
-  /// audio, so the track's own muted flag is not the source of truth — the
-  /// locally-tracked [_micMuted] is. An admin `mute_mic` is reflected
-  /// separately through [canPublish]. Returns true when not connected.
+  /// Whether the local microphone is effectively muted. With Option A muting
+  /// keeps a successfully published LiveKit track live and silences outgoing
+  /// audio through app-local gain. A missing/failed publication must still be
+  /// reported as muted so the local UI and server snapshot cannot claim that
+  /// other participants can hear a track which does not exist.
   bool get localMicMuted {
-    if (_room?.localParticipant == null) return true;
-    return _micMuted;
+    final local = _room?.localParticipant;
+    if (local == null ||
+        !_canPublish ||
+        _shouldMuteLocalMicrophone ||
+        _localMicrophonePublishUnavailable) {
+      return true;
+    }
+    final publication = local.getTrackPublicationBySource(
+      lk.TrackSource.microphone,
+    );
+    return publication == null || publication.muted;
   }
 
   Set<String> get speakingIdentities => Set.unmodifiable(_speakingIdentities);
@@ -561,7 +607,10 @@ class LiveSession extends ChangeNotifier {
       await setMicMuted(micMuted);
       return;
     }
-    await disconnect();
+    // A click on a remote share selects it before joining. Preserve that
+    // desired target while replacing the previous LiveKit room so the new
+    // room's initial auto-subscription is not immediately cancelled.
+    await _disconnect(clearWatchedTargets: false);
 
     _connecting = true;
     notifyListeners();
@@ -1044,10 +1093,14 @@ class LiveSession extends ChangeNotifier {
     }
   }
 
-  Future<void> disconnect() async {
+  Future<void> disconnect() => _disconnect();
+
+  Future<void> _disconnect({bool clearWatchedTargets = true}) async {
     final room = _room;
     final cancel = _cancelEvents;
     _cancelEvents = null;
+    _screenShareSubscriptionReconciler.invalidate();
+    _cameraSubscriptionReconciler.invalidate();
     _stopInputRebinder();
     _stopOutputRebinder();
     _room = null;
@@ -1055,8 +1108,10 @@ class LiveSession extends ChangeNotifier {
     _resolvedLiveKitUrl = null;
     _connecting = false;
     _screenSharing = false;
-    _watchedScreenShareIdentity = null;
-    _watchedCameraIdentity = null;
+    if (clearWatchedTargets) {
+      _watchedScreenShareIdentity = null;
+      _watchedCameraIdentity = null;
+    }
     _localMicrophonePublishUnavailable = false;
     _canPublish = true;
     _presenceCallbacksEnabled = false;
@@ -1090,6 +1145,8 @@ class LiveSession extends ChangeNotifier {
     final room = _room;
     final cancel = _cancelEvents;
     _cancelEvents = null;
+    _screenShareSubscriptionReconciler.invalidate();
+    _cameraSubscriptionReconciler.invalidate();
     _stopInputRebinder();
     _stopOutputRebinder();
     _room = null;
@@ -1282,7 +1339,7 @@ class LiveSession extends ChangeNotifier {
     if (room == null) return;
     final local = room.localParticipant;
     if (local != null) {
-      _micMutedByIdentity[local.identity] = _shouldMuteLocalMicrophone;
+      _micMutedByIdentity[local.identity] = localMicMuted;
     }
     for (final p in room.remoteParticipants.values) {
       if (_isScreenAudioAux(p.identity)) continue;
@@ -1484,35 +1541,39 @@ class LiveSession extends ChangeNotifier {
     }
   }
 
-  Future<void> _applyScreenShareSubscriptions() async {
-    final room = _room;
-    if (room == null) return;
-    final watchedIdentity = _watchedScreenShareIdentity;
-    for (final participant in room.remoteParticipants.values) {
-      if (_isScreenAudioAux(participant.identity)) continue;
-      for (final pub in participant.videoTrackPublications) {
-        if (pub.source != lk.TrackSource.screenShareVideo) continue;
-        final shouldSubscribe =
-            watchedIdentity != null && participant.identity == watchedIdentity;
-        try {
-          if (shouldSubscribe) {
-            await pub.subscribe();
-          } else {
-            await pub.unsubscribe();
-          }
-        } catch (_) {}
-      }
-    }
+  Future<void> _applyScreenShareSubscriptions() {
+    return _screenShareSubscriptionReconciler.schedule(
+      (isCurrent) => _reconcileVideoSubscriptions(
+        source: lk.TrackSource.screenShareVideo,
+        watchedIdentity: _watchedScreenShareIdentity,
+        isCurrent: isCurrent,
+      ),
+    );
   }
 
-  Future<void> _applyCameraSubscriptions() async {
+  Future<void> _applyCameraSubscriptions() {
+    return _cameraSubscriptionReconciler.schedule(
+      (isCurrent) => _reconcileVideoSubscriptions(
+        source: lk.TrackSource.camera,
+        watchedIdentity: _watchedCameraIdentity,
+        isCurrent: isCurrent,
+      ),
+    );
+  }
+
+  Future<void> _reconcileVideoSubscriptions({
+    required lk.TrackSource source,
+    required String? watchedIdentity,
+    required bool Function() isCurrent,
+  }) async {
     final room = _room;
     if (room == null) return;
-    final watchedIdentity = _watchedCameraIdentity;
     for (final participant in room.remoteParticipants.values) {
+      if (!isCurrent() || !identical(_room, room)) return;
       if (_isScreenAudioAux(participant.identity)) continue;
       for (final pub in participant.videoTrackPublications) {
-        if (pub.source != lk.TrackSource.camera) continue;
+        if (!isCurrent() || !identical(_room, room)) return;
+        if (pub.source != source) continue;
         final shouldSubscribe =
             watchedIdentity != null && participant.identity == watchedIdentity;
         try {

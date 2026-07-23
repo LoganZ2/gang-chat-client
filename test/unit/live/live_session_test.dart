@@ -34,6 +34,44 @@ void main() {
     expect(isLivePresenceSoundParticipantIdentity(''), isFalse);
   });
 
+  test('latest subscription reconciliation runs last', () async {
+    final reconciler = LatestLiveSubscriptionReconciler();
+    final firstStarted = Completer<void>();
+    final releaseFirst = Completer<void>();
+    final applied = <String>[];
+
+    final first = reconciler.schedule((isCurrent) async {
+      firstStarted.complete();
+      await releaseFirst.future;
+      if (isCurrent()) applied.add('first');
+    });
+    await firstStarted.future;
+
+    final second = reconciler.schedule((isCurrent) async {
+      if (isCurrent()) applied.add('second');
+    });
+    releaseFirst.complete();
+    await Future.wait([first, second]);
+
+    expect(applied, ['second']);
+  });
+
+  test('invalidated subscription reconciliation does not start', () async {
+    final reconciler = LatestLiveSubscriptionReconciler();
+    final blocker = Completer<void>();
+    final blockingTask = reconciler.schedule((_) => blocker.future);
+    var ranInvalidatedTask = false;
+    final invalidatedTask = reconciler.schedule((_) async {
+      ranInvalidatedTask = true;
+    });
+
+    reconciler.invalidate();
+    blocker.complete();
+    await Future.wait([blockingTask, invalidatedTask]);
+
+    expect(ranInvalidatedTask, isFalse);
+  });
+
   test('screen-share source picker keeps screens without thumbnails', () {
     final sources = filterScreenSourcesForPicker([
       const ScreenSource(

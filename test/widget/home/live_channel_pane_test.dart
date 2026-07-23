@@ -716,6 +716,79 @@ void main() {
     expect(selections.last?.isScreenShare, false);
   });
 
+  testWidgets('Android screen-share thumbnail joins voice and selects stage', (
+    tester,
+  ) async {
+    final searchController = TextEditingController();
+    addTearDown(searchController.dispose);
+    var joinCalls = 0;
+    final selections = <LiveStageSelection?>[];
+
+    await tester.pumpWidget(
+      _host(
+        searchController: searchController,
+        live: _liveState([
+          _participant(
+            id: 'live_phabe',
+            user: _user('phabe', 'Room Phabe', roomRole: 'member'),
+            screenSharing: true,
+          ),
+        ]),
+        platform: TargetPlatform.android,
+        joined: false,
+        onJoin: () => joinCalls += 1,
+        onStageSelectionChanged: selections.add,
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('live-member:screen-share-thumbnail')),
+    );
+
+    expect(joinCalls, 1);
+    expect(selections.single?.identity, 'phabe');
+    expect(selections.single?.isScreenShare, true);
+  });
+
+  testWidgets(
+    'Android screen-share thumbnail watches directly when already joined',
+    (tester) async {
+      final searchController = TextEditingController();
+      addTearDown(searchController.dispose);
+      var joinCalls = 0;
+      final selections = <LiveStageSelection?>[];
+
+      await tester.pumpWidget(
+        _host(
+          searchController: searchController,
+          live: _liveState([
+            _participant(
+              id: 'live_phabe',
+              user: _user('phabe', 'Room Phabe', roomRole: 'member'),
+              screenSharing: true,
+            ),
+          ]),
+          platform: TargetPlatform.android,
+          joined: true,
+          onJoin: () => joinCalls += 1,
+          onStageSelectionChanged: selections.add,
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('live-member:screen-share-thumbnail'),
+        ),
+      );
+
+      expect(joinCalls, 0);
+      expect(selections.single?.identity, 'phabe');
+      expect(selections.single?.isScreenShare, true);
+    },
+  );
+
   testWidgets('focused screen share leaves member card in avatar layout', (
     tester,
   ) async {
@@ -1034,18 +1107,24 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: ui.uiTheme(),
-        home: LiveFullScreenStage(
-          track: _liveVideoTrack(
-            identity: 'phabe',
-            isScreenShare: true,
-            isLocal: false,
+        home: MediaQuery(
+          data: const MediaQueryData(
+            size: Size(800, 600),
+            viewPadding: EdgeInsets.fromLTRB(6, 20, 24, 30),
           ),
-          label: 'Phabe 的屏幕共享',
-          screenShareViewers: [_currentUser.toSummary()],
-          screenShareVolume: 0.75,
-          onScreenShareVolumeChanged: (_) {},
-          onScreenShareMuteToggled: () {},
-          onExit: () => exitCount++,
+          child: LiveFullScreenStage(
+            track: _liveVideoTrack(
+              identity: 'phabe',
+              isScreenShare: true,
+              isLocal: false,
+            ),
+            label: 'Phabe 的屏幕共享',
+            screenShareViewers: [_currentUser.toSummary()],
+            screenShareVolume: 0.75,
+            onScreenShareVolumeChanged: (_) {},
+            onScreenShareMuteToggled: () {},
+            onExit: () => exitCount++,
+          ),
         ),
       ),
     );
@@ -1057,6 +1136,12 @@ void main() {
     final viewersReveal = find.byKey(
       const ValueKey<String>('live-fullscreen-stage:screen-viewers-reveal'),
     );
+    final exitReveal = find.byKey(
+      const ValueKey<String>('live-fullscreen-stage:exit-reveal'),
+    );
+    final volumeReveal = find.byKey(
+      const ValueKey<String>('live-fullscreen-stage:volume-reveal'),
+    );
     AnimatedOpacity revealOpacity(Finder reveal) {
       return tester.widget<AnimatedOpacity>(
         find.descendant(of: reveal, matching: find.byType(AnimatedOpacity)),
@@ -1065,16 +1150,35 @@ void main() {
 
     expect(labelReveal, findsOneWidget);
     expect(viewersReveal, findsOneWidget);
-    expect(revealOpacity(labelReveal).opacity, 0.58);
-    expect(revealOpacity(viewersReveal).opacity, 0.58);
+    expect(exitReveal, findsOneWidget);
+    expect(volumeReveal, findsOneWidget);
+    expect(tester.getTopLeft(labelReveal), const Offset(20, 34));
+    expect(tester.getTopRight(exitReveal).dx, closeTo(762, 0.01));
+    expect(tester.getBottomRight(volumeReveal).dx, closeTo(762, 0.01));
+    expect(tester.getBottomRight(volumeReveal).dy, closeTo(556, 0.01));
+    expect(revealOpacity(labelReveal).opacity, 1);
+    expect(revealOpacity(viewersReveal).opacity, 1);
 
     final hover = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await hover.addPointer(location: tester.getCenter(labelReveal));
-    await tester.pump(const Duration(milliseconds: 160));
-    expect(revealOpacity(labelReveal).opacity, 1);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(milliseconds: 180));
+    expect(revealOpacity(labelReveal).opacity, 0);
+    expect(revealOpacity(viewersReveal).opacity, 0);
+    expect(revealOpacity(exitReveal).opacity, 0);
+    expect(revealOpacity(volumeReveal).opacity, 0);
+
     await hover.moveTo(tester.getCenter(viewersReveal));
-    await tester.pump(const Duration(milliseconds: 160));
+    await tester.pump(const Duration(milliseconds: 180));
+    expect(revealOpacity(labelReveal).opacity, 1);
     expect(revealOpacity(viewersReveal).opacity, 1);
+    expect(revealOpacity(exitReveal).opacity, 1);
+    expect(revealOpacity(volumeReveal).opacity, 1);
+
+    await tester.pump(const Duration(seconds: 2));
+    await hover.moveTo(tester.getCenter(labelReveal));
+    await tester.pump(const Duration(seconds: 2));
+    expect(revealOpacity(labelReveal).opacity, 1);
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.escape);
     await tester.pump();
@@ -1082,6 +1186,64 @@ void main() {
 
     expect(exitCount, 1);
     await hover.removePointer();
+  });
+
+  testWidgets('full screen camera label and exit fully auto-hide', (
+    tester,
+  ) async {
+    liveVideoTrackRendererForTest = (track, fit, mirrorLocal) {
+      return const ColoredBox(color: Colors.black);
+    };
+    addTearDown(resetLiveVideoTrackRendererForTest);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: LiveFullScreenStage(
+          track: _liveVideoTrack(
+            identity: 'phabe',
+            isScreenShare: false,
+            isLocal: false,
+          ),
+          label: 'Phabe 的摄像头',
+          screenShareVolume: 0.75,
+          onScreenShareVolumeChanged: (_) {},
+          onScreenShareMuteToggled: () {},
+          onExit: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final labelReveal = find.byKey(
+      const ValueKey<String>('live-fullscreen-stage:label-reveal'),
+    );
+    final exitReveal = find.byKey(
+      const ValueKey<String>('live-fullscreen-stage:exit-reveal'),
+    );
+    double opacity(Finder reveal) => tester
+        .widget<AnimatedOpacity>(
+          find.descendant(of: reveal, matching: find.byType(AnimatedOpacity)),
+        )
+        .opacity;
+
+    expect(labelReveal, findsOneWidget);
+    expect(exitReveal, findsOneWidget);
+    expect(
+      find.byKey(
+        const ValueKey<String>('live-fullscreen-stage:screen-viewers-reveal'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('live-fullscreen-stage:volume-reveal')),
+      findsNothing,
+    );
+
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(milliseconds: 180));
+    expect(opacity(labelReveal), 0);
+    expect(opacity(exitReveal), 0);
   });
 
   testWidgets('live member names use self and room role colors', (
@@ -1230,6 +1392,7 @@ Widget _host({
   bool joining = false,
   bool micMuted = false,
   bool headphonesMuted = false,
+  TargetPlatform? platform,
   VoidCallback? onJoin,
   VoidCallback? onToggleMic,
   VoidCallback? onToggleHeadphones,
@@ -1253,7 +1416,7 @@ Widget _host({
   Future<UserSummary> Function(UserSummary user)? onResolveParticipantProfile,
 }) {
   return MaterialApp(
-    theme: ui.uiTheme(),
+    theme: ui.uiTheme().copyWith(platform: platform),
     home: AppConfigScope(
       config: const AppConfig(
         apiBaseUrl: 'https://api.test/api/v1',

@@ -73,6 +73,7 @@ class LiveSessionController {
 
   bool get isScreenSharing => session.isScreenSharing;
   bool get isConnected => session.isConnected;
+  bool get localMicMuted => session.localMicMuted;
   String? get roomName => session.roomName;
   bool isAttachedToRoom(String roomName) => session.isAttachedToRoom(roomName);
   Set<String> get speakingIdentities => session.speakingIdentities;

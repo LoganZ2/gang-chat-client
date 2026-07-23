@@ -244,6 +244,126 @@ void registerShellRealtimeLiveWidgetTests() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Android joins voice when opening a remote screen share', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(420, 740);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final realtime = _FakeRealtimeService();
+    final liveJoinRequests = <Map<String, Object?>>[];
+    final liveStateUpdates = <Map<String, Object?>>[];
+    final liveScreenViewUpdates = <String?>[];
+    final liveOperationLog = <String>[];
+    final liveSession = _FakeLiveSession();
+    final liveSessionController = _FakeLiveSessionController(
+      session: liveSession,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme().copyWith(platform: TargetPlatform.android),
+        home: HomePage(
+          app: _homeTestAppContext(
+            liveJoinRequests: liveJoinRequests,
+            liveStateUpdates: liveStateUpdates,
+            liveScreenViewUpdates: liveScreenViewUpdates,
+            liveOperationLog: liveOperationLog,
+          ),
+          liveSessionController: liveSessionController,
+          realtime: realtime,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Alpha Room'));
+    await tester.pumpAndSettle();
+    await _openLiveChannelFromHeader(tester);
+
+    realtime.add(
+      RealtimeEvent(
+        type: 'live_participant_updated',
+        data: {
+          'room_id': 'server-alpha',
+          'participant_count': 1,
+          'preview': <Object?>[],
+          'live': _liveStateJson(
+            roomId: 'server-alpha',
+            participantCount: 1,
+            participants: [
+              _liveParticipantJson(
+                user: _userJson(
+                  id: 'user-2',
+                  username: 'morgan',
+                  displayName: 'Morgan',
+                ),
+                liveSessionId: 'live-session-morgan',
+                micMuted: true,
+                screenSharing: true,
+              ),
+            ],
+          ),
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('live-member:screen-share-thumbnail')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(liveSession.connectAttempts, 1);
+    expect(liveJoinRequests.single['source'], 'live_panel');
+    expect(liveSession.micMutes, contains(false));
+    expect(liveStateUpdates.last['mic_muted'], false);
+    expect(liveSession.watchedScreenShareIdentity, 'user-2');
+    expect(liveScreenViewUpdates, ['user-2']);
+    expect(liveOperationLog, ['join', 'state:online', 'screen-view:user-2']);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'Android keeps live state muted when microphone publication fails',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(420, 740);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final realtime = _FakeRealtimeService();
+      final liveStateUpdates = <Map<String, Object?>>[];
+      final liveSession = _FakeLiveSession(failMicUnmute: true);
+      final liveSessionController = _FakeLiveSessionController(
+        session: liveSession,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme().copyWith(platform: TargetPlatform.android),
+          home: HomePage(
+            app: _homeTestAppContext(liveStateUpdates: liveStateUpdates),
+            liveSessionController: liveSessionController,
+            realtime: realtime,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Alpha Room'));
+      await tester.pumpAndSettle();
+      await _openLiveChannelFromHeader(tester);
+      await tester.tap(find.text('加入'));
+      await tester.pumpAndSettle();
+
+      expect(liveSession.micMutes, contains(false));
+      expect(liveSession.localMicMuted, isTrue);
+      expect(liveStateUpdates.last['mic_muted'], true);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('chat header live preview follows realtime live snapshots', (
     WidgetTester tester,
   ) async {

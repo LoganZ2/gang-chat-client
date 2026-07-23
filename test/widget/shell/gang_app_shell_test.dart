@@ -201,6 +201,8 @@ AuthenticatedAppContext _homeTestAppContext({
   List<Map<String, Object?>>? myRoomSettingsUpdates,
   List<Map<String, Object?>>? liveJoinRequests,
   List<Map<String, Object?>>? liveStateUpdates,
+  List<String?>? liveScreenViewUpdates,
+  List<String>? liveOperationLog,
   List<String>? liveModerationActions,
   String currentRoomRole = 'owner',
   String currentRoomJoinPolicy = 'approval_required',
@@ -253,6 +255,8 @@ AuthenticatedAppContext _homeTestAppContext({
       myRoomSettingsUpdates: myRoomSettingsUpdates,
       liveJoinRequests: liveJoinRequests,
       liveStateUpdates: liveStateUpdates,
+      liveScreenViewUpdates: liveScreenViewUpdates,
+      liveOperationLog: liveOperationLog,
       liveModerationActions: liveModerationActions,
       currentRoomRole: currentRoomRole,
       currentRoomJoinPolicy: currentRoomJoinPolicy,
@@ -280,6 +284,8 @@ GangApi _roomsApi({
   List<Map<String, Object?>>? myRoomSettingsUpdates,
   List<Map<String, Object?>>? liveJoinRequests,
   List<Map<String, Object?>>? liveStateUpdates,
+  List<String?>? liveScreenViewUpdates,
+  List<String>? liveOperationLog,
   List<String>? liveModerationActions,
   String currentRoomRole = 'owner',
   String currentRoomJoinPolicy = 'approval_required',
@@ -1095,6 +1101,7 @@ GangApi _roomsApi({
         });
       }
       if (request.url.path == '/api/v1/rooms/server-alpha/live/join') {
+        liveOperationLog?.add('join');
         liveJoinRequests?.add(
           jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>,
         );
@@ -1131,6 +1138,9 @@ GangApi _roomsApi({
       if (request.url.path == '/api/v1/rooms/server-alpha/live/me') {
         final body =
             jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>;
+        liveOperationLog?.add(
+          'state:${body['connection_state'] ?? 'unchanged'}',
+        );
         liveStateUpdates?.add(body);
         return _jsonResponse({
           'participant': _liveParticipantJson(
@@ -1141,6 +1151,20 @@ GangApi _roomsApi({
             screenSharing: body['screen_sharing'] as bool? ?? false,
           ),
         });
+      }
+      if (request.url.path ==
+          '/api/v1/rooms/server-alpha/live/me/screen-view') {
+        expect(request.method, 'PATCH');
+        final body =
+            jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, Object?>;
+        final broadcasterUserId = body['broadcaster_user_id'] as String?;
+        liveOperationLog?.add('screen-view:${broadcasterUserId ?? ''}');
+        liveScreenViewUpdates?.add(
+          broadcasterUserId == null || broadcasterUserId.isEmpty
+              ? null
+              : broadcasterUserId,
+        );
+        return _jsonResponse(const <String, Object?>{});
       }
       if (request.url.path == '/api/v1/me') {
         return _jsonResponse(_currentUserJson);
@@ -1824,10 +1848,14 @@ class _FakeLiveSessionController extends LiveSessionController {
 }
 
 class _FakeLiveSession extends LiveSession {
+  _FakeLiveSession({this.failMicUnmute = false});
+
+  final bool failMicUnmute;
   int connectAttempts = 0;
   int disconnects = 0;
   bool _connected = false;
   String? _roomName;
+  bool _localMicMuted = true;
   final inputVolumes = <double>[];
   final outputVolumes = <double>[];
   final participantVoiceVolumeWrites = <String>[];
@@ -1857,6 +1885,7 @@ class _FakeLiveSession extends LiveSession {
     connectAttempts += 1;
     _connected = true;
     _roomName = roomName;
+    _localMicMuted = micMuted;
   }
 
   @override
@@ -1876,8 +1905,12 @@ class _FakeLiveSession extends LiveSession {
   bool isAttachedToRoom(String roomName) => _connected && _roomName == roomName;
 
   @override
+  bool get localMicMuted => _localMicMuted;
+
+  @override
   Future<void> setMicMuted(bool muted) async {
     micMutes.add(muted);
+    _localMicMuted = !muted && failMicUnmute ? true : muted;
   }
 
   @override

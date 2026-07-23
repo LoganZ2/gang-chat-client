@@ -177,24 +177,53 @@ class LiveFullScreenStage extends StatefulWidget {
 }
 
 class _LiveFullScreenStageState extends State<LiveFullScreenStage> {
+  static const _controlsAutoHideDelay = Duration(seconds: 3);
+
   final FocusNode _focusNode = FocusNode(debugLabel: 'LiveFullScreenStage');
+  Timer? _controlsHideTimer;
+  bool _controlsVisible = true;
 
   @override
   void initState() {
     super.initState();
+    _scheduleControlsAutoHide();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focusNode.requestFocus();
     });
   }
 
   @override
+  void didUpdateWidget(LiveFullScreenStage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.track.identity != widget.track.identity ||
+        oldWidget.track.isScreenShare != widget.track.isScreenShare) {
+      _showControlsAndRestartTimer();
+    }
+  }
+
+  void _scheduleControlsAutoHide() {
+    _controlsHideTimer?.cancel();
+    _controlsHideTimer = Timer(_controlsAutoHideDelay, () {
+      if (!mounted || !_controlsVisible) return;
+      setState(() => _controlsVisible = false);
+    });
+  }
+
+  void _showControlsAndRestartTimer() {
+    if (!_controlsVisible) setState(() => _controlsVisible = true);
+    _scheduleControlsAutoHide();
+  }
+
+  @override
   void dispose() {
+    _controlsHideTimer?.cancel();
     _focusNode.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final safeInsets = MediaQuery.viewPaddingOf(context);
     return KeyboardListener(
       focusNode: _focusNode,
       autofocus: true,
@@ -204,65 +233,88 @@ class _LiveFullScreenStageState extends State<LiveFullScreenStage> {
           widget.onExit();
         }
       },
-      child: ColoredBox(
-        color: Colors.black,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            _LiveMediaVideo(
-              track: widget.track,
-              fit: LiveVideoTrackFit.contain,
-            ),
-            Positioned(
-              left: 14,
-              top: 14,
-              child: _FullScreenHoverReveal(
-                key: const ValueKey<String>(
-                  'live-fullscreen-stage:label-reveal',
+      child: MouseRegion(
+        onHover: (_) => _showControlsAndRestartTimer(),
+        child: Listener(
+          behavior: HitTestBehavior.opaque,
+          onPointerDown: (_) => _showControlsAndRestartTimer(),
+          onPointerMove: (_) => _showControlsAndRestartTimer(),
+          onPointerSignal: (_) => _showControlsAndRestartTimer(),
+          child: ColoredBox(
+            color: Colors.black,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                _LiveMediaVideo(
+                  track: widget.track,
+                  fit: LiveVideoTrackFit.contain,
                 ),
-                child: _LiveStageBadge(
-                  label: widget.label,
-                  kind: widget.track.isScreenShare
-                      ? _LiveMediaKind.screenShare
-                      : _LiveMediaKind.camera,
-                ),
-              ),
-            ),
-            if (widget.track.isScreenShare &&
-                widget.screenShareViewers.isNotEmpty)
-              Positioned(
-                left: 14,
-                bottom: 14,
-                child: _FullScreenHoverReveal(
-                  key: const ValueKey<String>(
-                    'live-fullscreen-stage:screen-viewers-reveal',
-                  ),
-                  child: _ScreenShareViewerPreview(
-                    viewers: widget.screenShareViewers,
+                Positioned(
+                  left: 14 + safeInsets.left,
+                  top: 14 + safeInsets.top,
+                  child: _FullScreenHoverReveal(
+                    key: const ValueKey<String>(
+                      'live-fullscreen-stage:label-reveal',
+                    ),
+                    visible: _controlsVisible,
+                    child: _LiveStageBadge(
+                      label: widget.label,
+                      kind: widget.track.isScreenShare
+                          ? _LiveMediaKind.screenShare
+                          : _LiveMediaKind.camera,
+                    ),
                   ),
                 ),
-              ),
-            Positioned(
-              top: 14,
-              right: 14,
-              child: _StageOverlayIconButton(
-                key: const ValueKey<String>('live-fullscreen-stage:exit'),
-                icon: Icons.fullscreen_exit,
-                infoMessage: '退出全屏',
-                onPressed: widget.onExit,
-              ),
-            ),
-            if (widget.track.isScreenShare && !widget.track.isLocal)
-              Positioned(
-                right: 14,
-                bottom: 14,
-                child: _StageScreenShareVolumeButton(
-                  value: widget.screenShareVolume,
-                  onChanged: widget.onScreenShareVolumeChanged,
-                  onPressed: widget.onScreenShareMuteToggled,
+                if (widget.track.isScreenShare &&
+                    widget.screenShareViewers.isNotEmpty)
+                  Positioned(
+                    left: 14 + safeInsets.left,
+                    bottom: 14 + safeInsets.bottom,
+                    child: _FullScreenHoverReveal(
+                      key: const ValueKey<String>(
+                        'live-fullscreen-stage:screen-viewers-reveal',
+                      ),
+                      visible: _controlsVisible,
+                      child: _ScreenShareViewerPreview(
+                        viewers: widget.screenShareViewers,
+                      ),
+                    ),
+                  ),
+                Positioned(
+                  top: 14 + safeInsets.top,
+                  right: 14 + safeInsets.right,
+                  child: _FullScreenHoverReveal(
+                    key: const ValueKey<String>(
+                      'live-fullscreen-stage:exit-reveal',
+                    ),
+                    visible: _controlsVisible,
+                    child: _StageOverlayIconButton(
+                      key: const ValueKey<String>('live-fullscreen-stage:exit'),
+                      icon: Icons.fullscreen_exit,
+                      infoMessage: '退出全屏',
+                      onPressed: widget.onExit,
+                    ),
+                  ),
                 ),
-              ),
-          ],
+                if (widget.track.isScreenShare && !widget.track.isLocal)
+                  Positioned(
+                    right: 14 + safeInsets.right,
+                    bottom: 14 + safeInsets.bottom,
+                    child: _FullScreenHoverReveal(
+                      key: const ValueKey<String>(
+                        'live-fullscreen-stage:volume-reveal',
+                      ),
+                      visible: _controlsVisible,
+                      child: _StageScreenShareVolumeButton(
+                        value: widget.screenShareVolume,
+                        onChanged: widget.onScreenShareVolumeChanged,
+                        onPressed: widget.onScreenShareMuteToggled,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -458,27 +510,24 @@ class _ScreenShareViewerPreview extends StatelessWidget {
   }
 }
 
-class _FullScreenHoverReveal extends StatefulWidget {
-  const _FullScreenHoverReveal({super.key, required this.child});
+class _FullScreenHoverReveal extends StatelessWidget {
+  const _FullScreenHoverReveal({
+    super.key,
+    required this.visible,
+    required this.child,
+  });
 
+  final bool visible;
   final Widget child;
 
   @override
-  State<_FullScreenHoverReveal> createState() => _FullScreenHoverRevealState();
-}
-
-class _FullScreenHoverRevealState extends State<_FullScreenHoverReveal> {
-  bool _hovered = false;
-
-  @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
+    return IgnorePointer(
+      ignoring: !visible,
       child: AnimatedOpacity(
-        opacity: _hovered ? 1 : 0.58,
-        duration: const Duration(milliseconds: 140),
-        child: widget.child,
+        opacity: visible ? 1 : 0,
+        duration: const Duration(milliseconds: 160),
+        child: child,
       ),
     );
   }
