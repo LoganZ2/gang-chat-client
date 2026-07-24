@@ -3479,111 +3479,127 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
             children: [
-              StickerActionRow(
-                children: [
-                  Button(
-                    onPressed: canStartStickerPrimaryAction(busy: busy)
-                        ? _managingStickers
-                              ? _deleteSelectedStickers
-                              : _pickAndUploadStickers
-                        : null,
-                    loading: _managingStickers
-                        ? _deletingStickers
-                        : _uploadingStickers,
-                    tone: _managingStickers
-                        ? ButtonTone.danger
-                        : ButtonTone.primary,
-                    icon: Icon(
-                      _managingStickers
-                          ? Icons.delete_outline
-                          : Icons.upload_file,
-                    ),
-                    width: double.infinity,
-                    child: Text(_managingStickers ? '删除' : '本地上传'),
-                  ),
-                  Button(
-                    onPressed: canUseStickerManagementControl(busy: busy)
-                        ? _toggleStickerManageMode
-                        : null,
-                    selected: _managingStickers,
-                    tone: _managingStickers
-                        ? ButtonTone.primary
-                        : ButtonTone.neutral,
-                    icon: Icon(
-                      _managingStickers ? Icons.close : Icons.checklist_rtl,
-                    ),
-                    width: double.infinity,
-                    child: Text(_managingStickers ? '取消管理' : '批量管理'),
-                  ),
-                  Button(
-                    onPressed: canUseStickerManagementControl(busy: busy)
-                        ? _openStickerFilter
-                        : null,
-                    selected: _stickerFilterActive,
-                    tone: _stickerFilterActive
-                        ? ButtonTone.primary
-                        : ButtonTone.neutral,
-                    icon: const Icon(Icons.filter_alt_outlined),
-                    width: double.infinity,
-                    child: const Text('筛选'),
-                  ),
-                ],
-              ),
-              if (_managingStickers) ...[
-                const SizedBox(height: 10),
-                StickerActionRow(
-                  children: [
-                    Button(
-                      onPressed:
-                          canStartStickerSelectionAction(
-                            busy: busy,
-                            selectedStickerIds: _selectedStickerIds,
-                          )
-                          ? _downloadSelectedStickers
+              StickerActionGrid(
+                actions: [
+                  StickerActionGridEntry(
+                    label: _managingStickers ? '删除' : '本地上传',
+                    button: Button(
+                      onPressed: canStartStickerPrimaryAction(busy: busy)
+                          ? _managingStickers
+                                ? _deleteSelectedStickers
+                                : _pickAndUploadStickers
                           : null,
-                      loading: _downloadingStickers,
-                      icon: const Icon(Icons.download_outlined),
-                      width: double.infinity,
-                      child: const Text('下载'),
-                    ),
-                    Button(
-                      onPressed:
-                          canStartStickerSelectionAction(
-                            busy: busy,
-                            selectedStickerIds: _selectedStickerIds,
-                          )
-                          ? _pinSelectedStickers
-                          : null,
-                      loading: _savingStickerOrder,
-                      icon: const Icon(Icons.vertical_align_top),
-                      width: double.infinity,
-                      child: const Text('置顶'),
-                    ),
-                    Button(
-                      onPressed:
-                          canSelectVisibleStickers(
-                            busy: busy,
-                            visibleItems: items,
-                          )
-                          ? () => _selectAllVisibleStickers(items)
-                          : null,
-                      selected: allVisibleSelected,
+                      loading: _managingStickers
+                          ? _deletingStickers
+                          : _uploadingStickers,
+                      tone: _managingStickers
+                          ? ButtonTone.danger
+                          : ButtonTone.primary,
                       icon: Icon(
-                        allVisibleSelected
-                            ? Icons.check_box
-                            : Icons.check_box_outline_blank,
+                        _managingStickers
+                            ? Icons.delete_outline
+                            : Icons.upload_file,
                       ),
                       width: double.infinity,
-                      child: Text(
-                        stickerVisibleSelectionButtonText(
-                          selectedStickerIds: _selectedStickerIds,
-                          visibleItems: items,
+                      child: Text(_managingStickers ? '删除' : '本地上传'),
+                    ),
+                  ),
+                  StickerActionGridEntry(
+                    label: _managingStickers ? '取消管理' : '批量管理',
+                    button: Button(
+                      onPressed: canUseStickerManagementControl(busy: busy)
+                          ? _toggleStickerManageMode
+                          : null,
+                      selected: _managingStickers,
+                      tone: _managingStickers
+                          ? ButtonTone.primary
+                          : ButtonTone.neutral,
+                      icon: Icon(
+                        _managingStickers ? Icons.close : Icons.checklist_rtl,
+                      ),
+                      width: double.infinity,
+                      child: Text(_managingStickers ? '取消管理' : '批量管理'),
+                    ),
+                  ),
+                  StickerActionGridEntry(
+                    label: '筛选',
+                    button: Button(
+                      onPressed: canUseStickerManagementControl(busy: busy)
+                          ? _openStickerFilter
+                          : null,
+                      selected: _stickerFilterActive,
+                      tone: _stickerFilterActive
+                          ? ButtonTone.primary
+                          : ButtonTone.neutral,
+                      icon: const Icon(Icons.filter_alt_outlined),
+                      width: double.infinity,
+                      child: const Text('筛选'),
+                    ),
+                  ),
+                  if (_managingStickers) ...[
+                    StickerActionGridEntry(
+                      label: '下载',
+                      button: Button(
+                        onPressed:
+                            canStartStickerSelectionAction(
+                              busy: busy,
+                              selectedStickerIds: _selectedStickerIds,
+                            )
+                            ? _downloadSelectedStickers
+                            : null,
+                        loading: _downloadingStickers,
+                        icon: const Icon(Icons.download_outlined),
+                        width: double.infinity,
+                        child: const Text('下载'),
+                      ),
+                    ),
+                    StickerActionGridEntry(
+                      label: '置顶',
+                      button: Button(
+                        onPressed:
+                            canStartStickerSelectionAction(
+                              busy: busy,
+                              selectedStickerIds: _selectedStickerIds,
+                            )
+                            ? _pinSelectedStickers
+                            : null,
+                        loading: _savingStickerOrder,
+                        icon: const Icon(Icons.vertical_align_top),
+                        width: double.infinity,
+                        child: const Text('置顶'),
+                      ),
+                    ),
+                    StickerActionGridEntry(
+                      label: stickerVisibleSelectionButtonText(
+                        selectedStickerIds: _selectedStickerIds,
+                        visibleItems: items,
+                      ),
+                      button: Button(
+                        onPressed:
+                            canSelectVisibleStickers(
+                              busy: busy,
+                              visibleItems: items,
+                            )
+                            ? () => _selectAllVisibleStickers(items)
+                            : null,
+                        selected: allVisibleSelected,
+                        icon: Icon(
+                          allVisibleSelected
+                              ? Icons.check_box
+                              : Icons.check_box_outline_blank,
+                        ),
+                        width: double.infinity,
+                        child: Text(
+                          stickerVisibleSelectionButtonText(
+                            selectedStickerIds: _selectedStickerIds,
+                            visibleItems: items,
+                          ),
                         ),
                       ),
                     ),
                   ],
-                ),
-              ],
+                ],
+              ),
               const SizedBox(height: 14),
               if (_loadingStickers && _stickerPacks.isEmpty)
                 const SizedBox(
@@ -3974,30 +3990,26 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
               const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: Button(
-                      onPressed: _verifyingPasswordReset || _isManagingUser
-                          ? null
-                          : _verifyEmailForPasswordReset,
-                      loading: _verifyingPasswordReset,
-                      icon: const Icon(Icons.help_outline),
-                      child: const Text('忘记密码'),
-                    ),
+              ResponsiveDialogActionBar(
+                expanded: true,
+                actions: [
+                  ResponsiveDialogAction(
+                    label: '忘记密码',
+                    icon: Icons.help_outline,
+                    loading: _verifyingPasswordReset,
+                    onPressed: _verifyingPasswordReset || _isManagingUser
+                        ? null
+                        : _verifyEmailForPasswordReset,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Button(
-                      onPressed:
-                          _changingPassword || managedSuperuserPasswordBlocked
-                          ? null
-                          : _changePassword,
-                      loading: _changingPassword,
-                      icon: const Icon(Icons.lock_reset),
-                      tone: ButtonTone.primary,
-                      child: const Text('更新密码'),
-                    ),
+                  ResponsiveDialogAction(
+                    label: '更新密码',
+                    icon: Icons.lock_reset,
+                    tone: ButtonTone.primary,
+                    loading: _changingPassword,
+                    onPressed:
+                        _changingPassword || managedSuperuserPasswordBlocked
+                        ? null
+                        : _changePassword,
                   ),
                 ],
               ),

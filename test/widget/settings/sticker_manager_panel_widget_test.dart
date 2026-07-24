@@ -6,6 +6,7 @@ import 'package:client/src/protocol/models.dart';
 import 'package:client/src/shell/file_selection_service.dart';
 import 'package:client/src/ui/ui.dart' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 
 Widget _host(Widget child) {
@@ -21,6 +22,87 @@ Widget _host(Widget child) {
 }
 
 void main() {
+  testWidgets('narrow sticker actions switch from three columns to two', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(380, 760));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final backend = _FakeStickerBackend(
+      capabilities:
+          const sticker_management.StickerManagementCapabilities.readOnlyDownloads(),
+      packs: [
+        _pack('room_pack', ['alpha', 'beta']),
+      ],
+    );
+    await tester.pumpWidget(
+      _host(
+        ui.StickerManagerPanel(
+          backend: backend,
+          fileSelectionService: _FakeFileSelectionService(),
+          title: '表情包管理',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('批量管理'));
+    await tester.pumpAndSettle();
+
+    final grid = find.byKey(const ValueKey('sticker-action-grid'));
+    final buttons = find.descendant(of: grid, matching: find.byType(ui.Button));
+    expect(buttons, findsNWidgets(6));
+    final rects = [
+      for (final button in buttons.evaluate())
+        tester.getRect(find.byWidget(button.widget)),
+    ];
+    expect(rects[0].center.dy, closeTo(rects[1].center.dy, 0.01));
+    expect(rects[2].center.dy, closeTo(rects[3].center.dy, 0.01));
+    expect(rects[4].center.dy, closeTo(rects[5].center.dy, 0.01));
+    expect(rects[0].center.dx, closeTo(rects[2].center.dx, 0.01));
+    expect(rects[1].center.dx, closeTo(rects[3].center.dx, 0.01));
+    expect(rects[2].center.dx, closeTo(rects[4].center.dx, 0.01));
+    expect(rects[3].center.dx, closeTo(rects[5].center.dx, 0.01));
+    expect(
+      tester
+          .renderObjectList<RenderParagraph>(
+            find.descendant(of: grid, matching: find.byType(RichText)),
+          )
+          .every((paragraph) => !paragraph.didExceedMaxLines),
+      isTrue,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('narrow sticker filter keeps action labels and hides icons', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(330, 620));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme(),
+        home: const Scaffold(
+          body: ui.StickerFilterDialog(keyword: '', mimeType: ''),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    for (final label in ['重置', '取消', '确认']) {
+      final button = find.widgetWithText(ui.Button, label);
+      expect(button, findsOneWidget);
+      expect(
+        find.descendant(of: button, matching: find.byType(Icon)),
+        findsNothing,
+      );
+      final paragraph = tester.renderObject<RenderParagraph>(find.text(label));
+      expect(paragraph.didExceedMaxLines, isFalse);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('room sticker panel keeps read-only actions disabled', (
     tester,
   ) async {

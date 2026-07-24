@@ -391,61 +391,93 @@ extension _HomeShellRoomActions on _HomeShellState {
               return DialogFrame(
                 title: '关闭 Gang Chat',
                 icon: Icons.close,
-                actions: [
-                  Button(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('取消'),
-                  ),
-                  Button(
-                    onPressed: () => Navigator.of(context).pop(
-                      _ClosePromptResult(
-                        behavior: selectedBehavior,
-                        remember: remember,
+                actionBar: ResponsiveDialogActionBar(
+                  actions: [
+                    ResponsiveDialogAction(
+                      label: '取消',
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                    ResponsiveDialogAction(
+                      label: '确认',
+                      icon: Icons.check,
+                      tone: selectedBehavior == CloseBehavior.exitProgram
+                          ? ButtonTone.danger
+                          : ButtonTone.primary,
+                      onPressed: () => Navigator.of(context).pop(
+                        _ClosePromptResult(
+                          behavior: selectedBehavior,
+                          remember: remember,
+                        ),
                       ),
                     ),
-                    icon: const Icon(Icons.check),
-                    tone: selectedBehavior == CloseBehavior.exitProgram
-                        ? ButtonTone.danger
-                        : ButtonTone.primary,
-                    child: const Text('确认'),
-                  ),
-                ],
+                  ],
+                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Button(
-                            selected:
-                                selectedBehavior ==
-                                CloseBehavior.minimizeToTray,
-                            onPressed: () => setDialogState(
-                              () => selectedBehavior =
-                                  CloseBehavior.minimizeToTray,
-                            ),
-                            icon: const Icon(Icons.keyboard_arrow_down),
-                            child: const Text('最小化到托盘'),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final minimizeWidth = Button.minimumWidthForLabel(
+                          context,
+                          label: '最小化到托盘',
+                          hasIcon: true,
+                        );
+                        final exitWidth = Button.minimumWidthForLabel(
+                          context,
+                          label: '退出程序',
+                          hasIcon: true,
+                        );
+                        final availableButtonWidth =
+                            (constraints.maxWidth - 12) / 2;
+                        final stack =
+                            constraints.maxWidth.isFinite &&
+                            (availableButtonWidth < minimizeWidth ||
+                                availableButtonWidth < exitWidth);
+                        final minimizeButton = Button(
+                          key: const ValueKey('close-behavior-minimize-button'),
+                          selected:
+                              selectedBehavior == CloseBehavior.minimizeToTray,
+                          onPressed: () => setDialogState(
+                            () =>
+                                selectedBehavior = CloseBehavior.minimizeToTray,
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Button(
-                            selected:
-                                selectedBehavior == CloseBehavior.exitProgram,
-                            onPressed: () => setDialogState(
-                              () =>
-                                  selectedBehavior = CloseBehavior.exitProgram,
-                            ),
-                            icon: const Icon(Icons.logout),
-                            tone: selectedBehavior == CloseBehavior.exitProgram
-                                ? ButtonTone.danger
-                                : ButtonTone.neutral,
-                            child: const Text('退出程序'),
+                          icon: const Icon(Icons.keyboard_arrow_down),
+                          width: double.infinity,
+                          child: const Text('最小化到托盘'),
+                        );
+                        final exitButton = Button(
+                          key: const ValueKey('close-behavior-exit-button'),
+                          selected:
+                              selectedBehavior == CloseBehavior.exitProgram,
+                          onPressed: () => setDialogState(
+                            () => selectedBehavior = CloseBehavior.exitProgram,
                           ),
-                        ),
-                      ],
+                          icon: const Icon(Icons.logout),
+                          width: double.infinity,
+                          tone: selectedBehavior == CloseBehavior.exitProgram
+                              ? ButtonTone.danger
+                              : ButtonTone.neutral,
+                          child: const Text('退出程序'),
+                        );
+                        if (stack) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              minimizeButton,
+                              const SizedBox(height: 12),
+                              exitButton,
+                            ],
+                          );
+                        }
+                        return Row(
+                          children: [
+                            Expanded(child: minimizeButton),
+                            const SizedBox(width: 12),
+                            Expanded(child: exitButton),
+                          ],
+                        );
+                      },
                     ),
                     const SizedBox(height: 14),
                     Row(

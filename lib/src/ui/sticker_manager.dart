@@ -1046,118 +1046,140 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
                 ),
               ),
               children: [
-                StickerActionRow(
-                  children: [
-                    Button(
-                      onPressed:
-                          canStartStickerPrimaryAction(
-                            busy: busy,
-                            allowed: _managing
-                                ? capabilities.canDelete
-                                : capabilities.canUpload,
-                          )
-                          ? _managing
-                                ? _deleteSelected
-                                : _upload
-                          : null,
-                      loading: _managing ? _deleting : _uploading,
-                      tone: _managing ? ButtonTone.danger : ButtonTone.primary,
-                      icon: Icon(
-                        _managing ? Icons.delete_outline : Icons.upload_file,
-                      ),
-                      width: double.infinity,
-                      child: Text(_managing ? '删除' : '本地上传'),
-                    ),
-                    Button(
-                      onPressed:
-                          canUseStickerManagementControl(
-                            busy: busy,
-                            allowed: capabilities.canBatchManage,
-                          )
-                          ? _toggleManageMode
-                          : null,
-                      selected: _managing,
-                      tone: _managing ? ButtonTone.primary : ButtonTone.neutral,
-                      icon: Icon(_managing ? Icons.close : Icons.checklist_rtl),
-                      width: double.infinity,
-                      child: Text(_managing ? '取消管理' : '批量管理'),
-                    ),
-                    Button(
-                      onPressed:
-                          canUseStickerManagementControl(
-                            busy: busy,
-                            allowed: capabilities.canFilter,
-                          )
-                          ? _openFilter
-                          : null,
-                      selected: _filterActive,
-                      tone: _filterActive
-                          ? ButtonTone.primary
-                          : ButtonTone.neutral,
-                      icon: const Icon(Icons.filter_alt_outlined),
-                      width: double.infinity,
-                      child: const Text('筛选'),
-                    ),
-                  ],
-                ),
-                if (_managing) ...[
-                  const SizedBox(height: 10),
-                  StickerActionRow(
-                    children: [
-                      Button(
+                StickerActionGrid(
+                  actions: [
+                    StickerActionGridEntry(
+                      label: _managing ? '删除' : '本地上传',
+                      button: Button(
                         onPressed:
-                            canStartStickerSelectionAction(
+                            canStartStickerPrimaryAction(
                               busy: busy,
-                              selectedStickerIds: _selectedStickerIds,
-                              allowed: capabilities.canDownload,
+                              allowed: _managing
+                                  ? capabilities.canDelete
+                                  : capabilities.canUpload,
                             )
-                            ? () => _downloadIds(_selectedStickerIds)
+                            ? _managing
+                                  ? _deleteSelected
+                                  : _upload
                             : null,
-                        loading: _downloading,
-                        icon: const Icon(Icons.download_outlined),
-                        width: double.infinity,
-                        child: const Text('下载'),
-                      ),
-                      Button(
-                        onPressed:
-                            canStartStickerSelectionAction(
-                              busy: busy,
-                              selectedStickerIds: _selectedStickerIds,
-                              allowed: capabilities.canPin,
-                            )
-                            ? _pinSelected
-                            : null,
-                        loading: _savingOrder,
-                        icon: const Icon(Icons.vertical_align_top),
-                        width: double.infinity,
-                        child: const Text('置顶'),
-                      ),
-                      Button(
-                        onPressed:
-                            canSelectVisibleStickers(
-                              busy: busy,
-                              visibleItems: items,
-                              allowed: capabilities.canSelectAll,
-                            )
-                            ? () => _selectAllVisible(items)
-                            : null,
-                        selected: allVisibleSelected,
+                        loading: _managing ? _deleting : _uploading,
+                        tone: _managing
+                            ? ButtonTone.danger
+                            : ButtonTone.primary,
                         icon: Icon(
-                          allVisibleSelected
-                              ? Icons.check_box
-                              : Icons.check_box_outline_blank,
+                          _managing ? Icons.delete_outline : Icons.upload_file,
                         ),
                         width: double.infinity,
-                        child: Text(
-                          stickerVisibleSelectionButtonText(
-                            selectedStickerIds: _selectedStickerIds,
-                            visibleItems: items,
+                        child: Text(_managing ? '删除' : '本地上传'),
+                      ),
+                    ),
+                    StickerActionGridEntry(
+                      label: _managing ? '取消管理' : '批量管理',
+                      button: Button(
+                        onPressed:
+                            canUseStickerManagementControl(
+                              busy: busy,
+                              allowed: capabilities.canBatchManage,
+                            )
+                            ? _toggleManageMode
+                            : null,
+                        selected: _managing,
+                        tone: _managing
+                            ? ButtonTone.primary
+                            : ButtonTone.neutral,
+                        icon: Icon(
+                          _managing ? Icons.close : Icons.checklist_rtl,
+                        ),
+                        width: double.infinity,
+                        child: Text(_managing ? '取消管理' : '批量管理'),
+                      ),
+                    ),
+                    StickerActionGridEntry(
+                      label: '筛选',
+                      button: Button(
+                        onPressed:
+                            canUseStickerManagementControl(
+                              busy: busy,
+                              allowed: capabilities.canFilter,
+                            )
+                            ? _openFilter
+                            : null,
+                        selected: _filterActive,
+                        tone: _filterActive
+                            ? ButtonTone.primary
+                            : ButtonTone.neutral,
+                        icon: const Icon(Icons.filter_alt_outlined),
+                        width: double.infinity,
+                        child: const Text('筛选'),
+                      ),
+                    ),
+                    if (_managing) ...[
+                      StickerActionGridEntry(
+                        label: '下载',
+                        button: Button(
+                          onPressed:
+                              canStartStickerSelectionAction(
+                                busy: busy,
+                                selectedStickerIds: _selectedStickerIds,
+                                allowed: capabilities.canDownload,
+                              )
+                              ? () => _downloadIds(_selectedStickerIds)
+                              : null,
+                          loading: _downloading,
+                          icon: const Icon(Icons.download_outlined),
+                          width: double.infinity,
+                          child: const Text('下载'),
+                        ),
+                      ),
+                      StickerActionGridEntry(
+                        label: '置顶',
+                        button: Button(
+                          onPressed:
+                              canStartStickerSelectionAction(
+                                busy: busy,
+                                selectedStickerIds: _selectedStickerIds,
+                                allowed: capabilities.canPin,
+                              )
+                              ? _pinSelected
+                              : null,
+                          loading: _savingOrder,
+                          icon: const Icon(Icons.vertical_align_top),
+                          width: double.infinity,
+                          child: const Text('置顶'),
+                        ),
+                      ),
+                      StickerActionGridEntry(
+                        label: stickerVisibleSelectionButtonText(
+                          selectedStickerIds: _selectedStickerIds,
+                          visibleItems: items,
+                        ),
+                        button: Button(
+                          onPressed:
+                              canSelectVisibleStickers(
+                                busy: busy,
+                                visibleItems: items,
+                                allowed: capabilities.canSelectAll,
+                              )
+                              ? () => _selectAllVisible(items)
+                              : null,
+                          selected: allVisibleSelected,
+                          icon: Icon(
+                            allVisibleSelected
+                                ? Icons.check_box
+                                : Icons.check_box_outline_blank,
+                          ),
+                          width: double.infinity,
+                          child: Text(
+                            stickerVisibleSelectionButtonText(
+                              selectedStickerIds: _selectedStickerIds,
+                              visibleItems: items,
+                            ),
                           ),
                         ),
                       ),
                     ],
-                  ),
-                ],
+                  ],
+                ),
                 const SizedBox(height: 14),
                 if (_loading && _packs.isEmpty)
                   const SizedBox(
@@ -1196,21 +1218,58 @@ class _StickerManagerPanelState extends State<StickerManagerPanel> {
 const _stickerAccent = Color(0xFF6FCFA6);
 const _stickerDangerBorder = Color(0xFF3A2A2E);
 
-/// 操作按钮等宽横排。
-class StickerActionRow extends StatelessWidget {
-  const StickerActionRow({super.key, required this.children});
+class StickerActionGridEntry {
+  const StickerActionGridEntry({required this.label, required this.button});
 
-  final List<Widget> children;
+  final String label;
+  final Button button;
+}
+
+/// Keeps sticker actions at three columns while every icon and label fits,
+/// then switches the complete action set to two columns.
+class StickerActionGrid extends StatelessWidget {
+  const StickerActionGrid({super.key, required this.actions});
+
+  static const double _gap = 10;
+
+  final List<StickerActionGridEntry> actions;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        for (final entry in children.asMap().entries) ...[
-          if (entry.key > 0) const SizedBox(width: 10),
-          Expanded(child: entry.value),
-        ],
-      ],
+    if (actions.isEmpty) return const SizedBox.shrink();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maximumButtonWidth = actions
+            .map(
+              (action) => Button.minimumWidthForLabel(
+                context,
+                label: action.label,
+                hasIcon: action.button.icon != null,
+                padding: action.button.padding,
+              ),
+            )
+            .reduce(math.max);
+        final threeColumnWidth = (maximumButtonWidth * 3) + (_gap * 2);
+        final columns =
+            actions.length > 2 &&
+                constraints.maxWidth.isFinite &&
+                constraints.maxWidth < threeColumnWidth
+            ? 2
+            : math.min(3, actions.length);
+        final availableWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : threeColumnWidth;
+        final itemWidth = (availableWidth - (_gap * (columns - 1))) / columns;
+        return Wrap(
+          key: const ValueKey('sticker-action-grid'),
+          spacing: _gap,
+          runSpacing: _gap,
+          children: [
+            for (final action in actions)
+              SizedBox(width: itemWidth, child: action.button),
+          ],
+        );
+      },
     );
   }
 }
@@ -1569,40 +1628,30 @@ class _StickerFilterDialogState extends State<StickerFilterDialog> {
                 ],
               ),
               const SizedBox(height: 18),
-              Row(
-                children: [
-                  Expanded(
-                    child: Button(
-                      onPressed: () {
-                        _keywordController.clear();
-                        setState(() => _mimeType = '');
-                      },
-                      width: double.infinity,
-                      icon: const Icon(Icons.restart_alt),
-                      child: const Text('重置'),
-                    ),
+              ResponsiveDialogActionBar(
+                expanded: true,
+                actions: [
+                  ResponsiveDialogAction(
+                    label: '重置',
+                    icon: Icons.restart_alt,
+                    onPressed: () {
+                      _keywordController.clear();
+                      setState(() => _mimeType = '');
+                    },
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Button(
-                      onPressed: () => Navigator.of(context).pop(),
-                      width: double.infinity,
-                      child: const Text('取消'),
-                    ),
+                  ResponsiveDialogAction(
+                    label: '取消',
+                    onPressed: () => Navigator.of(context).pop(),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Button(
-                      onPressed: () => Navigator.of(context).pop(
-                        StickerFilterDraft(
-                          keyword: _keywordController.text.trim(),
-                          mimeType: _mimeType,
-                        ),
+                  ResponsiveDialogAction(
+                    label: '确认',
+                    icon: Icons.check,
+                    tone: ButtonTone.primary,
+                    onPressed: () => Navigator.of(context).pop(
+                      StickerFilterDraft(
+                        keyword: _keywordController.text.trim(),
+                        mimeType: _mimeType,
                       ),
-                      width: double.infinity,
-                      tone: ButtonTone.primary,
-                      icon: const Icon(Icons.check),
-                      child: const Text('确认'),
                     ),
                   ),
                 ],
@@ -1668,19 +1717,17 @@ class StickerConfirmDialog extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 18),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Button(
+              ResponsiveDialogActionBar(
+                actions: [
+                  ResponsiveDialogAction(
+                    label: '取消',
                     onPressed: () => Navigator.of(context).pop(false),
-                    child: const Text('取消'),
                   ),
-                  const SizedBox(width: 12),
-                  Button(
-                    onPressed: () => Navigator.of(context).pop(true),
+                  ResponsiveDialogAction(
+                    label: confirmLabel,
+                    icon: confirmIcon,
                     tone: danger ? ButtonTone.danger : ButtonTone.primary,
-                    icon: Icon(confirmIcon),
-                    child: Text(confirmLabel),
+                    onPressed: () => Navigator.of(context).pop(true),
                   ),
                 ],
               ),
@@ -1688,24 +1735,6 @@ class StickerConfirmDialog extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _StickerPreviewActionRow extends StatelessWidget {
-  const _StickerPreviewActionRow({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        for (final entry in children.asMap().entries) ...[
-          if (entry.key > 0) const SizedBox(width: 10),
-          Expanded(child: entry.value),
-        ],
-      ],
     );
   }
 }
@@ -2245,80 +2274,93 @@ class _StickerPreviewDialogState extends State<StickerPreviewDialog> {
                 const SizedBox(height: 8),
                 _StickerDimensionsLine(asset: asset, imageUrl: widget.imageUrl),
                 const SizedBox(height: 16),
-                _StickerPreviewActionRow(
-                  children: [
-                    Button(
-                      onPressed: _busy || !widget.canDownload
-                          ? null
-                          : _download,
-                      loading: _downloading,
-                      icon: const Icon(Icons.download_outlined),
-                      width: double.infinity,
-                      child: const Text('下载'),
+                StickerActionGrid(
+                  actions: [
+                    StickerActionGridEntry(
+                      label: '下载',
+                      button: Button(
+                        onPressed: _busy || !widget.canDownload
+                            ? null
+                            : _download,
+                        loading: _downloading,
+                        icon: const Icon(Icons.download_outlined),
+                        width: double.infinity,
+                        child: const Text('下载'),
+                      ),
                     ),
                     if (showSetAvatar)
-                      Button(
-                        onPressed: _busy ? null : _setAvatar,
-                        loading: _settingAvatar,
-                        icon: const Icon(Icons.account_circle_outlined),
-                        width: double.infinity,
-                        child: const Text('设为头像'),
+                      StickerActionGridEntry(
+                        label: '设为头像',
+                        button: Button(
+                          onPressed: _busy ? null : _setAvatar,
+                          loading: _settingAvatar,
+                          icon: const Icon(Icons.account_circle_outlined),
+                          width: double.infinity,
+                          child: const Text('设为头像'),
+                        ),
                       ),
-                    Button(
-                      onPressed:
-                          canStartStickerRename(
-                            busy: _busy,
-                            name: _nameController.text,
-                            allowed: widget.canRename,
-                          )
-                          ? _saveName
-                          : null,
-                      loading: _savingName,
-                      tone: ButtonTone.primary,
-                      icon: const Icon(Icons.save_outlined),
-                      width: double.infinity,
-                      child: const Text('保存名称'),
+                    StickerActionGridEntry(
+                      label: '保存名称',
+                      button: Button(
+                        onPressed:
+                            canStartStickerRename(
+                              busy: _busy,
+                              name: _nameController.text,
+                              allowed: widget.canRename,
+                            )
+                            ? _saveName
+                            : null,
+                        loading: _savingName,
+                        tone: ButtonTone.primary,
+                        icon: const Icon(Icons.save_outlined),
+                        width: double.infinity,
+                        child: const Text('保存名称'),
+                      ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                _StickerPreviewActionRow(
-                  children: [
-                    Button(
-                      onPressed: _busy || !_canPin
-                          ? null
-                          : () => _move(
-                              action: widget.onPin,
-                              actionKind: StickerPreviewActionKind.pin,
-                            ),
-                      loading: _pinning,
-                      icon: const Icon(Icons.vertical_align_top),
-                      width: double.infinity,
-                      child: const Text('置顶'),
+                    StickerActionGridEntry(
+                      label: '置顶',
+                      button: Button(
+                        onPressed: _busy || !_canPin
+                            ? null
+                            : () => _move(
+                                action: widget.onPin,
+                                actionKind: StickerPreviewActionKind.pin,
+                              ),
+                        loading: _pinning,
+                        icon: const Icon(Icons.vertical_align_top),
+                        width: double.infinity,
+                        child: const Text('置顶'),
+                      ),
                     ),
-                    Button(
-                      onPressed: _busy || !_canMoveUp
-                          ? null
-                          : () => _move(
-                              action: widget.onMoveUp,
-                              actionKind: StickerPreviewActionKind.moveUp,
-                            ),
-                      loading: _movingUp,
-                      icon: const Icon(Icons.arrow_upward),
-                      width: double.infinity,
-                      child: const Text('上移一位'),
+                    StickerActionGridEntry(
+                      label: '上移一位',
+                      button: Button(
+                        onPressed: _busy || !_canMoveUp
+                            ? null
+                            : () => _move(
+                                action: widget.onMoveUp,
+                                actionKind: StickerPreviewActionKind.moveUp,
+                              ),
+                        loading: _movingUp,
+                        icon: const Icon(Icons.arrow_upward),
+                        width: double.infinity,
+                        child: const Text('上移一位'),
+                      ),
                     ),
-                    Button(
-                      onPressed: _busy || !_canMoveDown
-                          ? null
-                          : () => _move(
-                              action: widget.onMoveDown,
-                              actionKind: StickerPreviewActionKind.moveDown,
-                            ),
-                      loading: _movingDown,
-                      icon: const Icon(Icons.arrow_downward),
-                      width: double.infinity,
-                      child: const Text('下移一位'),
+                    StickerActionGridEntry(
+                      label: '下移一位',
+                      button: Button(
+                        onPressed: _busy || !_canMoveDown
+                            ? null
+                            : () => _move(
+                                action: widget.onMoveDown,
+                                actionKind: StickerPreviewActionKind.moveDown,
+                              ),
+                        loading: _movingDown,
+                        icon: const Icon(Icons.arrow_downward),
+                        width: double.infinity,
+                        child: const Text('下移一位'),
+                      ),
                     ),
                   ],
                 ),

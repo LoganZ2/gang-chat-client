@@ -1,6 +1,55 @@
 part of '../gang_app_shell_test.dart';
 
 void registerShellRealtimeLiveWidgetTests() {
+  testWidgets('narrow close prompt stacks behavior choices', (
+    WidgetTester tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(360, 740);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final windowController = _RecordingWindowController(<String>[]);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme().copyWith(platform: TargetPlatform.windows),
+        home: HomePage(
+          app: _homeTestAppContext(),
+          realtime: _NoopRealtimeService(),
+          closeBehaviorStore: const _FixedCloseBehaviorStore(
+            CloseBehavior.askEveryTime,
+          ),
+          windowController: windowController,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final handler = windowController.closeRequestHandler;
+    expect(handler, isNotNull);
+    final closeFuture = handler!();
+    await tester.pumpAndSettle();
+
+    final minimize = find.byKey(
+      const ValueKey('close-behavior-minimize-button'),
+    );
+    final exit = find.byKey(const ValueKey('close-behavior-exit-button'));
+    expect(tester.getRect(minimize).bottom, lessThan(tester.getRect(exit).top));
+    for (final label in ['最小化到托盘', '退出程序']) {
+      expect(
+        tester
+            .renderObject<RenderParagraph>(find.text(label))
+            .didExceedMaxLines,
+        isFalse,
+      );
+    }
+
+    await tester.tap(find.widgetWithText(ui.Button, '取消'));
+    await tester.pumpAndSettle();
+    expect(await closeFuture, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'only realtime all-policy message updates play and request attention',
     (WidgetTester tester) async {

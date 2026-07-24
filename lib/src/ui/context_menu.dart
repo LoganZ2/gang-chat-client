@@ -18,6 +18,7 @@ class UiContextMenuItem {
     required this.label,
     this.icon,
     this.shortcut,
+    this.selected = false,
     this.danger = false,
     required this.onPressed,
   });
@@ -25,6 +26,7 @@ class UiContextMenuItem {
   final String label;
   final IconData? icon;
   final String? shortcut;
+  final bool selected;
   final bool danger;
   final VoidCallback? onPressed;
 }
@@ -185,6 +187,8 @@ class _UiContextMenuItemWidgetState extends State<_UiContextMenuItemWidget> {
         ? UiColors.textMuted
         : widget.item.danger
         ? UiColors.danger
+        : widget.item.selected
+        ? UiColors.accent
         : UiColors.text;
     final shortcut = widget.item.shortcut?.trim() ?? '';
     return MouseRegion(
@@ -210,7 +214,9 @@ class _UiContextMenuItemWidgetState extends State<_UiContextMenuItemWidget> {
             horizontal: _contextMenuHorizontalPadding,
             vertical: 6,
           ),
-          color: _enabled && _hovered ? UiColors.selected : Colors.transparent,
+          color: _enabled && (_hovered || widget.item.selected)
+              ? UiColors.selected
+              : Colors.transparent,
           child: Row(
             children: [
               if (widget.item.icon case final icon?) ...[

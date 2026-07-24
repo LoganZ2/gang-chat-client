@@ -1120,21 +1120,58 @@ void registerShellHomeWidgetTests() {
       await tester.pumpAndSettle();
 
       expect(find.text('Riley 的用户设置'), findsOneWidget);
-      await tester.tap(find.text('隐私和安全'));
-      await tester.pumpAndSettle();
       final managedSettingsPage = find.byKey(
         const ValueKey('superuser-user-settings-user-3'),
       );
-      await tester.scrollUntilVisible(
-        find.text('新密码'),
-        200,
-        scrollable: find
-            .descendant(
-              of: managedSettingsPage,
-              matching: find.byType(Scrollable),
-            )
-            .first,
+      final settingsNavigation = find
+          .descendant(
+            of: managedSettingsPage,
+            matching: find.byType(ui.SegmentedControl<SettingsSection>),
+          )
+          .first;
+      final selectionMenu = find.descendant(
+        of: settingsNavigation,
+        matching: find.byTooltip('选择选项'),
       );
+      if (selectionMenu.evaluate().isNotEmpty) {
+        await tester.tap(selectionMenu);
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.tap(find.text('隐私和安全').hitTestable());
+      } else {
+        await tester.tap(find.text('隐私和安全').hitTestable());
+      }
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<ui.SegmentedControl<SettingsSection>>(settingsNavigation)
+            .value,
+        SettingsSection.security,
+      );
+      final verticalScrollable = find
+          .descendant(
+            of: managedSettingsPage,
+            matching: find.byWidgetPredicate(
+              (widget) =>
+                  widget is Scrollable &&
+                  axisDirectionToAxis(widget.axisDirection) == Axis.vertical,
+            ),
+          )
+          .first;
+      final verticalPosition = tester
+          .state<ScrollableState>(verticalScrollable)
+          .position;
+      while (find.text('新密码').evaluate().isEmpty &&
+          verticalPosition.pixels < verticalPosition.maxScrollExtent) {
+        verticalPosition.jumpTo(
+          (verticalPosition.pixels + 200)
+              .clamp(
+                verticalPosition.minScrollExtent,
+                verticalPosition.maxScrollExtent,
+              )
+              .toDouble(),
+        );
+        await tester.pump();
+      }
       await tester.pumpAndSettle();
       expect(find.text('当前密码'), findsNothing);
       expect(find.text('新密码'), findsOneWidget);
@@ -1452,6 +1489,8 @@ void registerShellHomeWidgetTests() {
   testWidgets(
     'authenticated home shell opens notifications and reviews invite',
     (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(2000, 1000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       final requestedUris = <Uri>[];
 
       await tester.pumpWidget(
@@ -1716,14 +1755,24 @@ void registerShellHomeWidgetTests() {
     );
     const timeKey = ValueKey('notification-room-event-time-room-event-alpha');
     expect(find.byKey(bodyKey), findsOneWidget);
-    expect(
-      tester.widget<ui.HighlightedText>(find.byKey(timeKey)).text,
-      contains('\n'),
-    );
     expect(tester.getSize(find.byKey(timeKey)).width, lessThan(82));
+    final timeTexts = find.descendant(
+      of: find.byKey(timeKey),
+      matching: find.byType(Text),
+    );
+    expect(tester.widgetList<Text>(timeTexts).map((text) => text.data), [
+      '2026/06/07',
+      '16:00',
+    ]);
+    final timeParagraphs = tester.renderObjectList<RenderParagraph>(timeTexts);
+    expect(
+      timeParagraphs.every((paragraph) => !paragraph.didExceedMaxLines),
+      isTrue,
+    );
     final roomEventCard = find.byKey(
       const ValueKey('notification-row-surface-room-event:room-event-alpha'),
     );
+    expect(tester.getRect(roomEventCard).left, lessThan(22));
     final jumpButton = find.descendant(
       of: roomEventCard,
       matching: find.byType(ui.ButtonIcon),
@@ -1795,10 +1844,16 @@ void registerShellHomeWidgetTests() {
           .contains(tester.getRect(firstMessageAvatar).center),
       isTrue,
     );
-    final notificationTime = tester.widget<ui.HighlightedText>(
-      find.byKey(timeKey),
+    final notificationTimeLines = tester.widgetList<FittedBox>(
+      find.descendant(
+        of: find.byKey(timeKey),
+        matching: find.byType(FittedBox),
+      ),
     );
-    expect(notificationTime.textAlign, TextAlign.center);
+    expect(notificationTimeLines, hasLength(1));
+    for (final line in notificationTimeLines) {
+      expect(line.alignment, Alignment.center);
+    }
     final notificationRows = find.byWidgetPredicate(
       (widget) =>
           widget.key is ValueKey<String> &&
@@ -1822,6 +1877,167 @@ void registerShellHomeWidgetTests() {
     expect(tester.getRect(jumpButton).center.dy, closeTo(cardCenterY, 1));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('desktop narrow notifications keep time on exactly two lines', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(433, 760));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    for (final platform in const [
+      TargetPlatform.windows,
+      TargetPlatform.macOS,
+    ]) {
+      await tester.pumpWidget(
+        MaterialApp(
+          key: ValueKey(platform),
+          theme: ui.uiTheme().copyWith(platform: platform),
+          home: HomePage(
+            app: _homeTestAppContext(includeUnreadRoomNotification: true),
+            realtime: _NoopRealtimeService(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('通知'));
+      await tester.pumpAndSettle();
+
+      const timeKey = ValueKey('notification-room-event-time-room-event-alpha');
+      final timeTexts = find.descendant(
+        of: find.byKey(timeKey),
+        matching: find.byType(Text),
+      );
+      expect(
+        tester.widgetList<Text>(timeTexts).map((text) => text.data),
+        ['2026/06/07', '16:00'],
+        reason: '$platform should preserve both compact timestamp lines',
+      );
+      expect(
+        tester
+            .renderObjectList<RenderParagraph>(timeTexts)
+            .every((paragraph) => !paragraph.didExceedMaxLines),
+        isTrue,
+        reason: '$platform should not truncate compact timestamps',
+      );
+      expect(
+        tester
+            .getRect(
+              find.byKey(
+                const ValueKey(
+                  'notification-row-surface-room-event:room-event-alpha',
+                ),
+              ),
+            )
+            .left,
+        lessThan(22),
+        reason: '$platform should use the reduced compact list inset',
+      );
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets(
+    'notifications switch to compact rows before the desktop shell breakpoint',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(2000, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme().copyWith(platform: TargetPlatform.windows),
+          home: HomePage(
+            app: _homeTestAppContext(includeUnreadRoomNotification: true),
+            realtime: _NoopRealtimeService(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('通知'));
+      await tester.pumpAndSettle();
+
+      const compactBodyKey = ValueKey(
+        'notification-mobile-body-room-event-room-event-alpha',
+      );
+      expect(find.byKey(compactBodyKey), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      for (final width in const [
+        1800.0,
+        1600.0,
+        1400.0,
+        1200.0,
+        1000.0,
+        900.0,
+        760.0,
+      ]) {
+        await tester.binding.setSurfaceSize(Size(width, 900));
+        await tester.pump();
+        await tester.pumpAndSettle();
+
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'resizing to $width should not overflow notification rows',
+        );
+        if (width == 1200) {
+          expect(
+            find.byKey(compactBodyKey),
+            findsOneWidget,
+            reason:
+                'the complex room event should wrap instead of truncating at '
+                '1200px',
+          );
+          final roomEventCard = find.byKey(
+            const ValueKey(
+              'notification-row-surface-room-event:room-event-alpha',
+            ),
+          );
+          final roomEventAvatars = tester.widgetList<ui.Avatar>(
+            find.descendant(
+              of: roomEventCard,
+              matching: find.byType(ui.Avatar),
+            ),
+          );
+          expect(roomEventAvatars, isNotEmpty);
+          expect(
+            roomEventAvatars.every((avatar) => avatar.size == 18),
+            isTrue,
+            reason: 'wrapped notification rows should use compact avatars',
+          );
+          expect(
+            tester
+                .renderObjectList<RenderParagraph>(
+                  find.descendant(
+                    of: roomEventCard,
+                    matching: find.byType(RichText),
+                  ),
+                )
+                .every((paragraph) => !paragraph.didExceedMaxLines),
+            isTrue,
+            reason: 'wrapped notification content should remain complete',
+          );
+          final jumpButton = find.descendant(
+            of: roomEventCard,
+            matching: find.byType(ui.ButtonIcon),
+          );
+          expect(
+            tester.getRect(jumpButton).center.dy,
+            closeTo(tester.getRect(roomEventCard).center.dy, 1),
+            reason: 'the trailing action should stay vertically centered',
+          );
+        }
+      }
+      expect(
+        find.byKey(compactBodyKey),
+        findsOneWidget,
+        reason:
+            'notification rows should become compact before the shell reaches '
+            'its 720px breakpoint',
+      );
+    },
+  );
 
   testWidgets('room notification row dot clears after leaving notifications', (
     WidgetTester tester,

@@ -19,81 +19,94 @@ class _MemberFilters extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final presenceSegments = <Segment<member_filter.RoomMemberPresenceFilter>>[
+      Segment(
+        value: member_filter.RoomMemberPresenceFilter.all,
+        label: member_filter.roomMemberPresenceFilterLabel(
+          member_filter.RoomMemberPresenceFilter.all,
+          filterCounts,
+        ),
+      ),
+      Segment(
+        value: member_filter.RoomMemberPresenceFilter.live,
+        label: member_filter.roomMemberPresenceFilterLabel(
+          member_filter.RoomMemberPresenceFilter.live,
+          filterCounts,
+        ),
+      ),
+      Segment(
+        value: member_filter.RoomMemberPresenceFilter.online,
+        label: member_filter.roomMemberPresenceFilterLabel(
+          member_filter.RoomMemberPresenceFilter.online,
+          filterCounts,
+        ),
+      ),
+      Segment(
+        value: member_filter.RoomMemberPresenceFilter.offline,
+        label: member_filter.roomMemberPresenceFilterLabel(
+          member_filter.RoomMemberPresenceFilter.offline,
+          filterCounts,
+        ),
+      ),
+    ];
+    final roleSegments = <Segment<member_filter.RoomMemberRoleFilter>>[
+      Segment(
+        value: member_filter.RoomMemberRoleFilter.all,
+        label: member_filter.roomMemberRoleFilterLabel(
+          member_filter.RoomMemberRoleFilter.all,
+          filterCounts,
+        ),
+      ),
+      Segment(
+        value: member_filter.RoomMemberRoleFilter.member,
+        label: member_filter.roomMemberRoleFilterLabel(
+          member_filter.RoomMemberRoleFilter.member,
+          filterCounts,
+        ),
+      ),
+      Segment(
+        value: member_filter.RoomMemberRoleFilter.admin,
+        label: member_filter.roomMemberRoleFilterLabel(
+          member_filter.RoomMemberRoleFilter.admin,
+          filterCounts,
+        ),
+      ),
+      Segment(
+        value: member_filter.RoomMemberRoleFilter.creator,
+        label: member_filter.roomMemberRoleFilterLabel(
+          member_filter.RoomMemberRoleFilter.creator,
+          filterCounts,
+        ),
+      ),
+    ];
     final presence = SegmentedControl<member_filter.RoomMemberPresenceFilter>(
       key: const ValueKey('member-presence-filter'),
       expanded: true,
       value: presenceFilter,
       onChanged: onPresenceChanged,
-      segments: [
-        Segment(
-          value: member_filter.RoomMemberPresenceFilter.all,
-          label: member_filter.roomMemberPresenceFilterLabel(
-            member_filter.RoomMemberPresenceFilter.all,
-            filterCounts,
-          ),
-        ),
-        Segment(
-          value: member_filter.RoomMemberPresenceFilter.live,
-          label: member_filter.roomMemberPresenceFilterLabel(
-            member_filter.RoomMemberPresenceFilter.live,
-            filterCounts,
-          ),
-        ),
-        Segment(
-          value: member_filter.RoomMemberPresenceFilter.online,
-          label: member_filter.roomMemberPresenceFilterLabel(
-            member_filter.RoomMemberPresenceFilter.online,
-            filterCounts,
-          ),
-        ),
-        Segment(
-          value: member_filter.RoomMemberPresenceFilter.offline,
-          label: member_filter.roomMemberPresenceFilterLabel(
-            member_filter.RoomMemberPresenceFilter.offline,
-            filterCounts,
-          ),
-        ),
-      ],
+      segments: presenceSegments,
     );
     final roles = SegmentedControl<member_filter.RoomMemberRoleFilter>(
       key: const ValueKey('member-role-filter'),
       expanded: true,
       value: roleFilter,
       onChanged: onRoleChanged,
-      segments: [
-        Segment(
-          value: member_filter.RoomMemberRoleFilter.all,
-          label: member_filter.roomMemberRoleFilterLabel(
-            member_filter.RoomMemberRoleFilter.all,
-            filterCounts,
-          ),
-        ),
-        Segment(
-          value: member_filter.RoomMemberRoleFilter.member,
-          label: member_filter.roomMemberRoleFilterLabel(
-            member_filter.RoomMemberRoleFilter.member,
-            filterCounts,
-          ),
-        ),
-        Segment(
-          value: member_filter.RoomMemberRoleFilter.admin,
-          label: member_filter.roomMemberRoleFilterLabel(
-            member_filter.RoomMemberRoleFilter.admin,
-            filterCounts,
-          ),
-        ),
-        Segment(
-          value: member_filter.RoomMemberRoleFilter.creator,
-          label: member_filter.roomMemberRoleFilterLabel(
-            member_filter.RoomMemberRoleFilter.creator,
-            filterCounts,
-          ),
-        ),
-      ],
+      segments: roleSegments,
     );
     return LayoutBuilder(
-      builder: (context, _) {
+      builder: (context, constraints) {
         final narrow = HomeAdaptiveLayout.usesCompactLayout(context);
+        final pairedControlWidth = constraints.maxWidth.isFinite
+            ? ((constraints.maxWidth - 10) / 2)
+                  .clamp(0.0, double.infinity)
+                  .toDouble()
+            : double.infinity;
+        final stackBeforeOverflow =
+            SegmentedControl.minimumWidthFor(context, presenceSegments) >
+                pairedControlWidth ||
+            SegmentedControl.minimumWidthFor(context, roleSegments) >
+                pairedControlWidth;
+        final stackFilters = narrow || stackBeforeOverflow;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -104,7 +117,7 @@ class _MemberFilters extends StatelessWidget {
               showClearButton: true,
             ),
             const SizedBox(height: 10),
-            if (narrow) ...[
+            if (stackFilters) ...[
               presence,
               const SizedBox(height: 10),
               roles,

@@ -121,15 +121,13 @@ class _JoinApplicationDialogState extends State<_JoinApplicationDialog> {
                   maxLines: 4,
                 ),
                 const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Button(onPressed: _cancel, child: const Text('取消')),
-                    const SizedBox(width: 8),
-                    Button(
+                ResponsiveDialogActionBar(
+                  actions: [
+                    ResponsiveDialogAction(label: '取消', onPressed: _cancel),
+                    ResponsiveDialogAction(
+                      label: '发送申请',
                       tone: ButtonTone.primary,
                       onPressed: _send,
-                      child: const Text('发送申请'),
                     ),
                   ],
                 ),

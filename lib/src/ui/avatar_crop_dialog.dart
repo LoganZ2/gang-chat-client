@@ -338,24 +338,22 @@ class _AvatarCropDialogState extends State<AvatarCropDialog> {
                     ),
                   ],
                   const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Button(
+                  ResponsiveDialogActionBar(
+                    actions: [
+                      ResponsiveDialogAction(
+                        label: '取消',
                         onPressed: _rendering
                             ? null
                             : () => Navigator.of(context).pop(),
-                        child: const Text('取消'),
                       ),
-                      const SizedBox(width: 12),
-                      Button(
+                      ResponsiveDialogAction(
+                        label: '确定',
+                        icon: Icons.crop,
+                        tone: ButtonTone.primary,
+                        loading: _rendering,
                         onPressed: image == null || _rendering
                             ? null
                             : _confirm,
-                        loading: _rendering,
-                        tone: ButtonTone.primary,
-                        icon: const Icon(Icons.crop),
-                        child: const Text('确定'),
                       ),
                     ],
                   ),

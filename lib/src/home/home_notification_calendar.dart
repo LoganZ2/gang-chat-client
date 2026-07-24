@@ -245,19 +245,21 @@ class _NotificationCalendarDialogState
       title: widget.title,
       icon: Icons.calendar_month_outlined,
       maxWidth: 420,
-      actions: [
-        Button(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
-        ),
-        Button(
-          key: const ValueKey('notification-calendar-confirm-button'),
-          onPressed: _confirm,
-          tone: ButtonTone.primary,
-          icon: const Icon(Icons.check),
-          child: const Text('确定'),
-        ),
-      ],
+      actionBar: ResponsiveDialogActionBar(
+        actions: [
+          ResponsiveDialogAction(
+            label: '取消',
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          ResponsiveDialogAction(
+            buttonKey: const ValueKey('notification-calendar-confirm-button'),
+            label: '确定',
+            icon: Icons.check,
+            tone: ButtonTone.primary,
+            onPressed: _confirm,
+          ),
+        ],
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -458,6 +458,9 @@ void main() {
   testWidgets('notification date filter sits to the right of search', (
     tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(2000, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     final invite = RoomInvite(
       id: 'invite_date_filter',
       status: 'accepted',
@@ -485,6 +488,7 @@ void main() {
           onOpenRoomEvent: (_) {},
         ),
         platform: TargetPlatform.windows,
+        layoutSize: const Size(2000, 1000),
       ),
     );
     await tester.enterText(find.byType(TextField).first, 'Launch');
@@ -981,6 +985,9 @@ void main() {
   testWidgets('windows superuser notifications use desktop brand avatars', (
     tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(2000, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     final invite = RoomInvite(
       id: 'invite_windows_superuser',
       status: 'accepted',
@@ -1026,6 +1033,7 @@ void main() {
           onOpenRoomEvent: (_) {},
         ),
         platform: TargetPlatform.windows,
+        layoutSize: const Size(2000, 1000),
       ),
     );
     await tester.pumpAndSettle();
@@ -1072,6 +1080,9 @@ void main() {
   testWidgets('Android and Windows superusers prefer a custom avatar', (
     tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(2000, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     const customAvatar =
         'data:image/png;base64,'
         'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
@@ -1115,6 +1126,9 @@ void main() {
             onOpenRoomEvent: (_) {},
           ),
           platform: platform,
+          layoutSize: platform == TargetPlatform.windows
+              ? const Size(2000, 1000)
+              : null,
         ),
       );
       await tester.pumpAndSettle();

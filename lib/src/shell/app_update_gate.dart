@@ -326,26 +326,20 @@ class _UpdateActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Button(
-            onPressed: downloading ? null : onIgnoreVersion,
-            icon: const Icon(Icons.notifications_off_outlined),
-            width: double.infinity,
-            child: const Text('忽略此版本'),
-          ),
+    return ResponsiveDialogActionBar(
+      expanded: true,
+      actions: [
+        ResponsiveDialogAction(
+          label: '忽略此版本',
+          icon: Icons.notifications_off_outlined,
+          onPressed: downloading ? null : onIgnoreVersion,
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Button(
-            onPressed: downloading ? null : onDownload,
-            loading: downloading,
-            icon: const Icon(Icons.download_for_offline_outlined),
-            tone: ButtonTone.primary,
-            width: double.infinity,
-            child: const Text('下载新版本'),
-          ),
+        ResponsiveDialogAction(
+          label: '下载新版本',
+          icon: Icons.download_for_offline_outlined,
+          tone: ButtonTone.primary,
+          loading: downloading,
+          onPressed: downloading ? null : onDownload,
         ),
       ],
     );

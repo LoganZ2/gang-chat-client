@@ -45,8 +45,16 @@ void registerShellRoomManagementWidgetTests() {
     expect(find.text('管理员 1'), findsOneWidget);
     expect(find.text('创建者 1'), findsOneWidget);
     expect(
+      tester
+          .getRect(find.byKey(const ValueKey('member-presence-filter')))
+          .bottom,
+      lessThan(
+        tester.getRect(find.byKey(const ValueKey('member-role-filter'))).top,
+      ),
+    );
+    expect(
       tester.getRect(find.byKey(const ValueKey('room-members-list'))).height,
-      greaterThan(260),
+      greaterThan(220),
     );
     expect(find.text('@riley'), findsNothing);
     expect(find.text('10000001'), findsNothing);
@@ -908,6 +916,72 @@ void registerShellRoomManagementWidgetTests() {
       await tester.pumpAndSettle();
 
       expect(find.text('修改Morgan Account的房间内用户名'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'member filters stack before either segmented control starts scrolling',
+    (WidgetTester tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(720, 800);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ui.uiTheme().copyWith(platform: TargetPlatform.windows),
+          builder: (context, child) {
+            return MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: const TextScaler.linear(1.2)),
+              child: child!,
+            );
+          },
+          home: HomePage(
+            app: _homeTestAppContext(),
+            realtime: _NoopRealtimeService(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Alpha Room'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('房间成员'));
+      await tester.pumpAndSettle();
+
+      final presenceFilter = find.byKey(
+        const ValueKey('member-presence-filter'),
+      );
+      final roleFilter = find.byKey(const ValueKey('member-role-filter'));
+      expect(
+        tester.getRect(presenceFilter).bottom,
+        lessThan(tester.getRect(roleFilter).top),
+      );
+      for (final filter in [presenceFilter, roleFilter]) {
+        expect(
+          find.descendant(
+            of: filter,
+            matching: find.byKey(
+              const ValueKey('segmented-control-scroll-view'),
+            ),
+          ),
+          findsNothing,
+          reason:
+              'each filter should receive a full row before using overflow '
+              'controls',
+        );
+        expect(
+          tester
+              .renderObjectList<RenderParagraph>(
+                find.descendant(of: filter, matching: find.byType(RichText)),
+              )
+              .every((paragraph) => !paragraph.didExceedMaxLines),
+          isTrue,
+        );
+      }
       expect(tester.takeException(), isNull);
     },
   );

@@ -586,6 +586,141 @@ class _NoticeCloseButtonState extends State<_NoticeCloseButton> {
   }
 }
 
+class ResponsiveDialogAction {
+  const ResponsiveDialogAction({
+    required this.label,
+    required this.onPressed,
+    this.buttonKey,
+    this.icon,
+    this.tone = ButtonTone.neutral,
+    this.loading = false,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final Key? buttonKey;
+  final IconData? icon;
+  final ButtonTone tone;
+  final bool loading;
+}
+
+class ResponsiveDialogActionBar extends StatelessWidget {
+  const ResponsiveDialogActionBar({
+    super.key,
+    required this.actions,
+    this.leadingActionCount = 0,
+    this.expanded = false,
+  });
+
+  static const double _gap = 10;
+
+  final List<ResponsiveDialogAction> actions;
+  final int leadingActionCount;
+  final bool expanded;
+
+  @override
+  Widget build(BuildContext context) {
+    if (actions.isEmpty) return const SizedBox.shrink();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final actionWidths = [
+          for (final action in actions)
+            Button.minimumWidthForLabel(
+              context,
+              label: action.label,
+              hasIcon: action.icon != null,
+            ),
+        ];
+        final requiredWithIcons =
+            (expanded
+                ? actionWidths.reduce(
+                        (left, right) => left > right ? left : right,
+                      ) *
+                      actions.length
+                : actionWidths.fold<double>(0, (sum, width) => sum + width)) +
+            (_gap * (actions.length - 1));
+        final actionWidthsWithoutIcons = [
+          for (final action in actions)
+            Button.minimumWidthForLabel(context, label: action.label),
+        ];
+        final requiredWithoutIcons =
+            (expanded
+                ? actionWidthsWithoutIcons.reduce(
+                        (left, right) => left > right ? left : right,
+                      ) *
+                      actions.length
+                : actionWidthsWithoutIcons.fold<double>(
+                    0,
+                    (sum, width) => sum + width,
+                  )) +
+            (_gap * (actions.length - 1));
+        final showIcons =
+            !constraints.maxWidth.isFinite ||
+            requiredWithIcons <= constraints.maxWidth;
+        final compact = !showIcons && constraints.maxWidth.isFinite;
+        final stack =
+            constraints.maxWidth.isFinite &&
+            requiredWithoutIcons > constraints.maxWidth;
+        final splitIndex = leadingActionCount.clamp(0, actions.length);
+
+        Widget button(ResponsiveDialogAction action) {
+          return Button(
+            key: action.buttonKey,
+            onPressed: action.onPressed,
+            tone: action.tone,
+            loading: action.loading,
+            icon: showIcons && action.icon != null ? Icon(action.icon) : null,
+            width: compact || expanded || stack ? double.infinity : null,
+            child: Text(action.label),
+          );
+        }
+
+        if (stack) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final entry in actions.indexed) ...[
+                if (entry.$1 > 0) const SizedBox(height: _gap),
+                button(entry.$2),
+              ],
+            ],
+          );
+        }
+
+        if (compact || expanded) {
+          return Row(
+            children: [
+              for (final entry in actions.indexed) ...[
+                if (entry.$1 > 0) const SizedBox(width: _gap),
+                Expanded(child: button(entry.$2)),
+              ],
+            ],
+          );
+        }
+
+        final leading = actions.take(splitIndex).toList(growable: false);
+        final trailing = actions.skip(splitIndex).toList(growable: false);
+        return Row(
+          mainAxisAlignment: splitIndex == 0
+              ? MainAxisAlignment.end
+              : MainAxisAlignment.start,
+          children: [
+            for (final entry in leading.indexed) ...[
+              if (entry.$1 > 0) const SizedBox(width: _gap),
+              button(entry.$2),
+            ],
+            if (leading.isNotEmpty && trailing.isNotEmpty) const Spacer(),
+            for (final entry in trailing.indexed) ...[
+              if (entry.$1 > 0) const SizedBox(width: _gap),
+              button(entry.$2),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
 class DialogFrame extends StatelessWidget {
   const DialogFrame({
     super.key,
@@ -593,13 +728,15 @@ class DialogFrame extends StatelessWidget {
     required this.child,
     this.icon,
     this.actions = const [],
+    this.actionBar,
     this.maxWidth = 480,
-  });
+  }) : assert(actions.length == 0 || actionBar == null);
 
   final String title;
   final IconData? icon;
   final Widget child;
   final List<Widget> actions;
+  final Widget? actionBar;
   final double maxWidth;
 
   @override
@@ -632,17 +769,17 @@ class DialogFrame extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 child,
-                if (actions.isNotEmpty) ...[
+                if (actions.isNotEmpty || actionBar != null) ...[
                   const SizedBox(height: 18),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      for (final action in actions) ...[
-                        action,
-                        if (action != actions.last) const SizedBox(width: 10),
-                      ],
-                    ],
-                  ),
+                  if (actionBar != null)
+                    actionBar!
+                  else
+                    Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: actions,
+                    ),
                 ],
               ],
             ),

@@ -110,17 +110,14 @@ class _LiveScreenSharePickerState extends State<LiveScreenSharePicker> {
                 const SizedBox(height: 16),
                 Flexible(child: _buildSourceList(_state.sources)),
                 const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Button(
-                      height: 40,
+                ResponsiveDialogActionBar(
+                  actions: [
+                    ResponsiveDialogAction(
+                      label: '取消',
                       onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('取消'),
                     ),
-                    const SizedBox(width: 10),
-                    Button(
-                      height: 40,
+                    ResponsiveDialogAction(
+                      label: '共享',
                       tone: ButtonTone.primary,
                       onPressed:
                           live_display.canConfirmLiveScreenSourceSelection(
@@ -128,7 +125,6 @@ class _LiveScreenSharePickerState extends State<LiveScreenSharePicker> {
                           )
                           ? _confirm
                           : null,
-                      child: const Text('共享'),
                     ),
                   ],
                 ),

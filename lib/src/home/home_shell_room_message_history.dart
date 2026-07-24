@@ -692,10 +692,10 @@ class _HistoryMessageRowState extends State<_HistoryMessageRow> {
     final highlighted = widget.selected || _contextMenuActive;
     final useCompactLayout = HomeAdaptiveLayout.usesCompactLayout(context);
     final timestampColumnWidth = useCompactLayout
-        ? CompactActivityLayout.androidTimestampColumnWidth
+        ? CompactActivityLayout.compactTimestampColumnWidth
         : CompactActivityLayout.timestampColumnWidth;
     final timestampContentGap = useCompactLayout
-        ? CompactActivityLayout.androidTimestampContentGap
+        ? CompactActivityLayout.compactTimestampContentGap
         : 8.0;
     final surface = AnimatedContainer(
       key: ValueKey('room-message-history-row-${message.id}'),
@@ -770,20 +770,26 @@ class _HistoryMessageRowState extends State<_HistoryMessageRow> {
             bottom: 0,
             width: timestampColumnWidth,
             child: Center(
-              child: Text(
-                key: ValueKey('room-message-history-time-${message.id}'),
-                useCompactLayout
-                    ? CompactActivityLayout.splitTimestamp(
-                        room_notifications.roomInviteTimestampLabel(
-                          message.createdAt,
-                        ),
-                      )
-                    : room_notifications.roomInviteTimestampLabel(
+              child: useCompactLayout
+                  ? CompactActivityTimestamp(
+                      key: ValueKey('room-message-history-time-${message.id}'),
+                      timestamp: room_notifications.roomInviteTimestampLabel(
                         message.createdAt,
                       ),
-                textAlign: TextAlign.center,
-                style: UiTypography.label.copyWith(color: UiColors.textMuted),
-              ),
+                      style: UiTypography.label.copyWith(
+                        color: UiColors.textMuted,
+                      ),
+                    )
+                  : Text(
+                      key: ValueKey('room-message-history-time-${message.id}'),
+                      room_notifications.roomInviteTimestampLabel(
+                        message.createdAt,
+                      ),
+                      textAlign: TextAlign.center,
+                      style: UiTypography.label.copyWith(
+                        color: UiColors.textMuted,
+                      ),
+                    ),
             ),
           ),
           Positioned(
@@ -972,29 +978,32 @@ class _HistoryMemberFilterDialogState
       title: '筛选消息成员',
       icon: Icons.person_search_outlined,
       maxWidth: 440,
-      actions: [
-        Button(
-          key: const ValueKey('message-history-member-reset'),
-          icon: const Icon(Icons.restart_alt),
-          onPressed: () =>
-              Navigator.of(context).pop(const _HistoryMemberFilterResult(null)),
-          child: const Text('重置'),
-        ),
-        const Spacer(),
-        Button(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
-        ),
-        Button(
-          key: const ValueKey('message-history-member-apply'),
-          tone: ButtonTone.primary,
-          icon: const Icon(Icons.check),
-          onPressed: () => Navigator.of(
-            context,
-          ).pop(_HistoryMemberFilterResult(_selectedMember)),
-          child: const Text('应用'),
-        ),
-      ],
+      actionBar: ResponsiveDialogActionBar(
+        leadingActionCount: 1,
+        actions: [
+          ResponsiveDialogAction(
+            buttonKey: const ValueKey('message-history-member-reset'),
+            label: '重置',
+            icon: Icons.restart_alt,
+            onPressed: () => Navigator.of(
+              context,
+            ).pop(const _HistoryMemberFilterResult(null)),
+          ),
+          ResponsiveDialogAction(
+            label: '取消',
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          ResponsiveDialogAction(
+            buttonKey: const ValueKey('message-history-member-apply'),
+            label: '应用',
+            icon: Icons.check,
+            tone: ButtonTone.primary,
+            onPressed: () => Navigator.of(
+              context,
+            ).pop(_HistoryMemberFilterResult(_selectedMember)),
+          ),
+        ],
+      ),
       child: SizedBox(
         height: 360,
         child: Column(

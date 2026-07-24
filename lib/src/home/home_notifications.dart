@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../app/room_notifications.dart';
 import '../app/error_display.dart';
@@ -403,28 +404,33 @@ class _NotificationDateRangeDialogState
       title: widget.title,
       icon: Icons.calendar_month_outlined,
       maxWidth: 420,
-      actions: [
-        Button(
-          key: const ValueKey('notification-date-reset-button'),
-          onPressed: () => Navigator.of(context).pop(widget.defaultRange),
-          icon: const Icon(Icons.restart_alt),
-          child: const Text('重置'),
-        ),
-        const Spacer(),
-        Button(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
-        ),
-        Button(
-          key: const ValueKey('notification-date-confirm-button'),
-          onPressed: () => Navigator.of(context).pop(
-            RoomNotificationDateRange(startDate: _startDate, endDate: _endDate),
+      actionBar: ResponsiveDialogActionBar(
+        leadingActionCount: 1,
+        actions: [
+          ResponsiveDialogAction(
+            buttonKey: const ValueKey('notification-date-reset-button'),
+            label: '重置',
+            icon: Icons.restart_alt,
+            onPressed: () => Navigator.of(context).pop(widget.defaultRange),
           ),
-          tone: ButtonTone.primary,
-          icon: const Icon(Icons.check),
-          child: const Text('应用'),
-        ),
-      ],
+          ResponsiveDialogAction(
+            label: '取消',
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          ResponsiveDialogAction(
+            buttonKey: const ValueKey('notification-date-confirm-button'),
+            label: '应用',
+            icon: Icons.check,
+            tone: ButtonTone.primary,
+            onPressed: () => Navigator.of(context).pop(
+              RoomNotificationDateRange(
+                startDate: _startDate,
+                endDate: _endDate,
+              ),
+            ),
+          ),
+        ],
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -631,9 +637,17 @@ class _NotificationsBody extends StatelessWidget {
       );
     }
 
+    final listHorizontalPadding = HomeAdaptiveLayout.usesCompactLayout(context)
+        ? CompactActivityLayout.compactNotificationListHorizontalPadding
+        : 22.0;
     return withErrorNotice(
       ListView.separated(
-        padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
+        padding: EdgeInsets.fromLTRB(
+          listHorizontalPadding,
+          0,
+          listHorizontalPadding,
+          22,
+        ),
         itemCount: items.length,
         separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
@@ -951,7 +965,6 @@ class _RoomInviteNotificationRow extends StatelessWidget {
     final time = roomInviteTimestampLabel(invite.createdAt);
     final invalid = isInvalidPendingRoomInvite(invite);
     final inviterAvatar = _notificationUserAvatar(
-      context: context,
       key: ValueKey('notification-inviter-avatar-${invite.id}'),
       user: inviter,
       userExists: invite.inviterExists,
@@ -1012,6 +1025,7 @@ class _RoomInviteNotificationRow extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           child: _ResponsiveNotificationContent(
+            layoutSignature: invite,
             compact: _CompactNotificationRow(
               time: time,
               timeKey: ValueKey('notification-time-${invite.id}'),
@@ -1226,6 +1240,7 @@ class _RoomApplicationRequestNotificationRow extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           child: _ResponsiveNotificationContent(
+            layoutSignature: application,
             compact: _CompactNotificationRow(
               time: time,
               timeKey: ValueKey(
@@ -1365,7 +1380,6 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
       application.reviewedAt ?? application.updatedAt,
     );
     final reviewerAvatar = _notificationUserAvatar(
-      context: context,
       key: ValueKey(
         'notification-application-reviewer-avatar-${application.id}',
       ),
@@ -1411,6 +1425,7 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
         child: _ResponsiveNotificationContent(
+          layoutSignature: application,
           compact: _CompactNotificationRow(
             time: time,
             timeKey: ValueKey(
@@ -1604,6 +1619,7 @@ class _RoomEventNotificationRow extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           child: _ResponsiveNotificationContent(
+            layoutSignature: notification,
             compact: _CompactNotificationRow(
               time: time,
               timeKey: ValueKey(
@@ -2009,13 +2025,12 @@ class _RoomEventInfoCard extends StatelessWidget {
 }
 
 double _notificationAvatarSize(BuildContext context) {
-  return HomeAdaptiveLayout.usesCompactLayout(context)
+  return _NotificationLayoutMode.usesCompactLayout(context)
       ? CompactActivityLayout.avatarSize
       : 34;
 }
 
 Widget _notificationUserAvatar({
-  required BuildContext context,
   required Key key,
   required UserSummary user,
   required bool userExists,
@@ -2023,52 +2038,245 @@ Widget _notificationUserAvatar({
   required String? imageUrl,
   required String defaultAvatarKey,
 }) {
-  final size = _notificationAvatarSize(context);
-  final role = user.roomRole?.trim().toLowerCase();
-  final platform = Theme.of(context).platform;
-  final useBundledSuperuserBrand =
-      (platform == TargetPlatform.android ||
-          platform == TargetPlatform.windows) &&
-      userExists &&
-      imageUrl == null &&
-      (user.isSuperuser || role == 'superuser');
-  if (useBundledSuperuserBrand) {
-    return SizedBox.square(
-      key: key,
-      dimension: size,
-      child: ClipOval(
-        child: Image.asset(
-          'assets/branding/auth_brand_icon.png',
-          width: size,
-          height: size,
-          fit: BoxFit.cover,
-          filterQuality: FilterQuality.medium,
-        ),
-      ),
-    );
-  }
-  return Avatar(
-    key: key,
-    label: label,
-    imageUrl: imageUrl,
-    defaultAvatarKey: defaultAvatarKey,
-    size: size,
-    showFallbackText: userExists,
+  return Builder(
+    builder: (context) {
+      final size = _notificationAvatarSize(context);
+      final role = user.roomRole?.trim().toLowerCase();
+      final platform = Theme.of(context).platform;
+      final useBundledSuperuserBrand =
+          (platform == TargetPlatform.android ||
+              platform == TargetPlatform.windows) &&
+          userExists &&
+          imageUrl == null &&
+          (user.isSuperuser || role == 'superuser');
+      if (useBundledSuperuserBrand) {
+        return SizedBox.square(
+          key: key,
+          dimension: size,
+          child: ClipOval(
+            child: Image.asset(
+              'assets/branding/auth_brand_icon.png',
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.medium,
+            ),
+          ),
+        );
+      }
+      return Avatar(
+        key: key,
+        label: label,
+        imageUrl: imageUrl,
+        defaultAvatarKey: defaultAvatarKey,
+        size: size,
+        showFallbackText: userExists,
+      );
+    },
   );
 }
 
-class _ResponsiveNotificationContent extends StatelessWidget {
+class _NotificationLayoutMode extends InheritedWidget {
+  const _NotificationLayoutMode({required this.compact, required super.child});
+
+  final bool compact;
+
+  static bool usesCompactLayout(BuildContext context) {
+    final mode = context
+        .dependOnInheritedWidgetOfExactType<_NotificationLayoutMode>();
+    return mode?.compact ?? HomeAdaptiveLayout.usesCompactLayout(context);
+  }
+
+  @override
+  bool updateShouldNotify(_NotificationLayoutMode oldWidget) {
+    return compact != oldWidget.compact;
+  }
+}
+
+class _NotificationMeasureLayout extends MultiChildRenderObjectWidget {
+  _NotificationMeasureLayout({
+    required Widget wide,
+    required Widget compact,
+    required ValueChanged<double> onMeasured,
+  }) : _onMeasured = onMeasured,
+       super(
+         children: [
+           _NotificationLayoutMode(compact: false, child: wide),
+           _NotificationLayoutMode(compact: true, child: compact),
+         ],
+       );
+
+  final ValueChanged<double> _onMeasured;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) {
+    return _RenderNotificationMeasureLayout(onMeasured: _onMeasured);
+  }
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderNotificationMeasureLayout renderObject,
+  ) {
+    renderObject.onMeasured = _onMeasured;
+  }
+}
+
+class _NotificationMeasureParentData
+    extends ContainerBoxParentData<RenderBox> {}
+
+class _RenderNotificationMeasureLayout extends RenderBox
+    with
+        ContainerRenderObjectMixin<RenderBox, _NotificationMeasureParentData>,
+        RenderBoxContainerDefaultsMixin<
+          RenderBox,
+          _NotificationMeasureParentData
+        > {
+  _RenderNotificationMeasureLayout({required ValueChanged<double> onMeasured})
+    : _onMeasured = onMeasured;
+
+  ValueChanged<double> _onMeasured;
+  double? _reportedWidth;
+  RenderBox? _activeChild;
+
+  ValueChanged<double> get onMeasured => _onMeasured;
+
+  set onMeasured(ValueChanged<double> value) {
+    if (identical(_onMeasured, value)) return;
+    _onMeasured = value;
+    _reportedWidth = null;
+  }
+
+  RenderBox get _wideChild => firstChild!;
+  RenderBox get _compactChild => childAfter(_wideChild)!;
+
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _NotificationMeasureParentData) {
+      child.parentData = _NotificationMeasureParentData();
+    }
+  }
+
+  double _requiredWideWidth(BoxConstraints childConstraints) {
+    final availableHeight = childConstraints.maxHeight.isFinite
+        ? childConstraints.maxHeight
+        : double.infinity;
+    return _wideChild.getMaxIntrinsicWidth(availableHeight).ceilToDouble();
+  }
+
+  RenderBox _childFor(BoxConstraints childConstraints, double requiredWidth) {
+    if (childConstraints.maxWidth.isFinite &&
+        requiredWidth > childConstraints.maxWidth) {
+      return _compactChild;
+    }
+    return _wideChild;
+  }
+
+  void _reportRequiredWidth(double width) {
+    if (_reportedWidth == width) return;
+    _reportedWidth = width;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onMeasured(width));
+  }
+
+  @override
+  void performLayout() {
+    final requiredWidth = _requiredWideWidth(constraints);
+    final child = _childFor(constraints, requiredWidth);
+    child.layout(constraints, parentUsesSize: true);
+    final parentData = child.parentData! as _NotificationMeasureParentData;
+    parentData.offset = Offset.zero;
+    _activeChild = child;
+    size = constraints.constrain(child.size);
+    _reportRequiredWidth(requiredWidth);
+  }
+
+  @override
+  Size computeDryLayout(BoxConstraints constraints) {
+    final requiredWidth = _requiredWideWidth(constraints);
+    final child = _childFor(constraints, requiredWidth);
+    return constraints.constrain(child.getDryLayout(constraints));
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final child = _activeChild;
+    if (child == null) return;
+    final parentData = child.parentData! as _NotificationMeasureParentData;
+    context.paintChild(child, offset + parentData.offset);
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    final child = _activeChild;
+    if (child == null) return false;
+    final parentData = child.parentData! as _NotificationMeasureParentData;
+    return child.hitTest(result, position: position - parentData.offset);
+  }
+
+  @override
+  void visitChildrenForSemantics(RenderObjectVisitor visitor) {
+    final child = _activeChild;
+    if (child != null) visitor(child);
+  }
+}
+
+class _ResponsiveNotificationContent extends StatefulWidget {
   const _ResponsiveNotificationContent({
+    required this.layoutSignature,
     required this.compact,
     required this.wide,
   });
 
+  final Object layoutSignature;
   final Widget compact;
   final Widget wide;
 
   @override
+  State<_ResponsiveNotificationContent> createState() =>
+      _ResponsiveNotificationContentState();
+}
+
+class _ResponsiveNotificationContentState
+    extends State<_ResponsiveNotificationContent> {
+  double? _requiredWideWidth;
+
+  @override
+  void didUpdateWidget(_ResponsiveNotificationContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.layoutSignature != widget.layoutSignature) {
+      _requiredWideWidth = null;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return HomeAdaptiveLayout.usesCompactLayout(context) ? compact : wide;
+    if (HomeAdaptiveLayout.usesCompactLayout(context)) {
+      return _NotificationLayoutMode(compact: true, child: widget.compact);
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final requiredWidth = _requiredWideWidth;
+        if (requiredWidth == null) {
+          return _NotificationMeasureLayout(
+            wide: widget.wide,
+            compact: widget.compact,
+            onMeasured: _handleMeasured,
+          );
+        }
+        final useCompactLayout =
+            constraints.maxWidth.isFinite &&
+            requiredWidth > constraints.maxWidth;
+        return _NotificationLayoutMode(
+          compact: useCompactLayout,
+          child: useCompactLayout ? widget.compact : widget.wide,
+        );
+      },
+    );
+  }
+
+  void _handleMeasured(double requiredWidth) {
+    if (!mounted || _requiredWideWidth == requiredWidth) return;
+    setState(() => _requiredWideWidth = requiredWidth);
   }
 }
 
@@ -2087,26 +2295,21 @@ class _CompactNotificationRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final compactTime = CompactActivityLayout.splitTimestamp(time);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         SizedBox(
-          width: CompactActivityLayout.androidTimestampColumnWidth,
-          child: HighlightedText(
-            text: compactTime,
-            query: '',
+          width: CompactActivityLayout.compactTimestampColumnWidth,
+          child: CompactActivityTimestamp(
             key: timeKey,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
+            timestamp: time,
             style: UiTypography.label.copyWith(
               color: UiColors.textMuted,
               height: 1.28,
             ),
           ),
         ),
-        const SizedBox(width: CompactActivityLayout.androidTimestampContentGap),
+        const SizedBox(width: CompactActivityLayout.compactTimestampContentGap),
         Expanded(child: body),
         if (trailing != null) ...[const SizedBox(width: 8), trailing!],
       ],
@@ -2229,7 +2432,6 @@ class _InlineUserTarget extends StatelessWidget {
       userExists: userExists,
     );
     final avatar = _notificationUserAvatar(
-      context: context,
       key: ValueKey('notification-room-event-actor-avatar-$targetId'),
       user: user,
       userExists: userExists,
@@ -2274,7 +2476,7 @@ class _InlineUserTarget extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 7),
-        if (HomeAdaptiveLayout.usesCompactLayout(context))
+        if (_NotificationLayoutMode.usesCompactLayout(context))
           _InviteRoleBadge(
             key: ValueKey('notification-room-event-actor-role-$targetId'),
             label: roomInviteRoleLabel(user),
@@ -2362,7 +2564,7 @@ class _InlineRoomTarget extends StatelessWidget {
         fontWeight: FontWeight.w600,
       ),
     );
-    if (!HomeAdaptiveLayout.usesCompactLayout(context)) {
+    if (!_NotificationLayoutMode.usesCompactLayout(context)) {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [

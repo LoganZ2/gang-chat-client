@@ -89,21 +89,19 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
                 ),
               ),
               const SizedBox(height: 18),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Button(
+              ResponsiveDialogActionBar(
+                actions: [
+                  ResponsiveDialogAction(
+                    label: '取消',
                     onPressed: () => Navigator.of(context).pop(false),
-                    child: const Text('取消'),
                   ),
-                  const SizedBox(width: 12),
-                  Button(
+                  ResponsiveDialogAction(
+                    label: spec.confirmLabel,
+                    icon: Icons.delete_outline,
+                    tone: ButtonTone.danger,
                     onPressed: matches
                         ? () => Navigator.of(context).pop(true)
                         : null,
-                    tone: ButtonTone.danger,
-                    icon: const Icon(Icons.delete_outline),
-                    child: Text(spec.confirmLabel),
                   ),
                 ],
               ),

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/gestures.dart'
     show PointerDeviceKind, PointerEnterEvent, kSecondaryMouseButton;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart'
     show LogicalKeyboardKey, SystemUiOverlayStyle;
 import 'package:flutter_test/flutter_test.dart';

@@ -37,6 +37,38 @@ class Button extends StatelessWidget {
   final MainAxisSize mainAxisSize;
   final bool loading;
 
+  static const TextStyle _labelStyle = TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0,
+  );
+  static const double _iconSize = 18;
+  static const double _iconGap = 8;
+  static const double _measurementSafety = 2;
+
+  /// Minimum width needed to show [label] without truncating it.
+  static double minimumWidthForLabel(
+    BuildContext context, {
+    required String label,
+    bool hasIcon = false,
+    EdgeInsetsGeometry padding = const EdgeInsets.symmetric(horizontal: 16),
+  }) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: DefaultTextStyle.of(context).style.merge(_labelStyle),
+      ),
+      maxLines: 1,
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    final resolvedPadding = padding.resolve(Directionality.of(context));
+    return painter.width +
+        resolvedPadding.horizontal +
+        (hasIcon ? _iconSize + _iconGap : 0) +
+        _measurementSafety;
+  }
+
   @override
   Widget build(BuildContext context) {
     final toggleMode = toggleValue != null || onToggleChanged != null;
@@ -176,17 +208,12 @@ class _ButtonContent extends StatelessWidget {
     final label = DefaultTextStyle.merge(
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: TextStyle(
-        color: colors.foreground,
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 0,
-      ),
+      style: Button._labelStyle.copyWith(color: colors.foreground),
       child: ClipRect(child: child),
     );
 
     return IconTheme.merge(
-      data: IconThemeData(color: colors.foreground, size: 18),
+      data: IconThemeData(color: colors.foreground, size: Button._iconSize),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final bounded = constraints.maxWidth.isFinite;
@@ -195,7 +222,10 @@ class _ButtonContent extends StatelessWidget {
               mainAxisSize: bounded ? MainAxisSize.max : mainAxisSize,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                if (icon != null) ...[icon!, const SizedBox(width: 8)],
+                if (icon != null) ...[
+                  icon!,
+                  const SizedBox(width: Button._iconGap),
+                ],
                 if (bounded) Flexible(child: label) else label,
               ],
             ),
