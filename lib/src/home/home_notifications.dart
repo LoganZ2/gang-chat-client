@@ -641,98 +641,101 @@ class _NotificationsBody extends StatelessWidget {
         ? CompactActivityLayout.compactNotificationListHorizontalPadding
         : 22.0;
     return withErrorNotice(
-      ListView.separated(
-        padding: EdgeInsets.fromLTRB(
-          listHorizontalPadding,
-          0,
-          listHorizontalPadding,
-          22,
+      _SynchronizedNotificationLayout(
+        itemKeys: {for (final item in items) item.id},
+        child: ListView.separated(
+          padding: EdgeInsets.fromLTRB(
+            listHorizontalPadding,
+            0,
+            listHorizontalPadding,
+            22,
+          ),
+          itemCount: items.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 10),
+          itemBuilder: (context, index) {
+            final item = items[index];
+            final selectedItems = [
+              for (final candidate in items)
+                if (selectedNotificationIds.contains(candidate.id)) candidate,
+            ];
+            final card = _NotificationContextMenuRegion(
+              key: ValueKey('notification-context-row-${item.id}'),
+              item: item,
+              selectionMode: selectionMode,
+              selectedItems: selectedItems,
+              onToggleSelection: selectionMode
+                  ? () => onToggleNotificationSelection(item)
+                  : null,
+              onCopyNotification: onCopyNotification,
+              onDeleteNotification: onDeleteNotification,
+              onDeleteNotifications: onDeleteNotifications,
+              onSelectionDeleted: onClearSelectedNotifications,
+              childBuilder: (contextMenuActive) => switch (item.type) {
+                RoomNotificationItemType.invite => _RoomInviteNotificationRow(
+                  invite: item.invite!,
+                  query: query,
+                  busy: busyInviteId == item.invite!.id,
+                  busyInviteId: busyInviteId,
+                  contextMenuActive: contextMenuActive,
+                  onReviewInvite: onReviewInvite,
+                  currentUser: currentUser,
+                  onOpenRoom: onOpenRoom,
+                  onResolveRoomProfile: onResolveRoomProfile,
+                  onResolveRoomUserProfile: onResolveRoomUserProfile,
+                ),
+                RoomNotificationItemType.applicationRequested =>
+                  _RoomApplicationRequestNotificationRow(
+                    application: item.application!,
+                    query: query,
+                    busy: busyApplicationId == item.application!.id,
+                    busyApplicationId: busyApplicationId,
+                    contextMenuActive: contextMenuActive,
+                    onWithdrawApplication: onWithdrawApplication,
+                    currentUser: currentUser,
+                    onOpenRoom: onOpenRoom,
+                    onResolveRoomProfile: onResolveRoomProfile,
+                    onResolveRoomUserProfile: onResolveRoomUserProfile,
+                  ),
+                RoomNotificationItemType.applicationReviewed =>
+                  _RoomApplicationReviewNotificationRow(
+                    application: item.application!,
+                    query: query,
+                    contextMenuActive: contextMenuActive,
+                    currentUser: currentUser,
+                    onOpenRoom: onOpenRoom,
+                    onResolveRoomProfile: onResolveRoomProfile,
+                    onResolveRoomUserProfile: onResolveRoomUserProfile,
+                  ),
+                RoomNotificationItemType.roomEvent => _RoomEventNotificationRow(
+                  notification: item.roomEvent!,
+                  query: query,
+                  contextMenuActive: contextMenuActive,
+                  currentUser: currentUser,
+                  onOpenRoom: onOpenRoom,
+                  onOpenRoomEvent: onOpenRoomEvent,
+                  onResolveRoomProfile: onResolveRoomProfile,
+                  onResolveRoomUserProfile: onResolveRoomUserProfile,
+                ),
+              },
+            );
+            if (!selectionMode) return card;
+            final selected = selectedNotificationIds.contains(item.id);
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                UiCheckbox(
+                  key: ValueKey('notification-selectbox-${item.id}'),
+                  value: selected,
+                  onChanged: (_) => onToggleNotificationSelection(item),
+                  tooltip: selected ? '取消选择通知' : '选择通知',
+                  semanticLabel: '选择通知',
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: card),
+              ],
+            );
+          },
         ),
-        itemCount: items.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 10),
-        itemBuilder: (context, index) {
-          final item = items[index];
-          final selectedItems = [
-            for (final candidate in items)
-              if (selectedNotificationIds.contains(candidate.id)) candidate,
-          ];
-          final card = _NotificationContextMenuRegion(
-            key: ValueKey('notification-context-row-${item.id}'),
-            item: item,
-            selectionMode: selectionMode,
-            selectedItems: selectedItems,
-            onToggleSelection: selectionMode
-                ? () => onToggleNotificationSelection(item)
-                : null,
-            onCopyNotification: onCopyNotification,
-            onDeleteNotification: onDeleteNotification,
-            onDeleteNotifications: onDeleteNotifications,
-            onSelectionDeleted: onClearSelectedNotifications,
-            childBuilder: (contextMenuActive) => switch (item.type) {
-              RoomNotificationItemType.invite => _RoomInviteNotificationRow(
-                invite: item.invite!,
-                query: query,
-                busy: busyInviteId == item.invite!.id,
-                busyInviteId: busyInviteId,
-                contextMenuActive: contextMenuActive,
-                onReviewInvite: onReviewInvite,
-                currentUser: currentUser,
-                onOpenRoom: onOpenRoom,
-                onResolveRoomProfile: onResolveRoomProfile,
-                onResolveRoomUserProfile: onResolveRoomUserProfile,
-              ),
-              RoomNotificationItemType.applicationRequested =>
-                _RoomApplicationRequestNotificationRow(
-                  application: item.application!,
-                  query: query,
-                  busy: busyApplicationId == item.application!.id,
-                  busyApplicationId: busyApplicationId,
-                  contextMenuActive: contextMenuActive,
-                  onWithdrawApplication: onWithdrawApplication,
-                  currentUser: currentUser,
-                  onOpenRoom: onOpenRoom,
-                  onResolveRoomProfile: onResolveRoomProfile,
-                  onResolveRoomUserProfile: onResolveRoomUserProfile,
-                ),
-              RoomNotificationItemType.applicationReviewed =>
-                _RoomApplicationReviewNotificationRow(
-                  application: item.application!,
-                  query: query,
-                  contextMenuActive: contextMenuActive,
-                  currentUser: currentUser,
-                  onOpenRoom: onOpenRoom,
-                  onResolveRoomProfile: onResolveRoomProfile,
-                  onResolveRoomUserProfile: onResolveRoomUserProfile,
-                ),
-              RoomNotificationItemType.roomEvent => _RoomEventNotificationRow(
-                notification: item.roomEvent!,
-                query: query,
-                contextMenuActive: contextMenuActive,
-                currentUser: currentUser,
-                onOpenRoom: onOpenRoom,
-                onOpenRoomEvent: onOpenRoomEvent,
-                onResolveRoomProfile: onResolveRoomProfile,
-                onResolveRoomUserProfile: onResolveRoomUserProfile,
-              ),
-            },
-          );
-          if (!selectionMode) return card;
-          final selected = selectedNotificationIds.contains(item.id);
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              UiCheckbox(
-                key: ValueKey('notification-selectbox-${item.id}'),
-                value: selected,
-                onChanged: (_) => onToggleNotificationSelection(item),
-                tooltip: selected ? '取消选择通知' : '选择通知',
-                semanticLabel: '选择通知',
-              ),
-              const SizedBox(width: 8),
-              Expanded(child: card),
-            ],
-          );
-        },
       ),
     );
   }
@@ -1025,6 +1028,7 @@ class _RoomInviteNotificationRow extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           child: _ResponsiveNotificationContent(
+            layoutKey: 'invite:${invite.id}',
             layoutSignature: invite,
             compact: _CompactNotificationRow(
               time: time,
@@ -1240,6 +1244,7 @@ class _RoomApplicationRequestNotificationRow extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           child: _ResponsiveNotificationContent(
+            layoutKey: 'application-requested:${application.id}',
             layoutSignature: application,
             compact: _CompactNotificationRow(
               time: time,
@@ -1425,6 +1430,7 @@ class _RoomApplicationReviewNotificationRow extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
         child: _ResponsiveNotificationContent(
+          layoutKey: 'application-reviewed:${application.id}',
           layoutSignature: application,
           compact: _CompactNotificationRow(
             time: time,
@@ -1619,6 +1625,7 @@ class _RoomEventNotificationRow extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           child: _ResponsiveNotificationContent(
+            layoutKey: 'room-event:${notification.id}',
             layoutSignature: notification,
             compact: _CompactNotificationRow(
               time: time,
@@ -2093,6 +2100,113 @@ class _NotificationLayoutMode extends InheritedWidget {
   }
 }
 
+class _NotificationLayoutMeasurement {
+  const _NotificationLayoutMeasurement({
+    required this.requiredWidth,
+    required this.availableWidth,
+  });
+
+  final double requiredWidth;
+  final double availableWidth;
+
+  bool get requiresCompactLayout => requiredWidth > availableWidth;
+}
+
+class _SynchronizedNotificationLayout extends StatefulWidget {
+  const _SynchronizedNotificationLayout({
+    required this.itemKeys,
+    required this.child,
+  });
+
+  final Set<String> itemKeys;
+  final Widget child;
+
+  @override
+  State<_SynchronizedNotificationLayout> createState() =>
+      _SynchronizedNotificationLayoutState();
+}
+
+class _SynchronizedNotificationLayoutState
+    extends State<_SynchronizedNotificationLayout> {
+  final Map<String, _NotificationLayoutMeasurement> _measurements = {};
+  bool _compact = false;
+
+  @override
+  void didUpdateWidget(_SynchronizedNotificationLayout oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _measurements.removeWhere(
+      (itemKey, _) => !widget.itemKeys.contains(itemKey),
+    );
+    _compact = _requiresCompactLayout();
+  }
+
+  bool _requiresCompactLayout() {
+    return _measurements.entries.any(
+      (entry) =>
+          widget.itemKeys.contains(entry.key) &&
+          entry.value.requiresCompactLayout,
+    );
+  }
+
+  void _reportMeasurement(
+    String itemKey,
+    double requiredWidth,
+    double availableWidth,
+  ) {
+    if (!mounted ||
+        !widget.itemKeys.contains(itemKey) ||
+        !requiredWidth.isFinite ||
+        !availableWidth.isFinite) {
+      return;
+    }
+    final previous = _measurements[itemKey];
+    if (previous?.requiredWidth == requiredWidth &&
+        previous?.availableWidth == availableWidth) {
+      return;
+    }
+    _measurements[itemKey] = _NotificationLayoutMeasurement(
+      requiredWidth: requiredWidth,
+      availableWidth: availableWidth,
+    );
+    final nextCompact = _requiresCompactLayout();
+    if (nextCompact == _compact) return;
+    setState(() => _compact = nextCompact);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _NotificationLayoutGroup(
+      compact: _compact,
+      onMeasured: _reportMeasurement,
+      child: widget.child,
+    );
+  }
+}
+
+typedef _NotificationLayoutMeasurementCallback =
+    void Function(String itemKey, double requiredWidth, double availableWidth);
+
+class _NotificationLayoutGroup extends InheritedWidget {
+  const _NotificationLayoutGroup({
+    required this.compact,
+    required this.onMeasured,
+    required super.child,
+  });
+
+  final bool compact;
+  final _NotificationLayoutMeasurementCallback onMeasured;
+
+  static _NotificationLayoutGroup? maybeOf(BuildContext context) {
+    return context
+        .dependOnInheritedWidgetOfExactType<_NotificationLayoutGroup>();
+  }
+
+  @override
+  bool updateShouldNotify(_NotificationLayoutGroup oldWidget) {
+    return compact != oldWidget.compact;
+  }
+}
+
 class _NotificationMeasureLayout extends MultiChildRenderObjectWidget {
   _NotificationMeasureLayout({
     required Widget wide,
@@ -2222,11 +2336,13 @@ class _RenderNotificationMeasureLayout extends RenderBox
 
 class _ResponsiveNotificationContent extends StatefulWidget {
   const _ResponsiveNotificationContent({
+    required this.layoutKey,
     required this.layoutSignature,
     required this.compact,
     required this.wide,
   });
 
+  final String layoutKey;
   final Object layoutSignature;
   final Widget compact;
   final Widget wide;
@@ -2239,12 +2355,17 @@ class _ResponsiveNotificationContent extends StatefulWidget {
 class _ResponsiveNotificationContentState
     extends State<_ResponsiveNotificationContent> {
   double? _requiredWideWidth;
+  double? _lastReportedRequiredWidth;
+  double? _lastReportedAvailableWidth;
 
   @override
   void didUpdateWidget(_ResponsiveNotificationContent oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.layoutSignature != widget.layoutSignature) {
+    if (oldWidget.layoutKey != widget.layoutKey ||
+        oldWidget.layoutSignature != widget.layoutSignature) {
       _requiredWideWidth = null;
+      _lastReportedRequiredWidth = null;
+      _lastReportedAvailableWidth = null;
     }
   }
 
@@ -2255,17 +2376,28 @@ class _ResponsiveNotificationContentState
     }
     return LayoutBuilder(
       builder: (context, constraints) {
+        final group = _NotificationLayoutGroup.maybeOf(context);
         final requiredWidth = _requiredWideWidth;
         if (requiredWidth == null) {
           return _NotificationMeasureLayout(
             wide: widget.wide,
             compact: widget.compact,
-            onMeasured: _handleMeasured,
+            onMeasured: (width) => _handleMeasured(
+              requiredWidth: width,
+              availableWidth: constraints.maxWidth,
+              group: group,
+            ),
           );
         }
+        _reportMeasurement(
+          group: group,
+          requiredWidth: requiredWidth,
+          availableWidth: constraints.maxWidth,
+        );
         final useCompactLayout =
-            constraints.maxWidth.isFinite &&
-            requiredWidth > constraints.maxWidth;
+            group?.compact == true ||
+            (constraints.maxWidth.isFinite &&
+                requiredWidth > constraints.maxWidth);
         return _NotificationLayoutMode(
           compact: useCompactLayout,
           child: useCompactLayout ? widget.compact : widget.wide,
@@ -2274,9 +2406,41 @@ class _ResponsiveNotificationContentState
     );
   }
 
-  void _handleMeasured(double requiredWidth) {
-    if (!mounted || _requiredWideWidth == requiredWidth) return;
-    setState(() => _requiredWideWidth = requiredWidth);
+  void _handleMeasured({
+    required double requiredWidth,
+    required double availableWidth,
+    required _NotificationLayoutGroup? group,
+  }) {
+    if (!mounted) return;
+    if (_requiredWideWidth != requiredWidth) {
+      setState(() => _requiredWideWidth = requiredWidth);
+    }
+    _reportMeasurement(
+      group: group,
+      requiredWidth: requiredWidth,
+      availableWidth: availableWidth,
+    );
+  }
+
+  void _reportMeasurement({
+    required _NotificationLayoutGroup? group,
+    required double requiredWidth,
+    required double availableWidth,
+  }) {
+    if (group == null ||
+        !requiredWidth.isFinite ||
+        !availableWidth.isFinite ||
+        (_lastReportedRequiredWidth == requiredWidth &&
+            _lastReportedAvailableWidth == availableWidth)) {
+      return;
+    }
+    _lastReportedRequiredWidth = requiredWidth;
+    _lastReportedAvailableWidth = availableWidth;
+    final layoutKey = widget.layoutKey;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      group.onMeasured(layoutKey, requiredWidth, availableWidth);
+    });
   }
 }
 

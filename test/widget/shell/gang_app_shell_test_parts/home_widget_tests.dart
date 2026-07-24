@@ -1989,6 +1989,61 @@ void registerShellHomeWidgetTests() {
                 'the complex room event should wrap instead of truncating at '
                 '1200px',
           );
+          for (final bodyKey in const [
+            ValueKey('notification-mobile-body-invite-alpha'),
+            ValueKey('notification-mobile-body-application-application-alpha'),
+            ValueKey('notification-mobile-body-reviewed-application-approved'),
+            ValueKey('notification-mobile-body-room-event-room-event-alpha'),
+          ]) {
+            expect(
+              find.byKey(bodyKey),
+              findsOneWidget,
+              reason:
+                  'one wrapped notification should synchronize compact '
+                  'layout across the list',
+            );
+          }
+          for (final timeKey in const [
+            ValueKey('notification-time-invite-alpha'),
+            ValueKey('notification-application-time-application-alpha'),
+            ValueKey(
+              'notification-application-review-time-application-approved',
+            ),
+            ValueKey('notification-room-event-time-room-event-alpha'),
+          ]) {
+            final timeLines = find.descendant(
+              of: find.byKey(timeKey),
+              matching: find.byType(Text),
+            );
+            expect(
+              timeLines,
+              findsNWidgets(2),
+              reason:
+                  'all synchronized compact timestamps should use the same '
+                  'two-line format',
+            );
+          }
+          final allNotificationRows = find.byWidgetPredicate(
+            (widget) =>
+                widget.key is ValueKey<String> &&
+                (widget.key! as ValueKey<String>).value.startsWith(
+                  'notification-row-surface-',
+                ),
+          );
+          final allNotificationAvatars = tester.widgetList<ui.Avatar>(
+            find.descendant(
+              of: allNotificationRows,
+              matching: find.byType(ui.Avatar),
+            ),
+          );
+          expect(allNotificationAvatars, isNotEmpty);
+          expect(
+            allNotificationAvatars.every((avatar) => avatar.size == 18),
+            isTrue,
+            reason:
+                'all notification avatars should share the compact size '
+                'after any row wraps',
+          );
           final roomEventCard = find.byKey(
             const ValueKey(
               'notification-row-surface-room-event:room-event-alpha',
@@ -2036,6 +2091,17 @@ void registerShellHomeWidgetTests() {
             'notification rows should become compact before the shell reaches '
             'its 720px breakpoint',
       );
+
+      await tester.binding.setSurfaceSize(const Size(2000, 900));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(compactBodyKey),
+        findsNothing,
+        reason:
+            'the synchronized list should return to wide rows after the '
+            'window expands',
+      );
+      expect(tester.takeException(), isNull);
     },
   );
 
