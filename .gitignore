@@ -44,3 +44,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Release signing private keys
+*.p12
+*.pfx
+AuthKey_*.p8

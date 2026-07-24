@@ -20,9 +20,14 @@ Unicode true
 !define OUTPUT_FILE "${PROJECT_ROOT}\GangChat-${APP_VERSION}-windows-installer.exe"
 !endif
 
+!ifndef SIGN_TIMESTAMP_URL
+!define SIGN_TIMESTAMP_URL "http://timestamp.digicert.com"
+!endif
+
 !define APP_NAME "Gang Chat"
 !define APP_PUBLISHER "Gang Chat"
-!define APP_EXE "client.exe"
+!define APP_EXE "GangChat.exe"
+!define LEGACY_APP_EXE "client.exe"
 !define APP_ICON_FILE "GangChat.ico"
 !define APP_SUPPORT_URL "https://ky-z.com/gang-chat/home/"
 
@@ -33,6 +38,19 @@ Unicode true
 
 Name "${APP_NAME}"
 OutFile "${OUTPUT_FILE}"
+
+!ifdef SIGNTOOL_PATH
+!ifndef SIGN_CERT_THUMBPRINT
+!error "SIGN_CERT_THUMBPRINT is required when SIGNTOOL_PATH is set."
+!endif
+!finalize '"${SIGNTOOL_PATH}" sign /fd SHA256 /td SHA256 /tr "${SIGN_TIMESTAMP_URL}" /s My /sha1 "${SIGN_CERT_THUMBPRINT}" "%1"'
+!uninstfinalize '"${SIGNTOOL_PATH}" sign /fd SHA256 /td SHA256 /tr "${SIGN_TIMESTAMP_URL}" /s My /sha1 "${SIGN_CERT_THUMBPRINT}" "%1"'
+!else
+!ifdef SIGN_CERT_THUMBPRINT
+!error "SIGNTOOL_PATH is required when SIGN_CERT_THUMBPRINT is set."
+!endif
+!endif
+
 InstallDir "$PROGRAMFILES64\Gang Chat"
 InstallDirRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gang Chat" "InstallLocation"
 RequestExecutionLevel admin
@@ -167,7 +185,10 @@ Function CleanInstallDirectory
     Abort "安装目录为空，无法继续安装。"
   ${EndIf}
 
-  IfFileExists "$INSTDIR\${APP_EXE}" 0 done
+  IfFileExists "$INSTDIR\${APP_EXE}" clean 0
+  IfFileExists "$INSTDIR\${LEGACY_APP_EXE}" clean done
+
+clean:
   DetailPrint "Cleaning old Gang Chat files from $INSTDIR"
   RMDir /r "$INSTDIR"
 
