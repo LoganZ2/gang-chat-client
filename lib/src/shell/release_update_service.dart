@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
@@ -13,12 +14,22 @@ typedef ReleaseInstallerProcessRunner =
     Future<ProcessResult> Function(String executable, List<String> arguments);
 
 typedef ReleaseTemporaryDirectoryProvider = Future<Directory> Function();
+typedef ReleaseAndroidInstallerLauncher = Future<void> Function(String path);
 
 class ReleaseDownloadCancelledException implements Exception {
   const ReleaseDownloadCancelledException();
 
   @override
   String toString() => '版本下载已取消';
+}
+
+class ReleaseInstallerException implements Exception {
+  const ReleaseInstallerException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
 }
 
 class ReleaseDownloadCancellationToken {
@@ -75,13 +86,16 @@ class ReleaseUpdateService {
     http.Client? httpClient,
     ReleaseInstallerProcessRunner? processRunner,
     ReleaseTemporaryDirectoryProvider? temporaryDirectoryProvider,
+    ReleaseAndroidInstallerLauncher? androidInstallerLauncher,
   }) : _httpClient = httpClient,
        _processRunner = processRunner,
-       _temporaryDirectoryProvider = temporaryDirectoryProvider;
+       _temporaryDirectoryProvider = temporaryDirectoryProvider,
+       _androidInstallerLauncher = androidInstallerLauncher;
 
   final http.Client? _httpClient;
   final ReleaseInstallerProcessRunner? _processRunner;
   final ReleaseTemporaryDirectoryProvider? _temporaryDirectoryProvider;
+  final ReleaseAndroidInstallerLauncher? _androidInstallerLauncher;
 
   Future<AvailableAppUpdate?> checkForUpdate({
     required String bucketUrl,
@@ -156,6 +170,13 @@ class ReleaseUpdateService {
       } finally {
         await sink.close();
       }
+      if (update.asset.platform == AppUpdatePlatform.android) {
+        await _validateAndroidApkDownload(
+          file,
+          receivedBytes: received,
+          expectedBytes: total,
+        );
+      }
       return file;
     } catch (error) {
       await _deleteFileQuietly(file);
@@ -170,18 +191,27 @@ class ReleaseUpdateService {
     }
   }
 
-  Future<void> startInstaller(File file) async {
-    if (Platform.isWindows) {
-      await _startWindowsInstaller(file);
-      return;
+  Future<void> startInstaller(File file, {AppUpdatePlatform? platform}) async {
+    final resolvedPlatform =
+        platform ??
+        appUpdatePlatformForOperatingSystem(Platform.operatingSystem);
+    switch (resolvedPlatform) {
+      case AppUpdatePlatform.windows:
+        await _startWindowsInstaller(file);
+        return;
+      case AppUpdatePlatform.macos:
+        await Process.start('open', [
+          file.path,
+        ], mode: ProcessStartMode.detached);
+        return;
+      case AppUpdatePlatform.android:
+        await _startAndroidInstaller(file);
+        return;
+      case null:
+        throw UnsupportedError(
+          'Installing updates is not supported on this platform.',
+        );
     }
-    if (Platform.isMacOS) {
-      await Process.start('open', [file.path], mode: ProcessStartMode.detached);
-      return;
-    }
-    throw UnsupportedError(
-      'Installing updates is not supported on this platform.',
-    );
   }
 
   Future<void> _startWindowsInstaller(File file) async {
@@ -196,6 +226,18 @@ class ReleaseUpdateService {
       _processResultMessage(result),
       result.exitCode,
     );
+  }
+
+  Future<void> _startAndroidInstaller(File file) async {
+    if (_pathExtension(file.path).toLowerCase() != 'apk') {
+      throw const ReleaseInstallerException('下载的文件不是 Android 安装包');
+    }
+    final launcher = _androidInstallerLauncher ?? _invokeAndroidInstaller;
+    try {
+      await launcher(file.path);
+    } on PlatformException catch (error) {
+      throw ReleaseInstallerException(_androidInstallerErrorMessage(error));
+    }
   }
 
   Future<T> _withClient<T>(
@@ -226,23 +268,43 @@ class ReleaseUpdateService {
   Future<File> _downloadTarget(AvailableAppUpdate update) async {
     final directoryProvider =
         _temporaryDirectoryProvider ?? getTemporaryDirectory;
-    final directory = await directoryProvider();
-    await _cleanupDownloadedInstallers(directory);
-    final extension = update.asset.platform == AppUpdatePlatform.windows
-        ? 'exe'
-        : 'dmg';
+    final temporaryDirectory = await directoryProvider();
+    final directory = update.asset.platform == AppUpdatePlatform.android
+        ? Directory(
+            '${temporaryDirectory.path}${Platform.pathSeparator}'
+            'release-updates',
+          )
+        : temporaryDirectory;
+    if (!await directory.exists()) {
+      await directory.create(recursive: true);
+    }
+    await _cleanupDownloadedInstallers(
+      directory,
+      platform: update.asset.platform,
+    );
+    final extension = switch (update.asset.platform) {
+      AppUpdatePlatform.windows => 'exe',
+      AppUpdatePlatform.macos => 'dmg',
+      AppUpdatePlatform.android => 'apk',
+    };
     return File(
       '${directory.path}${Platform.pathSeparator}'
       'GangChat_v${update.latestVersion}.$extension',
     );
   }
 
-  Future<void> _cleanupDownloadedInstallers(Directory directory) async {
+  Future<void> _cleanupDownloadedInstallers(
+    Directory directory, {
+    required AppUpdatePlatform platform,
+  }) async {
     if (!await directory.exists()) return;
 
+    final installerPattern = platform == AppUpdatePlatform.android
+        ? _downloadedAndroidInstallerPattern
+        : _downloadedDesktopInstallerPattern;
     await for (final entity in directory.list(followLinks: false)) {
       if (entity is! File) continue;
-      if (!_downloadedInstallerPattern.hasMatch(_pathBasename(entity.path))) {
+      if (!installerPattern.hasMatch(_pathBasename(entity.path))) {
         continue;
       }
       try {
@@ -262,15 +324,56 @@ Future<void> _deleteFileQuietly(File? file) async {
   } catch (_) {}
 }
 
-final _downloadedInstallerPattern = RegExp(
+final _downloadedDesktopInstallerPattern = RegExp(
   r'^GangChat_v\d+\.\d+\.\d+\.(exe|dmg)$',
 );
+final _downloadedAndroidInstallerPattern = RegExp(
+  r'^GangChat_v\d+\.\d+\.\d+\.apk$',
+);
+
+AppUpdatePlatform? appUpdatePlatformForOperatingSystem(String operatingSystem) {
+  return switch (operatingSystem.trim().toLowerCase()) {
+    'windows' => AppUpdatePlatform.windows,
+    'macos' => AppUpdatePlatform.macos,
+    'android' => AppUpdatePlatform.android,
+    _ => null,
+  };
+}
+
+Future<void> _validateAndroidApkDownload(
+  File file, {
+  required int receivedBytes,
+  required int? expectedBytes,
+}) async {
+  if (expectedBytes != null && receivedBytes != expectedBytes) {
+    throw const FormatException('Android 安装包下载不完整');
+  }
+  final input = await file.open();
+  try {
+    final header = await input.read(4);
+    if (header.length != 4 ||
+        header[0] != 0x50 ||
+        header[1] != 0x4B ||
+        header[2] != 0x03 ||
+        header[3] != 0x04) {
+      throw const FormatException('下载的文件不是有效的 Android 安装包');
+    }
+  } finally {
+    await input.close();
+  }
+}
 
 String _pathBasename(String path) {
   final slash = path.lastIndexOf('/');
   final backslash = path.lastIndexOf(r'\');
   final index = slash > backslash ? slash : backslash;
   return index < 0 ? path : path.substring(index + 1);
+}
+
+String _pathExtension(String path) {
+  final basename = _pathBasename(path);
+  final index = basename.lastIndexOf('.');
+  return index < 0 ? '' : basename.substring(index + 1);
 }
 
 Future<ProcessResult> _runProcess(String executable, List<String> arguments) {
@@ -301,4 +404,22 @@ String _processResultMessage(ProcessResult result) {
   if (stdout.isNotEmpty) return stdout;
 
   return '安装程序启动失败';
+}
+
+Future<void> _invokeAndroidInstaller(String path) {
+  return const MethodChannel(
+    'gang_chat/app_update',
+  ).invokeMethod<void>('installApk', {'path': path});
+}
+
+String _androidInstallerErrorMessage(PlatformException error) {
+  return switch (error.code) {
+    'permission_denied' => '请允许 Gang Chat 安装未知应用后重试',
+    'invalid_apk' => '下载的 Android 安装包无效，请重新下载',
+    'invalid_package' => '下载的安装包不是 Gang Chat',
+    'signature_mismatch' => '安装包签名与当前应用不一致，无法直接更新',
+    'installer_unavailable' => '系统中没有可用的 Android 安装器',
+    'install_in_progress' => '已有更新安装流程正在进行',
+    _ => '无法启动 Android 系统安装器',
+  };
 }

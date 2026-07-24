@@ -26,6 +26,7 @@ void main() {
       ),
     );
     final reportedUpdates = <AvailableAppUpdate>[];
+    final updateService = _FakeReleaseUpdateService(update);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -34,7 +35,7 @@ void main() {
           releaseBucketUrl: 'https://os.example.test/gang-chat',
           currentVersion: '0.5.0',
           autoUpdatePromptStore: const _FakeAutoUpdatePromptStore(true),
-          updateService: _FakeReleaseUpdateService(update),
+          updateService: updateService,
           platformOverride: AppUpdatePlatform.windows,
           windowController: DesktopWindowController(),
           onUpdateAvailable: reportedUpdates.add,
@@ -47,6 +48,47 @@ void main() {
     expect(find.text('Home is still available'), findsOneWidget);
     expect(find.text('发现新版本'), findsNothing);
     expect(reportedUpdates, [same(update)]);
+    expect(updateService.requestedPlatform, AppUpdatePlatform.windows);
+  });
+
+  testWidgets('update gate reports Android APK updates in the desktop form', (
+    tester,
+  ) async {
+    final update = AvailableAppUpdate(
+      currentVersion: '1.0.0',
+      latestVersion: '1.0.1',
+      asset: const ReleaseAsset(
+        key: 'releases/GangChat_v1.0.1.apk',
+        version: '1.0.1',
+        platform: AppUpdatePlatform.android,
+      ),
+      downloadUrl: Uri.parse(
+        'https://os.example.test/gang-chat/releases/GangChat_v1.0.1.apk',
+      ),
+    );
+    final updateService = _FakeReleaseUpdateService(update);
+    final reportedUpdates = <AvailableAppUpdate>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ui.uiTheme().copyWith(platform: TargetPlatform.android),
+        home: AppUpdateGate(
+          releaseBucketUrl: 'https://os.example.test/gang-chat',
+          currentVersion: '1.0.0',
+          autoUpdatePromptStore: const _FakeAutoUpdatePromptStore(true),
+          updateService: updateService,
+          platformOverride: AppUpdatePlatform.android,
+          windowController: DesktopWindowController(),
+          onUpdateAvailable: reportedUpdates.add,
+          child: const Scaffold(body: Text('Android home stays available')),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Android home stays available'), findsOneWidget);
+    expect(reportedUpdates, [same(update)]);
+    expect(updateService.requestedPlatform, AppUpdatePlatform.android);
   });
 
   testWidgets('update page shows release details and settings actions', (
@@ -216,6 +258,7 @@ class _FakeReleaseUpdateService extends ReleaseUpdateService {
   _FakeReleaseUpdateService(this.update);
 
   final AvailableAppUpdate? update;
+  AppUpdatePlatform? requestedPlatform;
 
   @override
   Future<AvailableAppUpdate?> checkForUpdate({
@@ -223,6 +266,7 @@ class _FakeReleaseUpdateService extends ReleaseUpdateService {
     required String currentVersion,
     required AppUpdatePlatform platform,
   }) async {
+    requestedPlatform = platform;
     return update;
   }
 }

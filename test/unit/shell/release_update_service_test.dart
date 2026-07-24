@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -9,6 +10,25 @@ import 'package:client/src/app/app_update.dart';
 import 'package:client/src/shell/release_update_service.dart';
 
 void main() {
+  test(
+    'operating system mapping includes Android without changing desktop',
+    () {
+      expect(
+        appUpdatePlatformForOperatingSystem('windows'),
+        AppUpdatePlatform.windows,
+      );
+      expect(
+        appUpdatePlatformForOperatingSystem('macos'),
+        AppUpdatePlatform.macos,
+      );
+      expect(
+        appUpdatePlatformForOperatingSystem('android'),
+        AppUpdatePlatform.android,
+      );
+      expect(appUpdatePlatformForOperatingSystem('linux'), isNull);
+    },
+  );
+
   test('checkForUpdate returns platform-specific latest release', () async {
     final service = ReleaseUpdateService(
       httpClient: MockClient((request) async {
@@ -78,9 +98,13 @@ void main() {
       final unrelated = File(
         '${temp.path}${Platform.pathSeparator}GangChat_notes.exe',
       );
+      final androidApk = File(
+        '${temp.path}${Platform.pathSeparator}GangChat_v0.5.0.apk',
+      );
       await oldExe.writeAsString('old exe');
       await oldDmg.writeAsString('old dmg');
       await unrelated.writeAsString('keep me');
+      await androidApk.writeAsString('keep Android separate');
 
       final service = ReleaseUpdateService(
         httpClient: MockClient((request) async {
@@ -107,10 +131,105 @@ void main() {
       expect(await oldExe.exists(), isFalse);
       expect(await oldDmg.exists(), isFalse);
       expect(await unrelated.exists(), isTrue);
+      expect(await androidApk.exists(), isTrue);
       expect(file.path, endsWith('GangChat_v0.5.1.exe'));
       expect(await file.readAsString(), 'new installer');
     },
   );
+
+  test(
+    'downloadUpdate keeps Android APKs in the private release directory',
+    () async {
+      final temp = await Directory.systemTemp.createTemp(
+        'gang_chat_android_release_update_test_',
+      );
+      addTearDown(() => temp.delete(recursive: true));
+      final updateDirectory = Directory(
+        '${temp.path}${Platform.pathSeparator}release-updates',
+      );
+      await updateDirectory.create();
+      final oldApk = File(
+        '${updateDirectory.path}${Platform.pathSeparator}'
+        'GangChat_v0.5.0.apk',
+      );
+      final unrelated = File(
+        '${updateDirectory.path}${Platform.pathSeparator}keep.txt',
+      );
+      await oldApk.writeAsBytes(const [0x50, 0x4B, 0x03, 0x04]);
+      await unrelated.writeAsString('keep me');
+
+      final service = ReleaseUpdateService(
+        httpClient: MockClient((request) async {
+          return http.Response.bytes(const [
+            0x50,
+            0x4B,
+            0x03,
+            0x04,
+            0x14,
+            0x00,
+          ], 200);
+        }),
+        temporaryDirectoryProvider: () async => temp,
+      );
+      final file = await service.downloadUpdate(
+        AvailableAppUpdate(
+          currentVersion: '0.5.0',
+          latestVersion: '0.5.1',
+          asset: const ReleaseAsset(
+            key: 'releases/GangChat_v0.5.1.apk',
+            version: '0.5.1',
+            platform: AppUpdatePlatform.android,
+          ),
+          downloadUrl: Uri.parse(
+            'https://os.example.test/gang-chat/releases/GangChat_v0.5.1.apk',
+          ),
+        ),
+      );
+
+      expect(await oldApk.exists(), isFalse);
+      expect(await unrelated.exists(), isTrue);
+      expect(file.parent.path, updateDirectory.path);
+      expect(file.path, endsWith('GangChat_v0.5.1.apk'));
+      expect(await file.readAsBytes(), [0x50, 0x4B, 0x03, 0x04, 0x14, 0x00]);
+    },
+  );
+
+  test('downloadUpdate deletes an invalid Android APK response', () async {
+    final temp = await Directory.systemTemp.createTemp(
+      'gang_chat_invalid_android_release_update_test_',
+    );
+    addTearDown(() => temp.delete(recursive: true));
+    final service = ReleaseUpdateService(
+      httpClient: MockClient((request) async {
+        return http.Response('not an apk', 200);
+      }),
+      temporaryDirectoryProvider: () async => temp,
+    );
+    final update = AvailableAppUpdate(
+      currentVersion: '0.5.0',
+      latestVersion: '0.5.1',
+      asset: const ReleaseAsset(
+        key: 'releases/GangChat_v0.5.1.apk',
+        version: '0.5.1',
+        platform: AppUpdatePlatform.android,
+      ),
+      downloadUrl: Uri.parse(
+        'https://os.example.test/gang-chat/releases/GangChat_v0.5.1.apk',
+      ),
+    );
+
+    await expectLater(
+      service.downloadUpdate(update),
+      throwsA(isA<FormatException>()),
+    );
+    expect(
+      await File(
+        '${temp.path}${Platform.pathSeparator}release-updates'
+        '${Platform.pathSeparator}GangChat_v0.5.1.apk',
+      ).exists(),
+      isFalse,
+    );
+  });
 
   test('downloadUpdate cancellation deletes partial installer', () async {
     final temp = await Directory.systemTemp.createTemp(
@@ -217,6 +336,46 @@ void main() {
     },
     skip: !Platform.isWindows ? 'Windows-only installer launcher' : false,
   );
+
+  test(
+    'startInstaller delegates Android APKs to the native installer',
+    () async {
+      String? launchedPath;
+      final service = ReleaseUpdateService(
+        androidInstallerLauncher: (path) async => launchedPath = path,
+      );
+      final file = File(
+        '${Directory.systemTemp.path}${Platform.pathSeparator}'
+        'GangChat_v0.5.1.apk',
+      );
+
+      await service.startInstaller(file, platform: AppUpdatePlatform.android);
+
+      expect(launchedPath, file.path);
+    },
+  );
+
+  test('startInstaller localizes Android signature mismatch', () async {
+    final service = ReleaseUpdateService(
+      androidInstallerLauncher: (_) async {
+        throw PlatformException(code: 'signature_mismatch');
+      },
+    );
+
+    await expectLater(
+      service.startInstaller(
+        File('GangChat_v0.5.1.apk'),
+        platform: AppUpdatePlatform.android,
+      ),
+      throwsA(
+        isA<ReleaseInstallerException>().having(
+          (error) => error.message,
+          'message',
+          contains('签名'),
+        ),
+      ),
+    );
+  });
 }
 
 class _ChunkedDownloadClient extends http.BaseClient {

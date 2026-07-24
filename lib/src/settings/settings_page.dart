@@ -1251,7 +1251,10 @@ class _SettingsPageState extends State<SettingsPage> {
         },
       );
       if (!mounted) return;
-      await widget.releaseUpdateService.startInstaller(file);
+      await widget.releaseUpdateService.startInstaller(
+        file,
+        platform: update.asset.platform,
+      );
       await Future<void>.delayed(const Duration(milliseconds: 280));
       await _windowController.terminateApplication();
     } on ReleaseDownloadCancelledException {
@@ -1279,9 +1282,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   AppUpdatePlatform? _currentUpdatePlatform() {
-    if (Platform.isWindows) return AppUpdatePlatform.windows;
-    if (Platform.isMacOS) return AppUpdatePlatform.macos;
-    return null;
+    return appUpdatePlatformForOperatingSystem(Platform.operatingSystem);
   }
 
   Future<void> _openFeedbackMail() async {

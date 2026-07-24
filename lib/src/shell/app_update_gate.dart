@@ -102,9 +102,7 @@ class _AppUpdateGateState extends State<AppUpdateGate> {
   AppUpdatePlatform? _currentPlatform() {
     final override = widget.platformOverride;
     if (override != null) return override;
-    if (Platform.isWindows) return AppUpdatePlatform.windows;
-    if (Platform.isMacOS) return AppUpdatePlatform.macos;
-    return null;
+    return appUpdatePlatformForOperatingSystem(Platform.operatingSystem);
   }
 
   @override

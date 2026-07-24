@@ -1,6 +1,6 @@
 import 'settings_about.dart';
 
-enum AppUpdatePlatform { windows, macos }
+enum AppUpdatePlatform { windows, macos, android }
 
 class ReleaseAsset {
   const ReleaseAsset({
@@ -44,7 +44,7 @@ List<ReleaseAsset> parseReleaseAssetsFromS3List(String xmlText) {
 
 ReleaseAsset? parseReleaseAssetKey(String key, {DateTime? releasedAt}) {
   final match = RegExp(
-    r'^releases/GangChat_v(\d+\.\d+\.\d+)\.(exe|dmg)$',
+    r'^releases/GangChat_v(\d+\.\d+\.\d+)\.(exe|dmg|apk)$',
     caseSensitive: false,
   ).firstMatch(key.trim());
   if (match == null) return null;
@@ -53,9 +53,11 @@ ReleaseAsset? parseReleaseAssetKey(String key, {DateTime? releasedAt}) {
   return ReleaseAsset(
     key: key.trim(),
     version: match.group(1)!,
-    platform: extension == 'exe'
-        ? AppUpdatePlatform.windows
-        : AppUpdatePlatform.macos,
+    platform: switch (extension) {
+      'exe' => AppUpdatePlatform.windows,
+      'dmg' => AppUpdatePlatform.macos,
+      _ => AppUpdatePlatform.android,
+    },
     releasedAt: releasedAt,
   );
 }

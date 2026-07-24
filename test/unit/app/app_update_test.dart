@@ -14,18 +14,25 @@ void main() {
           <Key>releases/GangChat_v0.5.1.dmg</Key>
           <LastModified>2026-07-09T04:05:06.000Z</LastModified>
         </Contents>
+        <Contents>
+          <Key>releases/GangChat_v0.5.2.apk</Key>
+          <LastModified>2026-07-10T05:06:07.000Z</LastModified>
+        </Contents>
         <Contents><Key>releases/GangChat-0.5.2-windows.zip</Key></Contents>
         <Contents><Key>avatars/not-a-release.png</Key></Contents>
       </ListBucketResult>
     ''');
 
-    expect(assets, hasLength(2));
+    expect(assets, hasLength(3));
     expect(assets.first.version, '0.5.0');
     expect(assets.first.platform, AppUpdatePlatform.windows);
     expect(assets.first.releasedAt, DateTime.utc(2026, 7, 8, 1, 2, 3));
-    expect(assets.last.version, '0.5.1');
-    expect(assets.last.platform, AppUpdatePlatform.macos);
-    expect(assets.last.releasedAt, DateTime.utc(2026, 7, 9, 4, 5, 6));
+    expect(assets[1].version, '0.5.1');
+    expect(assets[1].platform, AppUpdatePlatform.macos);
+    expect(assets[1].releasedAt, DateTime.utc(2026, 7, 9, 4, 5, 6));
+    expect(assets.last.version, '0.5.2');
+    expect(assets.last.platform, AppUpdatePlatform.android);
+    expect(assets.last.releasedAt, DateTime.utc(2026, 7, 10, 5, 6, 7));
   });
 
   test('latestReleaseAssetForPlatform chooses highest semantic version', () {
@@ -45,6 +52,11 @@ void main() {
         version: '0.9.0',
         platform: AppUpdatePlatform.macos,
       ),
+      const ReleaseAsset(
+        key: 'releases/GangChat_v0.11.0.apk',
+        version: '0.11.0',
+        platform: AppUpdatePlatform.android,
+      ),
     ];
 
     final latest = latestReleaseAssetForPlatform(
@@ -53,6 +65,10 @@ void main() {
     );
 
     expect(latest?.version, '0.10.0');
+    expect(
+      latestReleaseAssetForPlatform(assets, AppUpdatePlatform.android)?.version,
+      '0.11.0',
+    );
   });
 
   test('releaseAssetUrl encodes each key segment', () {
